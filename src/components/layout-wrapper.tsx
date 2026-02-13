@@ -1,28 +1,29 @@
 "use client";
-import { usePathname } from "next/navigation";
-import Navbar from "@/components/navbar";
+import Navbar from './navbar'; 
+import Topbar from './topbar'; 
+import { usePathname } from 'next/navigation';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // Verifica se a página atual é a de Login
-  const isLoginPage = pathname === "/login";
+  
+  // Lista de páginas que NÃO devem ter menu (Login, Cadastro, etc.)
+  const noMenuPages = ['/login', '/register'];
+  const isNoMenuPage = noMenuPages.includes(pathname);
 
-  // SE FOR LOGIN: Retorna apenas o conteúdo (tela cheia), sem barra lateral
-  if (isLoginPage) {
-    return <div className="h-full w-full">{children}</div>;
-  }
+  if (isNoMenuPage) return <>{children}</>;
 
-  // SE NÃO FOR LOGIN (Dashboard, Vendas, etc): Retorna com a Navbar
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <aside className="h-full flex-shrink-0">
-        <Navbar />
-      </aside>
-      <main className="flex-1 h-full overflow-y-auto bg-transparent">
-        <div className="p-8 max-w-[1400px] mx-auto">
+    <div className="flex h-screen overflow-hidden bg-[#0B1120]">
+      {/* Menu Lateral */}
+      <Navbar />
+
+      {/* Área da Direita */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <Topbar /> 
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

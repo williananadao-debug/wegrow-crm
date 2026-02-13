@@ -1,61 +1,57 @@
 "use client";
-import { useState } from 'react';
-import Link from 'next/link';
-import { Menu, X, LayoutDashboard, DollarSign, Users, Target, Package } from 'lucide-react';
+import { Menu, Bell, User, Search } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
-export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const menuItems = [
-    { name: 'Dashboard', icon: <LayoutDashboard />, path: '/' },
-    { name: 'Vendas', icon: <DollarSign />, path: '/vendas' },
-    { name: 'Financeiro', icon: <DollarSign />, path: '/financeiro' },
-    { name: 'Clientes', icon: <Users />, path: '/clientes' },
-    { name: 'Metas', icon: <Target />, path: '/metas' },
-    { name: 'Produção', icon: <Package />, path: '/producao' },
-  ];
+export default function Topbar() {
+  const { perfil } = useAuth();
 
   return (
-    <>
-      {/* Botão para abrir no Celular */}
-      <button 
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-blue-600 text-white rounded-md"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {isOpen ? <X /> : <Menu />}
-      </button>
-
-      {/* Menu Lateral */}
-      <div className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:inset-0
-      `}>
-        <div className="p-6 text-2xl font-bold border-b border-slate-800">
-          WeGrow CRM
+    <header className="h-16 border-b border-white/5 bg-[#0B1120] flex items-center justify-between px-4 md:px-8 w-full">
+      <div className="flex items-center gap-4">
+        {/* BOTÃO HAMBÚRGUER - Crucial para aparecer em celulares "em pé" (md:hidden) */}
+        <button 
+          onClick={() => window.dispatchEvent(new Event('open-sidebar'))}
+          className="md:hidden p-2.5 text-white hover:bg-white/10 rounded-xl transition-all bg-white/5 border border-white/10 active:scale-95"
+        >
+          <Menu size={22} />
+        </button>
+        
+        {/* Logo que aparece apenas no Mobile ao lado do botão */}
+        <div className="flex items-center gap-2 md:hidden">
+          <div className="w-7 h-7 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-xs">W</div>
+          <span className="font-bold text-sm tracking-tighter uppercase italic text-white">wegrow</span>
         </div>
-        <nav className="mt-6">
-          {menuItems.map((item) => (
-            <Link 
-              key={item.name} 
-              href={item.path}
-              onClick={() => setIsOpen(false)} // Fecha ao clicar no item (celular)
-              className="flex items-center gap-3 px-6 py-4 hover:bg-slate-800 transition-colors"
-            >
-              {item.icon}
-              {item.name}
-            </Link>
-          ))}
-        </nav>
+
+        {/* Título que aparece no Desktop */}
+        <div className="hidden md:flex items-center gap-2 text-sm">
+          <span className="text-slate-500 font-medium italic">Painel</span>
+          <span className="text-slate-700">/</span>
+          <span className="text-white font-semibold">Dashboard Principal</span>
+        </div>
       </div>
 
-      {/* Fundo escuro quando o menu abre no celular */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={() => setIsOpen(false)}
-        ></div>
-      )}
-    </>
+      <div className="flex items-center gap-2 md:gap-6">
+        {/* Busca rápida (escondida em celulares muito pequenos) */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-lg text-slate-500">
+          <Search size={14} />
+          <span className="text-xs">Buscar...</span>
+        </div>
+
+        <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
+          <Bell size={20} />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#22C55E] rounded-full border-2 border-[#0B1120]"></span>
+        </button>
+        
+        <div className="flex items-center gap-3 pl-2 border-l border-white/5">
+          <div className="hidden lg:flex flex-col items-end">
+            <span className="text-xs font-bold text-white leading-none">{perfil?.nome || 'Usuário'}</span>
+            <span className="text-[10px] text-[#22C55E] uppercase font-black mt-1 tracking-widest">{perfil?.cargo || 'Membro'}</span>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/20 flex items-center justify-center text-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+            <User size={20} />
+          </div>
+        </div>
+      </div>
+    </header>
   );
 }

@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --wg-bg: #0F172A; 
+  --wg-panel: rgba(30, 41, 59, 0.5);
+  --wg-stroke: rgba(255, 255, 255, 0.08);
+  --wg-text: #F8FAFC;
+  --wg-green: #22C55E;
+  --wg-radius: 22px;
+}
+
+body {
+  background-color: var(--wg-bg);
+  color: var(--wg-text);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  /* Aplica o scroll escuro na página inteira também */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) var(--wg-bg);
+}
+
+/* --- SCROLLBAR CUSTOMIZADA --- */
+@layer utilities {
+  /* Para Chrome, Safari e Edge */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent; /* Fundo invisível para ficar clean */
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1); /* Cinza bem sutil */
+    border-radius: 10px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--wg-green); /* Fica verde ao passar o mouse */
+  }
+
+  /* Animações utilitárias (opcional, ajuda nas transições de entrada) */
+  .animate-in {
+    animation-duration: 0.3s;
+    animation-fill-mode: forwards;
+  }
+}

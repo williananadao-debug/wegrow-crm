@@ -1,36 +1,46 @@
-"use client";
-import { usePathname } from 'next/navigation';
-// Usando o @/ para o Next.js achar a pasta components não importa onde ele esteja
-import Navbar from '@/components/navbar';
-import Topbar from '@/components/topbar';
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from '@/lib/contexts/AuthContext';
+// CORREÇÃO: Importando com o nome exato do arquivo (tudo minúsculo)
+import LayoutWrapper from '@/components/layout-wrapper'; 
 
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  
-  // Se for a tela de login, não mostra os menus
-  const isLoginPage = pathname === '/login';
+const inter = Inter({ subsets: ["latin"] });
 
-  if (isLoginPage) {
-    return <>{children}</>;
-  }
+export const viewport: Viewport = {
+  themeColor: "#0B1120",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
+export const metadata: Metadata = {
+  title: "WeGrow CRM",
+  description: "Gestão Comercial e Produção",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "WeGrow",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0B1120]">
-      {/* Menu Lateral - Visível apenas no computador (lg) */}
-      <aside className="hidden lg:block w-64 flex-shrink-0 border-r border-slate-800">
-        <Navbar />
-      </aside>
-
-      {/* Área da Direita - Topbar + Conteúdo */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Topbar />
-        
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar text-white">
-          <div className="max-w-[1600px] mx-auto">
+    <html lang="pt-br">
+      <body className={`${inter.className} bg-[#0B1120] text-white`}>
+        <AuthProvider>
+          {/* Envolvemos o children com o LayoutWrapper para o menu aparecer */}
+          <LayoutWrapper>
             {children}
-          </div>
-        </main>
-      </div>
-    </div>
+          </LayoutWrapper>
+        </AuthProvider>
+      </body>
+    </html>
   );
 }

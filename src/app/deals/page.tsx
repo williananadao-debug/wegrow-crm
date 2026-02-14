@@ -227,7 +227,7 @@ export default function DealsPage() {
 
     const msg = 
         `Olá *${lead.empresa}*! 🚀%0A%0A` +
-        `Aqui é o ${nomeConsultor} da Wegrow.%0A` +
+        `Aqui é o ${nomeConsultor} da Demais FM.%0A` +
         `Segue o resumo da nossa proposta:%0A` +
         `--------------------------------%0A` +
         `${itensTexto}%0A` +

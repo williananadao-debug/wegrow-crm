@@ -261,19 +261,52 @@ export default function DealsPage() {
 
   const fazerCheckin = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    if (!navigator.geolocation) return alert("Sem GPS.");
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${pos.coords.latitude},${pos.coords.longitude}`;
-      const now = new Date();
-      const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}, ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-      
-      const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
-      if (!error) {
-         setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-         setToastMessage("Check-in realizado com sucesso! 📍");
-         setShowToast(true);
+    
+    if (!navigator.geolocation) {
+      return alert("Seu navegador ou dispositivo não suporta geolocalização.");
+    }
+    
+    setToastMessage("🛰️ Obtendo localização exata...");
+    setShowToast(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        // URL oficial para abrir no app de mapas (Google/Apple)
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+        
+        const now = new Date();
+        const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        
+        const { error } = await supabase
+          .from('leads')
+          .update({ checkin: msg, localizacao_url: mapsUrl })
+          .eq('id', id);
+
+        if (!error) {
+          setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
+          setToastMessage("📍 Check-in realizado com sucesso!");
+          setShowToast(true);
+        } else {
+          alert("Erro ao salvar no banco. Verifique sua conexão.");
+        }
+      },
+      (err) => {
+        console.error(err);
+        let erroMsg = "Erro ao obter GPS.";
+        if (err.code === 1) erroMsg = "Permissão de localização negada. Ative nas configurações do seu navegador.";
+        if (err.code === 2) erroMsg = "Sinal de GPS indisponível ou fraco.";
+        if (err.code === 3) erroMsg = "Tempo de busca esgotado. Tente novamente em local aberto.";
+        
+        alert(erroMsg);
+        setToastMessage("Falha no GPS ❌");
+      },
+      { 
+        enableHighAccuracy: true, // Força o GPS do celular (mais preciso que Wi-Fi)
+        timeout: 15000,           // Espera até 15 segundos
+        maximumAge: 0             // Não aceita localização antiga do cache
       }
-    });
+    );
   };
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {

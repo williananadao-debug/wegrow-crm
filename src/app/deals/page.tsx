@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Toast } from '@/components/Toast'; // <--- IMPORTADO
+import { Toast } from '@/components/Toast';
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
@@ -158,7 +158,6 @@ export default function DealsPage() {
     if (!error) {
         setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: novaEtapa, status: novoStatus } : l));
         
-        // --- AUTOMAÇÃO: Se Ganhou, gera Job e Financeiro ---
         if (novoStatus === 'ganho') {
             const lead = leads.find(l => l.id === id);
             if (lead) {
@@ -167,7 +166,6 @@ export default function DealsPage() {
                     gerarCobrancaFinanceira(lead)
                 ]);
                 
-                // NOTIFICAÇÃO ELEGANTE
                 setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
                 setShowToast(true);
             }
@@ -192,11 +190,10 @@ export default function DealsPage() {
     await mudarEtapa(parseInt(draggableId), novaEtapa, novoStatus);
   };
 
-  // --- FUNÇÃO WHATSAPP BLINDADA ---
   const enviarWhatsapp = (e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
     if (!lead.telefone) {
-        alert("Cadastre o WhatsApp na edição!"); // Esse alert pode ficar, pois é erro de preenchimento
+        alert("Cadastre o WhatsApp na edição!"); 
         return;
     }
 
@@ -273,8 +270,6 @@ export default function DealsPage() {
       const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
       if (!error) {
          setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-         
-         // TOAST PARA CHECKIN
          setToastMessage("Check-in realizado com sucesso! 📍");
          setShowToast(true);
       }
@@ -285,7 +280,11 @@ export default function DealsPage() {
       e.stopPropagation();
       if(!confirm("Excluir oportunidade?")) return;
       const { error } = await supabase.from('leads').delete().eq('id', id);
-      if (!error) setLeads(prev => prev.filter(l => l.id !== id));
+      if (!error) {
+        setLeads(prev => prev.filter(l => l.id !== id));
+        // Se estiver apagando de dentro do modal, fecha o modal
+        if (isModalOpen) setIsModalOpen(false);
+      }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -465,10 +464,14 @@ export default function DealsPage() {
                                                 <Edit2 size={10} className="text-slate-500"/>
                                             </div>
                                             
-                                            <div className="flex gap-2">
-                                                <button onClick={(e) => enviarWhatsapp(e, lead)} className="text-[#22C55E] hover:text-white"><MessageCircle size={14}/></button>
-                                                <button onClick={(e) => fazerCheckin(e, lead.id)} className="text-blue-400 hover:text-white"><MapPin size={14}/></button>
-                                                <button onClick={(e) => handleDelete(e, lead.id)} className="text-red-500 hover:text-white"><Trash2 size={14}/></button>
+                                            {/* ÍCONES: Vertical (Mobile) / Horizontal (Desktop) */}
+                                            <div className="flex flex-col md:flex-row gap-2 md:gap-2">
+                                                <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
+                                                    <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
+                                                </button>
+                                                <button onClick={(e) => fazerCheckin(e, lead.id)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
+                                                    <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
+                                                </button>
                                             </div>
                                         </div>
                                         
@@ -538,7 +541,17 @@ export default function DealsPage() {
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">{editingLeadId ? 'Editar Oportunidade' : 'Novo Negócio'}</h2>
                   <div className="flex items-center gap-2">
-                      {editingLeadId && <button onClick={imprimirProposta} className="p-2 bg-blue-600/10 text-blue-400 rounded-full hover:bg-blue-600/20 transition-colors"><Printer size={20}/></button>}
+                      {editingLeadId && (
+                        <>
+                            {/* BOTÃO EXCLUIR (AGORA AQUI) */}
+                            <button onClick={(e) => handleDelete(e, editingLeadId)} className="p-2 bg-red-500/10 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors">
+                                <Trash2 size={20}/>
+                            </button>
+                            <button onClick={imprimirProposta} className="p-2 bg-blue-600/10 text-blue-400 rounded-full hover:bg-blue-600/20 transition-colors">
+                                <Printer size={20}/>
+                            </button>
+                        </>
+                      )}
                       <button onClick={() => setIsModalOpen(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={20}/></button>
                   </div>
               </div>

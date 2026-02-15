@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { 
-  Users, Search, Plus, Filter, Edit2, Trash2, 
+  Users, Search, Plus, Edit2, Trash2, 
   Phone, FileText, X, History, CheckCircle2, XCircle, 
   Loader2, ChevronDown, Building2, User, Upload 
 } from 'lucide-react';
@@ -16,7 +16,7 @@ type Cliente = {
   email?: string;
   cnpj?: string;
   status: 'ativo' | 'inativo';
-  owner_id?: string; // ID do vendedor responsável
+  owner_id?: string;
   created_at: string;
 };
 
@@ -29,7 +29,7 @@ type Unit = {
 
 type Vendedor = {
   id: string;
-  nome: string; // ou full_name dependendo do seu metadata
+  nome: string;
 };
 
 type VendaHistorico = {
@@ -45,32 +45,25 @@ const ITEMS_PER_PAGE = 20;
 export default function CustomersPage() {
   const { user } = useAuth();
   
-  // Estados de Dados Principais
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]); // Lista para o Dropdown
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   
-  // Estados de Paginação e Loading
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Filtros
   const [busca, setBusca] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | 'ativo' | 'inativo'>('ativo');
   
-  // Modal e Edição
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  
-  // Tabs do Modal: Dados | Unidades | Histórico
   const [activeTab, setActiveTab] = useState<'dados' | 'unidades' | 'historico'>('dados');
   
-  // Dados Auxiliares do Modal
   const [historicoVendas, setHistoricoVendas] = useState<VendaHistorico[]>([]);
   const [unidades, setUnidades] = useState<Unit[]>([]);
-  const [newUnit, setNewUnit] = useState({ nome: '', cidade: '', estado: '' }); // Form da nova unidade
+  const [newUnit, setNewUnit] = useState({ nome: '', cidade: '', estado: '' });
 
   const [formData, setFormData] = useState({
     nome_empresa: '',
@@ -83,24 +76,18 @@ export default function CustomersPage() {
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // --- EFEITOS ---
-
-  // 1. Carregar lista de Vendedores (Profiles) ao iniciar
   useEffect(() => {
     async function fetchSellers() {
-      // Ajuste 'profiles' conforme o nome da sua tabela de usuários/perfis
       const { data } = await supabase.from('profiles').select('id, nome'); 
-      if (data) setVendedores(data);
+      if (data) setVendedores(data as any);
     }
     fetchSellers();
   }, []);
 
-  // 2. Resetar e Buscar Clientes
   useEffect(() => {
     if (user) resetAndFetch();
   }, [user, statusFilter]);
 
-  // 3. Debounce da Busca
   useEffect(() => {
     if (!user) return;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -115,8 +102,6 @@ export default function CustomersPage() {
       fetchClientes(0, true);
   };
 
-  // --- FUNÇÕES DE BUSCA ---
-
   const fetchClientes = async (pageIndex: number, isNewSearch = false) => {
     if (pageIndex === 0) setLoading(true);
     else setLoadingMore(true);
@@ -126,7 +111,7 @@ export default function CustomersPage() {
         const to = from + ITEMS_PER_PAGE - 1;
 
         let query = supabase
-            .from('clientes')
+            .from('clientes') // Garantido que é 'clientes'
             .select('*', { count: 'exact' })
             .order('nome_empresa', { ascending: true })
             .range(from, to);
@@ -159,11 +144,9 @@ export default function CustomersPage() {
       fetchClientes(nextPage, false);
   };
 
-  // --- FUNÇÕES AUXILIARES (HISTÓRICO E UNIDADES) ---
-
   const fetchHistorico = async (clientId: number) => {
     const { data } = await supabase
-      .from('leads') // ou deals
+      .from('leads')
       .select('id, created_at, valor_total, status, itens')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
@@ -178,8 +161,6 @@ export default function CustomersPage() {
     if (data) setUnidades(data);
   };
 
-  // --- AÇÕES DO MODAL ---
-
   const handleOpenModal = (cliente?: Cliente) => {
     if (cliente) {
       setEditingId(cliente.id);
@@ -188,7 +169,7 @@ export default function CustomersPage() {
         telefone: cliente.telefone || '',
         email: cliente.email || '',
         cnpj: cliente.cnpj || '',
-        status: cliente.status || 'ativo',
+        status: cliente.status || 'ativo' as any,
         owner_id: cliente.owner_id || ''
       });
       fetchHistorico(cliente.id);
@@ -204,28 +185,36 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
+  // --- CORREÇÃO PRINCIPAL NO SALVAMENTO ---
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
 
-    // Prepara payload (remove campos vazios se necessário)
+    // Prepara payload com fallback do owner_id
     const payload: any = { ...formData };
-    if (!payload.owner_id) payload.owner_id = user?.id; // Fallback para o usuário logado
+    if (!payload.owner_id) payload.owner_id = user?.id;
 
     if (editingId) {
-      await supabase.from('clientes').update(payload).eq('id', editingId);
+      const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
+      if (error) {
+          alert("Erro ao atualizar: " + error.message);
+          return;
+      }
       setClientes(prev => prev.map(c => c.id === editingId ? { ...c, ...payload } as any : c));
     } else {
       const { data, error } = await supabase.from('clientes').insert([payload]).select();
-      if (!error && data) {
+      if (error) {
+          alert("Erro ao criar: " + error.message);
+          return;
+      }
+      if (data) {
           setClientes(prev => [data[0] as any, ...prev]);
           setTotalCount(prev => prev + 1);
-          // Opcional: Abrir modo edição logo após criar para permitir adicionar unidades
           setEditingId(data[0].id);
-          alert("Cliente criado! Agora você pode adicionar unidades.");
+          alert("Cliente criado! Agora você pode adicionar filiais.");
       }
     }
-    // Não fecha o modal se estiver criando, para permitir adicionar unidades
+    // Não fecha modal se for criação para permitir adicionar filiais
     if (editingId) setIsModalOpen(false);
   };
 
@@ -262,10 +251,8 @@ export default function CustomersPage() {
     }
   };
 
-  // Função Placeholder para Importação
   const handleImport = () => {
     alert("Funcionalidade de leitura de CSV será implementada no próximo passo!");
-    // Aqui abriremos um input file hidden
   };
 
   return (
@@ -330,7 +317,6 @@ export default function CustomersPage() {
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1">
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
-                                {/* Exibir Dono se houver */}
                                 {cliente.owner_id && (
                                     <span className="flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">
                                         <User size={10}/> 
@@ -352,7 +338,6 @@ export default function CustomersPage() {
                 </div>
                 ))}
                 
-                {/* Botão Load More... (mantido igual) */}
                 <div className="py-4 text-center">
                     {loadingMore ? (
                         <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-bold uppercase"><Loader2 className="animate-spin" size={16}/></div>

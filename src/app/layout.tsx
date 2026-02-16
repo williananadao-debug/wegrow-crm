@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from '@/lib/contexts/AuthContext';
-// CORREÇÃO: Importando com o nome exato do arquivo (tudo minúsculo)
 import LayoutWrapper from '@/components/layout-wrapper'; 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -33,9 +32,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-br">
-      <body className={`${inter.className} bg-[#0B1120] text-white`}>
+      <body className={`${inter.className} bg-[#0B1120] text-white antialiased`}>
         <AuthProvider>
-          {/* Envolvemos o children com o LayoutWrapper para o menu aparecer */}
+          {/* O LayoutWrapper deve conter a lógica para não aparecer no Login */}
           <LayoutWrapper>
             {children}
           </LayoutWrapper>

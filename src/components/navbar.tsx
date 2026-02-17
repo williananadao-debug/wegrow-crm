@@ -16,7 +16,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   X,
-  Rocket 
+  Rocket,
+  BarChart3 // Ícone para Relatórios
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -37,7 +38,7 @@ export default function Navbar() {
     return () => window.removeEventListener('open-sidebar', handleOpen);
   }, []);
 
-  // Itens Padrão - Ajustados para suas rotas reais (sem /dashboard/ na frente para evitar 404)
+  // Itens Padrão
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
     { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
@@ -47,18 +48,30 @@ export default function Navbar() {
     { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
   ];
 
-  // Itens de Gestão (Só Diretor/Gerente)
+  // Itens de Gestão e Relatórios Parrudos
   if (isDirector || isManager) {
     
-    // Aba Estratégia (Apenas Diretor) - Rota definida como /dashboard/premises
+    // Inserindo Estratégia e Relatórios no topo para o Diretor
     if (isDirector) {
+      // Adiciona Estratégia na posição 1
       menuItems.splice(1, 0, { 
         name: 'Estratégia', 
         icon: <Rocket size={20} />, 
         href: '/dashboard/premises' 
       });
+
+      // Adiciona Relatórios (War Room) logo após Estratégia
+      menuItems.splice(2, 0, { 
+        name: 'Relatórios', 
+        icon: <BarChart3 size={20} />, 
+        href: '/reports' 
+      });
+    } else {
+      // Se for apenas Gerente, adiciona Relatórios ao final da lista padrão
+      menuItems.push({ name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
     }
 
+    // Minha Equipe sempre ao final da seção de gestão
     menuItems.push({ 
       name: 'Minha Equipe', 
       icon: <ShieldCheck size={20} />, 
@@ -70,7 +83,6 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Overlay para fechar no celular */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-[60] md:hidden backdrop-blur-sm" 
@@ -86,12 +98,10 @@ export default function Navbar() {
           ${isCollapsed ? 'w-[80px] p-4' : 'w-[260px] p-6'}
         `}
       >
-        {/* BOTÃO FECHAR (MOBILE) */}
         <button onClick={() => setIsMobileOpen(false)} className="md:hidden absolute right-4 top-6 text-slate-400">
           <X size={24} />
         </button>
 
-        {/* BOTÃO TOGGLE (DESKTOP) */}
         <button 
           onClick={toggleSidebar}
           className="hidden md:flex absolute -right-3 top-8 bg-[#22C55E] text-[#0F172A] p-1 rounded-full hover:scale-110 transition-transform shadow-lg z-50"
@@ -99,7 +109,6 @@ export default function Navbar() {
           {isCollapsed ? <ChevronRight size={14} strokeWidth={3} /> : <ChevronLeft size={14} strokeWidth={3} />}
         </button>
 
-        {/* LOGO */}
         <div className={`flex items-center gap-3 mb-10 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
           <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">
             W
@@ -114,7 +123,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* LINKS DE NAVEGAÇÃO */}
         <nav className="flex flex-col gap-2 h-full overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => (
             <Link
@@ -135,7 +143,6 @@ export default function Navbar() {
                   </span>
               )}
 
-              {/* TOOLTIP (MODO RECOLHIDO) */}
               {isCollapsed && (
                   <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50 border border-white/10 translate-x-2 group-hover:translate-x-0">
                       {item.name}
@@ -144,7 +151,6 @@ export default function Navbar() {
             </Link>
           ))}
 
-          {/* ÁREA INFERIOR */}
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
             <Link
               href="/settings"

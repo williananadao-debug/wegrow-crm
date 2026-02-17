@@ -1,305 +1,200 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/contexts/AuthContext';
 import { 
-  UserPlus, Mail, Trash2, Loader2, X, ShieldAlert, 
-  UserCheck, Shield, Briefcase, Building2, MapPin, Edit2, Plus 
+  Users, Mail, MapPin, Shield, Edit2, Trash2, 
+  Plus, Search, Loader2 
 } from 'lucide-react';
-
-// Tipagem
-interface Unidade {
-  id: string;
-  nome: string;
-}
-
-interface MembroEquipe {
-  id: string;
-  nome: string;
-  email: string;
-  cargo: 'diretor' | 'gerente' | 'vendedor';
-  unidade_id?: string;
-  units?: Unidade;
-}
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { Toast } from '@/components/Toast';
 
 export default function TeamPage() {
-  const { user, perfil } = useAuth();
-  
+  const { perfil } = useAuth(); // Pega quem está logado
+  const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
-  const [unidades, setUnidades] = useState<Unidade[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Estados para Modal e Toast
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   
-  // Controle de Nova Unidade
-  const [isNewUnitMode, setIsNewUnitMode] = useState(false);
-  const [newUnitName, setNewUnitName] = useState('');
-
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    nome: '',
-    cargo: 'vendedor',
-    unidade_id: ''
-  });
+  // Verifica se é Diretor (para poder editar/excluir)
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
-    if (user && perfil) {
-      fetchData();
-    }
-  }, [user, perfil]);
+    fetchTeam();
+  }, []);
 
-  async function fetchData() {
+  async function fetchTeam() {
     setLoading(true);
-    // Busca membros
-    const { data: teamData } = await supabase.from('profiles').select('*, units(nome)').order('nome');
-    if (teamData) setEquipe(teamData as any);
+    try {
+      // --- CORREÇÃO: Busca na tabela 'profiles' em vez de 'perfis' ---
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+            *,
+            units ( nome )
+        `)
+        .order('nome');
 
-    // Busca unidades
-    const { data: unitsData } = await supabase.from('units').select('id, nome').order('nome');
-    if (unitsData) setUnidades(unitsData);
-    
-    setLoading(false);
+      if (error) throw error;
+      setMembers(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar equipe:", error);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const handleOpenCreate = () => {
-    setEditingId(null);
-    setFormData({ email: '', password: '', nome: '', cargo: 'vendedor', unidade_id: '' });
-    setIsNewUnitMode(false);
-    setNewUnitName('');
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = (membro: MembroEquipe) => {
-    setEditingId(membro.id);
-    setFormData({
-        email: membro.email || '',
-        password: '',
-        nome: membro.nome || '',
-        cargo: membro.cargo || 'vendedor',
-        unidade_id: membro.unidade_id || ''
-    });
-    setIsNewUnitMode(false);
-    setIsModalOpen(true);
-  };
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setProcessing(true);
-
-    let finalUnidadeId = formData.unidade_id;
-
-    // 1. SE FOR MODO NOVA UNIDADE: CRIA PRIMEIRO
-    if (isNewUnitMode) {
-        if (!newUnitName.trim()) {
-            alert("Digite o nome da nova unidade!");
-            setProcessing(false);
-            return;
-        }
-        
-        // Cria a unidade no banco
-        const { data: unitData, error: unitError } = await supabase
-            .from('units')
-            .insert([{ nome: newUnitName, cidade: 'Sede', estado: 'SP' }]) // Valores padrão para simplificar
-            .select()
-            .single();
-
-        if (unitError || !unitData) {
-            alert("Erro ao criar unidade: " + unitError?.message);
-            setProcessing(false);
-            return;
-        }
-        finalUnidadeId = unitData.id;
-    } else {
-        if (!finalUnidadeId) {
-            alert("Selecione uma unidade ou crie uma nova!");
-            setProcessing(false);
-            return;
-        }
-    }
-
-    // 2. CRIA OU EDITA O USUÁRIO COM O ID DA UNIDADE
-    if (editingId) {
-        // EDIÇÃO
-        const { error } = await supabase.from('profiles').update({
-            nome: formData.nome,
-            cargo: formData.cargo,
-            unidade_id: finalUnidadeId
-        }).eq('id', editingId);
-
-        if (!error) {
-            alert("Atualizado com sucesso!");
-            setIsModalOpen(false);
-            fetchData();
-        } else {
-            alert("Erro ao atualizar: " + error.message);
-        }
-    } else {
-        // CRIAÇÃO
-        const { error } = await supabase.auth.signUp({
-            email: formData.email,
-            password: formData.password,
-            options: {
-                data: {
-                    nome: formData.nome,
-                    cargo: formData.cargo,
-                    unidade_id: finalUnidadeId 
-                }
-            }
-        });
-
-        if (!error) {
-            alert("Usuário criado com sucesso!");
-            setIsModalOpen(false);
-            setTimeout(() => fetchData(), 1500); // Tempo extra para o trigger
-        } else {
-            alert("Erro ao criar usuário: " + error.message);
-        }
-    }
-    setProcessing(false);
-  }
-
-  async function handleDeleteUser(id: string) {
-    if (id === user?.id) return alert("Você não pode excluir a si mesmo!");
+  const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja remover este membro?")) return;
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (!error) setEquipe(prev => prev.filter(m => m.id !== id));
-  }
 
-  if (perfil?.cargo !== 'diretor' && perfil?.cargo !== 'gerente') {
-    return <div className="h-full flex items-center justify-center text-slate-500 uppercase font-bold text-xs">Acesso Restrito</div>;
-  }
+    try {
+      // Deleta da tabela profiles
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      
+      if (error) throw error;
+
+      setMembers(prev => prev.filter(m => m.id !== id));
+      setToastMessage("Membro removido com sucesso.");
+      setShowToast(true);
+    } catch (error: any) {
+      alert("Erro ao excluir: " + error.message);
+    }
+  };
+
+  const handlePromote = async (id: string, currentCargo: string) => {
+      if(!isDirector) return;
+      const novoCargo = currentCargo === 'vendedor' ? 'gerente' : 'vendedor';
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ cargo: novoCargo })
+        .eq('id', id);
+
+      if(!error) {
+          fetchTeam(); // Recarrega a lista
+          setToastMessage(`Cargo alterado para ${novoCargo}`);
+          setShowToast(true);
+      }
+  };
+
+  // Filtro de busca
+  const filteredMembers = members.filter(m => 
+    m.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    m.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-500 pb-10">
+    <div className="p-6 space-y-6 pb-24 animate-in fade-in duration-500">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8 px-2">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Gestão de Equipe</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{equipe.length} Membros Ativos</p>
+          <h1 className="text-2xl font-black uppercase italic text-white flex items-center gap-2">
+            <Users className="text-[#22C55E]" /> Gestão de Equipe
+          </h1>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+            {members.length} Membros Ativos
+          </p>
         </div>
-        
-        {perfil?.cargo === 'diretor' && (
-          <button onClick={handleOpenCreate} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-lg">
-            <UserPlus size={18} strokeWidth={3} /> Novo Membro
-          </button>
-        )}
+
+        <div className="flex gap-2 w-full md:w-auto">
+             <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
+                <input 
+                    type="text" 
+                    placeholder="Buscar membro..." 
+                    className="w-full bg-[#0B1120] border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm outline-none focus:border-[#22C55E]"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                />
+             </div>
+             {/* Botão Novo Membro (Pode ser implementado depois o modal de convite) */}
+             <button className="bg-[#22C55E] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase hover:scale-105 transition-all flex items-center gap-2">
+                <Plus size={16}/> <span className="hidden md:inline">Novo</span>
+             </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
-        {loading && <Loader2 className="animate-spin text-blue-500 mx-auto" size={32} />}
-        
-        {equipe.map((membro) => (
-            <div key={membro.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-[32px] flex flex-col gap-4 hover:border-white/10 transition-all">
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner ${membro.cargo === 'diretor' ? 'bg-red-500/10 text-red-500' : membro.cargo === 'gerente' ? 'bg-purple-500/10 text-purple-400' : 'bg-[#22C55E]/10 text-[#22C55E]'}`}>
-                  {membro.nome?.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-black text-sm uppercase truncate">{membro.nome}</h3>
-                  <div className="flex items-center gap-1.5 text-slate-500 mt-0.5">
-                    <Mail size={12} /><p className="text-[10px] font-medium truncate">{membro.email}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-400 mt-1">
-                    <MapPin size={10} /><p className="text-[9px] font-bold uppercase truncate">{membro.units?.nome || 'Sem Unidade'}</p>
-                  </div>
-                </div>
-              </div>
+      {loading ? (
+        <div className="flex justify-center py-20">
+            <Loader2 className="animate-spin text-[#22C55E]" size={40}/>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredMembers.map((member) => (
+            <div key={member.id} className="bg-white/[0.02] border border-white/5 p-5 rounded-3xl hover:border-white/10 transition-all group relative overflow-hidden">
+                
+                {/* Efeito de brilho no hover */}
+                <div className="absolute top-0 right-0 p-20 bg-[#22C55E]/5 rounded-full blur-3xl -mr-10 -mt-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
-              <div className="flex items-center justify-between mt-2 pt-4 border-t border-white/5">
-                <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${membro.cargo === 'diretor' ? 'border-red-500/20 text-red-500' : membro.cargo === 'gerente' ? 'border-purple-500/20 text-purple-400' : 'border-[#22C55E]/20 text-[#22C55E]'}`}>
-                  {membro.cargo === 'diretor' ? <Shield size={10} /> : membro.cargo === 'gerente' ? <Briefcase size={10} /> : <UserCheck size={10} />}
-                  {membro.cargo}
-                </span>
-
-                {perfil?.cargo === 'diretor' && (
-                  <div className="flex gap-2">
-                      <button onClick={() => handleOpenEdit(membro)} className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"><Edit2 size={16} /></button>
-                      {membro.id !== user?.id && <button onClick={() => handleDeleteUser(membro.id)} className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"><Trash2 size={16} /></button>}
-                  </div>
-                )}
-              </div>
-            </div>
-        ))}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
-          <div className="bg-[#0B1120] border border-white/10 p-8 rounded-[40px] w-full max-w-md shadow-2xl relative">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20}/></button>
-            
-            <div className="mb-6">
-              <h2 className="text-2xl font-black uppercase italic text-white tracking-tighter">{editingId ? 'Editar Acesso' : 'Novo Acesso'}</h2>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Gerencie as credenciais</p>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nome Completo</label>
-                <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} required />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">E-mail (Login)</label>
-                <input disabled={!!editingId} className={`w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 ${editingId ? 'opacity-50' : ''}`} type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
-              </div>
-
-              {!editingId && (
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Senha Provisória</label>
-                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500" type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
-                  </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nível de Acesso</label>
-                    <div className="relative">
-                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-black uppercase outline-none focus:border-blue-500 appearance-none" value={formData.cargo} onChange={e => setFormData({...formData, cargo: e.target.value as any})}>
-                            <option value="vendedor" className="bg-[#0B1120]">Vendedor</option>
-                            <option value="gerente" className="bg-[#0B1120]">Gerente</option>
-                            <option value="diretor" className="bg-[#0B1120]">Diretor</option>
-                        </select>
+                <div className="relative z-10 flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center text-lg font-black text-white border border-white/10">
+                            {member.nome?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                            <h3 className="text-white font-bold leading-tight">{member.nome}</h3>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                                member.cargo === 'diretor' 
+                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' 
+                                : member.cargo === 'gerente'
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                : 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20'
+                            }`}>
+                                {member.cargo || 'Vendedor'}
+                            </span>
+                        </div>
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex justify-between">
-                        Unidade / Filial
-                        <button type="button" onClick={() => setIsNewUnitMode(!isNewUnitMode)} className="text-blue-400 hover:text-white flex items-center gap-1">
-                            {isNewUnitMode ? 'Selecionar' : '+ Nova'}
-                        </button>
-                    </label>
                     
-                    {isNewUnitMode ? (
-                        <input 
-                            className="w-full bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 placeholder:text-blue-300/50 animate-in fade-in"
-                            placeholder="Nome da Nova Unidade..."
-                            value={newUnitName}
-                            onChange={e => setNewUnitName(e.target.value)}
-                            autoFocus
-                        />
-                    ) : (
-                        <div className="relative">
-                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-white text-xs font-black uppercase outline-none focus:border-blue-500 appearance-none" value={formData.unidade_id} onChange={e => setFormData({...formData, unidade_id: e.target.value})}>
-                                <option value="">Selecione...</option>
-                                {unidades.map(u => <option key={u.id} value={u.id} className="bg-[#0B1120]">{u.nome}</option>)}
-                            </select>
-                            <Building2 size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none"/>
+                    {isDirector && (
+                        <div className="flex gap-1">
+                            <button 
+                                onClick={() => handlePromote(member.id, member.cargo)}
+                                className="p-2 hover:bg-white/10 rounded-lg text-slate-500 hover:text-white transition-colors" 
+                                title="Alterar Cargo"
+                            >
+                                <Edit2 size={16}/>
+                            </button>
+                            <button 
+                                onClick={() => handleDelete(member.id)}
+                                className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-500 transition-colors"
+                                title="Remover Membro"
+                            >
+                                <Trash2 size={16}/>
+                            </button>
                         </div>
                     )}
-                  </div>
-              </div>
+                </div>
 
-              <button type="submit" disabled={processing} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-blue-500 transition-all shadow-lg mt-4 flex justify-center items-center gap-2">
-                {processing ? <Loader2 className="animate-spin" size={18} /> : <><UserCheck size={18} /> {isNewUnitMode ? 'Criar Unidade & Usuário' : editingId ? 'Salvar Alterações' : 'Confirmar Cadastro'}</>}
-              </button>
-            </form>
-          </div>
+                <div className="space-y-2 relative z-10">
+                    <div className="flex items-center gap-2 text-xs text-slate-400 bg-[#0B1120]/50 p-2 rounded-lg">
+                        <Mail size={14} className="text-slate-500"/>
+                        <span className="truncate">{member.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-400 bg-[#0B1120]/50 p-2 rounded-lg">
+                        <MapPin size={14} className="text-slate-500"/>
+                        <span className="truncate">{member.units?.nome || 'Matriz / Sem Unidade'}</span>
+                    </div>
+                </div>
+
+            </div>
+          ))}
+
+          {filteredMembers.length === 0 && (
+             <div className="col-span-full text-center py-10 text-slate-500">
+                Nenhum membro encontrado.
+             </div>
+          )}
         </div>
       )}
+
+      <Toast 
+        message={toastMessage} 
+        isVisible={showToast} 
+        onClose={() => setShowToast(false)} 
+      />
+
     </div>
   );
 }

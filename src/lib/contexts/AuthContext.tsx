@@ -13,29 +13,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function getSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
 
-        // Se for o admin, garante os poderes independente do banco
-        const isMaster = session.user.email === 'admin@wegrow.com';
-        
-        setUser(session.user);
-        setPerfil(isMaster ? { ...profile, cargo: 'diretor', nome: 'Admin' } : profile);
-      } else {
-        router.replace('/login');
+          // BLINDAGEM: Se for o admin, força o cargo independente do banco
+          const isMaster = session.user.email === 'admin@wegrow.com';
+          
+          setUser(session.user);
+          setPerfil(isMaster ? { ...profile, cargo: 'diretor', nome: 'Admin Supremo', email: session.user.email } : profile);
+        } else {
+          router.replace('/login');
+        }
+      } catch (err) {
+        console.error("Erro na sessão:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     getSession();
   }, [router]);
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, perfil, loading, signOut: () => supabase.auth.signOut() }}>
+    <AuthContext.Provider value={{ user, perfil, loading, signOut }}>
       {!loading && children}
     </AuthContext.Provider>
   );

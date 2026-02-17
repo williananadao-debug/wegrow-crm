@@ -1,26 +1,28 @@
 "use client";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+// Essencial: export default function
 export default function TeamPage() {
-  const [users, setUsers] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('profiles').select('*');
-      setUsers(data || []);
+      const { data } = await supabase.from('profiles').select('*').order('nome');
+      setMembers(data || []);
     }
     load();
   }, []);
 
   return (
     <div className="p-6 text-white">
-      <h1 className="text-2xl font-bold mb-4">Membros da Equipe</h1>
-      <div className="grid gap-4">
-        {users.map(u => (
-          <div key={u.id} className="bg-white/5 p-4 rounded-xl border border-white/10">
-            <p className="font-bold">{u.nome}</p>
-            <p className="text-xs text-slate-400">{u.email} - <span className="text-[#22C55E]">{u.cargo}</span></p>
+      <h1 className="text-2xl font-black uppercase italic text-[#22C55E] mb-6">Gestão de Equipe</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {members.map((m) => (
+          <div key={m.id} className="bg-white/5 border border-white/10 p-5 rounded-3xl">
+            <p className="font-bold">{m.nome}</p>
+            <p className="text-xs text-slate-500">{m.email}</p>
+            <span className="text-[10px] font-black uppercase text-[#22C55E] mt-2 block">{m.cargo}</span>
           </div>
         ))}
       </div>

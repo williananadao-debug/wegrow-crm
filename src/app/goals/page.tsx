@@ -1,28 +1,21 @@
 "use client";
-  
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { 
-  Target, TrendingUp, Users, DollarSign, 
-  Award, ArrowUpRight, CheckCircle2, Settings, X, Save, RefreshCw
+  Target, TrendingUp, Award, ArrowUpRight, 
+  CheckCircle2, Settings, X, Save
 } from 'lucide-react';
-import { Toast } from '@/components/Toast'; // <--- IMPORTADO
-
-// Tipagem estrita para melhor performance do compilador
-type VendedorMeta = {
-  user_id: string;
-  nome: string;
-  meta_atual: number;
-  realizado: number;
-};
+import { Toast } from '@/components/Toast';
 
 export default function GoalsPage() {
   const { perfil } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [rawLeads, setRawLeads] = useState<any[]>([]);
-  const [rawMetas, setRawMetas] = useState<any[]>([]);
-  const [rawUsuarios, setRawUsuarios] = useState<any[]>([]);
+  
+  // Dados do Banco
+  const [listaMetas, setListaMetas] = useState<any[]>([]);
+  const [listaUsuarios, setListaUsuarios] = useState<any[]>([]);
+  const [totalLeadsCount, setTotalLeadsCount] = useState(0); // Para contar contratos
 
   // Estados do Modal
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -33,16 +26,14 @@ export default function GoalsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Datas fixas (Memoizadas para não recriar a cada render)
-  const { mesAtual, anoAtual, inicioMes, fimMes } = useMemo(() => {
+  // Datas fixas (Formato YYYY-MM para o banco novo)
+  const { mesRef, mesNome } = useMemo(() => {
     const hoje = new Date();
     const ano = hoje.getFullYear();
-    const mes = hoje.getMonth() + 1;
+    const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
     return {
-      mesAtual: mes,
-      anoAtual: ano,
-      inicioMes: new Date(ano, mes - 1, 1).toISOString(),
-      fimMes: new Date(ano, mes, 0, 23, 59, 59).toISOString()
+      mesRef: `${ano}-${mes}`, // Ex: '2026-02'
+      mesNome: hoje.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
     };
   }, []);
 
@@ -51,155 +42,144 @@ export default function GoalsPage() {
   [perfil]);
 
   useEffect(() => {
-    fetchDadosOtimizado();
-  }, [inicioMes, fimMes]);
+    fetchDados();
+  }, [mesRef]);
 
-  async function fetchDadosOtimizado() {
+  async function fetchDados() {
     setLoading(true);
     try {
-        // PARALELISMO: Dispara as 3 requisições simultaneamente
-        const [leadsRes, metasRes, usersRes] = await Promise.all([
-            // 1. Leads
-            supabase
-                .from('leads')
-                .select('valor_total, user_id, perfis(nome)')
-                .eq('status', 'ganho')
-                .gte('created_at', inicioMes)
-                .lte('created_at', fimMes),
-            
-            // 2. Metas
-            supabase
-                .from('metas')
-                .select('user_id, valor')
-                .eq('mes', mesAtual)
-                .eq('ano', anoAtual),
+        // 1. BUSCA METAS JÁ CALCULADAS PELO BANCO (Muito mais rápido)
+        // O join 'profiles(nome, cargo)' traz o nome do usuário junto
+        const { data: metasData, error: metasError } = await supabase
+            .from('metas')
+            .select(`
+                user_id, 
+                valor_meta, 
+                valor_vendido, 
+                profiles:user_id ( id, nome, cargo )
+            `)
+            .eq('mes_referencia', mesRef);
 
-            // 3. Usuários
-            supabase
-                .from('perfis')
-                .select('id, nome, cargo')
-        ]);
+        if (metasError) throw metasError;
 
-        if (leadsRes.error) console.error("Erro Leads:", leadsRes.error);
-        if (metasRes.error) console.error("Erro Metas:", metasRes.error);
-        
-        // Salva os dados brutos e deixa o useMemo processar
-        setRawLeads(leadsRes.data || []);
-        setRawMetas(metasRes.data || []);
-        setRawUsuarios(usersRes.data || []);
+        // 2. BUSCA TODOS USUÁRIOS (Para o modal de config, caso alguém não tenha meta ainda)
+        const { data: usersData } = await supabase
+            .from('profiles')
+            .select('id, nome, cargo')
+            .order('nome');
 
-        // Prepara o modal apenas se necessário
-        if (usersRes.data && metasRes.data) {
-             const mapaInicial = (metasRes.data).reduce((acc: any, m) => {
-                acc[m.user_id] = Number(m.valor);
+        // 3. CONTA TOTAL DE VENDAS (Apenas para exibir "Qtd Contratos")
+        const { count } = await supabase
+            .from('leads')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'ganho')
+            .ilike('created_at', `${mesRef}%`); // Filtra pelo mês atual
+
+        setListaMetas(metasData || []);
+        setListaUsuarios(usersData || []);
+        setTotalLeadsCount(count || 0);
+
+        // Prepara o modal de edição com os valores atuais
+        if (metasData) {
+             const mapaInicial = metasData.reduce((acc: any, m: any) => {
+                acc[m.user_id] = Number(m.valor_meta);
                 return acc;
-            }, {});
-            setMetasEditaveis(mapaInicial);
+             }, {});
+             setMetasEditaveis(mapaInicial);
         }
 
-    } catch (error) {
-        console.error("Erro crítico:", error);
+    } catch (error: any) {
+        console.error("Erro ao carregar metas:", error.message);
     } finally {
         setLoading(false);
     }
   }
 
-  // CÁLCULOS MEMOIZADOS (Só rodam quando os dados mudam, não quando abre modal)
-  const { ranking, totalRealizado, metaGlobal, totalVendas, percentualGlobal } = useMemo(() => {
-    if (!rawUsuarios.length) return { ranking: [], totalRealizado: 0, metaGlobal: 1, totalVendas: 0, percentualGlobal: 0 };
+  // PROCESSAMENTO DOS DADOS (Ranking e Totais)
+  const { ranking, totalRealizado, metaGlobal, percentualGlobal } = useMemo(() => {
+    if (!listaMetas.length && !listaUsuarios.length) return { ranking: [], totalRealizado: 0, metaGlobal: 1, percentualGlobal: 0 };
 
-    // Mapas de busca rápida (Hash Maps)
-    const mapaMetas = rawMetas.reduce((acc: Record<string, number>, m) => {
-        acc[m.user_id] = Number(m.valor);
-        return acc;
-    }, {});
+    // Mescla usuários que tem meta com usuários que não tem (para mostrar todo mundo no modal)
+    // Para o Ranking, usamos a listaMetas que vem do banco já com o valor_vendido somado
+    const rank = listaMetas.map((m: any) => ({
+        user_id: m.user_id,
+        nome: m.profiles?.nome || 'Usuário',
+        cargo: m.profiles?.cargo,
+        meta: Number(m.valor_meta || 0),
+        vendido: Number(m.valor_vendido || 0) // O banco já te entrega isso pronto!
+    })).sort((a, b) => b.vendido - a.vendido); // Ordena quem vendeu mais
 
-    const mapaVendas = rawLeads.reduce((acc: Record<string, number>, l) => {
-        acc[l.user_id] = (acc[l.user_id] || 0) + Number(l.valor_total);
-        return acc;
-    }, {});
-
-    // Ranking
-    const rank = rawUsuarios.map(u => ({
-        user_id: u.id,
-        nome: u.nome || 'Desconhecido',
-        meta_atual: mapaMetas[u.id] || 0,
-        realizado: mapaVendas[u.id] || 0
-    })).sort((a, b) => b.realizado - a.realizado);
-
-    // Totais
-    const totalR = rawLeads.reduce((acc, curr) => acc + Number(curr.valor_total), 0);
-    const totalM = Object.values(mapaMetas).reduce((acc, curr) => acc + curr, 0);
+    // Totais da Empresa
+    const totalR = rank.reduce((acc, curr) => acc + curr.vendido, 0);
+    const totalM = rank.reduce((acc, curr) => acc + curr.meta, 0);
     const safeTotalM = totalM > 0 ? totalM : 1;
-    
+
     return {
         ranking: rank,
         totalRealizado: totalR,
         metaGlobal: safeTotalM,
-        totalVendas: rawLeads.length,
         percentualGlobal: Math.min((totalR / safeTotalM) * 100, 100)
     };
-  }, [rawLeads, rawMetas, rawUsuarios]);
+  }, [listaMetas, listaUsuarios]);
 
   const salvarMetas = async () => {
     setSaving(true);
     try {
+        // Prepara o array para salvar no banco novo
         const updates = Object.entries(metasEditaveis).map(([userId, valor]) => ({
             user_id: userId,
-            mes: mesAtual,
-            ano: anoAtual,
-            valor: valor
+            mes_referencia: mesRef, // Formato '2026-02'
+            valor_meta: valor
+            // Não precisa mandar valor_vendido, o banco mantém o que tem
         }));
 
-        const { error } = await supabase.from('metas').upsert(updates, { onConflict: 'user_id,mes,ano' });
+        // Upsert: Atualiza se existir, cria se não existir
+        const { error } = await supabase
+            .from('metas')
+            .upsert(updates, { onConflict: 'user_id,mes_referencia' });
         
-        if (!error) {
-            setToastMessage("Metas salvas com sucesso! 🚀"); // Define mensagem
-            setShowToast(true); // Mostra Toast
-            setIsConfigOpen(false);
-            fetchDadosOtimizado();
-        } else {
-            throw error;
-        }
+        if (error) throw error;
+
+        setToastMessage("Metas atualizadas! 🎯");
+        setShowToast(true);
+        setIsConfigOpen(false);
+        fetchDados(); // Recarrega para ver a barra mudar
     } catch (error: any) {
-        alert("Erro ao salvar: " + error.message); // Mantive alert só para erro crítico
+        alert("Erro ao salvar: " + error.message);
     } finally {
         setSaving(false);
     }
   };
 
-  // RENDERIZAÇÃO
-  if (loading && !rawUsuarios.length) {
+  if (loading && !listaMetas.length) {
     return (
         <div className="p-6 space-y-6 animate-pulse">
             <div className="h-8 w-48 bg-white/5 rounded-lg"></div>
             <div className="h-40 w-full bg-white/5 rounded-[32px]"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 h-96 bg-white/5 rounded-[32px]"></div>
-                <div className="h-96 bg-white/5 rounded-[32px]"></div>
-            </div>
         </div>
     );
   }
 
   return (
     <div className="p-4 md:p-6 space-y-6 pb-24 animate-in fade-in duration-500">
+      
+      {/* HEADER */}
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-black uppercase italic text-white flex items-center gap-3">
             <Target className="text-[#22C55E]" size={28} /> Painel de Metas
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
-            {new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+            {mesNome}
           </p>
         </div>
         
         {podeEditar && (
           <button 
             onClick={() => setIsConfigOpen(true)}
-            className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10 active:scale-95"
+            className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10"
           >
-            <Settings size={14} /> Configurar
+            <Settings size={14} /> Ajustar Metas
           </button>
         )}
       </header>
@@ -240,15 +220,16 @@ export default function GoalsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* RANKING LIST */}
         <div className="lg:col-span-2 bg-white/[0.02] border border-white/5 rounded-[32px] p-6">
           <h3 className="text-sm font-black uppercase text-white mb-6 flex items-center gap-2">
             <Award className="text-yellow-500" size={18} /> Ranking de Performance
           </h3>
           
           <div className="space-y-6">
-            {ranking.map((vend, idx) => {
-               const metaIndividual = vend.meta_atual > 0 ? vend.meta_atual : 1;
-               const pct = Math.min((vend.realizado / metaIndividual) * 100, 100);
+            {ranking.map((vend: any, idx: number) => {
+               const metaIndividual = vend.meta > 0 ? vend.meta : 1;
+               const pct = Math.min((vend.vendido / metaIndividual) * 100, 100);
                
                return (
                 <div key={vend.user_id} className="group">
@@ -258,12 +239,15 @@ export default function GoalsPage() {
                         {idx + 1}
                       </div>
                       <div>
-                          <p className="text-sm font-bold text-white leading-none">{vend.nome}</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Meta: {vend.meta_atual.toLocaleString('pt-BR', { notation: "compact" })}</p>
+                          <p className="text-sm font-bold text-white leading-none flex items-center gap-2">
+                             {vend.nome}
+                             {vend.user_id === perfil?.id && <span className="text-[8px] bg-blue-500/20 text-blue-400 px-1 rounded">VOCÊ</span>}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Meta: {vend.meta.toLocaleString('pt-BR', { notation: "compact" })}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-black text-white">R$ {vend.realizado.toLocaleString('pt-BR')}</p>
+                      <p className="text-sm font-black text-white">R$ {vend.vendido.toLocaleString('pt-BR')}</p>
                       <p className={`text-[9px] font-bold ${pct >= 100 ? 'text-[#22C55E]' : 'text-blue-400'}`}>{pct.toFixed(0)}%</p>
                     </div>
                   </div>
@@ -279,11 +263,15 @@ export default function GoalsPage() {
             })}
 
             {ranking.length === 0 && (
-                <p className="text-center text-slate-600 text-xs py-10">Nenhuma venda encontrada.</p>
+                <div className="text-center py-10">
+                    <p className="text-slate-500 text-xs uppercase font-bold">Nenhum dado encontrado para {mesNome}.</p>
+                    <p className="text-slate-600 text-[10px] mt-1">Verifique se há leads ganhos ou metas configuradas.</p>
+                </div>
             )}
           </div>
         </div>
 
+        {/* SIDEBAR INFO */}
         <div className="space-y-4">
           <div className="bg-white/[0.02] border border-white/5 rounded-[24px] p-5 flex items-center gap-4 hover:bg-white/[0.04] transition-colors">
             <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center text-green-500 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
@@ -291,7 +279,7 @@ export default function GoalsPage() {
             </div>
             <div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contratos</p>
-              <p className="text-2xl font-black text-white">{totalVendas}</p>
+              <p className="text-2xl font-black text-white">{totalLeadsCount}</p>
             </div>
           </div>
 
@@ -302,22 +290,25 @@ export default function GoalsPage() {
             <div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ticket Médio</p>
               <p className="text-2xl font-black text-white">
-                R$ {totalVendas > 0 ? (totalRealizado / totalVendas).toLocaleString('pt-BR', { notation: "compact" }) : 0}
+                R$ {totalLeadsCount > 0 ? (totalRealizado / totalLeadsCount).toLocaleString('pt-BR', { notation: "compact" }) : 0}
               </p>
             </div>
           </div>
 
            <div className="bg-[#22C55E]/10 border border-[#22C55E]/20 rounded-[24px] p-5">
-              <p className="text-[#22C55E] text-[10px] font-black uppercase mb-2">Dica do Mês</p>
+              <p className="text-[#22C55E] text-[10px] font-black uppercase mb-2">Insight do Mês</p>
               <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                  Faltam <strong className="text-white">{Math.max(metaGlobal - totalRealizado, 0).toLocaleString('pt-BR', { notation: "compact" })}</strong> para a meta global. Foque nos leads em "Negociação" para fechar o gap até sexta-feira!
+                  {metaGlobal > totalRealizado 
+                    ? `Faltam R$ ${(metaGlobal - totalRealizado).toLocaleString('pt-BR', { notation: "compact" })} para bater a meta global. Acelere os fechamentos!`
+                    : `Parabéns! A meta global foi batida. Agora é buscar o bônus de superação! 🚀`}
               </p>
            </div>
         </div>
       </div>
 
+      {/* MODAL CONFIG */}
       {isConfigOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
                 
                 <div className="p-6 border-b border-white/10 flex justify-between items-center">
@@ -326,16 +317,16 @@ export default function GoalsPage() {
                 </div>
 
                 <div className="p-6 overflow-y-auto custom-scrollbar space-y-4 flex-1">
-                    <p className="text-xs text-slate-400 mb-2">Defina a meta individual para o mês de <strong>{new Date().toLocaleString('pt-BR', { month: 'long' })}</strong>.</p>
+                    <p className="text-xs text-slate-400 mb-2">Definindo metas para: <strong className="text-white uppercase">{mesNome}</strong>.</p>
                     
-                    {rawUsuarios.map(user => (
+                    {listaUsuarios.map((user: any) => (
                         <div key={user.id} className="flex items-center gap-4 bg-white/[0.02] p-3 rounded-xl border border-white/5">
                             <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center font-bold text-slate-300">
                                 {user.nome?.charAt(0) || 'U'}
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm font-bold text-white">{user.nome}</p>
-                                <p className="text-[10px] text-slate-500 uppercase">{user.cargo || 'Consultor'}</p>
+                                <p className="text-[10px] text-slate-500 uppercase">{user.cargo || 'Membro'}</p>
                             </div>
                             <div className="relative w-32">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">R$</span>
@@ -343,7 +334,7 @@ export default function GoalsPage() {
                                     type="number" 
                                     className="w-full bg-[#0B1120] border border-white/10 rounded-lg py-2 pl-8 pr-2 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
                                     value={metasEditaveis[user.id] || ''}
-                                    placeholder="0"
+                                    placeholder="20000"
                                     onChange={(e) => setMetasEditaveis(prev => ({ ...prev, [user.id]: Number(e.target.value) }))}
                                 />
                             </div>
@@ -355,9 +346,9 @@ export default function GoalsPage() {
                     <button 
                         onClick={salvarMetas} 
                         disabled={saving}
-                        className="w-full bg-[#22C55E] hover:bg-[#1ea850] text-[#0F172A] py-3 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                        className="w-full bg-[#22C55E] hover:bg-[#1ea850] text-[#0F172A] py-3 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(34,197,94,0.3)]"
                     >
-                        {saving ? 'Salvando...' : <><Save size={16} /> Salvar Metas</>}
+                        {saving ? 'Salvando...' : <><Save size={16} /> Salvar Alterações</>}
                     </button>
                 </div>
 
@@ -365,7 +356,6 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {/* COMPONENTE DE NOTIFICAÇÃO (TOAST) */}
       <Toast 
         message={toastMessage} 
         isVisible={showToast} 

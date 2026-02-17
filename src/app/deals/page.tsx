@@ -81,18 +81,33 @@ export default function DealsPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const META_MENSAL = 100000;
+  
+  // Verifica se é chefe (para ver tudo)
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
       setLoading(true);
       
-      const { data: leadsData } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      // --- ALTERAÇÃO DE SEGURANÇA AQUI ---
+      // Inicia a query base
+      let query = supabase.from('leads').select('*');
+
+      // Se NÃO for diretor, força o filtro para trazer apenas os leads DO USUÁRIO
+      if (!isDirector) {
+        query = query.eq('user_id', user.id);
+      }
+
+      // Executa a query com a ordenação
+      const { data: leadsData } = await query.order('created_at', { ascending: false });
+      // -----------------------------------
+
       if (leadsData) {
           setLeads(leadsData);
           const userIds = Array.from(new Set(leadsData.map(l => l.user_id).filter(Boolean)));
           if (userIds.length > 0) {
-              const { data: perfisData } = await supabase.from('perfis').select('id, nome').in('id', userIds);
+              const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds);
               if (perfisData) {
                   const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
                   setUsersMap(mapa);
@@ -118,7 +133,7 @@ export default function DealsPage() {
       setLoading(false);
     };
     fetchData();
-  }, [user]);
+  }, [user, isDirector]); // Adicionado isDirector nas dependências
 
   const getIcone = (tipo: string | undefined) => {
       if(tipo === 'Zap') return <Zap size={14} className="text-yellow-400" />;
@@ -424,7 +439,7 @@ export default function DealsPage() {
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
            <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
-              <span className="text-slate-400 flex items-center gap-1"><Target size={10}/> Meta</span><span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
+              <span className="text-slate-400 flex items-center gap-1"><Target size={10}/> {isDirector ? 'Meta Global' : 'Meta Individual'}</span><span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
            </div>
            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div></div>
         </div>

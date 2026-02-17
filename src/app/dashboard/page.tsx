@@ -29,6 +29,9 @@ export default function DashboardPage() {
   const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [rawLancamentos, setRawLancamentos] = useState<any[]>([]);
 
+  // Verifica se é chefe (Diretor ou o Admin Supremo)
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+
   useEffect(() => {
     if (user) carregarDadosOtimizado();
   }, [user, mesSelecionado]);
@@ -41,21 +44,24 @@ export default function DashboardPage() {
         const dataInicio = new Date(ano, mes - 1, 1).toISOString();
         const dataFim = new Date(ano, mes, 0, 23, 59, 59).toISOString();
 
+        // --- ALTERAÇÃO DE SEGURANÇA AQUI ---
+        // Construção da Query de Leads com Filtro Condicional
+        let leadsQuery = supabase.from('leads')
+            .select('*')
+            .gte('created_at', dataInicio)
+            .lte('created_at', dataFim);
+
+        // Se NÃO for diretor, força o filtro apenas para os dados DELE
+        if (!isDirector) {
+            leadsQuery = leadsQuery.eq('user_id', user?.id);
+        }
+        // -----------------------------------
+
         // 2. PARALELISMO: Busca tudo de uma vez
         const [leadsRes, perfisRes, jobsRes, finRes] = await Promise.all([
-            // Leads filtrados por DATA (Usa o índice criado)
-            supabase.from('leads')
-                .select('*')
-                .gte('created_at', dataInicio)
-                .lte('created_at', dataFim),
-
-            // Perfis (Para mapear nomes)
-            supabase.from('perfis').select('id, nome'),
-
-            // Jobs (Diretoria)
+            leadsQuery, // Usa a query protegida
+            supabase.from('profiles').select('id, nome'), // Corrigido para tabela 'profiles'
             supabase.from('jobs').select('stage, deadline'),
-
-            // Financeiro (Diretoria) - Filtrando pagos
             supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago')
         ]);
 
@@ -80,6 +86,7 @@ export default function DashboardPage() {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
       // --- 2. GERA RANKING (Baseado nos dados brutos do mês) ---
+      // Como rawLeads já vem filtrado do banco se for vendedor, o ranking só vai mostrar ele mesmo
       const rankObj = rawLeads.reduce((acc: any, lead) => {
          const id = lead.user_id || 'sem_dono';
          const nome = nomesMap[id] || 'Desconhecido';
@@ -140,8 +147,6 @@ export default function DashboardPage() {
 
       leadsFiltrados.filter(l => l.status === 'ganho').forEach(l => {
           const dataCriacao = new Date(l.created_at);
-          // Ajuste de fuso horário simples (pega o dia UTC ou Local dependendo de como salvou)
-          // Assumindo ISO string, pegamos o dia.
           const diaIndex = dataCriacao.getDate() - 1; 
           
           if (vendasPorDiaArray[diaIndex]) {
@@ -151,7 +156,6 @@ export default function DashboardPage() {
 
       // --- 7. DADOS DIRETORIA (JOBS & FINANCEIRO) ---
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
-      const hoje = new Date();
       rawJobs.forEach((j: any) => {
         if (j.stage === 'roteiro') prod.roteiro++;
         if (j.stage === 'gravacao') prod.gravacao++;
@@ -217,9 +221,12 @@ export default function DashboardPage() {
                 <button onClick={() => setVisao('comercial')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-500 hover:text-white'}`}>
                     <TrendingUp size={12}/> Comercial
                 </button>
-                <button onClick={() => setVisao('diretoria')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'diretoria' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>
-                    <Radio size={12}/> Gestão
-                </button>
+                {/* Botão de Diretoria só aparece para o Diretor */}
+                {isDirector && (
+                  <button onClick={() => setVisao('diretoria')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'diretoria' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>
+                      <Radio size={12}/> Gestão
+                  </button>
+                )}
             </div>
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-2xl">
                 <Calendar size={12} className="text-blue-500" />
@@ -390,7 +397,7 @@ export default function DashboardPage() {
       )}
 
       {/* VISÃO DIRETORIA COMPACTA */}
-      {visao === 'diretoria' && (
+      {visao === 'diretoria' && isDirector && (
         <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Saldo</p><h3 className={`text-2xl font-black tracking-tight ${statsFinanceiro.saldo >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>R$ {statsFinanceiro.saldo.toLocaleString()}</h3></div>

@@ -12,50 +12,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    async function forceAuth() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+    async function loadSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        setUser(session.user);
         
-        if (session?.user) {
-          // BUSCA NO BANCO
-          const { data: dbProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
+        // Busca simples no banco
+        const { data: dbProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
 
-          // REGRA DE OURO: Se for você, ignora qualquer erro ou ausência no banco
-          if (session.user.email === 'admin@wegrow.com') {
-            const adminMaster = {
-              id: session.user.id,
-              nome: "Admin Principal",
-              cargo: 'diretor', // Força o cargo de diretor aqui
-              email: session.user.email
-            };
-            setUser(session.user);
-            setPerfil(adminMaster);
-          } else if (dbProfile) {
-            setUser(session.user);
-            setPerfil(dbProfile);
-          } else {
-            // Se não for admin e não tiver perfil, manda pro login
-            await supabase.auth.signOut();
-            router.replace('/login');
-          }
+        // BLINDAGEM SUPREMA: Se for você, ignora o erro do banco
+        if (session.user.email === 'admin@wegrow.com') {
+          setPerfil({
+            id: session.user.id,
+            nome: dbProfile?.nome || "Admin WeGrow",
+            cargo: 'diretor',
+            email: session.user.email
+          });
         } else {
-          router.replace('/login');
+          setPerfil(dbProfile);
         }
-      } catch (e) {
-        console.error("Erro no Auth:", e);
-      } finally {
-        setLoading(false);
+      } else {
+        router.replace('/login');
       }
+      setLoading(false);
     }
-    forceAuth();
+    loadSession();
   }, [router]);
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setPerfil(null);
+    router.push('/login');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, perfil, loading, signOut: () => supabase.auth.signOut() }}>
+    <AuthContext.Provider value={{ user, perfil, loading, signOut }}>
       {!loading && children}
     </AuthContext.Provider>
   );

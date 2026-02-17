@@ -4,19 +4,20 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-type Perfil = { 
+// Tipagem rigorosa para evitar erro de Build
+interface Perfil { 
   id: string; 
   nome: string; 
   cargo: 'diretor' | 'gerente' | 'vendedor'; 
   email: string;
-};
+}
 
-type AuthContextType = {
+interface AuthContextType {
   user: any;
   perfil: Perfil | null;
   signOut: () => Promise<void>;
   loading: boolean;
-};
+}
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
@@ -33,8 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Função de busca com validação rigorosa
-  const fetchPerfilETravar = useCallback(async (userId: string, email: string) => {
+  // Função de busca que NUNCA retorna um perfil genérico
+  const fetchSecureProfile = useCallback(async (userId: string, email: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -44,59 +45,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      // REGRA SUPREMA: Se for o email do dono, ele É diretor, ponto final.
+      // TRAVA DE SEGURANÇA MÁXIMA PARA O ADMIN
       if (email === 'admin@wegrow.com') {
         return {
           id: userId,
           email: email,
-          nome: data?.nome || 'Administrador',
-          cargo: 'diretor'
-        } as Perfil;
+          nome: data?.nome || 'Administrador WeGrow',
+          cargo: 'diretor' as const
+        };
       }
 
-      // Se não achou dados no banco para um usuário comum, retorna null para forçar logout
+      // Se não houver dados para um usuário comum, ele NÃO PODE ENTRAR
       if (!data) return null;
 
       return data as Perfil;
     } catch (err) {
-      console.error('Erro ao buscar perfil:', err);
+      console.error('Erro crítico de identidade:', err);
       return null;
     }
   }, []);
 
   useEffect(() => {
-    let active = true;
+    let isMounted = true;
 
-    const sessionInit = async () => {
-      setLoading(true);
+    const syncAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        const p = await fetchPerfilETravar(session.user.id, session.user.email!);
-        if (active) {
-          if (p) {
+        const validatedProfile = await fetchSecureProfile(session.user.id, session.user.email!);
+        
+        if (isMounted) {
+          if (validatedProfile) {
             setUser(session.user);
-            setPerfil(p);
+            setPerfil(validatedProfile);
           } else {
-            // Se tem sessão mas não tem perfil, limpa tudo (Evita o "Visitante")
+            // Se falhar a validação, força o logout para evitar o bug do "Visitante"
             await supabase.auth.signOut();
+            setUser(null);
+            setPerfil(null);
             router.replace('/login');
           }
         }
-      } else if (pathname !== '/login') {
+      } else if (pathname !== '/login' && !pathname.startsWith('/auth')) {
         router.replace('/login');
       }
-      if (active) setLoading(false);
+      
+      if (isMounted) setLoading(false);
     };
 
-    sessionInit();
+    syncAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
-          const p = await fetchPerfilETravar(session.user.id, session.user.email!);
-          setPerfil(p);
-          setUser(session.user);
+          const p = await fetchSecureProfile(session.user.id, session.user.email!);
+          if (p) {
+            setPerfil(p);
+            setUser(session.user);
+          }
         }
       }
 
@@ -108,10 +114,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      active = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [pathname, router, fetchPerfilETravar]);
+  }, [pathname, router, fetchSecureProfile]);
 
   const signOut = async () => {
     setLoading(true);
@@ -119,13 +125,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setPerfil(null);
     setLoading(false);
+    router.replace('/login');
   };
 
   if (loading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#0B1120]">
         <Loader2 className="animate-spin text-[#22C55E] mb-4" size={48} />
-        <span className="text-white font-black uppercase tracking-widest text-xs">Sincronizando Identidade...</span>
+        <div className="text-center">
+            <h2 className="text-white font-black uppercase tracking-widest text-sm">Sincronizando Identidade</h2>
+            <p className="text-slate-500 text-[10px] mt-1 italic">Bloqueando acesso não autorizado...</p>
+        </div>
       </div>
     );
   }

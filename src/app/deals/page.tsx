@@ -593,7 +593,6 @@ export default function DealsPage() {
                   <div className="flex items-center gap-2">
                       {editingLeadId && (
                         <>
-                            {/* BOTÃO EXCLUIR (AGORA AQUI) */}
                             <button onClick={(e) => handleDelete(e, editingLeadId)} className="p-2 bg-red-500/10 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors">
                                 <Trash2 size={20}/>
                             </button>
@@ -609,7 +608,6 @@ export default function DealsPage() {
               {/* BODY (ROLAGEM) */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
-                    {/* Inputs do Formulário */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
@@ -704,7 +702,6 @@ export default function DealsPage() {
                 </form>
               </div>
 
-              {/* FOOTER (FIXO) */}
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
                   <button type="submit" form="leadForm" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
                       {editingLeadId ? 'Salvar Alterações' : 'Criar Oportunidade'}
@@ -715,7 +712,6 @@ export default function DealsPage() {
         </div>
       )}
 
-      {/* COMPONENTE DE NOTIFICAÇÃO (TOAST) */}
       <Toast 
         message={toastMessage} 
         isVisible={showToast} 

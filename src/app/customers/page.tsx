@@ -16,7 +16,7 @@ type Cliente = {
   email?: string;
   cnpj?: string;
   status: 'ativo' | 'inativo';
-  owner_id?: string;
+  user_id?: string; // Ajustado de owner_id para user_id para bater com o Banco
   created_at: string;
 };
 
@@ -43,7 +43,7 @@ type VendaHistorico = {
 const ITEMS_PER_PAGE = 20;
 
 export default function CustomersPage() {
-  const { user } = useAuth();
+  const { user, perfil } = useAuth();
   
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -71,22 +71,26 @@ export default function CustomersPage() {
     email: '',
     cnpj: '',
     status: 'ativo',
-    owner_id: ''
+    user_id: '' // Ajustado para user_id
   });
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  // Verifica permissão
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+
   useEffect(() => {
     async function fetchSellers() {
-      const { data } = await supabase.from('profiles').select('id, nome'); 
+      // Tenta buscar na tabela profiles
+      const { data, error } = await supabase.from('profiles').select('id, nome'); 
       if (data) setVendedores(data as any);
     }
     fetchSellers();
   }, []);
 
   useEffect(() => {
-    if (user) resetAndFetch();
-  }, [user, statusFilter]);
+    if (user && perfil) resetAndFetch();
+  }, [user, perfil, statusFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -111,10 +115,15 @@ export default function CustomersPage() {
         const to = from + ITEMS_PER_PAGE - 1;
 
         let query = supabase
-            .from('clientes') // Garantido que é 'clientes'
+            .from('clientes')
             .select('*', { count: 'exact' })
             .order('nome_empresa', { ascending: true })
             .range(from, to);
+
+        // --- TRAVA DE PRIVACIDADE ---
+        if (!isDirector) {
+            query = query.eq('user_id', user?.id);
+        }
 
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
@@ -170,14 +179,21 @@ export default function CustomersPage() {
         email: cliente.email || '',
         cnpj: cliente.cnpj || '',
         status: cliente.status || 'ativo' as any,
-        owner_id: cliente.owner_id || ''
+        user_id: cliente.user_id || ''
       });
       fetchHistorico(cliente.id);
       fetchUnidades(cliente.id);
       setActiveTab('dados');
     } else {
       setEditingId(null);
-      setFormData({ nome_empresa: '', telefone: '', email: '', cnpj: '', status: 'ativo', owner_id: user?.id || '' });
+      setFormData({ 
+        nome_empresa: '', 
+        telefone: '', 
+        email: '', 
+        cnpj: '', 
+        status: 'ativo', 
+        user_id: isDirector ? '' : (user?.id || '') 
+      });
       setHistoricoVendas([]);
       setUnidades([]);
       setActiveTab('dados');
@@ -185,37 +201,31 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
-  // --- CORREÇÃO PRINCIPAL NO SALVAMENTO ---
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
 
-    // Prepara payload com fallback do owner_id
-    const payload: any = { ...formData };
-    if (!payload.owner_id) payload.owner_id = user?.id;
+    const payload = { ...formData };
+    if (!payload.user_id) payload.user_id = user?.id;
 
-    if (editingId) {
-      const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
-      if (error) {
-          alert("Erro ao atualizar: " + error.message);
-          return;
+    try {
+      if (editingId) {
+        const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
+        if (error) throw error;
+        resetAndFetch();
+      } else {
+        const { data, error } = await supabase.from('clientes').insert([payload]).select();
+        if (error) throw error;
+        if (data) {
+            setEditingId(data[0].id);
+            resetAndFetch();
+            alert("Cliente criado! Agora você pode adicionar filiais.");
+        }
       }
-      setClientes(prev => prev.map(c => c.id === editingId ? { ...c, ...payload } as any : c));
-    } else {
-      const { data, error } = await supabase.from('clientes').insert([payload]).select();
-      if (error) {
-          alert("Erro ao criar: " + error.message);
-          return;
-      }
-      if (data) {
-          setClientes(prev => [data[0] as any, ...prev]);
-          setTotalCount(prev => prev + 1);
-          setEditingId(data[0].id);
-          alert("Cliente criado! Agora você pode adicionar filiais.");
-      }
+      if (editingId) setIsModalOpen(false);
+    } catch (error: any) {
+      alert("Erro ao salvar: " + error.message);
     }
-    // Não fecha modal se for criação para permitir adicionar filiais
-    if (editingId) setIsModalOpen(false);
   };
 
   const handleSaveUnit = async (e: React.FormEvent) => {
@@ -245,14 +255,11 @@ export default function CustomersPage() {
   const handleDeleteCliente = async (id: number) => {
     if (!confirm("Excluir cliente e todo seu histórico?")) return;
     const { error } = await supabase.from('clientes').delete().eq('id', id);
-    if (!error) {
-        setClientes(prev => prev.filter(c => c.id !== id));
-        setTotalCount(prev => prev - 1);
-    }
+    if (!error) resetAndFetch();
   };
 
   const handleImport = () => {
-    alert("Funcionalidade de leitura de CSV será implementada no próximo passo!");
+    alert("Funcionalidade de importação CSV em desenvolvimento!");
   };
 
   return (
@@ -317,10 +324,10 @@ export default function CustomersPage() {
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1">
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
-                                {cliente.owner_id && (
+                                {isDirector && cliente.user_id && (
                                     <span className="flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">
                                         <User size={10}/> 
-                                        {vendedores.find(v => v.id === cliente.owner_id)?.nome || 'Vendedor'}
+                                        {vendedores.find(v => v.id === cliente.user_id)?.nome || 'Vendedor'}
                                     </span>
                                 )}
                             </div>
@@ -364,7 +371,7 @@ export default function CustomersPage() {
             {/* ABAS */}
             <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto">
                <button onClick={() => setActiveTab('dados')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'dados' ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>
-                   Dados Cadastrais
+                    Dados Cadastrais
                </button>
                {editingId && (
                    <>
@@ -380,12 +387,11 @@ export default function CustomersPage() {
 
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                 
-                {/* ABA 1: DADOS */}
                 {activeTab === 'dados' && (
                 <form onSubmit={handleSaveCliente} className="space-y-5 pb-2">
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nome Fantasia *</label>
-                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required placeholder="Ex: Rede de Rádio Jovem"/>
+                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required placeholder="Ex: Nome da Empresa"/>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -395,7 +401,7 @@ export default function CustomersPage() {
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} placeholder="CNPJ da Matriz"/>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} placeholder="CNPJ"/>
                         </div>
                     </div>
 
@@ -408,11 +414,12 @@ export default function CustomersPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Executivo de Conta</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Responsável</label>
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" 
-                                value={formData.owner_id} 
-                                onChange={e => setFormData({...formData, owner_id: e.target.value})}
+                                value={formData.user_id} 
+                                onChange={e => setFormData({...formData, user_id: e.target.value})}
+                                disabled={!isDirector} // Vendedor não troca o dono
                             >
                                 <option value="" className="bg-[#0B1120]">Selecione...</option>
                                 {vendedores.map(v => (
@@ -423,25 +430,22 @@ export default function CustomersPage() {
                     </div>
 
                     <button type="submit" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-lg mt-4">
-                        {editingId ? 'Salvar Alterações' : 'Criar Cliente e Adicionar Filiais'}
+                        {editingId ? 'Salvar Alterações' : 'Criar Cliente'}
                     </button>
                 </form>
                 )}
 
-                {/* ABA 2: UNIDADES / FILIAIS (NOVIDADE) */}
                 {activeTab === 'unidades' && (
                     <div className="space-y-6">
-                        {/* Formulário de Adicionar Unidade */}
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
                             <h4 className="text-xs font-black uppercase text-white mb-3 flex items-center gap-2"><Plus size={14}/> Nova Filial</h4>
                             <form onSubmit={handleSaveUnit} className="flex flex-col md:flex-row gap-3">
-                                <input className="flex-1 bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-purple-500" placeholder="Nome (Ex: Filial SP)" value={newUnit.nome} onChange={e => setNewUnit({...newUnit, nome: e.target.value})} required/>
+                                <input className="flex-1 bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-purple-500" placeholder="Nome" value={newUnit.nome} onChange={e => setNewUnit({...newUnit, nome: e.target.value})} required/>
                                 <input className="w-32 bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-purple-500" placeholder="Cidade" value={newUnit.cidade} onChange={e => setNewUnit({...newUnit, cidade: e.target.value})}/>
                                 <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-purple-500 transition-colors">Adicionar</button>
                             </form>
                         </div>
 
-                        {/* Lista de Unidades */}
                         <div className="space-y-2">
                             {unidades.map(unit => (
                                 <div key={unit.id} className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl border border-white/5">
@@ -451,18 +455,16 @@ export default function CustomersPage() {
                                         </div>
                                         <div>
                                             <div className="text-white text-sm font-bold">{unit.nome}</div>
-                                            <div className="text-slate-500 text-[10px] uppercase">{unit.cidade || 'Sem local'} {unit.estado}</div>
+                                            <div className="text-slate-500 text-[10px] uppercase">{unit.cidade || 'Sem local'}</div>
                                         </div>
                                     </div>
                                     <button onClick={() => handleDeleteUnit(unit.id)} className="text-slate-600 hover:text-red-500 p-2"><Trash2 size={14}/></button>
                                 </div>
                             ))}
-                            {unidades.length === 0 && <p className="text-center text-slate-600 text-xs py-4">Nenhuma filial cadastrada.</p>}
                         </div>
                     </div>
                 )}
 
-                {/* ABA 3: HISTÓRICO (MANTIDA) */}
                 {activeTab === 'historico' && (
                 <div className="space-y-3 pb-2">
                     {historicoVendas.map(venda => (
@@ -471,9 +473,7 @@ export default function CustomersPage() {
                             <span className="text-[10px] text-slate-500 font-black uppercase mb-1">
                                 {new Date(venda.created_at).toLocaleDateString('pt-BR')}
                             </span>
-                            <div className="flex gap-2">
-                                <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-blue-500/20 text-blue-500">{venda.status}</span>
-                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-blue-500/20 text-blue-500 w-fit">{venda.status}</span>
                         </div>
                         <span className="text-sm font-black text-white">R$ {venda.valor_total.toLocaleString('pt-BR')}</span>
                     </div>

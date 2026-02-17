@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-// Tipagem oficial do banco de dados
+// --- TIPAGEM (Baseada na tabela 'profiles') ---
 type Perfil = { 
   id: string; 
   nome: string; 
@@ -14,7 +14,6 @@ type Perfil = {
   avatar_url?: string;
 };
 
-// Definição do Contexto
 type AuthContextType = {
   user: any;
   perfil: Perfil | null;
@@ -37,73 +36,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // --- FUNÇÃO DE BUSCA BLINDADA ---
-  const buscarPerfil = async (userId: string) => {
+  // --- FUNÇÃO DE BUSCA DO PERFIL ---
+  const buscarPerfil = async (userId: string, userEmail?: string) => {
     try {
+      // 1. Busca na tabela correta 'profiles'
       const { data, error } = await supabase
-        .from('profiles') // Tabela correta
+        .from('profiles')
         .select('*')
-        .eq('id', userId) // Filtra pelo ID do usuário logado
-        .single();
+        .eq('id', userId)
+        .maybeSingle(); // Usa maybeSingle para não quebrar se não achar
 
       if (error) {
         console.error('Erro ao buscar perfil:', error.message);
-        return null;
       }
-      
-      // --- TRAVA DE SEGURANÇA (A BLINDAGEM) ---
-      // Se for o e-mail do dono, força o cargo 'diretor' via código.
-      // Isso garante acesso total independente do que estiver no banco.
-      if (data && data.email === 'admin@wegrow.com') {
-          return { ...data, cargo: 'diretor' } as Perfil;
+
+      // --- TRAVA DE SEGURANÇA (ADMIN SUPREMO) ---
+      // Se o banco falhar ou o cargo estiver errado, isso garante seu acesso.
+      const emailParaVerificar = userEmail || data?.email;
+      if (emailParaVerificar === 'admin@wegrow.com') {
+          // Retorna um perfil de Diretor forçado
+          return { 
+            ...data, 
+            id: userId,
+            email: 'admin@wegrow.com',
+            cargo: 'diretor',
+            nome: data?.nome || 'Admin WeGrow'
+          } as Perfil;
       }
-      // ----------------------------------------
-      
+      // ------------------------------------------
+
       return data as Perfil;
     } catch (err) {
-      console.error('Erro crítico no perfil:', err);
+      console.error('Erro crítico:', err);
       return null;
     }
   };
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
+
+    // --- TIMEOUT ANTI-TRAVAMENTO ---
+    // Se o banco não responder em 4 segundos, libera o app para não ficar na tela de load eterno
+    const safetyTimer = setTimeout(() => {
+        if (isMounted && loading) {
+            console.warn("⚠️ Login demorou. Liberando interface por segurança.");
+            setLoading(false); 
+        }
+    }, 4000);
 
     const inicializarSessao = async () => {
       try {
-        // 1. Verifica sessão atual no Supabase
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session?.user) {
-          setUser(session.user);
+          if (isMounted) setUser(session.user);
           
-          // 2. Busca o perfil com a trava de segurança
-          const dadosPerfil = await buscarPerfil(session.user.id);
+          // Busca perfil usando ID e Email
+          const dadosPerfil = await buscarPerfil(session.user.id, session.user.email);
           
-          if (mounted) {
-            setPerfil(dadosPerfil);
-          }
+          if (isMounted) setPerfil(dadosPerfil);
         } else {
-          // Se não tem usuário e tenta acessar página interna
+          // Se não tem usuário e não está no login
           if (pathname !== '/login') {
             router.replace('/login');
           }
         }
       } catch (error) {
-        console.error("Erro de autenticação:", error);
+        console.error("Erro auth:", error);
       } finally {
-        if (mounted) setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     inicializarSessao();
 
-    // 3. Monitora mudanças (Login, Logout, etc)
+    // Listener de mudanças (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user);
-        // Recarrega o perfil para garantir que pegamos os dados atualizados
-        const dadosPerfil = await buscarPerfil(session.user.id); 
+        const dadosPerfil = await buscarPerfil(session.user.id, session.user.email);
         setPerfil(dadosPerfil);
         setLoading(false);
       } else if (event === 'SIGNED_OUT') {
@@ -115,10 +126,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      mounted = false;
+      isMounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
-  }, [router, pathname]);
+  }, [pathname, router]);
 
   const signOut = async () => {
     setLoading(true);
@@ -129,14 +141,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   };
 
-  // TELA DE CARREGAMENTO
+  // --- TELA DE CARREGAMENTO ---
   if (loading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#0B1120] text-white gap-4">
         <Loader2 className="animate-spin text-[#22C55E]" size={48} />
         <div className="flex flex-col items-center gap-1">
            <span className="font-black uppercase tracking-widest text-sm">Carregando Sistema</span>
-           <span className="text-[10px] text-slate-500 font-mono">Verificando credenciais...</span>
+           <span className="text-[10px] text-slate-500 font-mono">Verificando acesso...</span>
         </div>
       </div>
     );

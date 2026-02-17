@@ -12,33 +12,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    async function checkUser() {
+    async function forceAuth() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session) {
-          // Busca o perfil, mas não trava se não achar
+        if (session?.user) {
+          // BUSCA NO BANCO
           const { data: dbProfile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .maybeSingle();
 
-          // BLINDAGEM: Se o email for o seu, força DIRETOR aqui no código
+          // REGRA DE OURO: Se for você, ignora qualquer erro ou ausência no banco
           if (session.user.email === 'admin@wegrow.com') {
-            const adminForcado = {
+            const adminMaster = {
               id: session.user.id,
-              nome: dbProfile?.nome || 'Admin Principal',
-              cargo: 'diretor',
+              nome: "Admin Principal",
+              cargo: 'diretor', // Força o cargo de diretor aqui
               email: session.user.email
             };
             setUser(session.user);
-            setPerfil(adminForcado);
+            setPerfil(adminMaster);
           } else if (dbProfile) {
             setUser(session.user);
             setPerfil(dbProfile);
           } else {
-            // Se não for admin e não tiver perfil, desloga por segurança
+            // Se não for admin e não tiver perfil, manda pro login
             await supabase.auth.signOut();
             router.replace('/login');
           }
@@ -46,12 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.replace('/login');
         }
       } catch (e) {
-        console.error("Erro Crítico Auth:", e);
+        console.error("Erro no Auth:", e);
       } finally {
         setLoading(false);
       }
     }
-    checkUser();
+    forceAuth();
   }, [router]);
 
   return (

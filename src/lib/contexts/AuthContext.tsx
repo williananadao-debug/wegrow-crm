@@ -12,24 +12,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    async function load() {
+    const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (session) {
         setUser(session.user);
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         
-        // Se for você, o cargo é Diretor, independente do banco
-        if (session.user.email === 'admin@wegrow.com') {
-          setPerfil({ ...data, cargo: 'diretor', nome: data?.nome || 'Admin' });
-        } else {
-          setPerfil(data);
-        }
+        // Busca o perfil que agora GARANTIMOS que existe via Trigger no SQL
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        setPerfil(profile);
       } else {
-        router.replace('/login');
+        if (window.location.pathname !== '/login') router.replace('/login');
       }
       setLoading(false);
-    }
-    load();
+    };
+
+    checkSession();
+
+    // Ouve mudanças na sessão (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+        checkSession();
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   return (

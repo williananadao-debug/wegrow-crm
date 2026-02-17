@@ -4,13 +4,14 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
-// Tipagem atualizada conforme o banco de dados 'profiles'
+// Tipagem oficial do banco de dados
 type Perfil = { 
   id: string; 
   nome: string; 
   cargo: 'diretor' | 'gerente' | 'vendedor'; 
   email: string;
   unidade_id?: string;
+  avatar_url?: string;
 };
 
 // Definição do Contexto
@@ -36,19 +37,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Função auxiliar para buscar o perfil na tabela CERTA
+  // --- FUNÇÃO DE BUSCA BLINDADA ---
   const buscarPerfil = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('profiles') // <--- CORREÇÃO: Usar 'profiles', não 'perfis'
+        .from('profiles') // Tabela correta
         .select('*')
-        .eq('id', userId) // <--- OBRIGATÓRIO: Filtra pelo ID do usuário logado
+        .eq('id', userId) // Filtra pelo ID do usuário logado
         .single();
 
       if (error) {
         console.error('Erro ao buscar perfil:', error.message);
         return null;
       }
+      
+      // --- TRAVA DE SEGURANÇA (A BLINDAGEM) ---
+      // Se for o e-mail do dono, força o cargo 'diretor' via código.
+      // Isso garante acesso total independente do que estiver no banco.
+      if (data && data.email === 'admin@wegrow.com') {
+          return { ...data, cargo: 'diretor' } as Perfil;
+      }
+      // ----------------------------------------
       
       return data as Perfil;
     } catch (err) {
@@ -68,14 +77,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           setUser(session.user);
           
-          // 2. Busca os dados do perfil (cargo, nome, etc)
+          // 2. Busca o perfil com a trava de segurança
           const dadosPerfil = await buscarPerfil(session.user.id);
           
           if (mounted) {
             setPerfil(dadosPerfil);
           }
         } else {
-          // Se não tem usuário e tenta acessar página protegida
+          // Se não tem usuário e tenta acessar página interna
           if (pathname !== '/login') {
             router.replace('/login');
           }
@@ -89,11 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     inicializarSessao();
 
-    // 3. Ouvinte de mudanças (Login, Logout, Token Refresh)
+    // 3. Monitora mudanças (Login, Logout, etc)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user);
-        // Garante que o perfil seja carregado também na troca de estado
+        // Recarrega o perfil para garantir que pegamos os dados atualizados
         const dadosPerfil = await buscarPerfil(session.user.id); 
         setPerfil(dadosPerfil);
         setLoading(false);
@@ -127,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <Loader2 className="animate-spin text-[#22C55E]" size={48} />
         <div className="flex flex-col items-center gap-1">
            <span className="font-black uppercase tracking-widest text-sm">Carregando Sistema</span>
-           <span className="text-[10px] text-slate-500 font-mono">Autenticando usuário...</span>
+           <span className="text-[10px] text-slate-500 font-mono">Verificando credenciais...</span>
         </div>
       </div>
     );

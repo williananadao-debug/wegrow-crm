@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
-  Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2 
+  Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
+  Sparkles, Crosshair // <--- ADICIONEI OS ÍCONES NOVOS AQUI
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -81,7 +82,7 @@ export default function DealsPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const META_MENSAL = 100000;
-  
+
   // Verifica se é chefe (para ver tudo)
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -90,8 +91,7 @@ export default function DealsPage() {
     const fetchData = async () => {
       setLoading(true);
       
-      // --- ALTERAÇÃO DE SEGURANÇA AQUI ---
-      // Inicia a query base
+      // --- SEGURANÇA: FILTRO DE LEADS ---
       let query = supabase.from('leads').select('*');
 
       // Se NÃO for diretor, força o filtro para trazer apenas os leads DO USUÁRIO
@@ -99,9 +99,8 @@ export default function DealsPage() {
         query = query.eq('user_id', user.id);
       }
 
-      // Executa a query com a ordenação
       const { data: leadsData } = await query.order('created_at', { ascending: false });
-      // -----------------------------------
+      // ----------------------------------
 
       if (leadsData) {
           setLeads(leadsData);
@@ -133,7 +132,7 @@ export default function DealsPage() {
       setLoading(false);
     };
     fetchData();
-  }, [user, isDirector]); // Adicionado isDirector nas dependências
+  }, [user, isDirector]);
 
   const getIcone = (tipo: string | undefined) => {
       if(tipo === 'Zap') return <Zap size={14} className="text-yellow-400" />;
@@ -287,7 +286,6 @@ export default function DealsPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
-        // URL oficial para abrir no app de mapas (Google/Apple)
         const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
         
         const now = new Date();
@@ -308,19 +306,9 @@ export default function DealsPage() {
       },
       (err) => {
         console.error(err);
-        let erroMsg = "Erro ao obter GPS.";
-        if (err.code === 1) erroMsg = "Permissão de localização negada. Ative nas configurações do seu navegador.";
-        if (err.code === 2) erroMsg = "Sinal de GPS indisponível ou fraco.";
-        if (err.code === 3) erroMsg = "Tempo de busca esgotado. Tente novamente em local aberto.";
-        
-        alert(erroMsg);
         setToastMessage("Falha no GPS ❌");
       },
-      { 
-        enableHighAccuracy: true, // Força o GPS do celular (mais preciso que Wi-Fi)
-        timeout: 15000,           // Espera até 15 segundos
-        maximumAge: 0             // Não aceita localização antiga do cache
-      }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -330,7 +318,6 @@ export default function DealsPage() {
       const { error } = await supabase.from('leads').delete().eq('id', id);
       if (!error) {
         setLeads(prev => prev.filter(l => l.id !== id));
-        // Se estiver apagando de dentro do modal, fecha o modal
         if (isModalOpen) setIsModalOpen(false);
       }
   };
@@ -424,6 +411,9 @@ export default function DealsPage() {
   const getStageTotal = (stageIdx: number) => {
       return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
   };
+
+  // --- HELPER PARA IDENTIFICAR MISSÕES (PREMISSAS) ---
+  const isMission = (text: string) => text && (text.includes('Meta') || text.includes('Resgate'));
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
@@ -523,18 +513,30 @@ export default function DealsPage() {
                                             </div>
                                         </div>
                                         
+                                        {/* --- ÁREA DE CHECKIN INTELIGENTE --- */}
+                                        <div className="mb-2">
+                                            {/* Caso 1: Missão/Premissa (Roxo) */}
+                                            {lead.checkin && isMission(lead.checkin) ? (
+                                                <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
+                                                    {lead.checkin.includes('Resgate') ? <Sparkles size={12} className="text-purple-400"/> : <Crosshair size={12} className="text-purple-400"/>}
+                                                    <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
+                                                </div>
+                                            ) : lead.checkin ? (
+                                                /* Caso 2: Checkin Normal (GPS) */
+                                                <div className="flex items-center gap-1 mb-1">
+                                                    <MapPin size={10} className="text-pink-500" />
+                                                    <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
+                                                </div>
+                                            ) : (
+                                                /* Caso 3: Pendente */
+                                                lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
+                                            )}
+                                        </div>
+                                        {/* ----------------------------------- */}
+
                                         <div className="mb-1">
                                             <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate">{lead.empresa}</h4>
                                         </div>
-
-                                        {lead.checkin ? (
-                                            <div className="flex items-center gap-1 mb-2">
-                                                <MapPin size={10} className="text-pink-500" />
-                                                <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
-                                            </div>
-                                        ) : (
-                                            lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
-                                        )}
 
                                         <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
                                             {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (

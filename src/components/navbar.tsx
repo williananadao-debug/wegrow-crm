@@ -16,7 +16,7 @@ import {
   ChevronLeft, 
   ChevronRight,
   X,
-  Rocket // Ícone para a aba Estratégia
+  Rocket 
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -37,22 +37,22 @@ export default function Navbar() {
     return () => window.removeEventListener('open-sidebar', handleOpen);
   }, []);
 
-  // Itens Padrão (Todo mundo vê)
+  // Itens Padrão - Ajustados para suas rotas reais (sem /dashboard/ na frente para evitar 404)
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
     { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
-    { name: 'Vendas', icon: <Zap size={20} />, href: '/dashboard/deals' }, // Ajustei para o caminho correto do Pipeline
+    { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' }, 
     { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' },
     { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' },
-    { name: 'Clientes', icon: <Users size={20} />, href: '/dashboard/clients' }, // Ajustei para o caminho correto
+    { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
   ];
 
   // Itens de Gestão (Só Diretor/Gerente)
   if (isDirector || isManager) {
     
-    // NOVO: Link para a página de Estratégia/IA (Apenas Diretor)
+    // Aba Estratégia (Apenas Diretor) - Rota definida como /dashboard/premises
     if (isDirector) {
-      menuItems.splice(1, 0, { // Insere logo abaixo de Dashboard
+      menuItems.splice(1, 0, { 
         name: 'Estratégia', 
         icon: <Rocket size={20} />, 
         href: '/dashboard/premises' 
@@ -144,7 +144,7 @@ export default function Navbar() {
             </Link>
           ))}
 
-          {/* ÁREA INFERIOR (Configurações e Sair) */}
+          {/* ÁREA INFERIOR */}
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
             <Link
               href="/settings"

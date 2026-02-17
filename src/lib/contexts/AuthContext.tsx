@@ -12,47 +12,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    async function loadSession() {
+    async function load() {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session) {
         setUser(session.user);
+        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         
-        // Busca simples no banco
-        const { data: dbProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        // BLINDAGEM SUPREMA: Se for você, ignora o erro do banco
+        // Se for você, o cargo é Diretor, independente do banco
         if (session.user.email === 'admin@wegrow.com') {
-          setPerfil({
-            id: session.user.id,
-            nome: dbProfile?.nome || "Admin WeGrow",
-            cargo: 'diretor',
-            email: session.user.email
-          });
+          setPerfil({ ...data, cargo: 'diretor', nome: data?.nome || 'Admin' });
         } else {
-          setPerfil(dbProfile);
+          setPerfil(data);
         }
       } else {
         router.replace('/login');
       }
       setLoading(false);
     }
-    loadSession();
+    load();
   }, [router]);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setPerfil(null);
-    router.push('/login');
-  };
-
   return (
-    <AuthContext.Provider value={{ user, perfil, loading, signOut }}>
+    <AuthContext.Provider value={{ user, perfil, loading, signOut: () => supabase.auth.signOut() }}>
       {!loading && children}
     </AuthContext.Provider>
   );

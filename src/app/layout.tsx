@@ -18,6 +18,15 @@ export const metadata: Metadata = {
   title: "WeGrow CRM",
   description: "Gestão Comercial e Produção",
   manifest: "/manifest.json",
+  
+  // --- AQUI ESTÁ A MÁGICA DO LOGO ---
+  // Certifique-se de ter um arquivo 'logo.png' na pasta 'public'
+  icons: {
+    icon: '/logo.png',      // Ícone da aba do navegador
+    shortcut: '/logo.png',  // Ícone de atalho
+    apple: '/logo.png',     // Ícone para iPhone/iPad (Apple Touch Icon)
+  },
+  
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -34,7 +43,7 @@ export default function RootLayout({
     <html lang="pt-br">
       <body className={`${inter.className} bg-[#0B1120] text-white antialiased`}>
         <AuthProvider>
-          {/* O LayoutWrapper deve conter a lógica para não aparecer no Login */}
+          {/* O LayoutWrapper contém a lógica do App (Sidebar, Topbar, Mobile) */}
           <LayoutWrapper>
             {children}
           </LayoutWrapper>

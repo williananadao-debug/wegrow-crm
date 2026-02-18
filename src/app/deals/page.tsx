@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair
+  Sparkles, Crosshair, Calendar
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -82,8 +82,6 @@ export default function DealsPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const META_MENSAL = 100000;
-
-  // Verifica se é chefe (para ver tudo)
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
@@ -91,22 +89,13 @@ export default function DealsPage() {
     const fetchData = async () => {
       setLoading(true);
       
-      // --- SEGURANÇA: FILTRO DE LEADS ---
       let query = supabase.from('leads').select('*');
-
-      // Se NÃO for diretor, força o filtro para trazer apenas os leads DO USUÁRIO
       if (!isDirector) {
         query = query.eq('user_id', user.id);
       }
 
-      // Ordenação inicial
-      const { data: leadsData, error } = await query.order('created_at', { ascending: false });
+      const { data: leadsData } = await query.order('created_at', { ascending: false });
       
-      if (error) {
-        console.error("Erro ao buscar leads:", error);
-      }
-      // ----------------------------------
-
       if (leadsData) {
           setLeads(leadsData);
           const userIds = Array.from(new Set(leadsData.map(l => l.user_id).filter(Boolean)));
@@ -145,6 +134,13 @@ export default function DealsPage() {
       return <Mic2 size={14} className="text-blue-400" />;
   };
 
+  // Helper para formatar data discreta
+  const formatarData = (dataIso: string) => {
+    if (!dataIso) return '';
+    const data = new Date(dataIso);
+    return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  };
+
   const criarJobDeProducao = async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
     const briefingAutomatico = `VENDA APROVADA ✅\n\nItens: ${resumoItens}\nValor: R$ ${lead.valor_total}\n\n(Gerado automaticamente)`;
@@ -177,7 +173,6 @@ export default function DealsPage() {
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
 
-    // Atualiza estado local primeiro
     setLeads(prev => prev.map(l => 
         l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l
     ));
@@ -192,14 +187,12 @@ export default function DealsPage() {
                     criarJobDeProducao(lead),
                     gerarCobrancaFinanceira(lead)
                 ]);
-                
                 setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
                 setShowToast(true);
             }
         }
     } else {
         console.error("Erro ao mudar etapa:", error);
-        alert(`Erro ao salvar mudança: ${error.message}`);
     }
   };
 
@@ -366,7 +359,7 @@ export default function DealsPage() {
 
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novaEmpresa) return alert("Selecione um cliente!");
+    if (!novaEmpresa) return alert("Digite o nome do cliente!");
     if (!user) return alert("Você precisa estar logado!");
 
     const valorTotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
@@ -377,7 +370,7 @@ export default function DealsPage() {
         valor_total: valorTotal,
         itens: itensTemporarios,
         foto_url: fotoUrl,
-        ...(editingLeadId ? {} : { status: 'aberto', etapa: 0 }),
+        ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
         client_id: selectedClientId
     };
@@ -436,7 +429,6 @@ export default function DealsPage() {
   const percentMeta = Math.min((totalGanhos / META_MENSAL) * 100, 100);
   const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
-  // FILTRO E ORDENAÇÃO POR DATA (Fix: Leads novos sempre no topo)
   const getLeadsByStage = (stageIdx: number) => {
       return leads
         .filter(l => l.etapa === stageIdx)
@@ -532,8 +524,12 @@ export default function DealsPage() {
                                         className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
                                     >
                                             <div className="flex justify-between items-start mb-1">
-                                                <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
-                                                    <Edit2 size={10} className="text-slate-500"/>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
+                                                        <Edit2 size={10} className="text-slate-500"/>
+                                                    </div>
+                                                    {/* DATA DISCRETA NO CARD */}
+                                                    <span className="text-[8px] text-slate-600 font-mono tracking-tighter">{formatarData(lead.created_at)}</span>
                                                 </div>
                                                 
                                                 {/* ÍCONES: Vertical (Mobile) / Horizontal (Desktop) */}
@@ -643,17 +639,37 @@ export default function DealsPage() {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        {/* CAMPO CLIENTE HÍBRIDO (DIGITAR OU SELECIONAR) */}
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
-                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] appearance-none" value={selectedClientId || ''} onChange={(e) => {
-                                    const id = Number(e.target.value);
-                                    const cli = clientesOpcoes.find(c => c.id === id);
-                                    if(cli) { setSelectedClientId(id); setNovaEmpresa(cli.nome_empresa); setNovoTelefone(cli.telefone || ''); }
-                                }} required>
-                                <option value="" className="bg-[#0B1120]">Selecione...</option>
-                                {clientesOpcoes.map(c => <option key={c.id} value={c.id} className="bg-[#0B1120]">{c.nome_empresa}</option>)}
-                            </select>
+                            <input 
+                                list="clientes-list"
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                placeholder="Digite ou selecione..."
+                                value={novaEmpresa}
+                                onChange={(e) => {
+                                    const texto = e.target.value;
+                                    setNovaEmpresa(texto);
+                                    // Tenta achar o cliente na lista
+                                    const clienteEncontrado = clientesOpcoes.find(c => c.nome_empresa === texto);
+                                    if(clienteEncontrado) {
+                                        setSelectedClientId(clienteEncontrado.id);
+                                        setNovoTelefone(clienteEncontrado.telefone || '');
+                                    } else {
+                                        setSelectedClientId(null);
+                                        // Não limpa o telefone, permite o usuário digitar se for novo
+                                    }
+                                }}
+                                required
+                            />
+                            <datalist id="clientes-list">
+                                {clientesOpcoes.map(c => (
+                                    <option key={c.id} value={c.nome_empresa} />
+                                ))}
+                            </datalist>
                         </div>
+
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />

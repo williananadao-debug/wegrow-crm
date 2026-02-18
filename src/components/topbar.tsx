@@ -1,114 +1,83 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { Bell, X, Check, Zap, Target, AlertCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { Search, Calendar } from 'lucide-react';
 
-export default function NotificationBell() {
-  const { user } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+// AJUSTE CRÍTICO: Importando do arquivo que você mandou agora (NotificationBell.tsx)
+// Se o arquivo na pasta for minúsculo (notification-bell.tsx), mude aqui.
+import NotificationBell from '@/components/NotificationBell'; 
 
-  // Busca notificações em tempo real
-  useEffect(() => {
-    if (!user) return;
+export default function Topbar() {
+  const { user, perfil } = useAuth();
+  const pathname = usePathname();
 
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (data) setNotifications(data);
-    };
-
-    fetchNotifications();
-
-    // ESCUTA O BANCO EM TEMPO REAL (Realtime)
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          setNotifications(prev => [payload.new, ...prev]);
-          // Opcional: Tocar um som de alerta aqui
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
-
-  const markAsRead = async (id: number) => {
-    await supabase.from('notifications').update({ lida: true }).eq('id', id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
+  // Função para dar nome à página baseado na URL
+  const getPageTitle = (path: string) => {
+    if (path.includes('/dashboard')) return 'Dashboard Geral';
+    if (path.includes('/deals')) return 'Pipeline de Vendas';
+    if (path.includes('/jobs')) return 'Esteira de Produção';
+    if (path.includes('/finance')) return 'Gestão Financeira';
+    if (path.includes('/customers')) return 'Carteira de Clientes';
+    if (path.includes('/goals')) return 'Metas & Performance';
+    if (path.includes('/settings')) return 'Configurações';
+    return 'Visão Geral';
   };
 
-  const unreadCount = notifications.filter(n => !n.lida).length;
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
-    <div className="relative">
-      {/* ÍCONE DO SINO */}
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-400 hover:text-white transition-colors"
-      >
-        <Bell size={20} />
-        {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-bounce">
-            {unreadCount}
-          </span>
-        )}
-      </button>
+    <header className="h-20 bg-[#0B1120] border-b border-white/5 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm w-full">
+      
+      {/* LADO ESQUERDO: Título + Data */}
+      <div className="flex flex-col justify-center">
+        <h1 className="text-xl font-black italic text-white tracking-tighter uppercase leading-none">
+          {getPageTitle(pathname)}
+        </h1>
+        <div className="flex items-center gap-2 mt-1">
+            <Calendar size={12} className="text-slate-500"/>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                {today}
+            </p>
+        </div>
+      </div>
 
-      {/* MENU DROP DOWN */}
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-3 w-80 bg-[#0B1120] border border-white/10 rounded-[24px] shadow-2xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Alertas do Sistema</h4>
-              <button onClick={() => setIsOpen(false)}><X size={14} className="text-slate-600" /></button>
-            </div>
+      {/* CENTRO: Barra de Busca */}
+      <div className="hidden xl:flex items-center bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-2.5 w-96 focus-within:border-[#22C55E]/50 focus-within:bg-white/[0.05] transition-all">
+        <Search size={18} className="text-slate-500 mr-3" />
+        <input 
+          type="text" 
+          placeholder="Buscar..." 
+          className="bg-transparent border-none outline-none text-xs text-white font-bold placeholder-slate-600 w-full uppercase tracking-wide"
+        />
+      </div>
 
-            <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-              {notifications.length > 0 ? (
-                notifications.map((n) => (
-                  <div 
-                    key={n.id} 
-                    onClick={() => markAsRead(n.id)}
-                    className={`p-4 border-b border-white/5 hover:bg-white/[0.02] transition-all cursor-pointer relative group ${!n.lida ? 'bg-blue-500/5' : ''}`}
-                  >
-                    {!n.lida && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />}
-                    <div className="flex gap-3">
-                      <div className="mt-1">
-                        {n.titulo.includes('Venda') ? <Zap size={14} className="text-[#22C55E]" /> : <Target size={14} className="text-blue-400" />}
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-bold text-white leading-tight uppercase mb-1">{n.titulo}</p>
-                        <p className="text-[10px] text-slate-500 leading-relaxed">{n.mensagem}</p>
-                        <p className="text-[8px] text-slate-700 font-bold mt-2 uppercase">
-                          {new Date(n.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-10 text-center text-slate-600">
-                  <Bell size={24} className="mx-auto mb-2 opacity-20" />
-                  <p className="text-[10px] font-bold uppercase">Nenhum alerta novo</p>
-                </div>
-              )}
-            </div>
-            
-            <button className="w-full py-3 bg-white/[0.02] text-[9px] font-black text-slate-500 uppercase hover:text-white transition-colors">
-              Ver todos os registros
-            </button>
+      {/* LADO DIREITO: Ações + Perfil */}
+      <div className="flex items-center gap-6">
+        
+        {/* Sino de Notificações */}
+        <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors">
+            <NotificationBell />
+        </div>
+
+        <div className="h-8 w-[1px] bg-white/10"></div>
+
+        {/* Perfil */}
+        <div className="flex items-center gap-3 pl-2 cursor-pointer group">
+          <div className="text-right hidden lg:block">
+            <p className="text-sm font-bold text-white leading-none group-hover:text-[#22C55E] transition-colors">
+              {perfil?.nome || user?.email?.split('@')[0]}
+            </p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider mt-1">
+              {perfil?.cargo || 'Membro'}
+            </p>
           </div>
-        </>
-      )}
-    </div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22C55E] to-emerald-800 border border-white/10 flex items-center justify-center text-sm font-black text-[#0F172A] shadow-lg group-hover:scale-105 transition-transform">
+            {user?.email?.[0].toUpperCase()}
+          </div>
+        </div>
+
+      </div>
+    </header>
   );
 }

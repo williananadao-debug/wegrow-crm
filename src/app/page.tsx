@@ -1,46 +1,37 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-
-const API = 'http://localhost:3000';
-const TOKEN_KEY = 'token';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const [deals, setDeals] = useState<any[]>([]);
-  const [stages, setStages] = useState<any[]>([]);
-
-  const getToken = () => localStorage.getItem(TOKEN_KEY);
-
-  const loadData = async () => {
-    const token = getToken();
-    if (!token) return;
-
-    try {
-      const [d, s] = await Promise.all([
-        fetch(`${API}/deals`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API}/pipelines/stages`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-
-      setDeals(await d.json());
-      setStages((await s.json()).sort((a: any, b: any) => a.position - b.position));
-    } catch (error) {
-      console.error("Erro ao carregar (silencioso)", error);
-    }
-  };
+  const router = useRouter();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!loading) {
+      if (user) {
+        // Se já tem usuário, joga pro Dashboard
+        router.push('/dashboard');
+      } else {
+        // Se não tem, joga pro Login
+        router.push('/login');
+      }
+    }
+  }, [user, loading, router]);
 
-  // Mantive as funções caso queira usar no futuro, mas elas não farão nada visual agora
-  const moveDeal = async (dealId: string, stageId: string) => {
-    // Lógica mantida...
-  };
-
+  // Enquanto ele pensa, mostra um loader bonitinho no centro
   return (
-    // AQUI ESTÁ O AJUSTE: Apenas a div com o fundo escuro e altura total
-    <div style={{ background: '#020617', minHeight: '100vh', width: '100%' }}>
-      {/* Nada aqui dentro */}
+    <div className="min-h-screen flex items-center justify-center bg-[#020617]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-2xl animate-pulse">
+          W
+        </div>
+        <div className="flex items-center text-[#22C55E] text-sm font-bold uppercase tracking-widest">
+            <Loader2 className="animate-spin mr-2" size={16}/> Carregando Sistema...
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair // <--- ADICIONEI OS ÍCONES NOVOS AQUI
+  Sparkles, Crosshair
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -99,6 +99,7 @@ export default function DealsPage() {
         query = query.eq('user_id', user.id);
       }
 
+      // Ordenação inicial
       const { data: leadsData } = await query.order('created_at', { ascending: false });
       // ----------------------------------
 
@@ -167,11 +168,22 @@ export default function DealsPage() {
       }]);
   };
 
+  // --- FUNÇÃO CORRIGIDA PARA MUDANÇA DE ETAPA E STATUS ---
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
-    const { error } = await supabase.from('leads').update({ etapa: novaEtapa, status: novoStatus }).eq('id', id);
+    // Força a etapa correta se for Ganho ou Perdido para o card mover visualmente
+    let etapaFinal = novaEtapa;
+    if (novoStatus === 'ganho') etapaFinal = 4;
+    if (novoStatus === 'perdido') etapaFinal = 5;
+
+    // Atualização Otimista no React (Instantânea)
+    setLeads(prev => prev.map(l => 
+        l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l
+    ));
+
+    // Atualização no Banco
+    const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
+    
     if (!error) {
-        setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: novaEtapa, status: novoStatus } : l));
-        
         if (novoStatus === 'ganho') {
             const lead = leads.find(l => l.id === id);
             if (lead) {
@@ -184,24 +196,36 @@ export default function DealsPage() {
                 setShowToast(true);
             }
         }
+    } else {
+        // Reverte se der erro (opcional, mas recomendado)
+        console.error("Erro ao salvar", error);
     }
   };
 
+  // --- DRAG AND DROP CORRIGIDO ---
   const onDragEnd = async (result: any) => {
     const { destination, draggableId } = result;
     if (!destination) return;
     
+    // Evita chamadas desnecessárias se soltou no mesmo lugar
+    if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) return;
+
     const novaEtapa = parseInt(destination.droppableId);
+    const leadId = parseInt(draggableId);
+
     let novoStatus: 'aberto' | 'ganho' | 'perdido' = 'aberto';
     if (novaEtapa === 4) novoStatus = 'ganho';
-    if (novaEtapa === 5) novoStatus = 'perdido';
+    else if (novaEtapa === 5) novoStatus = 'perdido';
+    else {
+         // Se moveu de volta para o funil, garante que volta para aberto
+         const leadAtual = leads.find(l => l.id === leadId);
+         if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) {
+             novoStatus = 'aberto';
+         }
+    }
 
-    setLeads(prev => prev.map(lead => {
-        if (lead.id === parseInt(draggableId)) return { ...lead, etapa: novaEtapa, status: novoStatus };
-        return lead;
-    }));
-
-    await mudarEtapa(parseInt(draggableId), novaEtapa, novoStatus);
+    // Chama a função centralizada
+    await mudarEtapa(leadId, novaEtapa, novoStatus);
   };
 
   const enviarWhatsapp = (e: React.MouseEvent, lead: Lead) => {
@@ -407,12 +431,17 @@ export default function DealsPage() {
   const percentMeta = Math.min((totalGanhos / META_MENSAL) * 100, 100);
   const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
-  const getLeadsByStage = (stageIdx: number) => leads.filter(l => l.etapa === stageIdx);
+  // --- FILTRO E ORDENAÇÃO POR DATA (Fix: Leads novos sempre no topo) ---
+  const getLeadsByStage = (stageIdx: number) => {
+      return leads
+        .filter(l => l.etapa === stageIdx)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  };
+
   const getStageTotal = (stageIdx: number) => {
       return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
   };
 
-  // --- HELPER PARA IDENTIFICAR MISSÕES (PREMISSAS) ---
   const isMission = (text: string) => text && (text.includes('Meta') || text.includes('Resgate'));
 
   return (
@@ -497,75 +526,75 @@ export default function DealsPage() {
                                         {...provided.dragHandleProps}
                                         className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
                                     >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
-                                                <Edit2 size={10} className="text-slate-500"/>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
+                                                    <Edit2 size={10} className="text-slate-500"/>
+                                                </div>
+                                                
+                                                {/* ÍCONES: Vertical (Mobile) / Horizontal (Desktop) */}
+                                                <div className="flex flex-col md:flex-row gap-2 md:gap-2">
+                                                    <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
+                                                        <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
+                                                    </button>
+                                                    <button onClick={(e) => fazerCheckin(e, lead.id)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
+                                                        <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
+                                                    </button>
+                                                </div>
                                             </div>
                                             
-                                            {/* ÍCONES: Vertical (Mobile) / Horizontal (Desktop) */}
-                                            <div className="flex flex-col md:flex-row gap-2 md:gap-2">
-                                                <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
-                                                    <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
-                                                </button>
-                                                <button onClick={(e) => fazerCheckin(e, lead.id)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
-                                                    <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
-                                                </button>
+                                            {/* --- ÁREA DE CHECKIN INTELIGENTE --- */}
+                                            <div className="mb-2">
+                                                {/* Caso 1: Missão/Premissa (Roxo) */}
+                                                {lead.checkin && isMission(lead.checkin) ? (
+                                                    <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
+                                                        {lead.checkin.includes('Resgate') ? <Sparkles size={12} className="text-purple-400"/> : <Crosshair size={12} className="text-purple-400"/>}
+                                                        <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
+                                                    </div>
+                                                ) : lead.checkin ? (
+                                                    /* Caso 2: Checkin Normal (GPS) */
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <MapPin size={10} className="text-pink-500" />
+                                                        <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
+                                                    </div>
+                                                ) : (
+                                                    /* Caso 3: Pendente */
+                                                    lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
+                                                )}
                                             </div>
-                                        </div>
-                                        
-                                        {/* --- ÁREA DE CHECKIN INTELIGENTE --- */}
-                                        <div className="mb-2">
-                                            {/* Caso 1: Missão/Premissa (Roxo) */}
-                                            {lead.checkin && isMission(lead.checkin) ? (
-                                                <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
-                                                    {lead.checkin.includes('Resgate') ? <Sparkles size={12} className="text-purple-400"/> : <Crosshair size={12} className="text-purple-400"/>}
-                                                    <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
-                                                </div>
-                                            ) : lead.checkin ? (
-                                                /* Caso 2: Checkin Normal (GPS) */
-                                                <div className="flex items-center gap-1 mb-1">
-                                                    <MapPin size={10} className="text-pink-500" />
-                                                    <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
-                                                </div>
-                                            ) : (
-                                                /* Caso 3: Pendente */
-                                                lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
-                                            )}
-                                        </div>
-                                        {/* ----------------------------------- */}
+                                            {/* ----------------------------------- */}
 
-                                        <div className="mb-1">
-                                            <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate">{lead.empresa}</h4>
-                                        </div>
-
-                                        <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
-                                            {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
-                                                <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
-                                            ))}
-                                            {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} itens...</p>}
-                                        </div>
-
-                                        <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
-                                            R$ {lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                        </div>
-
-                                        {lead.status === 'aberto' ? (
-                                            <div className="space-y-2 pt-1">
-                                                <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
-                                                    AVANÇAR ETAPA
-                                                </button>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button onClick={() => mudarEtapa(lead.id, 4, 'ganho')} className="py-1.5 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A] rounded text-[9px] font-black uppercase tracking-wider transition-colors">GANHO</button>
-                                                    <button onClick={() => mudarEtapa(lead.id, 5, 'perdido')} className="py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors">PERDIDO</button>
-                                                </div>
+                                            <div className="mb-1">
+                                                <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate">{lead.empresa}</h4>
                                             </div>
-                                        ) : lead.status === 'ganho' ? (
-                                            <div className="mt-1 text-center pt-2 border-t border-white/5">
-                                                <a href="/jobs" className="inline-flex items-center gap-1 text-[9px] bg-blue-600/10 text-blue-400 px-3 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                                                    <Briefcase size={10}/> VER NA PRODUÇÃO
-                                                </a>
+
+                                            <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
+                                                {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
+                                                    <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
+                                                ))}
+                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} itens...</p>}
                                             </div>
-                                        ) : null}
+
+                                            <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
+                                                R$ {lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                            </div>
+
+                                            {lead.status === 'aberto' ? (
+                                                <div className="space-y-2 pt-1">
+                                                    <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
+                                                        AVANÇAR ETAPA
+                                                    </button>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={() => mudarEtapa(lead.id, 4, 'ganho')} className="py-1.5 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A] rounded text-[9px] font-black uppercase tracking-wider transition-colors">GANHO</button>
+                                                        <button onClick={() => mudarEtapa(lead.id, 5, 'perdido')} className="py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors">PERDIDO</button>
+                                                    </div>
+                                                </div>
+                                            ) : lead.status === 'ganho' ? (
+                                                <div className="mt-1 text-center pt-2 border-t border-white/5">
+                                                    <a href="/jobs" className="inline-flex items-center gap-1 text-[9px] bg-blue-600/10 text-blue-400 px-3 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
+                                                        <Briefcase size={10}/> VER NA PRODUÇÃO
+                                                    </a>
+                                                </div>
+                                            ) : null}
                                     </div>
                                     )}
                                 </Draggable>

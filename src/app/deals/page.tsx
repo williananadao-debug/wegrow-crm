@@ -100,7 +100,11 @@ export default function DealsPage() {
       }
 
       // Ordenação inicial
-      const { data: leadsData } = await query.order('created_at', { ascending: false });
+      const { data: leadsData, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Erro ao buscar leads:", error);
+      }
       // ----------------------------------
 
       if (leadsData) {
@@ -168,19 +172,16 @@ export default function DealsPage() {
       }]);
   };
 
-  // --- FUNÇÃO CORRIGIDA PARA MUDANÇA DE ETAPA E STATUS ---
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
-    // Força a etapa correta se for Ganho ou Perdido para o card mover visualmente
     let etapaFinal = novaEtapa;
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
 
-    // Atualização Otimista no React (Instantânea)
+    // Atualiza estado local primeiro
     setLeads(prev => prev.map(l => 
         l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l
     ));
 
-    // Atualização no Banco
     const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
     
     if (!error) {
@@ -197,17 +198,15 @@ export default function DealsPage() {
             }
         }
     } else {
-        // Reverte se der erro (opcional, mas recomendado)
-        console.error("Erro ao salvar", error);
+        console.error("Erro ao mudar etapa:", error);
+        alert(`Erro ao salvar mudança: ${error.message}`);
     }
   };
 
-  // --- DRAG AND DROP CORRIGIDO ---
   const onDragEnd = async (result: any) => {
     const { destination, draggableId } = result;
     if (!destination) return;
     
-    // Evita chamadas desnecessárias se soltou no mesmo lugar
     if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) return;
 
     const novaEtapa = parseInt(destination.droppableId);
@@ -217,23 +216,18 @@ export default function DealsPage() {
     if (novaEtapa === 4) novoStatus = 'ganho';
     else if (novaEtapa === 5) novoStatus = 'perdido';
     else {
-         // Se moveu de volta para o funil, garante que volta para aberto
          const leadAtual = leads.find(l => l.id === leadId);
          if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) {
              novoStatus = 'aberto';
          }
     }
 
-    // Chama a função centralizada
     await mudarEtapa(leadId, novaEtapa, novoStatus);
   };
 
   const enviarWhatsapp = (e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
-    if (!lead.telefone) {
-        alert("Cadastre o WhatsApp na edição!"); 
-        return;
-    }
+    if (!lead.telefone) return alert("Cadastre o WhatsApp na edição!"); 
 
     let listaItens: ItemVenda[] = [];
     try {
@@ -243,7 +237,6 @@ export default function DealsPage() {
             listaItens = JSON.parse(lead.itens);
         }
     } catch (err) {
-        console.error("Erro ao ler itens", err);
         listaItens = [];
     }
 
@@ -299,10 +292,7 @@ export default function DealsPage() {
 
   const fazerCheckin = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    
-    if (!navigator.geolocation) {
-      return alert("Seu navegador ou dispositivo não suporta geolocalização.");
-    }
+    if (!navigator.geolocation) return alert("Seu navegador ou dispositivo não suporta geolocalização.");
     
     setToastMessage("🛰️ Obtendo localização exata...");
     setShowToast(true);
@@ -311,14 +301,10 @@ export default function DealsPage() {
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-        
         const now = new Date();
         const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
         
-        const { error } = await supabase
-          .from('leads')
-          .update({ checkin: msg, localizacao_url: mapsUrl })
-          .eq('id', id);
+        const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
 
         if (!error) {
           setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
@@ -381,6 +367,7 @@ export default function DealsPage() {
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaEmpresa) return alert("Selecione um cliente!");
+    if (!user) return alert("Você precisa estar logado!");
 
     const valorTotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const payload = {
@@ -391,18 +378,36 @@ export default function DealsPage() {
         itens: itensTemporarios,
         foto_url: fotoUrl,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0 }),
-        user_id: user?.id,
+        user_id: user.id,
         client_id: selectedClientId
     };
 
+    console.log("Tentando salvar lead:", payload);
+
     if (editingLeadId) {
         const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
-        if (!error) setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
+        if (!error) {
+            setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
+            setIsModalOpen(false);
+            setToastMessage("Lead atualizado!");
+            setShowToast(true);
+        } else {
+            console.error("ERRO AO ATUALIZAR:", error);
+            alert(`Erro ao atualizar: ${error.message}`);
+        }
     } else {
         const { data, error } = await supabase.from('leads').insert([payload]).select();
-        if (!error && data) setLeads(prev => [data[0], ...prev]);
+        
+        if (error) {
+            console.error("ERRO AO CRIAR LEAD:", error);
+            alert(`ERRO DE BANCO: ${error.message} \nVerifique o console (F12) para detalhes.`);
+        } else if (data) {
+            setLeads(prev => [data[0], ...prev]);
+            setIsModalOpen(false);
+            setToastMessage("Lead criado com sucesso! 🚀");
+            setShowToast(true);
+        }
     }
-    setIsModalOpen(false);
   };
 
   const abrirModal = (lead?: Lead) => {
@@ -431,7 +436,7 @@ export default function DealsPage() {
   const percentMeta = Math.min((totalGanhos / META_MENSAL) * 100, 100);
   const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
-  // --- FILTRO E ORDENAÇÃO POR DATA (Fix: Leads novos sempre no topo) ---
+  // FILTRO E ORDENAÇÃO POR DATA (Fix: Leads novos sempre no topo)
   const getLeadsByStage = (stageIdx: number) => {
       return leads
         .filter(l => l.etapa === stageIdx)

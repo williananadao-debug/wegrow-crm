@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, 
-  Calendar, Plus, X, Trash2, Edit2, AlertCircle
+  Calendar, Plus, X, Trash2, Edit2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -19,7 +19,7 @@ type Job = {
   user_id: string;
 };
 
-// 1. AJUSTE: Removemos a coluna 'entregue' daqui para limpar a tela
+// Removemos a coluna 'entregue' para focar apenas na produção ativa
 const STAGES = {
   roteiro: { title: 'Roteiro / Copy', icon: <Clapperboard size={14}/>, color: 'border-pink-500' },
   gravacao: { title: 'Locução / Gravação', icon: <Mic2 size={14}/>, color: 'border-purple-500' },
@@ -42,16 +42,21 @@ export default function JobsPage() {
       deadline: new Date().toISOString().split('T')[0] // Hoje
   });
 
+  // O useEffect agora depende do 'user' para garantir que temos o ID antes de buscar
   useEffect(() => {
-    fetchJobs();
-  }, []);
+    if (user) {
+      fetchJobs();
+    }
+  }, [user]);
 
   const fetchJobs = async () => {
-    // 2. AJUSTE: .neq('stage', 'entregue') - O banco NÃO vai trazer os finalizados
+    if (!user) return;
+
     const { data } = await supabase
         .from('jobs')
         .select('*')
-        .neq('stage', 'entregue') 
+        .neq('stage', 'entregue') // Filtra para não trazer os finalizados
+        .eq('user_id', user.id)   // FILTRO MESTRE: Traz apenas os Jobs do Vendedor Logado
         .order('deadline', { ascending: true });
         
     if (data) setJobs(data as any);
@@ -65,7 +70,7 @@ export default function JobsPage() {
     const newStage = destination.droppableId;
     const id = parseInt(draggableId);
 
-    // Optimistic UI Update
+    // Optimistic UI Update (Atualiza visualmente primeiro)
     setJobs(prev => prev.map(job => job.id === id ? { ...job, stage: newStage } : job));
 
     // Save to DB
@@ -74,7 +79,6 @@ export default function JobsPage() {
 
   // --- CRUD (CRIAR, EDITAR, DELETAR, FINALIZAR) ---
 
-  // 3. AJUSTE: Função nova para Finalizar o Job e sumir com ele
   const handleFinalizar = async (e: React.MouseEvent, id: number) => {
       e.stopPropagation(); // Evita abrir o modal ao clicar no botão
       if(!confirm("Deseja finalizar este Job? Ele será removido da esteira.")) return;
@@ -140,7 +144,7 @@ export default function JobsPage() {
     return 'bg-blue-500 text-white border-blue-500';
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white">CARREGANDO PRODUÇÃO...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white font-black animate-pulse">CARREGANDO PRODUÇÃO...</div>;
 
   return (
     <div className="h-full flex flex-col pb-20 animate-in fade-in duration-500 text-white">
@@ -148,11 +152,11 @@ export default function JobsPage() {
       <div className="p-6 flex justify-between items-end">
         <div>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter">Produção</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Esteira de Jobs</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Sua Esteira de Jobs</p>
         </div>
         <div className="flex items-center gap-4">
             <div className="text-right hidden md:block">
-                <span className="text-xs font-bold text-slate-400 uppercase">Ativos</span>
+                <span className="text-xs font-bold text-slate-400 uppercase">Seus Ativos</span>
                 <p className="text-2xl font-black text-white leading-none">{jobs.length}</p>
             </div>
             <button onClick={() => abrirModal()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg transition-all">
@@ -163,7 +167,7 @@ export default function JobsPage() {
 
       {/* KANBAN */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 p-6 h-[calc(100vh-180px)] overflow-x-auto items-start">
+        <div className="flex gap-4 p-6 h-[calc(100vh-180px)] overflow-x-auto items-start custom-scrollbar">
           {Object.entries(STAGES).map(([key, stage]) => {
             const stageJobs = jobs.filter(j => j.stage === key);
             
@@ -225,7 +229,7 @@ export default function JobsPage() {
                                   </div>
                               </div>
 
-                              {/* BOTÃO MÁGICO FINALIZAR */}
+                              {/* BOTÃO MÁGICO FINALIZAR (Aparece no hover) */}
                               <button 
                                   onClick={(e) => handleFinalizar(e, job.id)}
                                   className="w-full mt-2 bg-[#22C55E]/10 hover:bg-[#22C55E] text-[#22C55E] hover:text-[#0F172A] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100"
@@ -247,7 +251,7 @@ export default function JobsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL DE CRIAÇÃO/EDIÇÃO (MANTIDO INTACTO) */}
+      {/* MODAL DE CRIAÇÃO/EDIÇÃO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-200">

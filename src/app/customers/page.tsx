@@ -16,7 +16,7 @@ type Cliente = {
   email?: string;
   cnpj?: string;
   status: 'ativo' | 'inativo';
-  user_id?: string; // Ajustado de owner_id para user_id para bater com o Banco
+  user_id?: string; 
   created_at: string;
 };
 
@@ -71,7 +71,7 @@ export default function CustomersPage() {
     email: '',
     cnpj: '',
     status: 'ativo',
-    user_id: '' // Ajustado para user_id
+    user_id: '' 
   });
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -81,7 +81,6 @@ export default function CustomersPage() {
 
   useEffect(() => {
     async function fetchSellers() {
-      // Tenta buscar na tabela profiles
       const { data, error } = await supabase.from('profiles').select('id, nome'); 
       if (data) setVendedores(data as any);
     }
@@ -120,10 +119,8 @@ export default function CustomersPage() {
             .order('nome_empresa', { ascending: true })
             .range(from, to);
 
-        // --- TRAVA DE PRIVACIDADE ---
-        if (!isDirector) {
-            query = query.eq('user_id', user?.id);
-        }
+        // A TRAVA DE PRIVACIDADE FOI REMOVIDA DAQUI! 
+        // Agora o banco traz todos os clientes, não importa quem é o usuário logado.
 
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
@@ -324,7 +321,7 @@ export default function CustomersPage() {
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1">
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
-                                {isDirector && cliente.user_id && (
+                                {cliente.user_id && (
                                     <span className="flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">
                                         <User size={10}/> 
                                         {vendedores.find(v => v.id === cliente.user_id)?.nome || 'Vendedor'}
@@ -414,12 +411,12 @@ export default function CustomersPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Responsável</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Responsável (Dono da Conta)</label>
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" 
                                 value={formData.user_id} 
                                 onChange={e => setFormData({...formData, user_id: e.target.value})}
-                                disabled={!isDirector} // Vendedor não troca o dono
+                                disabled={!isDirector} 
                             >
                                 <option value="" className="bg-[#0B1120]">Selecione...</option>
                                 {vendedores.map(v => (

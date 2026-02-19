@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, Users, Radio, DollarSign, 
   BarChart3, Calendar, Loader2, 
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -15,52 +15,42 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
-  // Mês padrão: YYYY-MM
+  // --- ESTADOS DOS FILTROS ---
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Ano Atual');
+  const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
+
+  // Mês padrão só para não quebrar lógicas antigas, mas o filtro principal é o filtroPeriodo
   const [mesSelecionado, setMesSelecionado] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  
-  const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
 
-  // ESTADOS DE DADOS BRUTOS (Raw Data)
+  // ESTADOS DE DADOS BRUTOS
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
   const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [rawLancamentos, setRawLancamentos] = useState<any[]>([]);
 
-  // Verifica se é chefe (Diretor ou o Admin Supremo)
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
     if (user) carregarDadosOtimizado();
-  }, [user, mesSelecionado]);
+  }, [user, perfil]);
 
   const carregarDadosOtimizado = async () => {
     setLoading(true);
     try {
-        // 1. Define intervalo de datas para o Banco (Otimização Server-Side)
-        const [ano, mes] = mesSelecionado.split('-').map(Number);
-        const dataInicio = new Date(ano, mes - 1, 1).toISOString();
-        const dataFim = new Date(ano, mes, 0, 23, 59, 59).toISOString();
+        let leadsQuery = supabase.from('leads').select('*');
 
-        // --- ALTERAÇÃO DE SEGURANÇA AQUI ---
-        // Construção da Query de Leads com Filtro Condicional
-        let leadsQuery = supabase.from('leads')
-            .select('*')
-            .gte('created_at', dataInicio)
-            .lte('created_at', dataFim);
-
-        // Se NÃO for diretor, força o filtro apenas para os dados DELE
         if (!isDirector) {
-            leadsQuery = leadsQuery.eq('user_id', user?.id);
+            // Se não for diretor, traz os cards importados com o nome dele OU criados pelo ID dele
+            leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
         }
-        // -----------------------------------
 
-        // 2. PARALELISMO: Busca tudo de uma vez
         const [leadsRes, perfisRes, jobsRes, finRes] = await Promise.all([
-            leadsQuery, // Usa a query protegida
-            supabase.from('profiles').select('id, nome'), // Corrigido para tabela 'profiles'
+            leadsQuery, 
+            supabase.from('profiles').select('id, nome'), 
             supabase.from('jobs').select('stage, deadline'),
             supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago')
         ]);
@@ -79,36 +69,59 @@ export default function DashboardPage() {
     }
   };
 
-  // CÁLCULOS MEMOIZADOS (Só roda se os dados mudarem)
+  // --- FILTROS DISPONÍVEIS ---
+  const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
+  const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
+
+  // CÁLCULOS MEMOIZADOS (Recalcula sempre que um filtro muda)
   const { ranking, statsComercial, statsProducao, statsFinanceiro } = useMemo(() => {
       
-      // --- 1. PREPARAÇÃO (Mapeamento de Nomes) ---
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
-      // --- 2. GERA RANKING (Baseado nos dados brutos do mês) ---
-      // Como rawLeads já vem filtrado do banco se for vendedor, o ranking só vai mostrar ele mesmo
-      const rankObj = rawLeads.reduce((acc: any, lead) => {
-         const id = lead.user_id || 'sem_dono';
-         const nome = nomesMap[id] || 'Desconhecido';
-         if (!acc[id]) acc[id] = { id, nome, total: 0, count: 0 };
-         if (lead.status === 'ganho') acc[id].total += (Number(lead.valor_total) || 0);
-         acc[id].count += 1;
+      // --- APLICAÇÃO DOS FILTROS NO DASHBOARD ---
+      const leadsFiltrados = rawLeads.filter(lead => {
+          // 1. Filtro de Unidade
+          if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
+          
+          // 2. Filtro de Vendedor
+          if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
+              // Verifica pelo ID ou pelo Nome importado
+              if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
+          }
+          
+          // 3. Filtro de Período Dinâmico
+          if (filtroPeriodo !== 'Todo o Período') {
+              const dataLead = new Date(lead.created_at);
+              const hoje = new Date();
+              
+              if (filtroPeriodo === 'Mês Atual') {
+                  if (dataLead.getMonth() !== hoje.getMonth() || dataLead.getFullYear() !== hoje.getFullYear()) return false;
+              } else if (filtroPeriodo === 'Mês Passado') {
+                  const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+                  if (dataLead.getMonth() !== mesPassado.getMonth() || dataLead.getFullYear() !== mesPassado.getFullYear()) return false;
+              } else if (filtroPeriodo === 'Ano Atual') {
+                  if (dataLead.getFullYear() !== hoje.getFullYear()) return false;
+              }
+          }
+          return true;
+      });
+
+      // --- RANKING (Baseado nos dados FILTRADOS) ---
+      const rankObj = leadsFiltrados.reduce((acc: any, lead) => {
+         // Prioriza o nome importado do CSV, se não tiver, busca o ID
+         const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
+         // Usa o nome como chave para não duplicar se o ID for nulo
+         const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
+
+         if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0 };
+         if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
+         acc[chave].count += 1;
          return acc;
       }, {});
       
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
-      // --- 3. FILTRAGEM DINÂMICA (Vendedor Selecionado) ---
-      let leadsFiltrados = rawLeads;
-      if (vendedorSelecionado) {
-        if (vendedorSelecionado === 'sem_dono') {
-            leadsFiltrados = rawLeads.filter(l => !l.user_id);
-        } else {
-            leadsFiltrados = rawLeads.filter(l => l.user_id === vendedorSelecionado);
-        }
-      }
-
-      // --- 4. CÁLCULOS KPI COMERCIAL ---
+      // --- CÁLCULOS KPI COMERCIAL ---
       const fat = leadsFiltrados
         .filter(l => l.status === 'ganho')
         .reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0);
@@ -118,10 +131,10 @@ export default function DashboardPage() {
       const totalFinal = leadsFiltrados.filter(l => l.status === 'ganho' || l.status === 'perdido').length;
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
       
-      const comVisita = leadsFiltrados.filter(l => l.checkin && l.checkin.length > 5).length; // Validação simples
+      const comVisita = leadsFiltrados.filter(l => l.checkin && l.checkin.length > 5).length; 
       const semVisita = leadsFiltrados.length - comVisita;
 
-      // --- 5. FUNIL ---
+      // --- FUNIL ---
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
       leadsFiltrados.forEach(l => {
           const st = l.status;
@@ -136,25 +149,25 @@ export default function DashboardPage() {
           }
       });
 
-      // --- 6. VENDAS POR DIA ---
-      const [anoStr, mesStr] = mesSelecionado.split('-');
-      const diasNoMes = new Date(Number(anoStr), Number(mesStr), 0).getDate();
-      
+      // --- VENDAS POR DIA (Baseado no Mês Atual) ---
+      const diasNoMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
       const vendasPorDiaArray = Array.from({ length: diasNoMes }, (_, i) => ({
           dia: (i + 1).toString(),
           valor: 0
       }));
 
-      leadsFiltrados.filter(l => l.status === 'ganho').forEach(l => {
-          const dataCriacao = new Date(l.created_at);
-          const diaIndex = dataCriacao.getDate() - 1; 
-          
-          if (vendasPorDiaArray[diaIndex]) {
-              vendasPorDiaArray[diaIndex].valor += (Number(l.valor_total) || 0);
-          }
-      });
+      // Só alimenta o gráfico de dias se o filtro for Mês Atual (se for ano, não faz sentido dia a dia)
+      if (filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') {
+          leadsFiltrados.filter(l => l.status === 'ganho').forEach(l => {
+              const dataCriacao = new Date(l.created_at);
+              const diaIndex = dataCriacao.getDate() - 1; 
+              if (vendasPorDiaArray[diaIndex]) {
+                  vendasPorDiaArray[diaIndex].valor += (Number(l.valor_total) || 0);
+              }
+          });
+      }
 
-      // --- 7. DADOS DIRETORIA (JOBS & FINANCEIRO) ---
+      // --- DADOS DIRETORIA ---
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
       rawJobs.forEach((j: any) => {
         if (j.stage === 'roteiro') prod.roteiro++;
@@ -184,7 +197,7 @@ export default function DashboardPage() {
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai }
       };
 
-  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, mesSelecionado]);
+  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, filtroPeriodo, filtroUnidade]);
 
   const handleSellerClick = (id: string) => setVendedorSelecionado(prev => prev === id ? null : id);
 
@@ -205,32 +218,52 @@ export default function DashboardPage() {
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
       
-      {/* HEADER COMPACTO */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-2">
+      {/* HEADER COMPACTO E FILTROS */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2 px-2">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">
             Dashboard
           </h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">
             Visão Geral • {perfil?.nome || 'Equipe'}
           </p>
         </div>
         
-        <div className="flex flex-col items-end gap-2">
-            <div className="bg-[#0B1120] border border-white/10 p-1 rounded-2xl flex gap-1">
+        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+            {/* ABAS COMERCIAL / GESTÃO */}
+            <div className="bg-[#0B1120] border border-white/10 p-1 rounded-2xl flex gap-1 self-end">
                 <button onClick={() => setVisao('comercial')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-500 hover:text-white'}`}>
                     <TrendingUp size={12}/> Comercial
                 </button>
-                {/* Botão de Diretoria só aparece para o Diretor */}
                 {isDirector && (
                   <button onClick={() => setVisao('diretoria')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'diretoria' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>
                       <Radio size={12}/> Gestão
                   </button>
                 )}
             </div>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-2xl">
-                <Calendar size={12} className="text-blue-500" />
-                <input type="month" value={mesSelecionado} onChange={(e) => setMesSelecionado(e.target.value)} className="bg-transparent border-none outline-none text-[9px] font-black uppercase tracking-widest text-white cursor-pointer"/>
+            
+            {/* NOVO: BARRA DE FILTROS DO DASHBOARD */}
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto">
+                <Filter size={14} className="text-slate-400 ml-3 mr-1" />
+                
+                <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-2 border-r border-white/10">
+                    <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
+                    <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
+                    <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
+                    <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
+                </select>
+
+                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-2 border-r border-white/10">
+                    <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
+                    {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+                </select>
+
+                {isDirector && (
+                    <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent text-orange-500 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-2">
+                        <option value="Todos" className="bg-[#0B1120]">Toda Equipe</option>
+                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                    </select>
+                )}
             </div>
         </div>
       </div>
@@ -238,25 +271,10 @@ export default function DashboardPage() {
       {visao === 'comercial' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
-            {/* FILTRO ATIVO (COMPACTO) */}
-            {vendedorSelecionado && (
-                <div className="bg-orange-500/10 border border-orange-500/20 p-2 px-4 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Filter size={14} className="text-orange-500" />
-                        <span className="text-xs font-bold text-white uppercase">
-                            Filtrando: <span className="text-orange-500 italic">{ranking.find(r => r.id === vendedorSelecionado)?.nome || 'Sem Dono'}</span>
-                        </span>
-                    </div>
-                    <button onClick={() => setVendedorSelecionado(null)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1">
-                        <X size={12}/> Limpar
-                    </button>
-                </div>
-            )}
-
             {/* KPIS COMPACTOS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
-                    <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5">Faturamento</p>
+                    <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">Faturamento {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact" })}</h3>
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
@@ -281,47 +299,49 @@ export default function DashboardPage() {
             {statsComercial.propostasEnviadas === 0 && (
                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-center gap-3 text-slate-400">
                     <AlertCircle size={16} />
-                    <span className="text-xs font-bold uppercase">Sem dados comerciais neste mês.</span>
+                    <span className="text-xs font-bold uppercase">Sem dados comerciais para este filtro.</span>
                 </div>
             )}
 
-            {/* GRÁFICO DIÁRIO CORRIGIDO */}
-            <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
-                <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-                    <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia
-                </h3>
-                <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
-                    {statsComercial.vendasPorDia.map((d, i) => {
-                        const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
-                        const height = (d.valor / maxVal) * 100;
-                        
-                        return (
-                            <div key={i} className="flex-1 min-w-[24px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
-                                {d.valor > 0 && (
-                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[9px] font-black tracking-tighter whitespace-nowrap z-10">
-                                        {formatCompact(d.valor)}
+            {/* GRÁFICO DIÁRIO SÓ APARECE SE O FILTRO FOR MENSAL */}
+            {(filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') && (
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                    <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                        <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia ({filtroPeriodo})
+                    </h3>
+                    <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
+                        {statsComercial.vendasPorDia.map((d, i) => {
+                            const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
+                            const height = (d.valor / maxVal) * 100;
+                            
+                            return (
+                                <div key={i} className="flex-1 min-w-[24px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                                    {d.valor > 0 && (
+                                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[9px] font-black tracking-tighter whitespace-nowrap z-10">
+                                            {formatCompact(d.valor)}
+                                        </div>
+                                    )}
+                                    
+                                    <div 
+                                        className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} 
+                                        style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
+                                    >
+                                        {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
                                     </div>
-                                )}
-                                
-                                <div 
-                                    className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} 
-                                    style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
-                                >
-                                    {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
+                                    <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                                 </div>
-                                <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                {/* RANKING - LARANJA */}
+                {/* RANKING - DINÂMICO */}
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-white mb-3">
-                        <Users size={14} className="text-orange-500" /> Ranking
-                        <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 not-italic font-normal">Clique para filtrar</span>
+                        <Users size={14} className="text-orange-500" /> Ranking ({filtroUnidade})
+                        <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 not-italic font-normal">Clique para isolar</span>
                     </h3>
                     <div className="space-y-2 overflow-y-auto max-h-[200px] pr-1 custom-scrollbar">
                         {ranking.map((r, index) => (

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, 
-  Calendar, Plus, X, Trash2, Edit2
+  Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -17,9 +17,10 @@ type Job = {
   deadline: string;
   created_at: string;
   user_id: string;
+  unidade?: string;
+  vendedor_nome?: string;
 };
 
-// Removemos a coluna 'entregue' para focar apenas na produção ativa
 const STAGES = {
   roteiro: { title: 'Roteiro / Copy', icon: <Clapperboard size={14}/>, color: 'border-pink-500' },
   gravacao: { title: 'Locução / Gravação', icon: <Mic2 size={14}/>, color: 'border-purple-500' },
@@ -28,9 +29,14 @@ const STAGES = {
 };
 
 export default function JobsPage() {
-  const { user } = useAuth();
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const { user, perfil } = useAuth();
+  const [rawJobs, setRawJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ESTADOS DOS FILTROS
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Todo o Período');
+  const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
+  const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
   // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,29 +45,57 @@ export default function JobsPage() {
       titulo: '',
       briefing: '',
       prioridade: 'media',
-      deadline: new Date().toISOString().split('T')[0] // Hoje
+      deadline: new Date().toISOString().split('T')[0],
+      unidade: '',
+      vendedor_nome: ''
   });
 
-  // O useEffect agora depende do 'user' para garantir que temos o ID antes de buscar
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+
   useEffect(() => {
-    if (user) {
-      fetchJobs();
-    }
-  }, [user]);
+    if (user) fetchJobs();
+  }, [user, perfil]);
 
   const fetchJobs = async () => {
-    if (!user) return;
+    setLoading(true);
+    let query = supabase.from('jobs').select('*').neq('stage', 'entregue').order('deadline', { ascending: true });
+    
+    if (!isDirector) {
+        // Se não for diretor, traz os jobs dele (pelo ID ou pelo Nome)
+        query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
+    }
 
-    const { data } = await supabase
-        .from('jobs')
-        .select('*')
-        .neq('stage', 'entregue') // Filtra para não trazer os finalizados
-        .eq('user_id', user.id)   // FILTRO MESTRE: Traz apenas os Jobs do Vendedor Logado
-        .order('deadline', { ascending: true });
-        
-    if (data) setJobs(data as any);
+    const { data } = await query;
+    if (data) setRawJobs(data as any);
     setLoading(false);
   };
+
+  // --- LÓGICA DOS FILTROS ---
+  const unidadesDisponiveis = Array.from(new Set(rawJobs.map(j => j.unidade).filter(Boolean))) as string[];
+  const vendedoresDisponiveis = Array.from(new Set(rawJobs.map(j => j.vendedor_nome).filter(Boolean))) as string[];
+
+  const jobsFiltrados = rawJobs.filter(job => {
+      // 1. Filtro Unidade
+      if (filtroUnidade !== 'Todas' && job.unidade !== filtroUnidade) return false;
+      
+      // 2. Filtro Vendedor
+      if (filtroVendedor !== 'Todos' && job.vendedor_nome !== filtroVendedor && job.user_id !== filtroVendedor) return false;
+      
+      // 3. Filtro Período
+      if (filtroPeriodo !== 'Todo o Período') {
+          const dataJob = new Date(job.created_at || new Date());
+          const hoje = new Date();
+          if (filtroPeriodo === 'Mês Atual') {
+              if (dataJob.getMonth() !== hoje.getMonth() || dataJob.getFullYear() !== hoje.getFullYear()) return false;
+          } else if (filtroPeriodo === 'Mês Passado') {
+              const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+              if (dataJob.getMonth() !== mesPassado.getMonth() || dataJob.getFullYear() !== mesPassado.getFullYear()) return false;
+          } else if (filtroPeriodo === 'Ano Atual') {
+              if (dataJob.getFullYear() !== hoje.getFullYear()) return false;
+          }
+      }
+      return true;
+  });
 
   const onDragEnd = async (result: any) => {
     const { destination, draggableId } = result;
@@ -70,23 +104,14 @@ export default function JobsPage() {
     const newStage = destination.droppableId;
     const id = parseInt(draggableId);
 
-    // Optimistic UI Update (Atualiza visualmente primeiro)
-    setJobs(prev => prev.map(job => job.id === id ? { ...job, stage: newStage } : job));
-
-    // Save to DB
+    setRawJobs(prev => prev.map(job => job.id === id ? { ...job, stage: newStage } : job));
     await supabase.from('jobs').update({ stage: newStage }).eq('id', id);
   };
 
-  // --- CRUD (CRIAR, EDITAR, DELETAR, FINALIZAR) ---
-
   const handleFinalizar = async (e: React.MouseEvent, id: number) => {
-      e.stopPropagation(); // Evita abrir o modal ao clicar no botão
+      e.stopPropagation(); 
       if(!confirm("Deseja finalizar este Job? Ele será removido da esteira.")) return;
-
-      // Optimistic Update: Remove da tela na mesma hora
-      setJobs(prev => prev.filter(j => j.id !== id));
-
-      // Atualiza no banco para 'entregue'
+      setRawJobs(prev => prev.filter(j => j.id !== id));
       await supabase.from('jobs').update({ stage: 'entregue' }).eq('id', id);
   };
 
@@ -97,11 +122,18 @@ export default function JobsPage() {
               titulo: job.titulo,
               briefing: job.briefing || '',
               prioridade: job.prioridade as any,
-              deadline: job.deadline ? job.deadline.split('T')[0] : ''
+              deadline: job.deadline ? job.deadline.split('T')[0] : '',
+              unidade: job.unidade || '',
+              vendedor_nome: job.vendedor_nome || ''
           });
       } else {
           setEditingJobId(null);
-          setFormData({ titulo: '', briefing: '', prioridade: 'media', deadline: new Date().toISOString().split('T')[0] });
+          setFormData({ 
+            titulo: '', briefing: '', prioridade: 'media', 
+            deadline: new Date().toISOString().split('T')[0],
+            unidade: filtroUnidade !== 'Todas' ? filtroUnidade : '',
+            vendedor_nome: isDirector ? '' : (perfil?.nome || '')
+          });
       }
       setIsModalOpen(true);
   };
@@ -113,18 +145,19 @@ export default function JobsPage() {
       const payload = {
           ...formData,
           user_id: user?.id,
+          vendedor_nome: formData.vendedor_nome || perfil?.nome,
           ...(editingJobId ? {} : { stage: 'roteiro' }) 
       };
 
       if (editingJobId) {
           const { error } = await supabase.from('jobs').update(payload).eq('id', editingJobId);
           if (!error) {
-              setJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...payload } as Job : j));
+              setRawJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...payload } as Job : j));
           }
       } else {
           const { data, error } = await supabase.from('jobs').insert([payload]).select();
           if (!error && data) {
-              setJobs(prev => [data[0], ...prev]);
+              setRawJobs(prev => [data[0], ...prev]);
           }
       }
       setIsModalOpen(false);
@@ -133,9 +166,8 @@ export default function JobsPage() {
   const handleDelete = async (e: React.MouseEvent, id: number) => {
       e.stopPropagation(); 
       if(!confirm("Tem certeza que deseja excluir este Job?")) return;
-      
       const { error } = await supabase.from('jobs').delete().eq('id', id);
-      if(!error) setJobs(prev => prev.filter(j => j.id !== id));
+      if(!error) setRawJobs(prev => prev.filter(j => j.id !== id));
   };
 
   const getPriorityColor = (p: string) => {
@@ -149,36 +181,60 @@ export default function JobsPage() {
   return (
     <div className="h-full flex flex-col pb-20 animate-in fade-in duration-500 text-white">
       {/* HEADER */}
-      <div className="p-6 flex justify-between items-end">
+      <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4">
         <div>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter">Produção</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Sua Esteira de Jobs</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Esteira de Jobs</p>
         </div>
-        <div className="flex items-center gap-4">
-            <div className="text-right hidden md:block">
-                <span className="text-xs font-bold text-slate-400 uppercase">Seus Ativos</span>
-                <p className="text-2xl font-black text-white leading-none">{jobs.length}</p>
+        
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            
+            {/* BARRA DE FILTROS TRIPLOS DA PRODUÇÃO */}
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto shadow-lg">
+                <Filter size={14} className="text-slate-400 ml-3 mr-1" />
+                
+                <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-2 border-r border-white/10">
+                    <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
+                    <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
+                    <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
+                    <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
+                </select>
+
+                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-2 border-r border-white/10">
+                    <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
+                    {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+                </select>
+
+                {isDirector && (
+                    <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-orange-500 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-2">
+                        <option value="Todos" className="bg-[#0B1120]">Toda Equipe</option>
+                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                    </select>
+                )}
             </div>
-            <button onClick={() => abrirModal()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg transition-all">
-                <Plus size={18} /> Novo Job
-            </button>
+
+            <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="text-right hidden md:block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Abertos</span>
+                    <p className="text-2xl font-black text-white leading-none">{jobsFiltrados.length}</p>
+                </div>
+                <button onClick={() => abrirModal()} className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all">
+                    <Plus size={18} /> Novo Job
+                </button>
+            </div>
         </div>
       </div>
 
-      {/* KANBAN */}
+      {/* KANBAN DA PRODUÇÃO */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 p-6 h-[calc(100vh-180px)] overflow-x-auto items-start custom-scrollbar">
+        <div className="flex gap-4 p-6 pt-0 h-[calc(100vh-200px)] overflow-x-auto items-start custom-scrollbar">
           {Object.entries(STAGES).map(([key, stage]) => {
-            const stageJobs = jobs.filter(j => j.stage === key);
+            const stageJobs = jobsFiltrados.filter(j => j.stage === key);
             
             return (
               <Droppable key={key} droppableId={key}>
                 {(provided) => (
-                  <div 
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-3 h-full flex flex-col min-w-[280px] md:flex-1`}
-                  >
+                  <div ref={provided.innerRef} {...provided.droppableProps} className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-3 h-full flex flex-col min-w-[280px] md:flex-1`}>
                     <div className="flex items-center gap-2 mb-4 px-1 pt-1">
                         <div className={`p-1.5 rounded-lg bg-white/5 text-slate-300`}>{stage.icon}</div>
                         <h3 className="font-black uppercase text-xs tracking-wide flex-1">{stage.title}</h3>
@@ -213,6 +269,16 @@ export default function JobsPage() {
                               
                               <h4 className="font-bold text-sm text-white mb-2 leading-tight">{job.titulo}</h4>
                               
+                              {/* ETIQUETAS DO CARD: UNIDADE E VENDEDOR */}
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                  {filtroUnidade === 'Todas' && job.unidade && (
+                                      <span className="text-[8px] bg-white/5 text-slate-400 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1"><Building2 size={8}/> {job.unidade}</span>
+                                  )}
+                                  {filtroVendedor === 'Todos' && job.vendedor_nome && isDirector && (
+                                      <span className="text-[8px] bg-blue-600/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1"><User size={8}/> {job.vendedor_nome}</span>
+                                  )}
+                              </div>
+
                               {job.briefing && (
                                 <p className="text-[10px] text-slate-400 line-clamp-2 mb-3 bg-black/20 p-2 rounded-lg border border-white/5 font-medium">
                                     {job.briefing}
@@ -221,22 +287,20 @@ export default function JobsPage() {
 
                               <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1 mb-2">
                                   <div className="flex items-center gap-1 text-[9px] text-slate-600 font-mono">
-                                      <Clock size={10}/>
-                                      <span>ID: {job.id}</span>
+                                      <Clock size={10}/> <span>ID: {job.id}</span>
                                   </div>
                                   <div className="p-1 bg-white/5 rounded-full text-slate-500 group-hover:text-white transition-colors">
                                       <Edit2 size={10}/>
                                   </div>
                               </div>
 
-                              {/* BOTÃO MÁGICO FINALIZAR (Aparece no hover) */}
+                              {/* BOTÃO MÁGICO FINALIZAR */}
                               <button 
                                   onClick={(e) => handleFinalizar(e, job.id)}
                                   className="w-full mt-2 bg-[#22C55E]/10 hover:bg-[#22C55E] text-[#22C55E] hover:text-[#0F172A] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100"
                               >
                                   <CheckCircle2 size={14} /> Finalizar Job
                               </button>
-
                             </div>
                           )}
                         </Draggable>
@@ -251,7 +315,7 @@ export default function JobsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL DE CRIAÇÃO/EDIÇÃO */}
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-200">
@@ -263,7 +327,21 @@ export default function JobsPage() {
                 <form onSubmit={handleSave} className="p-6 space-y-4">
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Título do Job</label>
-                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 transition-colors" placeholder="Ex: Vídeo Institucional" value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} autoFocus required />
+                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500" placeholder="Ex: Spot 30s Dia das Mães" value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} required />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Unidade / Filial</label>
+                            <input list="unidades-jobs" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 uppercase" placeholder="DEMAIS FM 101,1" value={formData.unidade} onChange={e => setFormData({...formData, unidade: e.target.value})} />
+                            <datalist id="unidades-jobs">
+                                {unidadesDisponiveis.map(u => <option key={u} value={u} />)}
+                            </datalist>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Vendedor</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500" value={formData.vendedor_nome} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector} />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -276,7 +354,7 @@ export default function JobsPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Deadline</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Deadline (Prazo)</label>
                             <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
                         </div>
                     </div>

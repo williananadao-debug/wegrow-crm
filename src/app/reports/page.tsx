@@ -69,13 +69,14 @@ export default function ReportsPage() {
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
-  // --- CÁLCULOS MEMOIZADOS E BLINDADOS CONTRA ERROS ---
+  // --- CÁLCULOS MEMOIZADOS E BLINDADOS ---
   const { 
       currentMonth, 
       lastMonth, 
       rankingVendedores, 
       servicosCurva, 
-      estrategiasImpacto 
+      estrategiasImpacto,
+      performanceUnidades 
   } = useMemo(() => {
       
       const now = new Date();
@@ -135,11 +136,25 @@ export default function ReportsPage() {
         conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0
       };
 
+      // --- PERFORMANCE POR UNIDADE (Corrigido pro TypeScript) ---
+      const undObj = currentGanhos.reduce((acc: any, lead) => {
+          const und = lead.unidade || 'Sem Unidade Vinculada';
+          if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 };
+          acc[und].total += Number(lead.valor_total || 0);
+          acc[und].count += 1;
+          return acc;
+      }, {});
+      
+      // Aqui mapeamos explicitamente para o TS entender o tipo de dados
+      const calcUnidades = Object.values(undObj).map((u: any) => ({
+          nome: u.nome,
+          total: Number(u.total) || 0,
+          count: Number(u.count) || 0
+      })).sort((a, b) => b.total - a.total);
+
       // --- CURVA ABC SERVIÇOS ---
       const curve = currentGanhos.reduce((acc: any, curr) => {
         let itensArray = [];
-        
-        // Tenta ler os itens, seja Array ou String de JSON (caso venha do CSV)
         if (Array.isArray(curr.itens)) {
             itensArray = curr.itens;
         } else if (typeof curr.itens === 'string') {
@@ -178,9 +193,8 @@ export default function ReportsPage() {
           conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- IMPACTO DAS ESTRATÉGIAS (Blindado contra nulos) ---
+      // --- IMPACTO DAS ESTRATÉGIAS ---
       const calcImpacto = rawPremissas.map(p => {
-          // Garante que p.titulo não quebre o includes
           const leadsVinculados = currentLeads.filter(l => {
               const temPremissa = p.titulo && l.checkin?.includes(p.titulo);
               const geradoApp = l.checkin?.includes('Meta Gerada');
@@ -205,7 +219,8 @@ export default function ReportsPage() {
           lastMonth: calcLast,
           servicosCurva: calcCurva,
           rankingVendedores: calcRanking,
-          estrategiasImpacto: calcImpacto
+          estrategiasImpacto: calcImpacto,
+          performanceUnidades: calcUnidades
       };
 
   }, [rawLeads, rawPremissas, rawProfiles, filtroPeriodo, filtroUnidade, filtroVendedor]);
@@ -293,7 +308,7 @@ export default function ReportsPage() {
         })}
       </div>
 
-      {/* BLOCO CENTRAL: CURVA ABC + PERFORMANCE */}
+      {/* BLOCO CENTRAL: CURVA ABC + PERFORMANCE DE VENDAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* CURVA ABC */}
@@ -314,7 +329,7 @@ export default function ReportsPage() {
                   <div className="flex justify-between items-end mb-2">
                     <div>
                       <span className="text-[9px] text-slate-600 font-black uppercase">Tier {idx < 2 ? 'A' : idx < 4 ? 'B' : 'C'}</span>
-                      <h4 className="text-white font-black uppercase italic text-sm">{nome || 'Outros'}</h4>
+                      <h4 className="text-white font-black uppercase italic text-sm">{nome || 'Serviços Diversos'}</h4>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-black text-sm">R$ {valorNum.toLocaleString('pt-BR')}</p>
@@ -324,7 +339,7 @@ export default function ReportsPage() {
                   <ProgressBar value={valorNum} max={maxNum} color={idx === 0 ? 'bg-blue-500' : 'bg-white/10'} />
                 </div>
               );
-            }) : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Sem vendas detalhadas no período.</p>}
+            }) : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Nenhum item detalhado neste período.</p>}
           </div>
         </div>
 
@@ -334,22 +349,22 @@ export default function ReportsPage() {
             <Users size={20} className="text-purple-500" /> Elite de Vendas
           </h3>
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
-            {rankingVendedores.length > 0 ? rankingVendedores.map((vend, idx) => {
+            {rankingVendedores.length > 0 ? rankingVendedores.map((vend: any, idx: number) => {
               const vendTotal = Number(vend.total) || 0;
               const maxVendTotal = Number(rankingVendedores[0]?.total) || 1;
               
               return (
                 <div key={vend.nome || idx} className="flex items-center gap-4 group">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black italic shadow-lg ${idx === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-white/5 text-slate-500 border border-white/10'}`}>
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black italic shadow-lg flex-shrink-0 ${idx === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-white/5 text-slate-500 border border-white/10'}`}>
                     {idx + 1}º
                   </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors">{vend.nome || 'Sem Nome'}</span>
-                      <span className="text-[#22C55E] font-black text-[10px]">R$ {vendTotal.toLocaleString('pt-BR')}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-end mb-1">
+                      <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors truncate pr-2">{vend.nome || 'Sem Nome'}</span>
+                      <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
                     </div>
                     <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
-                    <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Taxa de Conversão: {Math.round(vend.conversao || 0)}%</p>
+                    <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Conversão: {Math.round(vend.conversao || 0)}%</p>
                   </div>
                 </div>
               );
@@ -358,59 +373,97 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* TABELA DE ESTRATÉGIAS */}
-      <div className="bg-[#0B1120] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
-        <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
-          <h3 className="text-white font-black uppercase italic flex items-center gap-2">
-            <BarChart3 size={20} className="text-[#22C55E]" /> ROI de Estratégias (Premissas)
-          </h3>
-          <span className="text-[10px] text-blue-500 font-black uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full">Filtro: {filtroPeriodo}</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[10px] font-black uppercase text-slate-500 tracking-widest bg-white/[0.02]">
-                <th className="px-8 py-5">Nome da Missão</th>
-                <th className="px-8 py-5">Tipo</th>
-                <th className="px-8 py-5 text-center">Leads</th>
-                <th className="px-8 py-5 text-center">Sucesso (%)</th>
-                <th className="px-8 py-5 text-right">Faturamento Real</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {estrategiasImpacto.length > 0 ? estrategiasImpacto.map((est, i) => (
-                <tr key={i} className="hover:bg-white/[0.02] transition-all group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                        {est.titulo?.includes('Resgate') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
-                        <span className="text-white font-bold text-sm uppercase italic group-hover:text-[#22C55E] transition-colors">{est.titulo}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="text-[10px] bg-white/5 text-slate-400 px-2 py-1 rounded-md font-black uppercase">{est.tipo || 'Vendas'}</span>
-                  </td>
-                  <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
-                  <td className="px-8 py-5 text-center">
-                    <div className="flex flex-col items-center">
-                        <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) > 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
-                        <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
-                            <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
-                        </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR')}</td>
+      {/* BLOCO INFERIOR: ESTRATÉGIAS + PERFORMANCE DE UNIDADES */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* TABELA DE ESTRATÉGIAS */}
+        <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl flex flex-col">
+          <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
+            <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+              <BarChart3 size={20} className="text-[#22C55E]" /> ROI de Estratégias (Premissas)
+            </h3>
+            <span className="text-[10px] text-blue-500 font-black uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full">{filtroPeriodo}</span>
+          </div>
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-black uppercase text-slate-500 tracking-widest bg-white/[0.02]">
+                  <th className="px-8 py-5">Nome da Missão</th>
+                  <th className="px-8 py-5">Tipo</th>
+                  <th className="px-8 py-5 text-center">Leads</th>
+                  <th className="px-8 py-5 text-center">Sucesso (%)</th>
+                  <th className="px-8 py-5 text-right">Faturamento Real</th>
                 </tr>
-              )) : (
-                <tr>
-                    <td colSpan={5} className="px-8 py-10 text-center text-slate-600 text-xs font-black uppercase flex flex-col items-center justify-center">
-                        <Target size={24} className="mb-2 opacity-20"/>
-                        Nenhuma estratégia gerou resultado neste filtro.
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {estrategiasImpacto.length > 0 ? estrategiasImpacto.map((est, i) => (
+                  <tr key={i} className="hover:bg-white/[0.02] transition-all group">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-3">
+                          {est.titulo?.includes('Resgate') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
+                          <span className="text-white font-bold text-sm uppercase italic group-hover:text-[#22C55E] transition-colors">{est.titulo}</span>
+                      </div>
                     </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <td className="px-8 py-5">
+                      <span className="text-[10px] bg-white/5 text-slate-400 px-2 py-1 rounded-md font-black uppercase">{est.tipo || 'Vendas'}</span>
+                    </td>
+                    <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
+                    <td className="px-8 py-5 text-center">
+                      <div className="flex flex-col items-center">
+                          <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) > 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
+                          <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
+                              <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
+                          </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR')}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                      <td colSpan={5} className="px-8 py-10 text-center text-slate-600 text-xs font-black uppercase flex flex-col items-center justify-center">
+                          <Target size={24} className="mb-2 opacity-20"/>
+                          Nenhuma estratégia gerou resultado neste filtro.
+                      </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* PERFORMANCE POR UNIDADE */}
+        <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
+          <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
+            <Building2 size={20} className="text-cyan-400" /> Faturamento por Filial
+          </h3>
+          <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
+            {performanceUnidades.length > 0 ? performanceUnidades.map((und: any, idx: number) => {
+              const undTotal = Number(und.total) || 0;
+              const maxUndTotal = Number(performanceUnidades[0]?.total) || 1;
+              const share = currentMonth.faturamento > 0 ? Math.round((undTotal / currentMonth.faturamento) * 100) : 0;
+
+              return (
+                <div key={und.nome || idx}>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-white font-black text-xs uppercase truncate pr-2 max-w-[60%]">{und.nome}</span>
+                    <span className="text-cyan-400 font-black text-[11px] whitespace-nowrap">R$ {undTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                  </div>
+                  <ProgressBar value={undTotal} max={maxUndTotal} color="bg-cyan-500" />
+                  <div className="flex justify-between mt-1">
+                      <p className="text-[9px] text-slate-500 font-bold uppercase">{und.count} Vendas</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
+                  </div>
+                </div>
+              );
+            }) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-600 opacity-50">
+                    <Building2 size={32} className="mb-2" />
+                    <p className="text-xs font-black uppercase">Sem dados de filiais</p>
+                </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
     </div>

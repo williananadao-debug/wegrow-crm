@@ -5,7 +5,7 @@ import {
   TrendingUp, BarChart3, PieChart, Users, 
   ArrowUpRight, ArrowDownRight, Target, Calendar,
   Download, Zap, Clock, ChevronRight, Filter, 
-  ShieldCheck, Crosshair, Sparkles, Building2
+  ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle 
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -24,7 +24,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DOS FILTROS TRIPLOS ---
-  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Mês Atual'); // Padrão
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Mês Atual'); 
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
@@ -45,7 +45,6 @@ export default function ReportsPage() {
       let leadsQuery = supabase.from('leads').select('*');
       
       if (!isDirector) {
-          // Se não for diretor, traz os cards dele
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
@@ -59,8 +58,10 @@ export default function ReportsPage() {
       setRawPremissas(premissasRes.data || []);
       setRawProfiles(profilesRes.data || []);
       
+    } catch (error) {
+      console.error("Erro ao buscar dados:", error);
     } finally { 
-        setLoading(false); 
+      setLoading(false); 
     }
   }
 
@@ -68,7 +69,7 @@ export default function ReportsPage() {
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
-  // --- CÁLCULOS MEMOIZADOS E FILTRADOS ---
+  // --- CÁLCULOS MEMOIZADOS E BLINDADOS CONTRA ERROS ---
   const { 
       currentMonth, 
       lastMonth, 
@@ -78,7 +79,6 @@ export default function ReportsPage() {
   } = useMemo(() => {
       
       const now = new Date();
-      // Pega data inicial do ano se o filtro for "Ano Atual"
       const firstDayAnoAtual = new Date(now.getFullYear(), 0, 1).toISOString();
       const firstDayCurrent = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const firstDayLast = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
@@ -86,32 +86,29 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
-      // 1. Aplica Filtros de Unidade e Vendedor na base bruta ANTES de dividir por período
+      // 1. Filtros Unidade e Vendedor
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
           return true;
       });
 
-      // 2. Filtra por Período
+      // 2. Filtro Período
       let currentLeads = [];
-      let pastLeads = []; // Mês anterior ou período equivalente para comparação
+      let pastLeads = []; 
 
       if (filtroPeriodo === 'Ano Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at >= firstDayAnoAtual);
-          // Comparativo do ano passado (Opcional, deixei zerado para focar no ano atual)
+          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayAnoAtual);
           pastLeads = []; 
       } else if (filtroPeriodo === 'Mês Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at >= firstDayCurrent);
-          pastLeads = baseFiltrada.filter(l => l.created_at >= firstDayLast && l.created_at <= lastDayLast);
+          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayCurrent);
+          pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayLast && l.created_at <= lastDayLast);
       } else if (filtroPeriodo === 'Mês Passado') {
-          currentLeads = baseFiltrada.filter(l => l.created_at >= firstDayLast && l.created_at <= lastDayLast);
-          // Mês retrasado para comparativo
+          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayLast && l.created_at <= lastDayLast);
           const firstDayRetrasado = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
           const lastDayRetrasado = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59).toISOString();
-          pastLeads = baseFiltrada.filter(l => l.created_at >= firstDayRetrasado && l.created_at <= lastDayRetrasado);
+          pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayRetrasado && l.created_at <= lastDayRetrasado);
       } else {
-          // Todo o Período
           currentLeads = baseFiltrada;
           pastLeads = [];
       }
@@ -127,7 +124,7 @@ export default function ReportsPage() {
         conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0
       };
 
-      // --- KPIs Período Comparativo (Anterior) ---
+      // --- KPIs Período Comparativo ---
       const lastGanhos = pastLeads.filter(l => l.status === 'ganho');
       const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
 
@@ -138,20 +135,31 @@ export default function ReportsPage() {
         conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0
       };
 
-      // --- CURVA ABC SERVIÇOS (Baseado no Período Selecionado) ---
+      // --- CURVA ABC SERVIÇOS ---
       const curve = currentGanhos.reduce((acc: any, curr) => {
+        let itensArray = [];
+        
+        // Tenta ler os itens, seja Array ou String de JSON (caso venha do CSV)
         if (Array.isArray(curr.itens)) {
-            curr.itens.forEach((item: any) => {
-                acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade);
-            });
+            itensArray = curr.itens;
+        } else if (typeof curr.itens === 'string') {
+            try { itensArray = JSON.parse(curr.itens) || []; } catch(e) { itensArray = []; }
         }
+
+        itensArray.forEach((item: any) => {
+            if (item && item.servico) {
+                acc[item.servico] = (acc[item.servico] || 0) + ((Number(item.precoUnitario) || 0) * (Number(item.quantidade) || 1));
+            }
+        });
+        
         return acc;
       }, {});
-      const calcCurva = Object.entries(curve).sort((a: any, b: any) => b[1] - a[1]);
+      
+      const calcCurva = Object.entries(curve).sort((a: any, b: any) => Number(b[1]) - Number(a[1]));
 
-      // --- RANKING VENDEDORES (Baseado no Período Selecionado) ---
+      // --- RANKING VENDEDORES ---
       const rankObj = currentLeads.reduce((acc: any, lead) => {
-         const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
+         const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Sem Dono';
          const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
 
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, leadsCount: 0, ganhosCount: 0 };
@@ -166,22 +174,29 @@ export default function ReportsPage() {
 
       const calcRanking = Object.values(rankObj).map((v: any) => ({
           nome: v.nome,
-          total: v.total,
+          total: Number(v.total) || 0,
           conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- IMPACTO DAS ESTRATÉGIAS (Baseado no Período Selecionado) ---
+      // --- IMPACTO DAS ESTRATÉGIAS (Blindado contra nulos) ---
       const calcImpacto = rawPremissas.map(p => {
-          const leadsVinculados = currentLeads.filter(l => l.checkin?.includes(p.titulo) || l.checkin?.includes('Meta Gerada'));
+          // Garante que p.titulo não quebre o includes
+          const leadsVinculados = currentLeads.filter(l => {
+              const temPremissa = p.titulo && l.checkin?.includes(p.titulo);
+              const geradoApp = l.checkin?.includes('Meta Gerada');
+              return temPremissa || geradoApp;
+          });
+          
           const ganhos = leadsVinculados.filter(l => l.status === 'ganho');
+          
           return {
-              titulo: p.titulo,
-              tipo: p.tipo_cliente,
+              titulo: p.titulo || 'Estratégia sem nome',
+              tipo: p.tipo_cliente || 'Geral',
               gerados: leadsVinculados.length,
               conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
               faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
           };
-      }).filter(est => est.gerados > 0) // Só mostra as que geraram resultado no período
+      }).filter(est => est.gerados > 0)
         .sort((a, b) => b.faturamento - a.faturamento)
         .slice(0, 5); 
 
@@ -255,7 +270,6 @@ export default function ReportsPage() {
           { label: `Ticket Médio (${filtroPeriodo})`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
           { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500' },
         ].map((item, i) => {
-          // Se o filtro for Ano Atual ou Todo o Período, escondemos o comparativo do last (que estaria zerado)
           const isComparing = filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado';
           const growth = isComparing && item.last !== undefined ? getGrowth(item.current, item.last) : null;
           
@@ -265,7 +279,7 @@ export default function ReportsPage() {
               <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{item.label}</p>
               <div className="flex items-end gap-2">
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
-                  {item.prefix}{item.current.toLocaleString('pt-BR', {maximumFractionDigits: 0})}{item.suffix}
+                  {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {maximumFractionDigits: 0})}{item.suffix}
                 </h3>
                 {growth !== null && (
                    <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
@@ -282,7 +296,7 @@ export default function ReportsPage() {
       {/* BLOCO CENTRAL: CURVA ABC + PERFORMANCE */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CURVA ABC (Dobra de tamanho para destaque) */}
+        {/* CURVA ABC */}
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20" />
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8 relative z-10">
@@ -290,21 +304,27 @@ export default function ReportsPage() {
           </h3>
           
           <div className="space-y-6 relative z-10 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-            {servicosCurva.length > 0 ? servicosCurva.map(([nome, valor], idx) => (
-              <div key={nome}>
-                <div className="flex justify-between items-end mb-2">
-                  <div>
-                    <span className="text-[9px] text-slate-600 font-black uppercase">Tier {idx < 2 ? 'A' : idx < 4 ? 'B' : 'C'}</span>
-                    <h4 className="text-white font-black uppercase italic text-sm">{nome}</h4>
+            {servicosCurva.length > 0 ? servicosCurva.map(([nome, valor]: any, idx: number) => {
+              const valorNum = Number(valor) || 0;
+              const maxNum = Number(servicosCurva[0][1]) || 1;
+              const share = currentMonth.faturamento > 0 ? Math.round((valorNum / currentMonth.faturamento) * 100) : 0;
+              
+              return (
+                <div key={nome || idx}>
+                  <div className="flex justify-between items-end mb-2">
+                    <div>
+                      <span className="text-[9px] text-slate-600 font-black uppercase">Tier {idx < 2 ? 'A' : idx < 4 ? 'B' : 'C'}</span>
+                      <h4 className="text-white font-black uppercase italic text-sm">{nome || 'Outros'}</h4>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-black text-sm">R$ {valorNum.toLocaleString('pt-BR')}</p>
+                      <p className="text-[9px] text-slate-500 font-bold uppercase">Share: {share}%</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-white font-black text-sm">R$ {valor.toLocaleString('pt-BR')}</p>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase">Share: {Math.round((valor / currentMonth.faturamento) * 100)}%</p>
-                  </div>
+                  <ProgressBar value={valorNum} max={maxNum} color={idx === 0 ? 'bg-blue-500' : 'bg-white/10'} />
                 </div>
-                <ProgressBar value={valor} max={servicosCurva[0][1]} color={idx === 0 ? 'bg-blue-500' : 'bg-white/10'} />
-              </div>
-            )) : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Sem vendas cadastradas com itens detalhados neste filtro.</p>}
+              );
+            }) : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Sem vendas detalhadas no período.</p>}
           </div>
         </div>
 
@@ -314,21 +334,26 @@ export default function ReportsPage() {
             <Users size={20} className="text-purple-500" /> Elite de Vendas
           </h3>
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
-            {rankingVendedores.length > 0 ? rankingVendedores.map((vend, idx) => (
-              <div key={vend.nome} className="flex items-center gap-4 group">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black italic shadow-lg ${idx === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-white/5 text-slate-500 border border-white/10'}`}>
-                  {idx + 1}º
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors">{vend.nome}</span>
-                    <span className="text-[#22C55E] font-black text-[10px]">R$ {vend.total.toLocaleString('pt-BR')}</span>
+            {rankingVendedores.length > 0 ? rankingVendedores.map((vend, idx) => {
+              const vendTotal = Number(vend.total) || 0;
+              const maxVendTotal = Number(rankingVendedores[0]?.total) || 1;
+              
+              return (
+                <div key={vend.nome || idx} className="flex items-center gap-4 group">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black italic shadow-lg ${idx === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : 'bg-white/5 text-slate-500 border border-white/10'}`}>
+                    {idx + 1}º
                   </div>
-                  <ProgressBar value={vend.total} max={rankingVendedores[0]?.total || 1} color="bg-purple-600" />
-                  <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Taxa de Conversão: {Math.round(vend.conversao)}%</p>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors">{vend.nome || 'Sem Nome'}</span>
+                      <span className="text-[#22C55E] font-black text-[10px]">R$ {vendTotal.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
+                    <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Taxa de Conversão: {Math.round(vend.conversao || 0)}%</p>
+                  </div>
                 </div>
-              </div>
-            )) : <p className="text-slate-600 text-xs italic font-bold uppercase">Sem vendas registradas.</p>}
+              );
+            }) : <p className="text-slate-600 text-xs italic font-bold uppercase">Sem vendas registradas.</p>}
           </div>
         </div>
       </div>
@@ -357,29 +382,29 @@ export default function ReportsPage() {
                 <tr key={i} className="hover:bg-white/[0.02] transition-all group">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
-                        {est.titulo.includes('Resgate') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
+                        {est.titulo?.includes('Resgate') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
                         <span className="text-white font-bold text-sm uppercase italic group-hover:text-[#22C55E] transition-colors">{est.titulo}</span>
                     </div>
                   </td>
                   <td className="px-8 py-5">
                     <span className="text-[10px] bg-white/5 text-slate-400 px-2 py-1 rounded-md font-black uppercase">{est.tipo || 'Vendas'}</span>
                   </td>
-                  <td className="px-8 py-5 text-center text-white font-black">{est.gerados}</td>
+                  <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
                   <td className="px-8 py-5 text-center">
                     <div className="flex flex-col items-center">
-                        <span className={`text-[10px] font-black uppercase ${est.conversao > 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao)}%</span>
+                        <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) > 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
                         <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
-                            <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao}%` }} />
+                            <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
                         </div>
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {est.faturamento.toLocaleString('pt-BR')}</td>
+                  <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR')}</td>
                 </tr>
               )) : (
                 <tr>
                     <td colSpan={5} className="px-8 py-10 text-center text-slate-600 text-xs font-black uppercase flex flex-col items-center justify-center">
                         <Target size={24} className="mb-2 opacity-20"/>
-                        Nenhuma estratégia gerou resultado neste período/unidade.
+                        Nenhuma estratégia gerou resultado neste filtro.
                     </td>
                 </tr>
               )}

@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -31,6 +31,8 @@ type Lead = {
   user_id?: string;    
   filial_id?: number;
   client_id?: number;
+  contrato_inicio?: string; // NOVO CAMPO
+  contrato_fim?: string;    // NOVO CAMPO
 };
 
 type ClienteOpcao = {
@@ -66,6 +68,10 @@ export default function DealsPage() {
   const [novoTelefone, setNovoTelefone] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
+  
+  // NOVOS ESTADOS PARA CONTRATO
+  const [contratoInicio, setContratoInicio] = useState('');
+  const [contratoFim, setContratoFim] = useState('');
   
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
   const [servicoAtual, setServicoAtual] = useState('');
@@ -134,11 +140,22 @@ export default function DealsPage() {
       return <Mic2 size={14} className="text-blue-400" />;
   };
 
-  // Helper para formatar data discreta
+  // Melhorada para não dar erro de fuso horário
   const formatarData = (dataIso: string) => {
     if (!dataIso) return '';
-    const data = new Date(dataIso);
-    return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const parts = dataIso.split('T')[0].split('-');
+    if(parts.length === 3) return `${parts[2]}/${parts[1]}`;
+    return new Date(dataIso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  };
+
+  // Calcula quantos dias faltam para vencer
+  const getDaysLeft = (endDate?: string) => {
+    if (!endDate) return null;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const end = new Date(endDate + 'T00:00:00');
+    const diffTime = end.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
   const criarJobDeProducao = async (lead: Lead) => {
@@ -370,12 +387,12 @@ export default function DealsPage() {
         valor_total: valorTotal,
         itens: itensTemporarios,
         foto_url: fotoUrl,
+        contrato_inicio: contratoInicio || null,
+        contrato_fim: contratoFim || null,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
         client_id: selectedClientId
     };
-
-    console.log("Tentando salvar lead:", payload);
 
     if (editingLeadId) {
         const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
@@ -390,12 +407,11 @@ export default function DealsPage() {
         }
     } else {
         const { data, error } = await supabase.from('leads').insert([payload]).select();
-        
         if (error) {
             console.error("ERRO AO CRIAR LEAD:", error);
-            alert(`ERRO DE BANCO: ${error.message} \nVerifique o console (F12) para detalhes.`);
+            alert(`ERRO DE BANCO: ${error.message}`);
         } else if (data) {
-            setLeads(prev => [data[0], ...prev]);
+            setLeads(prev => [data[0] as Lead, ...prev]);
             setIsModalOpen(false);
             setToastMessage("Lead criado com sucesso! 🚀");
             setShowToast(true);
@@ -411,6 +427,8 @@ export default function DealsPage() {
         setSelectedClientId(lead.client_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
+        setContratoInicio(lead.contrato_inicio || '');
+        setContratoFim(lead.contrato_fim || '');
         carregarHistorico(lead.id);
     } else {
         setEditingLeadId(null);
@@ -419,6 +437,8 @@ export default function DealsPage() {
         setSelectedClientId(null);
         setItensTemporarios([]);
         setFotoUrl('');
+        setContratoInicio('');
+        setContratoFim('');
         setHistorico([]);
     }
     setIsModalOpen(true);
@@ -514,6 +534,8 @@ export default function DealsPage() {
 
                     <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
                         {leadsDaColuna.map((lead, index) => {
+                            const daysLeft = getDaysLeft(lead.contrato_fim);
+
                             return (
                                 <Draggable key={lead.id} draggableId={lead.id.toString()} index={index}>
                                     {(provided, snapshot) => (
@@ -528,11 +550,9 @@ export default function DealsPage() {
                                                     <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
                                                         <Edit2 size={10} className="text-slate-500"/>
                                                     </div>
-                                                    {/* DATA DISCRETA NO CARD */}
                                                     <span className="text-[8px] text-slate-600 font-mono tracking-tighter">{formatarData(lead.created_at)}</span>
                                                 </div>
                                                 
-                                                {/* ÍCONES: Vertical (Mobile) / Horizontal (Desktop) */}
                                                 <div className="flex flex-col md:flex-row gap-2 md:gap-2">
                                                     <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
                                                         <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
@@ -543,26 +563,21 @@ export default function DealsPage() {
                                                 </div>
                                             </div>
                                             
-                                            {/* --- ÁREA DE CHECKIN INTELIGENTE --- */}
                                             <div className="mb-2">
-                                                {/* Caso 1: Missão/Premissa (Roxo) */}
                                                 {lead.checkin && isMission(lead.checkin) ? (
                                                     <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
                                                         {lead.checkin.includes('Resgate') ? <Sparkles size={12} className="text-purple-400"/> : <Crosshair size={12} className="text-purple-400"/>}
                                                         <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
                                                     </div>
                                                 ) : lead.checkin ? (
-                                                    /* Caso 2: Checkin Normal (GPS) */
                                                     <div className="flex items-center gap-1 mb-1">
                                                         <MapPin size={10} className="text-pink-500" />
                                                         <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
                                                     </div>
                                                 ) : (
-                                                    /* Caso 3: Pendente */
                                                     lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
                                                 )}
                                             </div>
-                                            {/* ----------------------------------- */}
 
                                             <div className="mb-1">
                                                 <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate">{lead.empresa}</h4>
@@ -578,6 +593,30 @@ export default function DealsPage() {
                                             <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
                                                 R$ {lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                             </div>
+
+                                            {/* --- ALERTA DE CONTRATO NO CARD --- */}
+                                            {lead.contrato_inicio && lead.contrato_fim && (
+                                                <div className="mb-2 flex items-center gap-2 p-1.5 bg-white/[0.02] border border-white/5 rounded-lg">
+                                                    <CalendarDays size={12} className="text-slate-500" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black uppercase text-slate-500">Contrato</span>
+                                                        <span className="text-[9px] text-slate-300 font-mono leading-none">
+                                                            {formatarData(lead.contrato_inicio)} até {formatarData(lead.contrato_fim)}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {daysLeft !== null && daysLeft <= 30 && daysLeft >= 0 && (
+                                                        <div className="ml-auto flex items-center gap-1 bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase animate-pulse border border-red-500/30">
+                                                            <AlertTriangle size={10}/> {daysLeft}D
+                                                        </div>
+                                                    )}
+                                                    {daysLeft !== null && daysLeft < 0 && (
+                                                        <div className="ml-auto flex items-center bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] font-black uppercase">
+                                                            VENCIDO
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {lead.status === 'aberto' ? (
                                                 <div className="space-y-2 pt-1">
@@ -611,13 +650,11 @@ export default function DealsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL CORRIGIDO (HEADER + BODY + FOOTER FIXO) */}
+      {/* MODAL CORRIGIDO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-0 md:p-4">
-           {/* Modal Container */}
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">
               
-              {/* HEADER (FIXO) */}
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">{editingLeadId ? 'Editar Oportunidade' : 'Novo Negócio'}</h2>
                   <div className="flex items-center gap-2">
@@ -635,12 +672,10 @@ export default function DealsPage() {
                   </div>
               </div>
 
-              {/* BODY (ROLAGEM) */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         
-                        {/* CAMPO CLIENTE HÍBRIDO (DIGITAR OU SELECIONAR) */}
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
                             <input 
@@ -651,14 +686,12 @@ export default function DealsPage() {
                                 onChange={(e) => {
                                     const texto = e.target.value;
                                     setNovaEmpresa(texto);
-                                    // Tenta achar o cliente na lista
                                     const clienteEncontrado = clientesOpcoes.find(c => c.nome_empresa === texto);
                                     if(clienteEncontrado) {
                                         setSelectedClientId(clienteEncontrado.id);
                                         setNovoTelefone(clienteEncontrado.telefone || '');
                                     } else {
                                         setSelectedClientId(null);
-                                        // Não limpa o telefone, permite o usuário digitar se for novo
                                     }
                                 }}
                                 required
@@ -675,6 +708,19 @@ export default function DealsPage() {
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
                         </div>
                     </div>
+
+                    {/* --- NOVOS CAMPOS DE CONTRATO --- */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
+                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => setContratoInicio(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
+                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
+                        </div>
+                    </div>
+                    {/* -------------------------------- */}
 
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4">
                         <div className="flex justify-between items-center">

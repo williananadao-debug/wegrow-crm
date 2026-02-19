@@ -19,13 +19,12 @@ type Job = {
   user_id: string;
 };
 
-// Etapas do Fluxo de Produção
+// 1. AJUSTE: Removemos a coluna 'entregue' daqui para limpar a tela
 const STAGES = {
   roteiro: { title: 'Roteiro / Copy', icon: <Clapperboard size={14}/>, color: 'border-pink-500' },
   gravacao: { title: 'Locução / Gravação', icon: <Mic2 size={14}/>, color: 'border-purple-500' },
   edicao: { title: 'Edição / Motion', icon: <MonitorPlay size={14}/>, color: 'border-blue-500' },
-  aprovacao: { title: 'Aprovação', icon: <Clock size={14}/>, color: 'border-yellow-500' },
-  entregue: { title: 'Entregue', icon: <CheckCircle2 size={14}/>, color: 'border-green-500' }
+  aprovacao: { title: 'Aprovação', icon: <Clock size={14}/>, color: 'border-yellow-500' }
 };
 
 export default function JobsPage() {
@@ -48,7 +47,13 @@ export default function JobsPage() {
   }, []);
 
   const fetchJobs = async () => {
-    const { data } = await supabase.from('jobs').select('*').order('deadline', { ascending: true });
+    // 2. AJUSTE: .neq('stage', 'entregue') - O banco NÃO vai trazer os finalizados
+    const { data } = await supabase
+        .from('jobs')
+        .select('*')
+        .neq('stage', 'entregue') 
+        .order('deadline', { ascending: true });
+        
     if (data) setJobs(data as any);
     setLoading(false);
   };
@@ -67,7 +72,19 @@ export default function JobsPage() {
     await supabase.from('jobs').update({ stage: newStage }).eq('id', id);
   };
 
-  // --- CRUD (CRIAR, EDITAR, DELETAR) ---
+  // --- CRUD (CRIAR, EDITAR, DELETAR, FINALIZAR) ---
+
+  // 3. AJUSTE: Função nova para Finalizar o Job e sumir com ele
+  const handleFinalizar = async (e: React.MouseEvent, id: number) => {
+      e.stopPropagation(); // Evita abrir o modal ao clicar no botão
+      if(!confirm("Deseja finalizar este Job? Ele será removido da esteira.")) return;
+
+      // Optimistic Update: Remove da tela na mesma hora
+      setJobs(prev => prev.filter(j => j.id !== id));
+
+      // Atualiza no banco para 'entregue'
+      await supabase.from('jobs').update({ stage: 'entregue' }).eq('id', id);
+  };
 
   const abrirModal = (job?: Job) => {
       if (job) {
@@ -92,7 +109,6 @@ export default function JobsPage() {
       const payload = {
           ...formData,
           user_id: user?.id,
-          // Se for novo, define stage inicial
           ...(editingJobId ? {} : { stage: 'roteiro' }) 
       };
 
@@ -111,7 +127,7 @@ export default function JobsPage() {
   };
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
-      e.stopPropagation(); // Evita abrir o modal ao clicar no lixo
+      e.stopPropagation(); 
       if(!confirm("Tem certeza que deseja excluir este Job?")) return;
       
       const { error } = await supabase.from('jobs').delete().eq('id', id);
@@ -137,7 +153,7 @@ export default function JobsPage() {
         <div className="flex items-center gap-4">
             <div className="text-right hidden md:block">
                 <span className="text-xs font-bold text-slate-400 uppercase">Ativos</span>
-                <p className="text-2xl font-black text-white leading-none">{jobs.filter(j => j.stage !== 'entregue').length}</p>
+                <p className="text-2xl font-black text-white leading-none">{jobs.length}</p>
             </div>
             <button onClick={() => abrirModal()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg transition-all">
                 <Plus size={18} /> Novo Job
@@ -174,7 +190,7 @@ export default function JobsPage() {
                               {...prov.draggableProps}
                               {...prov.dragHandleProps}
                               className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all cursor-grab active:cursor-grabbing relative ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''}`}
-                              onClick={() => abrirModal(job)} // Abre modal ao clicar no card
+                              onClick={() => abrirModal(job)} 
                             >
                               <div className="flex justify-between items-start mb-2">
                                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${getPriorityColor(job.prioridade)}`}>
@@ -199,7 +215,7 @@ export default function JobsPage() {
                                 </p>
                               )}
 
-                              <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
+                              <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1 mb-2">
                                   <div className="flex items-center gap-1 text-[9px] text-slate-600 font-mono">
                                       <Clock size={10}/>
                                       <span>ID: {job.id}</span>
@@ -208,6 +224,15 @@ export default function JobsPage() {
                                       <Edit2 size={10}/>
                                   </div>
                               </div>
+
+                              {/* BOTÃO MÁGICO FINALIZAR */}
+                              <button 
+                                  onClick={(e) => handleFinalizar(e, job.id)}
+                                  className="w-full mt-2 bg-[#22C55E]/10 hover:bg-[#22C55E] text-[#22C55E] hover:text-[#0F172A] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                  <CheckCircle2 size={14} /> Finalizar Job
+                              </button>
+
                             </div>
                           )}
                         </Draggable>
@@ -222,7 +247,7 @@ export default function JobsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL DE CRIAÇÃO/EDIÇÃO */}
+      {/* MODAL DE CRIAÇÃO/EDIÇÃO (MANTIDO INTACTO) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-200">

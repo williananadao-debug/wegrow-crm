@@ -13,7 +13,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
   
   // Liberamos o login e o portal para não terem menu lateral
-  const isPublicPage = pathname === '/login' || pathname === '/portal';
+  const isPublicPage = pathname === '/login' || pathname === '/portal' || pathname === '/solicitar';
 
   if (isPublicPage) {
     return <>{children}</>;

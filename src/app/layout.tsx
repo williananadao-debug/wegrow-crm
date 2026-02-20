@@ -1,33 +1,49 @@
-"use client";
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css"; 
+import { AuthProvider } from '@/lib/contexts/AuthContext';
+import LayoutWrapper from '../components/layout-wrapper'; 
 
-import { usePathname } from 'next/navigation';
-import Navbar from '@/components/navbar';           
-import Topbar from '@/components/topbar';           
+const inter = Inter({ subsets: ["latin"] });
 
-// 👇 A MÁGICA ESTÁ AQUI NESTA LINHA: { children }: { children: React.ReactNode }
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  
-  // Liberamos o login e o portal para não terem menu
-  const isPublicPage = pathname === '/login' || pathname === '/portal';
+export const viewport: Viewport = {
+  themeColor: "#0B1120",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
-  if (isPublicPage) return <>{children}</>;
+export const metadata: Metadata = {
+  title: "WeGrow CRM",
+  description: "Gestão Comercial e Produção",
+  manifest: "/manifest.json",
+  icons: {
+    icon: '/logo.png',      
+    shortcut: '/logo.png',  
+    apple: '/logo.png',     
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "WeGrow",
+  },
+};
 
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <div className="flex h-screen bg-[#0B1120] overflow-hidden">
-      <div className="z-40 relative">
-        <Navbar />
-      </div>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative md:pl-5">
-        <div className="hidden md:block">
-           <Topbar /> 
-        </div>
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B1120] w-full h-full">
-          <div className="pt-20 pb-8 px-4 md:pt-6 md:pb-6 md:px-8 max-w-[1600px] mx-auto w-full">
+    <html lang="pt-br">
+      <body className={`${inter.className} bg-[#0B1120] text-white antialiased`}>
+        <AuthProvider>
+          <LayoutWrapper>
             {children}
-          </div>
-        </main>
-      </div>
-    </div>
+          </LayoutWrapper>
+        </AuthProvider>
+      </body>
+    </html>
   );
 }

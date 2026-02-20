@@ -11,7 +11,11 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 type RankingItem = { id: string; nome: string; total: number; count: number; };
 
 export default function DashboardPage() {
-  const { user, perfil } = useAuth();
+  // BLINDAGEM ANTI-VERCEL AQUI 👇
+  const auth = useAuth() || {};
+  const user = auth.user;
+  const perfil = auth.perfil;
+  
   const [loading, setLoading] = useState(true);
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
@@ -20,7 +24,6 @@ export default function DashboardPage() {
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
 
-  // Mês padrão só para não quebrar lógicas antigas, mas o filtro principal é o filtroPeriodo
   const [mesSelecionado, setMesSelecionado] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -44,7 +47,6 @@ export default function DashboardPage() {
         let leadsQuery = supabase.from('leads').select('*');
 
         if (!isDirector) {
-            // Se não for diretor, traz os cards importados com o nome dele OU criados pelo ID dele
             leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
         }
 
@@ -69,27 +71,18 @@ export default function DashboardPage() {
     }
   };
 
-  // --- FILTROS DISPONÍVEIS ---
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
-  // CÁLCULOS MEMOIZADOS (Recalcula sempre que um filtro muda)
   const { ranking, statsComercial, statsProducao, statsFinanceiro } = useMemo(() => {
       
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
-      // --- APLICAÇÃO DOS FILTROS NO DASHBOARD ---
       const leadsFiltrados = rawLeads.filter(lead => {
-          // 1. Filtro de Unidade
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
-          
-          // 2. Filtro de Vendedor
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
-              // Verifica pelo ID ou pelo Nome importado
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
           }
-          
-          // 3. Filtro de Período Dinâmico
           if (filtroPeriodo !== 'Todo o Período') {
               const dataLead = new Date(lead.created_at);
               const hoje = new Date();
@@ -106,11 +99,8 @@ export default function DashboardPage() {
           return true;
       });
 
-      // --- RANKING (Baseado nos dados FILTRADOS) ---
       const rankObj = leadsFiltrados.reduce((acc: any, lead) => {
-         // Prioriza o nome importado do CSV, se não tiver, busca o ID
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
-         // Usa o nome como chave para não duplicar se o ID for nulo
          const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
 
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0 };
@@ -121,7 +111,6 @@ export default function DashboardPage() {
       
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
-      // --- CÁLCULOS KPI COMERCIAL ---
       const fat = leadsFiltrados
         .filter(l => l.status === 'ganho')
         .reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0);
@@ -134,7 +123,6 @@ export default function DashboardPage() {
       const comVisita = leadsFiltrados.filter(l => l.checkin && l.checkin.length > 5).length; 
       const semVisita = leadsFiltrados.length - comVisita;
 
-      // --- FUNIL ---
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
       leadsFiltrados.forEach(l => {
           const st = l.status;
@@ -149,14 +137,12 @@ export default function DashboardPage() {
           }
       });
 
-      // --- VENDAS POR DIA (Baseado no Mês Atual) ---
       const diasNoMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
       const vendasPorDiaArray = Array.from({ length: diasNoMes }, (_, i) => ({
           dia: (i + 1).toString(),
           valor: 0
       }));
 
-      // Só alimenta o gráfico de dias se o filtro for Mês Atual (se for ano, não faz sentido dia a dia)
       if (filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') {
           leadsFiltrados.filter(l => l.status === 'ganho').forEach(l => {
               const dataCriacao = new Date(l.created_at);
@@ -167,7 +153,6 @@ export default function DashboardPage() {
           });
       }
 
-      // --- DADOS DIRETORIA ---
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
       rawJobs.forEach((j: any) => {
         if (j.stage === 'roteiro') prod.roteiro++;

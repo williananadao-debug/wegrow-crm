@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Navbar from '@/components/navbar';           
 import Topbar from '@/components/topbar';           
 
+// 👇 ESSA LINHA ABAIXO É O QUE MATA O ERRO VERMELHO E TRAZ A BELEZA DE VOLTA
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
@@ -15,7 +16,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex h-screen bg-[#0B1120] overflow-hidden">
-      {/* Menu Lateral Desktop e Mobile integrado */}
+      {/* Menu Lateral */}
       <div className="z-40 relative">
         <Navbar />
       </div>

@@ -8,20 +8,19 @@ import Topbar from '@/components/topbar';
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   
-  const isPublicPage = pathname === '/login' || pathname === '/portal';
+  // Páginas que NÃO devem ter o menu lateral
+  const isPublicPage = pathname === '/login' || pathname === '/portal' || pathname === '/solicitar';
 
-  if (isPublicPage) return <>{children}</>;
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex h-screen bg-[#0B1120] overflow-hidden text-white">
-      <div className="z-40 relative">
-        <Navbar />
-      </div>
+      <Navbar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative md:pl-5">
-        <div className="hidden md:block">
-           <Topbar /> 
-        </div>
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B1120] w-full h-full">
+        <Topbar /> 
+        <main className="flex-1 overflow-y-auto bg-[#0B1120] w-full h-full">
           <div className="pt-20 pb-8 px-4 md:pt-6 md:pb-6 md:px-8 max-w-[1600px] mx-auto w-full">
             {children}
           </div>

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Navbar from '@/components/navbar';           
 import Topbar from '@/components/topbar';           
 
+// 👇 A LINHA ABAIXO É A CURA DO SISTEMA
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   

@@ -19,6 +19,7 @@ type Lead = {
   id: number; 
   empresa: string; 
   valor_total: number; 
+  desconto?: number; // 👈 NOVA TIPAGEM DE DESCONTO
   itens: ItemVenda[]; 
   etapa: number; 
   status: 'aberto' | 'ganho' | 'perdido'; 
@@ -79,6 +80,7 @@ export default function DealsPage() {
   const [servicoAtual, setServicoAtual] = useState('');
   const [qtdAtual, setQtdAtual] = useState(1);
   const [precoAtual, setPrecoAtual] = useState(0);
+  const [desconto, setDesconto] = useState(0); // 👈 NOVO ESTADO DE DESCONTO
   
   const [fotoUrl, setFotoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -159,7 +161,7 @@ export default function DealsPage() {
 
   const criarJobDeProducao = async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
-    const briefingAutomatico = `VENDA APROVADA ✅\n\nItens: ${resumoItens}\nValor: R$ ${lead.valor_total}\n\n(Gerado automaticamente)`;
+    const briefingAutomatico = `VENDA APROVADA ✅\n\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
     
     await supabase.from('jobs').insert([{
         titulo: `Gravação: ${lead.empresa}`,
@@ -260,7 +262,13 @@ export default function DealsPage() {
     }
 
     const totalFormatado = lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const descontoFormatado = (lead.desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const nomeConsultor = perfil?.nome || 'Consultor';
+
+    let msgDesconto = "";
+    if (lead.desconto && lead.desconto > 0) {
+        msgDesconto = `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A`;
+    }
 
     const msg = 
         `Olá *${lead.empresa}*! 🚀%0A%0A` +
@@ -268,8 +276,9 @@ export default function DealsPage() {
         `Segue o resumo da nossa proposta:%0A` +
         `--------------------------------%0A` +
         `${itensTexto}%0A` +
-        `--------------------------------%0A%0A` +
-        `💰 *INVESTIMENTO TOTAL: R$ ${totalFormatado}*%0A%0A` +
+        `--------------------------------%0A` +
+        `${msgDesconto}%0A` +
+        `💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0A` +
         `Podemos avançar com a aprovação?`;
 
     const telefoneLimpo = lead.telefone.replace(/\D/g, '');
@@ -277,21 +286,25 @@ export default function DealsPage() {
   };
 
   const imprimirProposta = () => {
-    const total = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+    const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+    const total = Math.max(0, subtotal - desconto);
+    
     const dataHoje = new Date().toLocaleDateString('pt-BR');
     const janela = window.open('', '', 'width=800,height=600');
     if(!janela) return alert("Habilite popups");
 
     janela.document.write(`
       <html>
-        <head><title>Proposta - ${novaEmpresa}</title><style>body{font-family:sans-serif;padding:40px;color:#333}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:30px}.logo{font-size:24px;font-weight:bold;font-style:italic}table{width:100%;border-collapse:collapse;margin-bottom:30px}th{text-align:left;border-bottom:1px solid #ccc;padding:10px;font-size:12px;text-transform:uppercase}td{padding:10px;border-bottom:1px solid #eee}.total-box{text-align:right;font-size:20px;font-weight:bold}</style></head>
+        <head><title>Proposta - ${novaEmpresa}</title><style>body{font-family:sans-serif;padding:40px;color:#333}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:30px}.logo{font-size:24px;font-weight:bold;font-style:italic}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{text-align:left;border-bottom:1px solid #ccc;padding:10px;font-size:12px;text-transform:uppercase}td{padding:10px;border-bottom:1px solid #eee}.total-box{text-align:right;font-size:16px;margin-top:5px;}.total-final{text-align:right;font-size:20px;font-weight:bold;margin-top:10px;color:#22C55E;}</style></head>
         <body>
           <div class="header"><div class="logo">WEGROW</div><div>Proposta Comercial<br>${dataHoje}</div></div>
           <h3>Cliente: ${novaEmpresa}</h3>
           <table><thead><tr><th>Item</th><th>Qtd</th><th>Valor</th><th>Total</th></tr></thead><tbody>
           ${itensTemporarios.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade*i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}
           </tbody></table>
-          <div class="total-box">Total: R$ ${total.toLocaleString('pt-BR')}</div>
+          <div class="total-box">Subtotal: R$ ${subtotal.toLocaleString('pt-BR')}</div>
+          ${desconto > 0 ? `<div class="total-box" style="color:red">Desconto: - R$ ${desconto.toLocaleString('pt-BR')}</div>` : ''}
+          <div class="total-final">Total Final: R$ ${total.toLocaleString('pt-BR')}</div>
           <script>window.onload=function(){window.print()}</script>
         </body>
       </html>
@@ -309,7 +322,7 @@ export default function DealsPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
-        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+        const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
         const now = new Date();
         const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
         
@@ -378,12 +391,16 @@ export default function DealsPage() {
     if (!novaEmpresa) return alert("Digite o nome do cliente!");
     if (!user) return alert("Você precisa estar logado!");
 
-    const valorTotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+    // 👇 O CÁLCULO COM DESCONTO ACONTECE AQUI
+    const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+    const valorTotalFinal = Math.max(0, subtotal - desconto); // Garante que não fica negativo
+
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
         tipo: tipoCliente,
-        valor_total: valorTotal,
+        valor_total: valorTotalFinal,
+        desconto: desconto, // 👈 ENVIANDO O DESCONTO PRO BANCO
         itens: itensTemporarios,
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
@@ -428,6 +445,7 @@ export default function DealsPage() {
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
+        setDesconto(lead.desconto || 0); // 👈 PUXA O DESCONTO QUE FOI SALVO
         carregarHistorico(lead.id);
     } else {
         setEditingLeadId(null);
@@ -438,6 +456,7 @@ export default function DealsPage() {
         setFotoUrl('');
         setContratoInicio('');
         setContratoFim('');
+        setDesconto(0); // 👈 ZERA PARA NOVOS LEADS
         setHistorico([]);
     }
     setIsModalOpen(true);
@@ -459,6 +478,10 @@ export default function DealsPage() {
   };
 
   const isMission = (text: string) => text && (text.includes('Meta') || text.includes('Resgate'));
+
+  // Variáveis para a tela do modal de itens e valores
+  const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+  const totalModalFinal = Math.max(0, subtotalModal - desconto);
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
@@ -591,6 +614,7 @@ export default function DealsPage() {
 
                                             <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
                                                 R$ {lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                                {lead.desconto && lead.desconto > 0 ? <span className="text-[8px] text-red-400 ml-1 bg-red-500/10 px-1 py-0.5 rounded">COM DESCONTO</span> : null}
                                             </div>
 
                                             {/* --- ALERTA DE CONTRATO NO CARD --- */}
@@ -708,7 +732,6 @@ export default function DealsPage() {
                         </div>
                     </div>
 
-                    {/* --- NOVOS CAMPOS DE CONTRATO --- */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
@@ -719,12 +742,27 @@ export default function DealsPage() {
                             <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
                         </div>
                     </div>
-                    {/* -------------------------------- */}
 
-                    <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest">Itens da Proposta</p>
-                            <p className="text-xs font-black text-white">Total: R$ {itensTemporarios.reduce((a,b)=>a+(b.precoUnitario*b.quantidade),0).toLocaleString()}</p>
+                    <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
+                        {/* 👇 ÁREA COM O NOVO CAMPO DE DESCONTO 👇 */}
+                        <div className="flex justify-between items-start">
+                            <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest mt-1">Itens da Proposta</p>
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-slate-400">Subtotal: R$ {subtotalModal.toLocaleString()}</p>
+                                <div className="flex items-center justify-end gap-2 mt-1 mb-1">
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Desconto R$</span>
+                                    <input 
+                                        type="number" 
+                                        className="w-20 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-2 py-1 text-xs font-bold outline-none text-right" 
+                                        placeholder="0" 
+                                        value={desconto || ''} 
+                                        onChange={e => setDesconto(Number(e.target.value))} 
+                                    />
+                                </div>
+                                <p className="text-sm font-black text-white bg-[#22C55E]/20 px-3 py-1 rounded-lg border border-[#22C55E]/30 inline-block">
+                                    Final: R$ {totalModalFinal.toLocaleString()}
+                                </p>
+                            </div>
                         </div>
                         
                         <div className="flex flex-wrap gap-2 pb-2">

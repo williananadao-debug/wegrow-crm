@@ -29,7 +29,11 @@ const STAGES = {
 };
 
 export default function JobsPage() {
-  const { user, perfil } = useAuth();
+  // BLINDAGEM ANTI-VERCEL AQUI 👇
+  const auth = useAuth() || {};
+  const user = auth.user;
+  const perfil = auth.perfil;
+  
   const [rawJobs, setRawJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -61,7 +65,6 @@ export default function JobsPage() {
     let query = supabase.from('jobs').select('*').neq('stage', 'entregue').order('deadline', { ascending: true });
     
     if (!isDirector) {
-        // Se não for diretor, traz os jobs dele (pelo ID ou pelo Nome)
         query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
     }
 
@@ -70,18 +73,13 @@ export default function JobsPage() {
     setLoading(false);
   };
 
-  // --- LÓGICA DOS FILTROS ---
   const unidadesDisponiveis = Array.from(new Set(rawJobs.map(j => j.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawJobs.map(j => j.vendedor_nome).filter(Boolean))) as string[];
 
   const jobsFiltrados = rawJobs.filter(job => {
-      // 1. Filtro Unidade
       if (filtroUnidade !== 'Todas' && job.unidade !== filtroUnidade) return false;
-      
-      // 2. Filtro Vendedor
       if (filtroVendedor !== 'Todos' && job.vendedor_nome !== filtroVendedor && job.user_id !== filtroVendedor) return false;
       
-      // 3. Filtro Período
       if (filtroPeriodo !== 'Todo o Período') {
           const dataJob = new Date(job.created_at || new Date());
           const hoje = new Date();

@@ -31,8 +31,8 @@ type Lead = {
   user_id?: string;    
   filial_id?: number;
   client_id?: number;
-  contrato_inicio?: string; // NOVO CAMPO
-  contrato_fim?: string;    // NOVO CAMPO
+  contrato_inicio?: string; 
+  contrato_fim?: string;    
 };
 
 type ClienteOpcao = {
@@ -53,7 +53,10 @@ const STAGES = {
 };
 
 export default function DealsPage() {
-  const { user, perfil } = useAuth();
+  // BLINDAGEM ANTI-VERCEL AQUI 👇
+  const auth = useAuth() || {};
+  const user = auth.user;
+  const perfil = auth.perfil;
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,6 @@ export default function DealsPage() {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   
-  // NOVOS ESTADOS PARA CONTRATO
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
   
@@ -83,7 +85,6 @@ export default function DealsPage() {
   const [historico, setHistorico] = useState<Historico[]>([]);
   const [novaNota, setNovaNota] = useState('');
 
-  // Estados do Toast
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -140,7 +141,6 @@ export default function DealsPage() {
       return <Mic2 size={14} className="text-blue-400" />;
   };
 
-  // Melhorada para não dar erro de fuso horário
   const formatarData = (dataIso: string) => {
     if (!dataIso) return '';
     const parts = dataIso.split('T')[0].split('-');
@@ -148,7 +148,6 @@ export default function DealsPage() {
     return new Date(dataIso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
-  // Calcula quantos dias faltam para vencer
   const getDaysLeft = (endDate?: string) => {
     if (!endDate) return null;
     const today = new Date();

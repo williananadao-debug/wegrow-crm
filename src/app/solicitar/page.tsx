@@ -88,7 +88,6 @@ export default function PortalCliente() {
           </div>
 
           <form onSubmit={enviarPedido} className="space-y-5">
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1 mb-1"><Briefcase size={12}/> Sua Empresa</label>
@@ -115,11 +114,9 @@ export default function PortalCliente() {
             <button disabled={loading} type="submit" className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:scale-[1.02] disabled:opacity-50 text-white py-5 rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-[0_10px_30px_rgba(249,115,22,0.3)] mt-6 flex items-center justify-center gap-2">
               {loading ? 'Enviando...' : <><Send size={18}/> Enviar para o Estúdio</>}
             </button>
-            
             <p className="text-center text-slate-600 text-[9px] uppercase font-bold tracking-widest mt-6 flex items-center justify-center gap-1">
                <Sparkles size={10}/> Powered by WeGrow CRM
             </p>
-
           </form>
         </div>
       </div>

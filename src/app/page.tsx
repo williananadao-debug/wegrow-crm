@@ -12,16 +12,13 @@ export default function Home() {
   useEffect(() => {
     if (!loading) {
       if (user) {
-        // Se já tem usuário, joga pro Dashboard
         router.push('/dashboard');
       } else {
-        // Se não tem, joga pro Login
         router.push('/login');
       }
     }
   }, [user, loading, router]);
 
-  // Enquanto ele pensa, mostra um loader bonitinho no centro
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#020617]">
       <div className="flex flex-col items-center gap-4">

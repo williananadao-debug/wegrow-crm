@@ -19,14 +19,14 @@ export default function PortalCliente() {
     setLoading(true);
 
     try {
-      // 👇 TÁTICA DO CAVALO DE TRÓIA: WhatsApp e Unidade vão direto pro texto da Descrição!
+      // Formata o texto juntando o WhatsApp, a Unidade e o texto do cliente
       const descricaoFormatada = `📱 WhatsApp: ${contato}\n📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
 
-      // Inserindo na tabela 'leads' (Vendas) SEM a coluna 'contato' pra não dar erro
+      // Inserindo na tabela 'leads' (Vendas)
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
         titulo: titulo,
-        descricao: descricaoFormatada,
+        briefing: descricaoFormatada, // 👈 AQUI ESTÁ A CHAVE DE OURO QUE MUDAMOS!
         status: 'novo', 
         origem: 'Portal Web',
         valor: 0 

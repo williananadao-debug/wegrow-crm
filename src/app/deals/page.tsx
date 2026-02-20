@@ -34,7 +34,7 @@ type Lead = {
   client_id?: number;
   contrato_inicio?: string; 
   contrato_fim?: string; 
-  origem?: string; // 👈 ADICIONADO AQUI PARA RECONHECER O SITE
+  origem?: string;
 };
 
 type ClienteOpcao = {
@@ -55,7 +55,6 @@ const STAGES = {
 };
 
 export default function DealsPage() {
-  // BLINDAGEM ANTI-VERCEL AQUI 👇
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
@@ -91,7 +90,8 @@ export default function DealsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  const META_MENSAL = 100000;
+  const [metaMensal, setMetaMensal] = useState(1); 
+  
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
@@ -117,6 +117,44 @@ export default function DealsPage() {
               }
           }
       }
+
+      // 👇 BUSCA DA META INTELIGENTE (MÊS E ANO ATUAIS) 👇
+      try {
+          const dataAtual = new Date();
+          const mesAtual = dataAtual.getMonth() + 1; // getMonth() retorna 0-11, então somamos 1
+          const anoAtual = dataAtual.getFullYear();
+
+          if (isDirector) {
+              // Diretor: Puxa a meta GLOBAL (onde user_id é nulo) do mês e ano exatos
+              const { data: metaData } = await supabase
+                  .from('metas')
+                  .select('valor_objetivo')
+                  .is('user_id', null)
+                  .eq('mes', mesAtual)
+                  .eq('ano', anoAtual)
+                  .single();
+              
+              if (metaData && metaData.valor_objetivo) {
+                  setMetaMensal(Number(metaData.valor_objetivo));
+              }
+          } else {
+              // Vendedor: Puxa a meta DELE (pelo user.id) do mês e ano exatos
+              const { data: metaData } = await supabase
+                  .from('metas')
+                  .select('valor_objetivo')
+                  .eq('user_id', user.id)
+                  .eq('mes', mesAtual)
+                  .eq('ano', anoAtual)
+                  .single();
+              
+              if (metaData && metaData.valor_objetivo) {
+                  setMetaMensal(Number(metaData.valor_objetivo));
+              }
+          }
+      } catch (err) {
+          console.log("Aviso: Meta do mês atual não encontrada ou erro na busca.", err);
+      }
+      // ----------------------------------------
 
       const { data: clientesData } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email').eq('status', 'ativo').order('nome_empresa', { ascending: true });
       if (clientesData) setClientesOpcoes(clientesData as any);
@@ -464,7 +502,10 @@ export default function DealsPage() {
 
   const totalGanhos = leads.filter(l => l.status === 'ganho').reduce((acc, curr) => acc + curr.valor_total, 0);
   const totalAberto = leads.filter(l => l.status === 'aberto').reduce((acc, curr) => acc + curr.valor_total, 0);
-  const percentMeta = Math.min((totalGanhos / META_MENSAL) * 100, 100);
+  
+  // Evita calcular % se a meta do banco for zero ou não carregar
+  const percentMeta = metaMensal > 0 ? Math.min((totalGanhos / metaMensal) * 100, 100) : 0;
+  
   const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
   const getLeadsByStage = (stageIdx: number) => {
@@ -496,9 +537,15 @@ export default function DealsPage() {
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
            <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
-              <span className="text-slate-400 flex items-center gap-1"><Target size={10}/> {isDirector ? 'Meta Global' : 'Meta Individual'}</span><span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
+              <span className="text-slate-400 flex items-center gap-1">
+                  <Target size={10}/> {isDirector ? 'Meta Global (Mês Atual)' : 'Meta Individual (Mês Atual)'} 
+                  <span className="text-white ml-1 font-mono">R$ {metaMensal.toLocaleString('pt-BR')}</span>
+              </span>
+              <span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
            </div>
-           <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div></div>
+           <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+               <div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div>
+           </div>
         </div>
 
         <div>
@@ -600,7 +647,6 @@ export default function DealsPage() {
                                                 )}
                                             </div>
 
-                                            {/* 👇 A MÁGICA DA ETIQUETA WEB ACONTECE AQUI 👇 */}
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
                                                 <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate max-w-full">{lead.empresa}</h4>
                                                 {lead.origem === 'Portal Web' && (
@@ -622,7 +668,6 @@ export default function DealsPage() {
                                                 {lead.desconto && lead.desconto > 0 ? <span className="text-[8px] text-red-400 ml-1 bg-red-500/10 px-1 py-0.5 rounded">COM DESCONTO</span> : null}
                                             </div>
 
-                                            {/* --- ALERTA DE CONTRATO NO CARD --- */}
                                             {lead.contrato_inicio && lead.contrato_fim && (
                                                 <div className="mb-2 flex items-center gap-2 p-1.5 bg-white/[0.02] border border-white/5 rounded-lg">
                                                     <CalendarDays size={12} className="text-slate-500" />
@@ -678,7 +723,6 @@ export default function DealsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL CORRIGIDO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-0 md:p-4">
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">

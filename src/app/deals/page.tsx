@@ -19,7 +19,7 @@ type Lead = {
   id: number; 
   empresa: string; 
   valor_total: number; 
-  desconto?: number; // 👈 NOVA TIPAGEM DE DESCONTO
+  desconto?: number; 
   itens: ItemVenda[]; 
   etapa: number; 
   status: 'aberto' | 'ganho' | 'perdido'; 
@@ -33,7 +33,8 @@ type Lead = {
   filial_id?: number;
   client_id?: number;
   contrato_inicio?: string; 
-  contrato_fim?: string;    
+  contrato_fim?: string; 
+  origem?: string; // 👈 ADICIONADO AQUI PARA RECONHECER O SITE
 };
 
 type ClienteOpcao = {
@@ -80,7 +81,7 @@ export default function DealsPage() {
   const [servicoAtual, setServicoAtual] = useState('');
   const [qtdAtual, setQtdAtual] = useState(1);
   const [precoAtual, setPrecoAtual] = useState(0);
-  const [desconto, setDesconto] = useState(0); // 👈 NOVO ESTADO DE DESCONTO
+  const [desconto, setDesconto] = useState(0); 
   
   const [fotoUrl, setFotoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -391,16 +392,15 @@ export default function DealsPage() {
     if (!novaEmpresa) return alert("Digite o nome do cliente!");
     if (!user) return alert("Você precisa estar logado!");
 
-    // 👇 O CÁLCULO COM DESCONTO ACONTECE AQUI
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
-    const valorTotalFinal = Math.max(0, subtotal - desconto); // Garante que não fica negativo
+    const valorTotalFinal = Math.max(0, subtotal - desconto); 
 
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
-        desconto: desconto, // 👈 ENVIANDO O DESCONTO PRO BANCO
+        desconto: desconto, 
         itens: itensTemporarios,
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
@@ -445,7 +445,7 @@ export default function DealsPage() {
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
-        setDesconto(lead.desconto || 0); // 👈 PUXA O DESCONTO QUE FOI SALVO
+        setDesconto(lead.desconto || 0); 
         carregarHistorico(lead.id);
     } else {
         setEditingLeadId(null);
@@ -456,7 +456,7 @@ export default function DealsPage() {
         setFotoUrl('');
         setContratoInicio('');
         setContratoFim('');
-        setDesconto(0); // 👈 ZERA PARA NOVOS LEADS
+        setDesconto(0); 
         setHistorico([]);
     }
     setIsModalOpen(true);
@@ -479,7 +479,6 @@ export default function DealsPage() {
 
   const isMission = (text: string) => text && (text.includes('Meta') || text.includes('Resgate'));
 
-  // Variáveis para a tela do modal de itens e valores
   const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
 
@@ -601,8 +600,14 @@ export default function DealsPage() {
                                                 )}
                                             </div>
 
-                                            <div className="mb-1">
-                                                <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate">{lead.empresa}</h4>
+                                            {/* 👇 A MÁGICA DA ETIQUETA WEB ACONTECE AQUI 👇 */}
+                                            <div className="mb-1 flex items-center gap-2 flex-wrap">
+                                                <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate max-w-full">{lead.empresa}</h4>
+                                                {lead.origem === 'Portal Web' && (
+                                                    <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                        🌐 VIA SITE
+                                                    </span>
+                                                )}
                                             </div>
 
                                             <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
@@ -744,7 +749,6 @@ export default function DealsPage() {
                     </div>
 
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
-                        {/* 👇 ÁREA COM O NOVO CAMPO DE DESCONTO 👇 */}
                         <div className="flex justify-between items-start">
                             <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest mt-1">Itens da Proposta</p>
                             <div className="text-right">

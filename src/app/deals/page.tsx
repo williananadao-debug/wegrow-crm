@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -35,6 +35,7 @@ type Lead = {
   contrato_inicio?: string; 
   contrato_fim?: string; 
   origem?: string;
+  unidade?: string; // 👈 NOVO TIPO
 };
 
 type ClienteOpcao = {
@@ -70,6 +71,7 @@ export default function DealsPage() {
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
   const [novoTelefone, setNovoTelefone] = useState('');
+  const [novaUnidade, setNovaUnidade] = useState(''); // 👈 NOVO ESTADO
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   
@@ -118,43 +120,21 @@ export default function DealsPage() {
           }
       }
 
-      // 👇 BUSCA DA META INTELIGENTE (MÊS E ANO ATUAIS) 👇
       try {
           const dataAtual = new Date();
-          const mesAtual = dataAtual.getMonth() + 1; // getMonth() retorna 0-11, então somamos 1
+          const mesAtual = dataAtual.getMonth() + 1; 
           const anoAtual = dataAtual.getFullYear();
 
           if (isDirector) {
-              // Diretor: Puxa a meta GLOBAL (onde user_id é nulo) do mês e ano exatos
-              const { data: metaData } = await supabase
-                  .from('metas')
-                  .select('valor_objetivo')
-                  .is('user_id', null)
-                  .eq('mes', mesAtual)
-                  .eq('ano', anoAtual)
-                  .single();
-              
-              if (metaData && metaData.valor_objetivo) {
-                  setMetaMensal(Number(metaData.valor_objetivo));
-              }
+              const { data: metaData } = await supabase.from('metas').select('valor_objetivo').is('user_id', null).eq('mes', mesAtual).eq('ano', anoAtual).single();
+              if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
           } else {
-              // Vendedor: Puxa a meta DELE (pelo user.id) do mês e ano exatos
-              const { data: metaData } = await supabase
-                  .from('metas')
-                  .select('valor_objetivo')
-                  .eq('user_id', user.id)
-                  .eq('mes', mesAtual)
-                  .eq('ano', anoAtual)
-                  .single();
-              
-              if (metaData && metaData.valor_objetivo) {
-                  setMetaMensal(Number(metaData.valor_objetivo));
-              }
+              const { data: metaData } = await supabase.from('metas').select('valor_objetivo').eq('user_id', user.id).eq('mes', mesAtual).eq('ano', anoAtual).single();
+              if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
           }
       } catch (err) {
           console.log("Aviso: Meta do mês atual não encontrada ou erro na busca.", err);
       }
-      // ----------------------------------------
 
       const { data: clientesData } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email').eq('status', 'ativo').order('nome_empresa', { ascending: true });
       if (clientesData) setClientesOpcoes(clientesData as any);
@@ -200,7 +180,7 @@ export default function DealsPage() {
 
   const criarJobDeProducao = async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
-    const briefingAutomatico = `VENDA APROVADA ✅\n\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
+    const briefingAutomatico = `VENDA APROVADA ✅\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
     
     await supabase.from('jobs').insert([{
         titulo: `Gravação: ${lead.empresa}`,
@@ -215,7 +195,7 @@ export default function DealsPage() {
 
   const gerarCobrancaFinanceira = async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
-          titulo: `VENDA: ${lead.empresa}`,
+          titulo: `VENDA: ${lead.empresa} ${lead.unidade ? `(${lead.unidade})` : ''}`,
           valor: lead.valor_total,
           tipo: 'entrada',
           categoria: 'vendas',
@@ -351,6 +331,78 @@ export default function DealsPage() {
     janela.document.close();
   };
 
+  // 👇 GERADOR DE CONTRATO 👇
+  const gerarContrato = (lead: Lead) => {
+    let listaItens: ItemVenda[] = [];
+    try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
+    
+    const total = lead.valor_total;
+    const descontoAplicado = lead.desconto || 0;
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+    const dataIni = lead.contrato_inicio ? formatarData(lead.contrato_inicio) : '_____/_____/_____';
+    const dataFim = lead.contrato_fim ? formatarData(lead.contrato_fim) : '_____/_____/_____';
+
+    const janela = window.open('', '', 'width=800,height=800');
+    if(!janela) return alert("Habilite os popups no seu navegador para gerar o contrato.");
+
+    janela.document.write(`
+      <html>
+        <head><title>Contrato - ${lead.empresa}</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; line-height: 1.6; text-align: justify; }
+          .header { text-align: center; margin-bottom: 40px; }
+          .logo { font-size: 28px; font-weight: bold; font-style: italic; font-family: sans-serif; }
+          h1 { font-size: 18px; text-transform: uppercase; text-align: center; text-decoration: underline; margin-bottom: 30px; }
+          h2 { font-size: 14px; font-weight: bold; margin-top: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: sans-serif; font-size: 12px;}
+          th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+          th { background-color: #f0f0f0; }
+          .assinaturas { margin-top: 60px; display: flex; justify-content: space-between; gap: 40px;}
+          .assinatura-box { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 5px; }
+        </style>
+        </head>
+        <body>
+          <div class="header"><div class="logo">WEGROW / DEMAIS FM</div></div>
+          <h1>Contrato de Prestação de Serviços Publicitários</h1>
+          
+          <p><strong>CONTRATADA:</strong> WEGROW LTDA, empresa de publicidade e radiodifusão.</p>
+          <p><strong>CONTRATANTE:</strong> ${lead.empresa}, doravante denominada simplesmente CONTRATANTE.</p>
+          <p>As partes acima qualificadas celebram o presente contrato, que se regerá pelas seguintes cláusulas:</p>
+          
+          <h2>CLÁUSULA 1ª - DO OBJETO</h2>
+          <p>O presente contrato tem como objeto a veiculação e prestação dos seguintes serviços publicitários para a CONTRATANTE${lead.unidade ? ` na unidade <strong>${lead.unidade}</strong>` : ''}:</p>
+          <table>
+            <thead><tr><th>Serviço</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              ${listaItens.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}
+            </tbody>
+          </table>
+
+          <h2>CLÁUSULA 2ª - DOS VALORES E PAGAMENTO</h2>
+          <p>Pela prestação dos serviços, a CONTRATANTE pagará à CONTRATADA o valor total de <strong>R$ ${total.toLocaleString('pt-BR')}</strong>.</p>
+          ${descontoAplicado > 0 ? `<p><em>* Foi aplicado um desconto comercial especial no valor de R$ ${descontoAplicado.toLocaleString('pt-BR')} sobre o valor original da tabela.</em></p>` : ''}
+
+          <h2>CLÁUSULA 3ª - DA VIGÊNCIA E VEICULAÇÃO</h2>
+          <p>A prestação dos serviços terá início oficial em <strong>${dataIni}</strong> e término previsto para <strong>${dataFim}</strong>.</p>
+
+          <h2>CLÁUSULA 4ª - FORO</h2>
+          <p>As partes elegem o foro da comarca da CONTRATADA para dirimir quaisquer dúvidas oriundas deste contrato, renunciando a qualquer outro por mais privilegiado que seja.</p>
+
+          <p style="text-align: right; margin-top: 60px;">Local e Data: ____________________________, ${dataHoje}.</p>
+
+          <div class="assinaturas">
+            <div class="assinatura-box">CONTRATADA<br>Equipe Comercial</div>
+            <div class="assinatura-box">CONTRATANTE<br>${lead.empresa}</div>
+          </div>
+
+          <script>window.onload=function(){window.print()}</script>
+        </body>
+      </html>
+    `);
+    janela.document.close();
+  };
+
   const fazerCheckin = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     if (!navigator.geolocation) return alert("Seu navegador ou dispositivo não suporta geolocalização.");
@@ -436,6 +488,7 @@ export default function DealsPage() {
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
+        unidade: novaUnidade, // 👈 SALVANDO A UNIDADE NO BANCO
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
         desconto: desconto, 
@@ -478,6 +531,7 @@ export default function DealsPage() {
         setEditingLeadId(lead.id);
         setNovaEmpresa(lead.empresa);
         setNovoTelefone(lead.telefone || '');
+        setNovaUnidade(lead.unidade || ''); // 👈 CARREGANDO A UNIDADE NA EDIÇÃO
         setSelectedClientId(lead.client_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
@@ -489,6 +543,7 @@ export default function DealsPage() {
         setEditingLeadId(null);
         setNovaEmpresa('');
         setNovoTelefone('');
+        setNovaUnidade('');
         setSelectedClientId(null);
         setItensTemporarios([]);
         setFotoUrl('');
@@ -503,7 +558,6 @@ export default function DealsPage() {
   const totalGanhos = leads.filter(l => l.status === 'ganho').reduce((acc, curr) => acc + curr.valor_total, 0);
   const totalAberto = leads.filter(l => l.status === 'aberto').reduce((acc, curr) => acc + curr.valor_total, 0);
   
-  // Evita calcular % se a meta do banco for zero ou não carregar
   const percentMeta = metaMensal > 0 ? Math.min((totalGanhos / metaMensal) * 100, 100) : 0;
   
   const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
@@ -649,6 +703,12 @@ export default function DealsPage() {
 
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
                                                 <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate max-w-full">{lead.empresa}</h4>
+                                                {/* 👇 EXIBIÇÃO DA UNIDADE NO CARD 👇 */}
+                                                {lead.unidade && (
+                                                    <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                        <Building2 size={8}/> {lead.unidade}
+                                                    </span>
+                                                )}
                                                 {lead.origem === 'Portal Web' && (
                                                     <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                                         🌐 VIA SITE
@@ -702,10 +762,14 @@ export default function DealsPage() {
                                                     </div>
                                                 </div>
                                             ) : lead.status === 'ganho' ? (
-                                                <div className="mt-1 text-center pt-2 border-t border-white/5">
-                                                    <a href="/jobs" className="inline-flex items-center gap-1 text-[9px] bg-blue-600/10 text-blue-400 px-3 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                                                        <Briefcase size={10}/> VER NA PRODUÇÃO
+                                                <div className="mt-2 flex gap-2 pt-2 border-t border-white/5">
+                                                    <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
+                                                        <Briefcase size={10}/> PRODUÇÃO
                                                     </a>
+                                                    {/* 👇 BOTÃO GERADOR DE CONTRATO 👇 */}
+                                                    <button onClick={(e) => { e.stopPropagation(); gerarContrato(lead); }} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
+                                                        <FileText size={10}/> CONTRATO
+                                                    </button>
                                                 </div>
                                             ) : null}
                                     </div>
@@ -723,6 +787,7 @@ export default function DealsPage() {
         </div>
       </DragDropContext>
 
+      {/* MODAL CORRIGIDO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-0 md:p-4">
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">
@@ -746,9 +811,13 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
-                        <div>
+                    {/* 👇 LINHA 1 COM 3 COLUNAS (INCLUINDO UNIDADE) 👇 */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-1">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
+                        </div>
+                        <div className="md:col-span-1">
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
                             <input 
                                 list="clientes-list"
@@ -774,10 +843,10 @@ export default function DealsPage() {
                                 ))}
                             </datalist>
                         </div>
-
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
+                        {/* 👇 NOVO CAMPO NO MODAL 👇 */}
+                        <div className="md:col-span-1">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial</label>
+                            <input placeholder="Ex: Matriz, Sul..." className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={novaUnidade} onChange={e => setNovaUnidade(e.target.value)} />
                         </div>
                     </div>
 

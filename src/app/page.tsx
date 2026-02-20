@@ -7,10 +7,14 @@ import { Loader2 } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  
+  // BLINDAGEM ANTI-VERCEL AQUI 👇
+  const auth = useAuth() || {};
+  const user = auth.user;
+  const loading = auth.loading;
 
   useEffect(() => {
-    if (!loading) {
+    if (loading === false) { // Só redireciona se já terminou de carregar
       if (user) {
         router.push('/dashboard');
       } else {

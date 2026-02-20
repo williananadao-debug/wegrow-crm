@@ -19,28 +19,24 @@ export default function PortalCliente() {
     setLoading(true);
 
     try {
-      // Formata a descrição para o vendedor entender tudo o que o cliente quer
-      const descricaoFormatada = `📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
+      // 👇 TÁTICA DO CAVALO DE TRÓIA: WhatsApp e Unidade vão direto pro texto da Descrição!
+      const descricaoFormatada = `📱 WhatsApp: ${contato}\n📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
 
-      // 👇 A MÁGICA ACONTECE AQUI: Inserindo na tabela 'leads' (Vendas)
+      // Inserindo na tabela 'leads' (Vendas) SEM a coluna 'contato' pra não dar erro
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
-        contato: contato,
         titulo: titulo,
         descricao: descricaoFormatada,
-        status: 'novo', // 👈 Cai direto na primeira coluna de Vendas!
+        status: 'novo', 
         origem: 'Portal Web',
-        valor: 0 // Valor inicial zerado para o vendedor negociar depois
+        valor: 0 
       }]);
-
-      // Nota: Se no seu banco a coluna de descrição do lead tiver outro nome (ex: briefing), 
-      // basta trocar 'descricao: descricaoFormatada' para 'briefing: descricaoFormatada'.
 
       if (error) throw error;
       
       setSucesso(true);
-    } catch (error) {
-      alert("Houve um erro ao enviar. Verifique os dados e tente novamente.");
+    } catch (error: any) {
+      alert(`ERRO DO BANCO: ${error.message || JSON.stringify(error)}`);
       console.error(error);
     } finally {
       setLoading(false);
@@ -74,7 +70,6 @@ export default function PortalCliente() {
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-orange-600/10 to-transparent pointer-events-none"></div>
       <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-red-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-      {/* 👇 CABEÇALHO COM A LOGO NOVA 👇 */}
       <div className="w-full max-w-3xl mx-auto pt-16 px-6 relative z-10 flex flex-col items-center justify-center gap-4 mb-8">
         <img 
           src="/logo-demais.png" 

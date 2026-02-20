@@ -9,7 +9,9 @@ import {
 import { Toast } from '@/components/Toast';
 
 export default function GoalsPage() {
-  const { user, perfil } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string>('global');

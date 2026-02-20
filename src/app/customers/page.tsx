@@ -43,7 +43,9 @@ type VendaHistorico = {
 const ITEMS_PER_PAGE = 20;
 
 export default function CustomersPage() {
-  const { user, perfil } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);

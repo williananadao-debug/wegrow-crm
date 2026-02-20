@@ -20,7 +20,9 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
 );
 
 export default function ReportsPage() {
-  const { user, perfil } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DOS FILTROS TRIPLOS ---

@@ -9,7 +9,9 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
 
 export default function PremisesPage() {
-  const { user, perfil } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [premissas, setPremissas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);

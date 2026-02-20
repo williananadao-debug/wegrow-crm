@@ -20,7 +20,9 @@ type Lancamento = {
 const ITEMS_PER_PAGE = 20;
 
 export default function FinancePage() {
-  const { user } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   
   // Estados de Dados
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);

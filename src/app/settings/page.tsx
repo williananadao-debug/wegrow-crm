@@ -12,7 +12,9 @@ type ServicoConfig = {
 };
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const auth = useAuth() || {};
+const user = auth.user;
+const perfil = auth.perfil;
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

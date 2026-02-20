@@ -27,7 +27,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setPerfil(profile);
       } else {
-        if (window.location.pathname !== '/login') router.replace('/login');
+        // 👇 AQUI ESTÁ A MÁGICA! A LISTA VIP DO LEÃO DE CHÁCARA
+        const isPublicPage = window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
+        
+        if (!isPublicPage) {
+          router.replace('/login');
+        }
       }
       setLoading(false);
     };

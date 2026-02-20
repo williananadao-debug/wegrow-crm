@@ -19,17 +19,17 @@ export default function PortalCliente() {
     setLoading(true);
 
     try {
-      // Formata o texto juntando o WhatsApp, a Unidade e o texto do cliente
-      const descricaoFormatada = `📱 WhatsApp: ${contato}\n📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
+      const descricaoFormatada = `📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
 
-      // Inserindo na tabela 'leads' (Vendas)
+      // Inserindo na tabela 'leads' EXATAMENTE com os nomes do seu banco!
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
-        titulo: titulo,
-        briefing: descricaoFormatada, // 👈 AQUI ESTÁ A CHAVE DE OURO QUE MUDAMOS!
+        telefone: contato, // 👈 Usando a coluna 'telefone' que vi no seu print
+        titulo: titulo, // 👈 Coluna que você acabou de criar
+        descricao: descricaoFormatada, // 👈 Coluna que você acabou de criar
         status: 'novo', 
-        origem: 'Portal Web',
-        valor: 0 
+        origem: 'Portal Web', // 👈 Coluna que você acabou de criar
+        valor_total: 0 // 👈 Usando a coluna 'valor_total' que vi no seu print
       }]);
 
       if (error) throw error;

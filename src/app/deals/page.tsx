@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -53,6 +53,11 @@ const STAGES = {
   3: { title: 'Negociação', color: 'border-yellow-500' },
   4: { title: 'Ganhos', color: 'border-[#22C55E]' },
   5: { title: 'Perdidos', color: 'border-red-500' },
+};
+
+// 👇 Função para formatar o ID bonitão (Ex: 42 vira "0042")
+const formatId = (id: number, prefix: string) => {
+    return `${prefix}-${String(id).padStart(4, '0')}`;
 };
 
 export default function DealsPage() {
@@ -180,7 +185,8 @@ export default function DealsPage() {
 
   const criarJobDeProducao = async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
-    const briefingAutomatico = `VENDA APROVADA ✅\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
+    // 👇 ADICIONADO A REFERÊNCIA NO JOB
+    const briefingAutomatico = `VENDA APROVADA ✅ (Ref: ${formatId(lead.id, 'LD')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
     
     await supabase.from('jobs').insert([{
         titulo: `Gravação: ${lead.empresa}`,
@@ -195,7 +201,8 @@ export default function DealsPage() {
 
   const gerarCobrancaFinanceira = async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
-          titulo: `VENDA: ${lead.empresa} ${lead.unidade ? `(${lead.unidade})` : ''}`,
+          // 👇 ADICIONADO A REFERÊNCIA NO FINANCEIRO
+          titulo: `VENDA: ${lead.empresa} (${lead.unidade || 'Geral'}) - OS: ${formatId(lead.id, 'LD')}`,
           valor: lead.valor_total,
           tipo: 'entrada',
           categoria: 'vendas',
@@ -289,10 +296,11 @@ export default function DealsPage() {
         msgDesconto = `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A`;
     }
 
+    // 👇 ADICIONADO A REFERÊNCIA NA MENSAGEM DO WHATSAPP
     const msg = 
         `Olá *${lead.empresa}*! 🚀%0A%0A` +
         `Aqui é o ${nomeConsultor} da Demais FM.%0A` +
-        `Segue o resumo da nossa proposta:%0A` +
+        `Segue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A` +
         `--------------------------------%0A` +
         `${itensTexto}%0A` +
         `--------------------------------%0A` +
@@ -341,6 +349,9 @@ export default function DealsPage() {
 
     const dataIni = lead.contrato_inicio ? formatarData(lead.contrato_inicio) : '_____/_____/_____';
     const dataFim = lead.contrato_fim ? formatarData(lead.contrato_fim) : '_____/_____/_____';
+    
+    // 👇 REFERÊNCIA NO CONTRATO
+    const refInterna = formatId(lead.id, 'LD');
 
     const janela = window.open('', '', 'width=800,height=800');
     if(!janela) return alert("Habilite os popups no seu navegador para gerar o contrato.");
@@ -350,7 +361,8 @@ export default function DealsPage() {
         <head><title>Contrato - ${lead.empresa}</title>
         <style>
           body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; line-height: 1.6; text-align: justify; }
-          .header { text-align: center; margin-bottom: 40px; }
+          .header { text-align: center; margin-bottom: 20px; }
+          .ref-interna { text-align: right; font-size: 10px; color: #666; font-family: sans-serif; margin-bottom: 20px; }
           .logo { font-size: 28px; font-weight: bold; font-style: italic; font-family: sans-serif; }
           h1 { font-size: 18px; text-transform: uppercase; text-align: center; text-decoration: underline; margin-bottom: 30px; }
           h2 { font-size: 14px; font-weight: bold; margin-top: 20px; }
@@ -362,6 +374,7 @@ export default function DealsPage() {
         </style>
         </head>
         <body>
+          <div class="ref-interna">Nº Registro: ${refInterna}</div>
           <div class="header"><div class="logo">WEGROW / DEMAIS FM</div></div>
           <h1>Contrato de Prestação de Serviços Publicitários</h1>
           
@@ -671,7 +684,10 @@ export default function DealsPage() {
                                                     <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
                                                         <Edit2 size={10} className="text-slate-500"/>
                                                     </div>
-                                                    <span className="text-[8px] text-slate-600 font-mono tracking-tighter">{formatarData(lead.created_at)}</span>
+                                                    {/* 👇 ETIQUETA COM O NÚMERO DE REGISTRO DO LEAD 👇 */}
+                                                    <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
+                                                        <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
+                                                    </span>
                                                 </div>
                                                 
                                                 <div className="flex flex-col md:flex-row gap-2 md:gap-2">
@@ -764,7 +780,6 @@ export default function DealsPage() {
                                                     <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
                                                         <Briefcase size={10}/> PRODUÇÃO
                                                     </a>
-                                                    {/* 👇 BOTÃO GERADOR DE CONTRATO AQUI 👇 */}
                                                     <button onClick={(e) => { e.stopPropagation(); gerarContrato(lead); }} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
                                                         <FileText size={10}/> CONTRATO
                                                     </button>
@@ -791,7 +806,11 @@ export default function DealsPage() {
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">
               
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
-                  <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">{editingLeadId ? 'Editar Oportunidade' : 'Novo Negócio'}</h2>
+                  {/* 👇 TÍTULO DO MODAL COM O NÚMERO DA OS 👇 */}
+                  <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
+                      {editingLeadId ? `Editar Oportunidade ` : 'Novo Negócio'}
+                      {editingLeadId && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
+                  </h2>
                   <div className="flex items-center gap-2">
                       {editingLeadId && (
                         <>
@@ -810,7 +829,6 @@ export default function DealsPage() {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
                     
-                    {/* 👇 LINHA 1: APENAS EMPRESA (Ocupa tudo e fica alinhado) 👇 */}
                     <div className="mb-4">
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
                         <input 
@@ -838,7 +856,6 @@ export default function DealsPage() {
                         </datalist>
                     </div>
 
-                    {/* 👇 LINHA 2: WHATSAPP E UNIDADE LADO A LADO 👇 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
@@ -846,7 +863,6 @@ export default function DealsPage() {
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial</label>
-                            {/* AQUI VOCÊ CADASTRA OS NOMES DAS SUAS UNIDADES NAS TAGS <option> */}
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" 
                                 value={novaUnidade} 
@@ -855,8 +871,7 @@ export default function DealsPage() {
                                 <option value="" className="bg-[#0B1120]">Nenhuma específica</option>
                                 <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
                                 <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
-                                <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">FDEMAIS FM 101,1</option>
-                                
+                                <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
                             </select>
                         </div>
                     </div>

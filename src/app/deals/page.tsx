@@ -35,7 +35,7 @@ type Lead = {
   contrato_inicio?: string; 
   contrato_fim?: string; 
   origem?: string;
-  unidade?: string; // 👈 NOVO TIPO
+  unidade?: string; 
 };
 
 type ClienteOpcao = {
@@ -71,7 +71,7 @@ export default function DealsPage() {
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
   const [novoTelefone, setNovoTelefone] = useState('');
-  const [novaUnidade, setNovaUnidade] = useState(''); // 👈 NOVO ESTADO
+  const [novaUnidade, setNovaUnidade] = useState(''); 
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   
@@ -331,7 +331,6 @@ export default function DealsPage() {
     janela.document.close();
   };
 
-  // 👇 GERADOR DE CONTRATO 👇
   const gerarContrato = (lead: Lead) => {
     let listaItens: ItemVenda[] = [];
     try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
@@ -488,7 +487,7 @@ export default function DealsPage() {
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
-        unidade: novaUnidade, // 👈 SALVANDO A UNIDADE NO BANCO
+        unidade: novaUnidade, 
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
         desconto: desconto, 
@@ -531,7 +530,7 @@ export default function DealsPage() {
         setEditingLeadId(lead.id);
         setNovaEmpresa(lead.empresa);
         setNovoTelefone(lead.telefone || '');
-        setNovaUnidade(lead.unidade || ''); // 👈 CARREGANDO A UNIDADE NA EDIÇÃO
+        setNovaUnidade(lead.unidade || ''); 
         setSelectedClientId(lead.client_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
@@ -703,7 +702,6 @@ export default function DealsPage() {
 
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
                                                 <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate max-w-full">{lead.empresa}</h4>
-                                                {/* 👇 EXIBIÇÃO DA UNIDADE NO CARD 👇 */}
                                                 {lead.unidade && (
                                                     <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                                         <Building2 size={8}/> {lead.unidade}
@@ -766,7 +764,7 @@ export default function DealsPage() {
                                                     <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
                                                         <Briefcase size={10}/> PRODUÇÃO
                                                     </a>
-                                                    {/* 👇 BOTÃO GERADOR DE CONTRATO 👇 */}
+                                                    {/* 👇 BOTÃO GERADOR DE CONTRATO AQUI 👇 */}
                                                     <button onClick={(e) => { e.stopPropagation(); gerarContrato(lead); }} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
                                                         <FileText size={10}/> CONTRATO
                                                     </button>
@@ -787,7 +785,7 @@ export default function DealsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL CORRIGIDO */}
+      {/* MODAL CORRIGIDO - LAYOUT ALINHADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-0 md:p-4">
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">
@@ -811,42 +809,55 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
-                    {/* 👇 LINHA 1 COM 3 COLUNAS (INCLUINDO UNIDADE) 👇 */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-1">
+                    
+                    {/* 👇 LINHA 1: APENAS EMPRESA (Ocupa tudo e fica alinhado) 👇 */}
+                    <div className="mb-4">
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
+                        <input 
+                            list="clientes-list"
+                            className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                            placeholder="Digite ou selecione..."
+                            value={novaEmpresa}
+                            onChange={(e) => {
+                                const texto = e.target.value;
+                                setNovaEmpresa(texto);
+                                const clienteEncontrado = clientesOpcoes.find(c => c.nome_empresa === texto);
+                                if(clienteEncontrado) {
+                                    setSelectedClientId(clienteEncontrado.id);
+                                    setNovoTelefone(clienteEncontrado.telefone || '');
+                                } else {
+                                    setSelectedClientId(null);
+                                }
+                            }}
+                            required
+                        />
+                        <datalist id="clientes-list">
+                            {clientesOpcoes.map(c => (
+                                <option key={c.id} value={c.nome_empresa} />
+                            ))}
+                        </datalist>
+                    </div>
+
+                    {/* 👇 LINHA 2: WHATSAPP E UNIDADE LADO A LADO 👇 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
                         </div>
-                        <div className="md:col-span-1">
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
-                            <input 
-                                list="clientes-list"
-                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
-                                placeholder="Digite ou selecione..."
-                                value={novaEmpresa}
-                                onChange={(e) => {
-                                    const texto = e.target.value;
-                                    setNovaEmpresa(texto);
-                                    const clienteEncontrado = clientesOpcoes.find(c => c.nome_empresa === texto);
-                                    if(clienteEncontrado) {
-                                        setSelectedClientId(clienteEncontrado.id);
-                                        setNovoTelefone(clienteEncontrado.telefone || '');
-                                    } else {
-                                        setSelectedClientId(null);
-                                    }
-                                }}
-                                required
-                            />
-                            <datalist id="clientes-list">
-                                {clientesOpcoes.map(c => (
-                                    <option key={c.id} value={c.nome_empresa} />
-                                ))}
-                            </datalist>
-                        </div>
-                        {/* 👇 NOVO CAMPO NO MODAL 👇 */}
-                        <div className="md:col-span-1">
+                        <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial</label>
-                            <input placeholder="Ex: Matriz, Sul..." className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={novaUnidade} onChange={e => setNovaUnidade(e.target.value)} />
+                            {/* AQUI VOCÊ CADASTRA OS NOMES DAS SUAS UNIDADES NAS TAGS <option> */}
+                            <select 
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" 
+                                value={novaUnidade} 
+                                onChange={e => setNovaUnidade(e.target.value)}
+                            >
+                                <option value="" className="bg-[#0B1120]">Nenhuma específica</option>
+                                <option value="Matriz" className="bg-[#0B1120]">Matriz</option>
+                                <option value="Filial Sul" className="bg-[#0B1120]">Filial Sul</option>
+                                <option value="Filial Norte" className="bg-[#0B1120]">Filial Norte</option>
+                                <option value="Filial Litoral" className="bg-[#0B1120]">Filial Litoral</option>
+                            </select>
                         </div>
                     </div>
 
@@ -962,12 +973,7 @@ export default function DealsPage() {
         </div>
       )}
 
-      <Toast 
-        message={toastMessage} 
-        isVisible={showToast} 
-        onClose={() => setShowToast(false)} 
-      />
-
+      <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
     </div>
   );
 }

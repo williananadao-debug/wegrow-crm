@@ -29,7 +29,6 @@ export default function Navbar() {
     { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
     { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' }, 
     { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' },
-    { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' },
     { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
   ];
 

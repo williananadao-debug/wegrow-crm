@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, 
-  Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User
+  Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User, Hash
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -28,8 +28,12 @@ const STAGES = {
   aprovacao: { title: 'Aprovação', icon: <Clock size={14}/>, color: 'border-yellow-500' }
 };
 
+// 👇 Função de Máscara de ID
+const formatId = (id: number, prefix: string) => {
+    return `${prefix}-${String(id).padStart(4, '0')}`;
+};
+
 export default function JobsPage() {
-  // BLINDAGEM ANTI-VERCEL AQUI 👇
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
@@ -37,12 +41,10 @@ export default function JobsPage() {
   const [rawJobs, setRawJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ESTADOS DOS FILTROS
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Todo o Período');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
-  // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -187,7 +189,6 @@ export default function JobsPage() {
         
         <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             
-            {/* BARRA DE FILTROS TRIPLOS DA PRODUÇÃO */}
             <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto shadow-lg">
                 <Filter size={14} className="text-slate-400 ml-3 mr-1" />
                 
@@ -267,7 +268,6 @@ export default function JobsPage() {
                               
                               <h4 className="font-bold text-sm text-white mb-2 leading-tight">{job.titulo}</h4>
                               
-                              {/* ETIQUETAS DO CARD: UNIDADE E VENDEDOR */}
                               <div className="flex flex-wrap gap-1 mb-2">
                                   {filtroUnidade === 'Todas' && job.unidade && (
                                       <span className="text-[8px] bg-white/5 text-slate-400 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1"><Building2 size={8}/> {job.unidade}</span>
@@ -284,15 +284,15 @@ export default function JobsPage() {
                               )}
 
                               <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1 mb-2">
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-600 font-mono">
-                                      <Clock size={10}/> <span>ID: {job.id}</span>
+                                  {/* 👇 ID MASCARADO AQUI 👇 */}
+                                  <div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono font-bold tracking-widest bg-white/5 px-2 py-0.5 rounded">
+                                      <Hash size={10}/> {formatId(job.id, 'JB')}
                                   </div>
                                   <div className="p-1 bg-white/5 rounded-full text-slate-500 group-hover:text-white transition-colors">
                                       <Edit2 size={10}/>
                                   </div>
                               </div>
 
-                              {/* BOTÃO MÁGICO FINALIZAR */}
                               <button 
                                   onClick={(e) => handleFinalizar(e, job.id)}
                                   className="w-full mt-2 bg-[#22C55E]/10 hover:bg-[#22C55E] text-[#22C55E] hover:text-[#0F172A] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100"
@@ -318,7 +318,10 @@ export default function JobsPage() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center p-6 border-b border-white/10">
-                    <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">{editingJobId ? 'Editar Job' : 'Novo Job'}</h2>
+                    <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
+                        {editingJobId ? 'Editar Job' : 'Novo Job'}
+                        {editingJobId && <span className="text-blue-500 bg-blue-500/10 px-2 py-1 rounded text-lg">#{formatId(editingJobId, 'JB')}</span>}
+                    </h2>
                     <button onClick={() => setIsModalOpen(false)} className="bg-white/5 p-2 rounded-full hover:bg-white/10 transition-colors"><X className="text-slate-500 hover:text-white" size={20}/></button>
                 </div>
                 

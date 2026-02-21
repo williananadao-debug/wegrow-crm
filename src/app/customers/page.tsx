@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   Phone, FileText, X, History, CheckCircle2, XCircle, 
-  Loader2, ChevronDown, Building2, User, Upload 
+  Loader2, ChevronDown, Building2, User, Upload, Hash 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -42,10 +42,15 @@ type VendaHistorico = {
 
 const ITEMS_PER_PAGE = 20;
 
+// 👇 Função de Máscara de ID
+const formatId = (id: number, prefix: string) => {
+    return `${prefix}-${String(id).padStart(4, '0')}`;
+};
+
 export default function CustomersPage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -78,7 +83,6 @@ const perfil = auth.perfil;
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Verifica permissão
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   useEffect(() => {
@@ -120,9 +124,6 @@ const perfil = auth.perfil;
             .select('*', { count: 'exact' })
             .order('nome_empresa', { ascending: true })
             .range(from, to);
-
-        // A TRAVA DE PRIVACIDADE FOI REMOVIDA DAQUI! 
-        // Agora o banco traz todos os clientes, não importa quem é o usuário logado.
 
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
@@ -319,12 +320,18 @@ const perfil = auth.perfil;
                             {cliente.nome_empresa.charAt(0)}
                         </div>
                         <div>
-                            <h3 className="text-white font-black text-sm uppercase tracking-wide">{cliente.nome_empresa}</h3>
+                            <h3 className="text-white font-black text-sm uppercase tracking-wide flex items-center gap-2">
+                                {cliente.nome_empresa}
+                                {/* 👇 ID MASCARADO DO CLIENTE 👇 */}
+                                <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded tracking-widest flex items-center gap-0.5">
+                                    <Hash size={10}/> {formatId(cliente.id, 'CL')}
+                                </span>
+                            </h3>
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1">
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
                                 {cliente.user_id && (
-                                    <span className="flex items-center gap-1 bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">
+                                    <span className="flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">
                                         <User size={10}/> 
                                         {vendedores.find(v => v.id === cliente.user_id)?.nome || 'Vendedor'}
                                     </span>
@@ -363,14 +370,15 @@ const perfil = auth.perfil;
           <div className="bg-[#0B1120] border border-white/10 p-8 rounded-[40px] w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-hidden flex flex-col">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20}/></button>
             
-            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white mb-6">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white mb-6 flex items-center gap-2">
                 {editingId ? 'Gerenciar Cliente' : 'Novo Cadastro'}
+                {editingId && <span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded text-xl">#{formatId(editingId, 'CL')}</span>}
             </h2>
 
             {/* ABAS */}
             <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto">
                <button onClick={() => setActiveTab('dados')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'dados' ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>
-                    Dados Cadastrais
+                   Dados Cadastrais
                </button>
                {editingId && (
                    <>
@@ -474,7 +482,10 @@ const perfil = auth.perfil;
                             </span>
                             <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-blue-500/20 text-blue-500 w-fit">{venda.status}</span>
                         </div>
-                        <span className="text-sm font-black text-white">R$ {venda.valor_total.toLocaleString('pt-BR')}</span>
+                        <div className="flex flex-col items-end">
+                            <span className="text-sm font-black text-white">R$ {venda.valor_total.toLocaleString('pt-BR')}</span>
+                            <span className="text-[8px] text-slate-500 font-mono mt-1">Ref: {formatId(venda.id, 'LD')}</span>
+                        </div>
                     </div>
                     ))}
                     {historicoVendas.length === 0 && (

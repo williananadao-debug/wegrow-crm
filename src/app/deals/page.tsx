@@ -853,10 +853,10 @@ export default function DealsPage() {
                                 onChange={e => setNovaUnidade(e.target.value)}
                             >
                                 <option value="" className="bg-[#0B1120]">Nenhuma específica</option>
-                                <option value="Matriz" className="bg-[#0B1120]">Matriz</option>
-                                <option value="Filial Sul" className="bg-[#0B1120]">Filial Sul</option>
-                                <option value="Filial Norte" className="bg-[#0B1120]">Filial Norte</option>
-                                <option value="Filial Litoral" className="bg-[#0B1120]">Filial Litoral</option>
+                                <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
+                                <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
+                                <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">FDEMAIS FM 101,1</option>
+                                
                             </select>
                         </div>
                     </div>

@@ -96,17 +96,36 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
+      // 1. Busca dados padrão
+      const [leadsRes, premissasRes, profilesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('*').limit(10000) 
       ]);
+
+      // 👇 2. O TRATOR DE PAGINAÇÃO: Busca de 1000 em 1000 até acabar (Fura o bloqueio do Supabase) 👇
+      let allClientes: any[] = [];
+      let page = 0;
+      let fetchMore = true;
+      
+      while(fetchMore) {
+          const { data, error } = await supabase
+              .from('clientes')
+              .select('*')
+              .range(page * 1000, (page + 1) * 1000 - 1);
+              
+          if (data && data.length > 0) {
+              allClientes = [...allClientes, ...data];
+              page++;
+          } else {
+              fetchMore = false; // Acabaram os clientes
+          }
+      }
 
       setRawLeads(leadsRes.data || []);
       setRawPremissas(premissasRes.data || []);
       setRawProfiles(profilesRes.data || []);
-      setRawClientes(clientesRes.data || []);
+      setRawClientes(allClientes); // Agora os 4.151 clientes estão aqui com certeza!
       
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -193,41 +212,36 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO CORRIGIDO (CALIBRAGEM SNIPER) ---
+      // --- MOTOR DE VÍNCULO CALIBRADO PARA NOMES COM CNPJ ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
           let rawCity = cidadesById[lead.client_id];
           
+          // Se não tem ID, ativa a IA de nomes
           if (!rawCity) {
               const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.titulo || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
               
               if (cleanLeadName && cleanLeadName.length > 2) {
-                  const leadWords = cleanLeadName.split(' ').filter(w => w.length > 3);
-
                   const clienteEncontrado = rawClientes.find(c => {
                       if (!c.nome_empresa) return false;
                       const cName = normalizeString(c.nome_empresa);
                       
-                      // Match perfeito
+                      // Match 1: O nome é idêntico
                       if (cName === cleanLeadName) return true;
                       
-                      // Match contido (Seguro)
-                      if (cleanLeadName.length > 5 && cName.includes(cleanLeadName)) return true;
-                      if (cName.length > 5 && cleanLeadName.includes(cName)) return true;
+                      // Match 2: O nome do Lead está inteiro dentro do nome do cliente (Ex: "NELIO NAIDEK" dentro de "24067880 NELIO NAIDEK")
+                      if (cleanLeadName.length > 4 && cName.includes(cleanLeadName)) return true;
                       
-                      // Match de cruzamento de palavras
-                      const clientWords = cName.split(' ').filter(w => w.length > 3);
-                      let matches = 0;
+                      // Match 3: O nome do Cliente está inteiro dentro do Lead
+                      if (cName.length > 4 && cleanLeadName.includes(cName)) return true;
+                      
+                      // Match 4: Cruzamento de palavras longas
+                      const leadWords = cleanLeadName.split(' ').filter(w => w.length > 4);
+                      const clientWords = cName.split(' ').filter(w => w.length > 4);
                       for (let w of leadWords) {
-                          if (clientWords.includes(w)) matches++;
+                          if (clientWords.includes(w)) return true; // Uma palavra super específica bateu!
                       }
-                      
-                      // Precisa bater no mínimo 2 palavras pra não ter erro
-                      if (matches >= 2) return true;
-                      
-                      // Se o nome do lead for uma palavra só, e estiver no nome oficial
-                      if (leadWords.length === 1 && clientWords.includes(leadWords[0])) return true;
                       
                       return false;
                   });
@@ -235,19 +249,16 @@ export default function ReportsPage() {
                   if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf;
               }
           }
-
-          // Filtro final para limpar a cidade e agrupar
-          if (rawCity && rawCity !== 'NÃO INFORMADA') {
-              const cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase();
-              if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
-              acc[cleanCity].total += Number(lead.valor_total || 0);
-              acc[cleanCity].count += 1;
-          } else {
-              if (!acc['NÃO INFORMADA']) acc['NÃO INFORMADA'] = { nome: 'NÃO INFORMADA', total: 0, count: 0 };
-              acc['NÃO INFORMADA'].total += Number(lead.valor_total || 0);
-              acc['NÃO INFORMADA'].count += 1;
-          }
           
+          // Fallback final: Se a cidade estava gravada direto no Lead por algum motivo
+          if (!rawCity) rawCity = lead.cidade || lead.cidade_uf;
+
+          rawCity = rawCity || 'NÃO INFORMADA';
+          const cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
+          
+          if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
+          acc[cleanCity].total += Number(lead.valor_total || 0);
+          acc[cleanCity].count += 1;
           return acc;
       }, {});
 
@@ -397,7 +408,7 @@ export default function ReportsPage() {
         })}
       </div>
 
-      {/* 👇 NOVO: RADAR DE HEATMAP GEOGRÁFICO DE SANTA CATARINA 👇 */}
+      {/* 👇 MAPA DE CALOR REGIONAL (SC) 👇 */}
       <div className="bg-[#0B1120] border border-white/5 rounded-[40px] shadow-2xl overflow-hidden">
          <div className="p-8 border-b border-white/5 bg-white/[0.01]">
             <h3 className="text-white font-black uppercase italic flex items-center gap-2">
@@ -407,7 +418,7 @@ export default function ReportsPage() {
          </div>
 
          <div className="grid grid-cols-1 lg:grid-cols-3">
-            {/* Lista das Cidades (Tabela/Ranking) */}
+            {/* Lista das Cidades */}
             <div className="lg:col-span-1 p-8 border-r border-white/5 bg-white/[0.01] max-h-[400px] overflow-y-auto custom-scrollbar">
                 <div className="space-y-6">
                     {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {

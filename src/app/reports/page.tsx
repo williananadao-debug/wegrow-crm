@@ -19,6 +19,7 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
 );
 
 const getCityCoordinates = (cityName: string) => {
+    if (!cityName) return null;
     const name = cityName.toUpperCase();
     if (name.includes('ITAJAÍ') || name.includes('ITAJAI')) return { top: '45%', left: '85%' };
     if (name.includes('CAMBORIÚ') || name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
@@ -67,12 +68,12 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // 👇 Puxando o nome_empresa para cruzar dados
+      // 👇 CORREÇÃO AQUI: PUXANDO A COLUNA 'cidade' EM VEZ DE 'cidade_uf'
       const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*'),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('id, nome_empresa, cidade_uf, bairro') 
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro') 
       ]);
 
       setRawLeads(leadsRes.data || []);
@@ -108,10 +109,15 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
-      // 👇 MOTOR DE VÍNCULO INTELIGENTE 👇
-      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade_uf }), {});
+      // 👇 MOTOR DE VÍNCULO INTELIGENTE CORRIGIDO PARA 'cidade' 👇
+      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade }), {});
+      
       const cidadesByName = rawClientes.reduce((acc: any, c) => {
-          if(c.nome_empresa) acc[c.nome_empresa.trim().toUpperCase()] = c.cidade_uf;
+          if(c.nome_empresa) {
+              // Limpa o nome para garantir o cruzamento
+              const cleanName = c.nome_empresa.trim().toUpperCase().replace(/\s+/g, ' ');
+              acc[cleanName] = c.cidade;
+          }
           return acc;
       }, {});
 
@@ -176,10 +182,11 @@ export default function ReportsPage() {
           // 1. Tenta achar pelo ID
           let rawCity = cidadesById[lead.client_id];
           
-          // 2. Se não achar, tenta cruzar pelo NOME (Vínculo Inteligente)
+          // 2. Se não achar, tenta cruzar pelo NOME
           if (!rawCity) {
-              const leadName = (lead.nome_empresa || lead.cliente_nome || lead.nome_cliente || lead.nome || '').trim().toUpperCase();
-              rawCity = cidadesByName[leadName];
+              const rawLeadName = lead.nome_empresa || lead.cliente_nome || lead.nome_cliente || lead.nome || '';
+              const cleanLeadName = rawLeadName.trim().toUpperCase().replace(/\s+/g, ' ');
+              rawCity = cidadesByName[cleanLeadName];
           }
 
           rawCity = rawCity || 'NÃO INFORMADA';

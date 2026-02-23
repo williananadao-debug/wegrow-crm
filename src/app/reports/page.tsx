@@ -103,7 +103,7 @@ export default function ReportsPage() {
         supabase.from('profiles').select('id, nome'),
       ]);
 
-      // 👇 O TRATOR: BUSCANDO TODOS OS 4.151 CLIENTES SEM LIMITES 👇
+      // 👇 O TRATOR: BUSCANDO TODOS OS CLIENTES SEM RISCO DE QUEBRAR 👇
       let allClientes: any[] = [];
       let page = 0;
       let fetchMore = true;
@@ -111,7 +111,7 @@ export default function ReportsPage() {
       while(fetchMore) {
           const { data, error } = await supabase
               .from('clientes')
-              .select('id, nome_empresa, cidade, cidade_uf') // Puxando as colunas certas
+              .select('*') // <--- SEGREDO ESTÁ AQUI: Puxa todas as colunas existentes!
               .range(page * 1000, (page + 1) * 1000 - 1);
               
           if (data && data.length > 0) {
@@ -155,7 +155,7 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
-      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf) }), {});
+      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf || c.bairro) }), {});
 
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -212,11 +212,12 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO SIMPLIFICADO E EFICIENTE ---
+      // --- MOTOR DE VÍNCULO (Lê IDs novos + IA para leads velhos) ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
           let rawCity = cidadesById[lead.client_id];
           
+          // Se for um lead antigo sem ID, tenta pescar pelo nome
           if (!rawCity) {
               const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.empresa || lead.cliente || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
@@ -225,24 +226,19 @@ export default function ReportsPage() {
                   const clienteEncontrado = rawClientes.find(c => {
                       if (!c.nome_empresa) return false;
                       const cName = normalizeString(c.nome_empresa);
-                      
-                      // Match Exato
                       if (cName === cleanLeadName) return true;
-                      
-                      // Match Flexível Seguro
                       if (cName.includes(cleanLeadName)) return true;
                       if (cleanLeadName.includes(cName)) return true;
-                      
                       return false;
                   });
 
                   if (clienteEncontrado) {
-                      rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf;
+                      rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf || clienteEncontrado.bairro;
                   }
               }
           }
           
-          // Fallback se a cidade foi digitada no próprio Lead
+          // Fallback se a cidade foi digitada no próprio Lead antigamente
           if (!rawCity) rawCity = lead.cidade || lead.cidade_uf;
 
           rawCity = rawCity || 'NÃO INFORMADA';

@@ -450,19 +450,29 @@ export default function ReportsPage() {
             </div>
 
 {/* Visual Radar Map Area */}
-            <div className="lg:col-span-2 relative h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120] flex items-center justify-center overflow-hidden">
+            <div className="lg:col-span-2 relative h-[400px] bg-[#0B1120] flex items-center justify-center overflow-hidden">
+                {/* Fundo Base */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120]"></div>
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
-                
-                {/* 👇 O MAPA COM A CAPA DE INVISIBILIDADE (HACKER MODE) 👇 */}
-                <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none p-12">
-                    <img 
-                        src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Santa_Catarina_blank_map.svg/800px-Santa_Catarina_blank_map.svg.png" 
-                        alt="Mapa Santa Catarina" 
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-contain filter invert opacity-20 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-                    />
+
+                {/* 👇 RADAR MILITAR 100% CÓDIGO (NUNCA QUEBRA) 👇 */}
+                {/* Anéis Estáticos */}
+                <div className="absolute w-[600px] h-[600px] border border-white/5 rounded-full"></div>
+                <div className="absolute w-[450px] h-[450px] border border-blue-500/10 rounded-full"></div>
+                <div className="absolute w-[300px] h-[300px] border border-white/5 rounded-full border-dashed animate-[spin_60s_linear_infinite]"></div>
+                <div className="absolute w-[150px] h-[150px] border border-[#22C55E]/20 rounded-full"></div>
+                <div className="absolute w-[50px] h-[50px] bg-blue-500/5 border border-blue-500/20 rounded-full animate-ping"></div>
+
+                {/* Cruz de Mira (Crosshair) */}
+                <div className="absolute w-full h-[1px] bg-white/5"></div>
+                <div className="absolute h-full w-[1px] bg-white/5"></div>
+
+                {/* Escâner Giratório do Radar */}
+                <div className="absolute w-[450px] h-[450px] border-r-2 border-[#22C55E]/40 rounded-full animate-[spin_4s_linear_infinite]">
+                    <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#22C55E]/10 to-transparent rounded-r-full"></div>
                 </div>
 
+                {/* PINOS DE INTELIGÊNCIA GEOGRÁFICA */}
                 <div className="relative w-full h-full max-w-[500px] max-h-[350px]">
                     {mapaCidades.map((cid: any, idx: number) => {
                         if (cid.nome === 'NÃO INFORMADA') return null;
@@ -492,7 +502,9 @@ export default function ReportsPage() {
                         );
                     })}
                 </div>
-                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded">Radar Otimizado SC</div>
+                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded border border-white/5 backdrop-blur-sm z-50">
+                    🟢 Radar Otimizado
+                </div>
             </div>
          </div>
       </div>

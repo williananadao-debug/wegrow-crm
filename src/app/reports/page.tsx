@@ -453,11 +453,12 @@ export default function ReportsPage() {
             <div className="lg:col-span-2 relative h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120] flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
                 
-                {/* 👇 O MAPA REAL DE SANTA CATARINA (PNG BLINDADO) 👇 */}
+                {/* 👇 O MAPA COM A CAPA DE INVISIBILIDADE (HACKER MODE) 👇 */}
                 <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none p-12">
                     <img 
                         src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Santa_Catarina_blank_map.svg/800px-Santa_Catarina_blank_map.svg.png" 
                         alt="Mapa Santa Catarina" 
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-contain filter invert opacity-20 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
                     />
                 </div>

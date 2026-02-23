@@ -18,11 +18,11 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
+// MATRIZ GEOGRÁFICA
 const getCityCoordinates = (cityName: string) => {
     if (!cityName) return null;
     const name = cityName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     
-    // Litoral e Centros
     if (name.includes('ITAJAI')) return { top: '45%', left: '85%' };
     if (name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
     if (name.includes('JOINVILLE')) return { top: '20%', left: '80%' };
@@ -55,6 +55,7 @@ const getCityCoordinates = (cityName: string) => {
     return null; 
 };
 
+// LIMPACOR DE NOMES
 const normalizeString = (str: string) => {
     if (!str) return '';
     return String(str)
@@ -96,14 +97,13 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // 1. Busca dados padrão
       const [leadsRes, premissasRes, profilesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*').limit(1000),
         supabase.from('profiles').select('id, nome'),
       ]);
 
-      // 👇 2. O TRATOR DE PAGINAÇÃO: Busca de 1000 em 1000 até acabar (Fura o bloqueio do Supabase) 👇
+      // 👇 O TRATOR: BUSCANDO TODOS OS 4.151 CLIENTES SEM LIMITES 👇
       let allClientes: any[] = [];
       let page = 0;
       let fetchMore = true;
@@ -111,21 +111,21 @@ export default function ReportsPage() {
       while(fetchMore) {
           const { data, error } = await supabase
               .from('clientes')
-              .select('*')
+              .select('id, nome_empresa, cidade, cidade_uf') // Puxando as colunas certas
               .range(page * 1000, (page + 1) * 1000 - 1);
               
           if (data && data.length > 0) {
               allClientes = [...allClientes, ...data];
               page++;
           } else {
-              fetchMore = false; // Acabaram os clientes
+              fetchMore = false; 
           }
       }
 
       setRawLeads(leadsRes.data || []);
       setRawPremissas(premissasRes.data || []);
       setRawProfiles(profilesRes.data || []);
-      setRawClientes(allClientes); // Agora os 4.151 clientes estão aqui com certeza!
+      setRawClientes(allClientes); 
       
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -212,45 +212,37 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO CALIBRADO PARA NOMES COM CNPJ ---
+      // --- MOTOR DE VÍNCULO SIMPLIFICADO E EFICIENTE ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
           let rawCity = cidadesById[lead.client_id];
           
-          // Se não tem ID, ativa a IA de nomes
           if (!rawCity) {
-              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.titulo || '';
+              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.empresa || lead.cliente || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
               
-              if (cleanLeadName && cleanLeadName.length > 2) {
+              if (cleanLeadName && cleanLeadName.length >= 3) {
                   const clienteEncontrado = rawClientes.find(c => {
                       if (!c.nome_empresa) return false;
                       const cName = normalizeString(c.nome_empresa);
                       
-                      // Match 1: O nome é idêntico
+                      // Match Exato
                       if (cName === cleanLeadName) return true;
                       
-                      // Match 2: O nome do Lead está inteiro dentro do nome do cliente (Ex: "NELIO NAIDEK" dentro de "24067880 NELIO NAIDEK")
-                      if (cleanLeadName.length > 4 && cName.includes(cleanLeadName)) return true;
-                      
-                      // Match 3: O nome do Cliente está inteiro dentro do Lead
-                      if (cName.length > 4 && cleanLeadName.includes(cName)) return true;
-                      
-                      // Match 4: Cruzamento de palavras longas
-                      const leadWords = cleanLeadName.split(' ').filter(w => w.length > 4);
-                      const clientWords = cName.split(' ').filter(w => w.length > 4);
-                      for (let w of leadWords) {
-                          if (clientWords.includes(w)) return true; // Uma palavra super específica bateu!
-                      }
+                      // Match Flexível Seguro
+                      if (cName.includes(cleanLeadName)) return true;
+                      if (cleanLeadName.includes(cName)) return true;
                       
                       return false;
                   });
 
-                  if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf;
+                  if (clienteEncontrado) {
+                      rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf;
+                  }
               }
           }
           
-          // Fallback final: Se a cidade estava gravada direto no Lead por algum motivo
+          // Fallback se a cidade foi digitada no próprio Lead
           if (!rawCity) rawCity = lead.cidade || lead.cidade_uf;
 
           rawCity = rawCity || 'NÃO INFORMADA';

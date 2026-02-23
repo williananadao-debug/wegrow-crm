@@ -68,7 +68,7 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // 👇 CORREÇÃO AQUI: PUXANDO A COLUNA 'cidade' EM VEZ DE 'cidade_uf'
+      // Puxando 'cidade' (que é a coluna que está funcionando na sua tela de Clientes)
       const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*'),
@@ -109,17 +109,7 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
-      // 👇 MOTOR DE VÍNCULO INTELIGENTE CORRIGIDO PARA 'cidade' 👇
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade }), {});
-      
-      const cidadesByName = rawClientes.reduce((acc: any, c) => {
-          if(c.nome_empresa) {
-              // Limpa o nome para garantir o cruzamento
-              const cleanName = c.nome_empresa.trim().toUpperCase().replace(/\s+/g, ' ');
-              acc[cleanName] = c.cidade;
-          }
-          return acc;
-      }, {});
 
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -176,20 +166,40 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- HEATMAP COM BUSCA POR NOME ---
+      // --- MOTOR DE VÍNCULO AVANÇADO (FUZZY MATCH) PARA O MAPA ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
-          // 1. Tenta achar pelo ID
+          // 1. Tenta achar pelo ID direto
           let rawCity = cidadesById[lead.client_id];
           
-          // 2. Se não achar, tenta cruzar pelo NOME
+          // 2. Se não achar pelo ID, usa inteligência artificial para cruzar os nomes
           if (!rawCity) {
-              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || '';
-              const cleanLeadName = rawLeadName.trim().toUpperCase().replace(/\s+/g, ' ');
-              rawCity = cidadesByName[cleanLeadName];
+              // Pega o nome do lead em TODAS as variações (incluindo 'empresa cliente' com espaço)
+              const rawLeadName = String(lead['empresa cliente'] || lead.empresa_cliente || lead.nome_empresa || lead.empresa || lead.cliente || lead.nome || '').trim().toUpperCase().replace(/\s+/g, ' ');
+              
+              if (rawLeadName && rawLeadName.length > 2) {
+                  // Procura na base de clientes um nome que pareça com o do Lead
+                  const clienteEncontrado = rawClientes.find(c => {
+                      if (!c.nome_empresa) return false;
+                      const cName = String(c.nome_empresa).trim().toUpperCase().replace(/\s+/g, ' ');
+                      
+                      // Match exato
+                      if (cName === rawLeadName) return true;
+                      // Match flexível: se o nome do lead está dentro do nome do cliente, ou vice-versa
+                      if (rawLeadName.length > 4 && cName.includes(rawLeadName)) return true;
+                      if (cName.length > 4 && rawLeadName.includes(cName)) return true;
+                      
+                      return false;
+                  });
+
+                  if (clienteEncontrado) {
+                      rawCity = clienteEncontrado.cidade;
+                  }
+              }
           }
 
           rawCity = rawCity || 'NÃO INFORMADA';
+          // Limpa o nome da cidade para tirar o "/ SC"
           const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); 
           
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };

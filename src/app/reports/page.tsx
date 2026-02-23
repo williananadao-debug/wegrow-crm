@@ -449,15 +449,17 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {/* Visual Radar Map Area */}
+          {/* Visual Radar Map Area */}
             <div className="lg:col-span-2 relative h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120] flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
-                <div className="absolute w-[600px] h-[600px] border border-white/5 rounded-full"></div>
-                <div className="absolute w-[400px] h-[400px] border border-white/5 rounded-full"></div>
-                <div className="absolute w-[200px] h-[200px] border border-blue-500/10 rounded-full animate-pulse"></div>
-
-                <div className="text-center absolute z-0 opacity-10 flex flex-col items-center pointer-events-none">
-                    <Globe2 size={250} className="text-blue-500" />
+                
+                {/* 👇 O MAPA REAL DE SANTA CATARINA ENTRA AQUI 👇 */}
+                <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none p-8">
+                    <img 
+                        src="https://upload.wikimedia.org/wikipedia/commons/e/ea/Santa_Catarina_blank_map.svg" 
+                        alt="Mapa Santa Catarina" 
+                        className="w-full h-full object-contain filter invert opacity-10 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+                    />
                 </div>
 
                 <div className="relative w-full h-full max-w-[500px] max-h-[350px]">

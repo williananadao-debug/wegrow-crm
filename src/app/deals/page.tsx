@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -55,7 +55,6 @@ const STAGES = {
   5: { title: 'Perdidos', color: 'border-red-500' },
 };
 
-// 👇 Função para formatar o ID bonitão (Ex: 42 vira "0042")
 const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
@@ -75,6 +74,8 @@ export default function DealsPage() {
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
+  const [showClientDropdown, setShowClientDropdown] = useState(false); // 👈 Controle do novo dropdown
+  
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
@@ -138,11 +139,30 @@ export default function DealsPage() {
               if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
           }
       } catch (err) {
-          console.log("Aviso: Meta do mês atual não encontrada ou erro na busca.", err);
+          console.log("Aviso: Meta do mês atual não encontrada.");
       }
 
-      const { data: clientesData } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email').eq('status', 'ativo').order('nome_empresa', { ascending: true });
-      if (clientesData) setClientesOpcoes(clientesData as any);
+      // 👇 O TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES 👇
+      let allClientes: ClienteOpcao[] = [];
+      let page = 0;
+      let fetchMore = true;
+      
+      while(fetchMore) {
+          const { data, error } = await supabase
+              .from('clientes')
+              .select('id, nome_empresa, telefone, cnpj, email')
+              .eq('status', 'ativo')
+              .order('nome_empresa', { ascending: true })
+              .range(page * 1000, (page + 1) * 1000 - 1);
+              
+          if (data && data.length > 0) {
+              allClientes = [...allClientes, ...(data as any)];
+              page++;
+          } else {
+              fetchMore = false; 
+          }
+      }
+      setClientesOpcoes(allClientes);
 
       const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
       
@@ -185,7 +205,6 @@ export default function DealsPage() {
 
   const criarJobDeProducao = async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
-    // 👇 ADICIONADO A REFERÊNCIA NO JOB
     const briefingAutomatico = `VENDA APROVADA ✅ (Ref: ${formatId(lead.id, 'LD')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
     
     await supabase.from('jobs').insert([{
@@ -201,7 +220,6 @@ export default function DealsPage() {
 
   const gerarCobrancaFinanceira = async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
-          // 👇 ADICIONADO A REFERÊNCIA NO FINANCEIRO
           titulo: `VENDA: ${lead.empresa} (${lead.unidade || 'Geral'}) - OS: ${formatId(lead.id, 'LD')}`,
           valor: lead.valor_total,
           tipo: 'entrada',
@@ -235,8 +253,6 @@ export default function DealsPage() {
                 setShowToast(true);
             }
         }
-    } else {
-        console.error("Erro ao mudar etapa:", error);
     }
   };
 
@@ -296,7 +312,6 @@ export default function DealsPage() {
         msgDesconto = `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A`;
     }
 
-    // 👇 ADICIONADO A REFERÊNCIA NA MENSAGEM DO WHATSAPP
     const msg = 
         `Olá *${lead.empresa}*! 🚀%0A%0A` +
         `Aqui é o ${nomeConsultor} da Demais FM.%0A` +
@@ -350,7 +365,6 @@ export default function DealsPage() {
     const dataIni = lead.contrato_inicio ? formatarData(lead.contrato_inicio) : '_____/_____/_____';
     const dataFim = lead.contrato_fim ? formatarData(lead.contrato_fim) : '_____/_____/_____';
     
-    // 👇 REFERÊNCIA NO CONTRATO
     const refInterna = formatId(lead.id, 'LD');
 
     const janela = window.open('', '', 'width=800,height=800');
@@ -489,10 +503,15 @@ export default function DealsPage() {
       }
   };
 
+  // 👇 TRAVA DE SEGURANÇA NA HORA DE SALVAR 👇
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novaEmpresa) return alert("Digite o nome do cliente!");
     if (!user) return alert("Você precisa estar logado!");
+    
+    // Bloqueia se não selecionou o cliente na lista suspensa
+    if (!selectedClientId) {
+        return alert("⚠️ ALERTA: Você precisa selecionar um cliente válido na lista suspensa! Digite o nome e clique em uma das opções.");
+    }
 
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
@@ -510,7 +529,7 @@ export default function DealsPage() {
         contrato_fim: contratoFim || null,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
-        client_id: selectedClientId
+        client_id: selectedClientId // 👈 ID GRAVADO COM SUCESSO SEMPRE!
     };
 
     if (editingLeadId) {
@@ -539,6 +558,7 @@ export default function DealsPage() {
   };
 
   const abrirModal = (lead?: Lead) => {
+    setShowClientDropdown(false);
     if (lead) {
         setEditingLeadId(lead.id);
         setNovaEmpresa(lead.empresa);
@@ -684,7 +704,6 @@ export default function DealsPage() {
                                                     <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
                                                         <Edit2 size={10} className="text-slate-500"/>
                                                     </div>
-                                                    {/* 👇 ETIQUETA COM O NÚMERO DE REGISTRO DO LEAD 👇 */}
                                                     <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
                                                         <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
                                                     </span>
@@ -717,7 +736,9 @@ export default function DealsPage() {
                                             </div>
 
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
-                                                <h4 className="text-white font-black text-sm uppercase leading-tight hover:text-[#22C55E] transition-colors truncate max-w-full">{lead.empresa}</h4>
+                                                <h4 className={`font-black text-sm uppercase leading-tight transition-colors truncate max-w-full ${lead.client_id ? 'text-[#22C55E]' : 'text-white group-hover:text-[#22C55E]'}`}>
+                                                    {lead.empresa}
+                                                </h4>
                                                 {lead.unidade && (
                                                     <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                                         <Building2 size={8}/> {lead.unidade}
@@ -800,13 +821,12 @@ export default function DealsPage() {
         </div>
       </DragDropContext>
 
-      {/* MODAL CORRIGIDO - LAYOUT ALINHADO */}
+      {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-0 md:p-4">
            <div className="bg-[#0B1120] md:border border-white/10 w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl md:rounded-[40px] shadow-2xl relative flex flex-col">
               
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
-                  {/* 👇 TÍTULO DO MODAL COM O NÚMERO DA OS 👇 */}
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
                       {editingLeadId ? `Editar Oportunidade ` : 'Novo Negócio'}
                       {editingLeadId && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
@@ -829,31 +849,61 @@ export default function DealsPage() {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
                     
-                    <div className="mb-4">
-                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa</label>
-                        <input 
-                            list="clientes-list"
-                            className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
-                            placeholder="Digite ou selecione..."
-                            value={novaEmpresa}
-                            onChange={(e) => {
-                                const texto = e.target.value;
-                                setNovaEmpresa(texto);
-                                const clienteEncontrado = clientesOpcoes.find(c => c.nome_empresa === texto);
-                                if(clienteEncontrado) {
-                                    setSelectedClientId(clienteEncontrado.id);
-                                    setNovoTelefone(clienteEncontrado.telefone || '');
-                                } else {
-                                    setSelectedClientId(null);
-                                }
-                            }}
-                            required
-                        />
-                        <datalist id="clientes-list">
-                            {clientesOpcoes.map(c => (
-                                <option key={c.id} value={c.nome_empresa} />
-                            ))}
-                        </datalist>
+                    {/* 👇 O NOVO BUSCADOR INTELIGENTE BLINDADO 👇 */}
+                    <div className="mb-4 relative">
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa *</label>
+                        <div className="relative">
+                            <input 
+                                className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[#22C55E] text-[#22C55E]' : 'border-white/10'} rounded-xl pl-4 pr-24 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
+                                placeholder="Buscar cliente..."
+                                value={novaEmpresa}
+                                onChange={(e) => {
+                                    setNovaEmpresa(e.target.value);
+                                    setSelectedClientId(null); // Se apagar ou mudar o texto, quebra o vínculo!
+                                    setShowClientDropdown(true);
+                                }}
+                                onFocus={() => setShowClientDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
+                                required
+                            />
+                            {/* O Selo de Garantia Verde */}
+                            {selectedClientId && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
+                                    <CheckCircle2 size={12}/> Vinculado
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* A Lista Suspensa do Trator */}
+                        {showClientDropdown && !selectedClientId && (
+                            <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
+                                {clientesOpcoes
+                                    .filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase()))
+                                    .slice(0, 50) // Limita a visualização na tela para não travar o Chrome
+                                    .map(c => (
+                                        <div 
+                                            key={c.id} 
+                                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
+                                            onClick={() => {
+                                                setNovaEmpresa(c.nome_empresa);
+                                                setSelectedClientId(c.id);
+                                                setNovoTelefone(c.telefone || '');
+                                                setShowClientDropdown(false);
+                                            }}
+                                        >
+                                            <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
+                                            {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
+                                        </div>
+                                    ))}
+                                {clientesOpcoes.filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase())).length === 0 && (
+                                    <div className="px-4 py-4 text-center text-slate-500 text-xs font-bold uppercase">
+                                        Nenhum cliente encontrado.
+                                        <br/>
+                                        <span className="text-[9px] font-normal normal-case mt-1 block">Cadastre o cliente na aba de Clientes primeiro.</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -979,7 +1029,7 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId ? 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {editingLeadId ? 'Salvar Alterações' : 'Criar Oportunidade'}
                   </button>
               </div>

@@ -18,24 +18,55 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
+// MATRIZ GEOGRÁFICA EXPANDIDA (Alto Vale, Norte, Litoral, Oeste)
 const getCityCoordinates = (cityName: string) => {
     if (!cityName) return null;
-    const name = cityName.toUpperCase();
-    if (name.includes('ITAJAÍ') || name.includes('ITAJAI')) return { top: '45%', left: '85%' };
-    if (name.includes('CAMBORIÚ') || name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
+    // Removemos os acentos para o radar achar a cidade mesmo se estiver escrita "TAIO" ou "TAIÓ"
+    const name = cityName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    
+    // Litoral e Grandes Centros
+    if (name.includes('ITAJAI')) return { top: '45%', left: '85%' };
+    if (name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
     if (name.includes('JOINVILLE')) return { top: '20%', left: '80%' };
     if (name.includes('FLORIPA') || name.includes('FLORIAN')) return { top: '65%', left: '85%' };
     if (name.includes('BLUMENAU')) return { top: '40%', left: '75%' };
-    if (name.includes('CHAPECÓ') || name.includes('CHAPECO')) return { top: '45%', left: '15%' };
+    if (name.includes('CHAPECO')) return { top: '45%', left: '15%' };
     if (name.includes('LAGES')) return { top: '60%', left: '50%' };
-    if (name.includes('CRICIÚMA') || name.includes('CRICIUMA')) return { top: '85%', left: '75%' };
-    if (name.includes('TUBARÃO') || name.includes('TUBARAO')) return { top: '80%', left: '80%' };
-    if (name.includes('JARAGUÁ') || name.includes('JARAGUA')) return { top: '25%', left: '75%' };
+    if (name.includes('CRICIUMA')) return { top: '85%', left: '75%' };
+    if (name.includes('TUBARAO')) return { top: '80%', left: '80%' };
+    if (name.includes('JARAGUA')) return { top: '25%', left: '75%' };
     if (name.includes('BRUSQUE')) return { top: '45%', left: '80%' };
-    if (name.includes('JOSÉ') || name.includes('JOSE')) return { top: '63%', left: '83%' };
-    if (name.includes('PALHOÇA') || name.includes('PALHOCA')) return { top: '66%', left: '83%' };
+    if (name.includes('JOSE')) return { top: '63%', left: '83%' };
+    if (name.includes('PALHOCA')) return { top: '66%', left: '83%' };
     if (name.includes('NAVEGANTES')) return { top: '43%', left: '86%' };
+    
+    // Alto Vale do Itajaí e Norte (Baseado nos seus dados)
+    if (name.includes('RIO DO SUL')) return { top: '50%', left: '65%' };
+    if (name.includes('PRESIDENTE GETULIO')) return { top: '47%', left: '67%' };
+    if (name.includes('POUSO REDONDO')) return { top: '52%', left: '60%' };
+    if (name.includes('MAFRA')) return { top: '15%', left: '65%' };
+    if (name.includes('ITAIOPOLIS')) return { top: '20%', left: '67%' };
+    if (name.includes('TAIO')) return { top: '50%', left: '62%' };
+    if (name.includes('SALETE')) return { top: '48%', left: '60%' };
+    if (name.includes('SANTA TEREZINHA')) return { top: '43%', left: '62%' };
+    if (name.includes('AGROLANDIA')) return { top: '54%', left: '65%' };
+    if (name.includes('CURITIBANOS')) return { top: '55%', left: '45%' };
+    if (name.includes('RIO NEGRO')) return { top: '14%', left: '65%' }; // Fica no PR mas colado em Mafra
+    if (name.includes('IBIRAMA')) return { top: '48%', left: '68%' };
+    
     return null; 
+};
+
+// FUNÇÃO PARA NORMALIZAR NOMES E MATAR DIFERENÇAS DE CARACTERES
+const normalizeString = (str: string) => {
+    if (!str) return '';
+    return String(str)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^\w\s]/gi, '') // Remove pontos, traços, barras
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, ' '); // Remove espaços duplos
 };
 
 export default function ReportsPage() {
@@ -68,7 +99,6 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // Puxando 'cidade' (que é a coluna que está funcionando na sua tela de Clientes)
       const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*'),
@@ -108,7 +138,6 @@ export default function ReportsPage() {
       const lastDayLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
-      
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade }), {});
 
       const baseFiltrada = rawLeads.filter(lead => {
@@ -166,40 +195,46 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO AVANÇADO (FUZZY MATCH) PARA O MAPA ---
+      // --- MOTOR DE VÍNCULO SUPER AVANÇADO (FUZZY MATCH AGRESSIVO) ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
-          // 1. Tenta achar pelo ID direto
           let rawCity = cidadesById[lead.client_id];
           
-          // 2. Se não achar pelo ID, usa inteligência artificial para cruzar os nomes
           if (!rawCity) {
-              // Pega o nome do lead em TODAS as variações (incluindo 'empresa cliente' com espaço)
-              const rawLeadName = String(lead['empresa cliente'] || lead.empresa_cliente || lead.nome_empresa || lead.empresa || lead.cliente || lead.nome || '').trim().toUpperCase().replace(/\s+/g, ' ');
+              // Procura o nome do cliente em todas as possíveis colunas que você possa ter criado no Lead
+              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.titulo || '';
+              const cleanLeadName = normalizeString(rawLeadName);
               
-              if (rawLeadName && rawLeadName.length > 2) {
-                  // Procura na base de clientes um nome que pareça com o do Lead
+              if (cleanLeadName && cleanLeadName.length > 2) {
+                  // Separa as palavras do lead com mais de 3 letras (Ex: "Supermercado Alto Vale" -> ["SUPERMERCADO", "ALTO", "VALE"])
+                  const leadWords = cleanLeadName.split(' ').filter(w => w.length > 3);
+
                   const clienteEncontrado = rawClientes.find(c => {
                       if (!c.nome_empresa) return false;
-                      const cName = String(c.nome_empresa).trim().toUpperCase().replace(/\s+/g, ' ');
+                      const cName = normalizeString(c.nome_empresa);
                       
-                      // Match exato
-                      if (cName === rawLeadName) return true;
-                      // Match flexível: se o nome do lead está dentro do nome do cliente, ou vice-versa
-                      if (rawLeadName.length > 4 && cName.includes(rawLeadName)) return true;
-                      if (cName.length > 4 && rawLeadName.includes(cName)) return true;
+                      // Match perfeito
+                      if (cName === cleanLeadName) return true;
+                      
+                      // Match se uma palavra estiver contida na outra
+                      if (cleanLeadName.length > 4 && cName.includes(cleanLeadName)) return true;
+                      if (cName.length > 4 && cleanLeadName.includes(cName)) return true;
+                      
+                      // Match de Palavras-Chave Foco (Se a primeira ou segunda palavra baterem, já puxa)
+                      const clientWords = cName.split(' ').filter(w => w.length > 3);
+                      if (leadWords.length > 0 && clientWords.length > 0) {
+                          // Se a primeira palavra for igual (ex: SOHO === SOHO)
+                          if (leadWords[0] === clientWords[0]) return true;
+                      }
                       
                       return false;
                   });
 
-                  if (clienteEncontrado) {
-                      rawCity = clienteEncontrado.cidade;
-                  }
+                  if (clienteEncontrado) rawCity = clienteEncontrado.cidade;
               }
           }
 
           rawCity = rawCity || 'NÃO INFORMADA';
-          // Limpa o nome da cidade para tirar o "/ SC"
           const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); 
           
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };

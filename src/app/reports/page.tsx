@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
-// Barra de Progresso Customizada
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
     <div 
@@ -19,8 +18,6 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
-// 👇 DICIONÁRIO GEOGRÁFICO DE SANTA CATARINA 👇
-// Mapeia o nome da cidade para posições aproximadas no nosso Radar visual
 const getCityCoordinates = (cityName: string) => {
     const name = cityName.toUpperCase();
     if (name.includes('ITAJAÍ') || name.includes('ITAJAI')) return { top: '45%', left: '85%' };
@@ -37,7 +34,7 @@ const getCityCoordinates = (cityName: string) => {
     if (name.includes('JOSÉ') || name.includes('JOSE')) return { top: '63%', left: '83%' };
     if (name.includes('PALHOÇA') || name.includes('PALHOCA')) return { top: '66%', left: '83%' };
     if (name.includes('NAVEGANTES')) return { top: '43%', left: '86%' };
-    return null; // Se não for uma destas, não plota o pino no radar (mas aparece na lista)
+    return null; 
 };
 
 export default function ReportsPage() {
@@ -46,16 +43,14 @@ export default function ReportsPage() {
   const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   
-  // --- ESTADOS DOS FILTROS TRIPLOS ---
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Mês Atual'); 
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
-  // Estados Brutos (Raw Data)
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
-  const [rawClientes, setRawClientes] = useState<any[]>([]); // 👈 NOVO: PARA PEGAR AS CIDADES
+  const [rawClientes, setRawClientes] = useState<any[]>([]); 
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -72,12 +67,12 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // 👇 BUSCAMOS A TABELA DE CLIENTES JUNTO 👇
+      // 👇 Puxando o nome_empresa para cruzar dados
       const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*'),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('id, cidade_uf, bairro')
+        supabase.from('clientes').select('id, nome_empresa, cidade_uf, bairro') 
       ]);
 
       setRawLeads(leadsRes.data || []);
@@ -92,11 +87,9 @@ export default function ReportsPage() {
     }
   }
 
-  // --- FILTROS DISPONÍVEIS ---
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
-  // --- CÁLCULOS MEMOIZADOS E BLINDADOS ---
   const { 
       currentMonth, 
       lastMonth, 
@@ -104,7 +97,7 @@ export default function ReportsPage() {
       servicosCurva, 
       estrategiasImpacto,
       performanceUnidades,
-      mapaCidades // 👈 NOVO: MAPA DE CALOR
+      mapaCidades 
   } = useMemo(() => {
       
       const now = new Date();
@@ -115,23 +108,24 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
-      // Mapeia o ID do cliente para a Cidade dele
-      const cidadesMap = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade_uf }), {});
+      // 👇 MOTOR DE VÍNCULO INTELIGENTE 👇
+      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade_uf }), {});
+      const cidadesByName = rawClientes.reduce((acc: any, c) => {
+          if(c.nome_empresa) acc[c.nome_empresa.trim().toUpperCase()] = c.cidade_uf;
+          return acc;
+      }, {});
 
-      // 1. Filtros Unidade e Vendedor
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
           return true;
       });
 
-      // 2. Filtro Período
       let currentLeads = [];
       let pastLeads = []; 
 
       if (filtroPeriodo === 'Ano Atual') {
           currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayAnoAtual);
-          pastLeads = []; 
       } else if (filtroPeriodo === 'Mês Atual') {
           currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayCurrent);
           pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayLast && l.created_at <= lastDayLast);
@@ -142,10 +136,8 @@ export default function ReportsPage() {
           pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayRetrasado && l.created_at <= lastDayRetrasado);
       } else {
           currentLeads = baseFiltrada;
-          pastLeads = [];
       }
 
-      // --- KPIs Período Atual ---
       const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
       const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
       
@@ -156,7 +148,6 @@ export default function ReportsPage() {
         conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0
       };
 
-      // --- KPIs Período Comparativo ---
       const lastGanhos = pastLeads.filter(l => l.status === 'ganho');
       const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
 
@@ -167,7 +158,6 @@ export default function ReportsPage() {
         conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0
       };
 
-      // --- PERFORMANCE POR UNIDADE ---
       const undObj = currentGanhos.reduce((acc: any, lead) => {
           const und = lead.unidade || 'Sem Unidade Vinculada';
           if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 };
@@ -180,11 +170,20 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- PERFORMANCE POR CIDADE (HEATMAP) 👇 ---
+      // --- HEATMAP COM BUSCA POR NOME ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          // Pega a cidade da tabela de clientes usando o client_id do Lead
-          const rawCity = cidadesMap[lead.client_id] || 'NÃO INFORMADA';
-          const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); // Ex: "Itajaí / SC" vira "ITAJAÍ"
+          
+          // 1. Tenta achar pelo ID
+          let rawCity = cidadesById[lead.client_id];
+          
+          // 2. Se não achar, tenta cruzar pelo NOME (Vínculo Inteligente)
+          if (!rawCity) {
+              const leadName = (lead.nome_empresa || lead.cliente_nome || lead.nome_cliente || lead.nome || '').trim().toUpperCase();
+              rawCity = cidadesByName[leadName];
+          }
+
+          rawCity = rawCity || 'NÃO INFORMADA';
+          const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); 
           
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
           acc[cleanCity].total += Number(lead.valor_total || 0);
@@ -196,7 +195,6 @@ export default function ReportsPage() {
           nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- CURVA ABC SERVIÇOS ---
       const curve = currentGanhos.reduce((acc: any, curr) => {
         let itensArray = [];
         if (Array.isArray(curr.itens)) itensArray = curr.itens;
@@ -211,7 +209,6 @@ export default function ReportsPage() {
       }, {});
       const calcCurva = Object.entries(curve).sort((a: any, b: any) => Number(b[1]) - Number(a[1]));
 
-      // --- RANKING VENDEDORES ---
       const rankObj = currentLeads.reduce((acc: any, lead) => {
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Sem Dono';
          const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
@@ -230,7 +227,6 @@ export default function ReportsPage() {
           nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- IMPACTO DAS ESTRATÉGIAS ---
       const calcImpacto = rawPremissas.map(p => {
           const leadsVinculados = currentLeads.filter(l => {
               return (p.titulo && l.checkin?.includes(p.titulo)) || l.checkin?.includes('Meta Gerada');
@@ -253,7 +249,7 @@ export default function ReportsPage() {
           rankingVendedores: calcRanking,
           estrategiasImpacto: calcImpacto,
           performanceUnidades: calcUnidades,
-          mapaCidades: calcCidades // 👈 Exportando as Cidades
+          mapaCidades: calcCidades 
       };
 
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, filtroPeriodo, filtroUnidade, filtroVendedor]);
@@ -359,7 +355,6 @@ export default function ReportsPage() {
                         const maxCidTotal = Number(mapaCidades[0]?.total) || 1;
                         const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
                         
-                        // Define a cor baseada no "Heat" (Top 1 é mais quente)
                         let heatColor = "bg-blue-500";
                         let textColor = "text-blue-400";
                         if (idx === 0) { heatColor = "bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"; textColor = "text-red-400"; }
@@ -396,7 +391,6 @@ export default function ReportsPage() {
 
             {/* Visual Radar Map Area */}
             <div className="lg:col-span-2 relative h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120] flex items-center justify-center overflow-hidden">
-                {/* Background Grid Pattern */}
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
                 <div className="absolute w-[600px] h-[600px] border border-white/5 rounded-full"></div>
                 <div className="absolute w-[400px] h-[400px] border border-white/5 rounded-full"></div>
@@ -406,12 +400,11 @@ export default function ReportsPage() {
                     <Globe2 size={250} className="text-blue-500" />
                 </div>
 
-                {/* Plotando os pontos geográficos */}
                 <div className="relative w-full h-full max-w-[500px] max-h-[350px]">
                     {mapaCidades.map((cid: any, idx: number) => {
-                        if (idx > 10) return null; // Limita o mapa aos Top 10 pra não poluir
+                        if (idx > 10) return null; 
                         const coords = getCityCoordinates(cid.nome);
-                        if (!coords) return null; // Se não tem coordenada, não plota
+                        if (!coords) return null; 
 
                         const isTop1 = idx === 0;
                         const isTop3 = idx > 0 && idx <= 2;
@@ -422,14 +415,11 @@ export default function ReportsPage() {
                                 className="absolute flex flex-col items-center justify-center group"
                                 style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
                             >
-                                {/* Radar Ping Effect */}
                                 {isTop1 && <div className="absolute w-12 h-12 bg-red-500/30 rounded-full animate-ping"></div>}
                                 {isTop3 && <div className="absolute w-8 h-8 bg-orange-500/20 rounded-full animate-ping"></div>}
 
-                                {/* O Pino */}
                                 <div className={`relative z-10 w-3 h-3 rounded-full border-2 border-[#0B1120] ${isTop1 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]' : isTop3 ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
                                 
-                                {/* Label Tooltip */}
                                 <div className="absolute top-4 bg-black/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-xl">
                                     <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>
                                     <p className="text-[9px] font-bold text-[#22C55E]">R$ {Number(cid.total).toLocaleString('pt-BR', { notation: 'compact' })}</p>

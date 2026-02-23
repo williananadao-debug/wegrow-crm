@@ -15,7 +15,7 @@ type Cliente = {
   telefone: string;
   email?: string;
   cnpj?: string;
-  cidade_uf?: string;  // 👈 USANDO A SUA COLUNA REAL
+  cidade?: string;  // 👈 CORRIGIDO PARA BATER COM SEU BANCO
   bairro?: string;  
   status: 'ativo' | 'inativo';
   user_id?: string; 
@@ -79,7 +79,7 @@ export default function CustomersPage() {
     telefone: '',
     email: '',
     cnpj: '',
-    cidade_uf: '', // 👈 MAPEADO PRO BANCO
+    cidade: '', // 👈 CORRIGIDO
     bairro: '', 
     status: 'ativo',
     user_id: '' 
@@ -132,8 +132,8 @@ export default function CustomersPage() {
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
         if (busca.trim()) {
-            // 👇 BUSCA PODEROSA NA COLUNA CORRETA 👇
-            query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade_uf.ilike.%${busca}%,bairro.ilike.%${busca}%`);
+            // 👇 BUSCA PODEROSA NA COLUNA CORRETA (cidade) 👇
+            query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade.ilike.%${busca}%,bairro.ilike.%${busca}%`);
         }
 
         const { data, count, error } = await query;
@@ -183,7 +183,7 @@ export default function CustomersPage() {
         telefone: cliente.telefone || '',
         email: cliente.email || '',
         cnpj: cliente.cnpj || '',
-        cidade_uf: cliente.cidade_uf || '', // 👈 PUXANDO DO BANCO
+        cidade: cliente.cidade || '', // 👈 PUXANDO DO BANCO
         bairro: cliente.bairro || '', 
         status: cliente.status || 'ativo' as any,
         user_id: cliente.user_id || ''
@@ -198,7 +198,7 @@ export default function CustomersPage() {
         telefone: '', 
         email: '', 
         cnpj: '', 
-        cidade_uf: '', 
+        cidade: '', 
         bairro: '', 
         status: 'ativo', 
         user_id: isDirector ? '' : (user?.id || '') 
@@ -337,10 +337,10 @@ export default function CustomersPage() {
                             </h3>
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1.5">
                                 {/* 👇 EXIBIÇÃO INTELIGENTE DE CIDADE E BAIRRO 👇 */}
-                                {(cliente.cidade_uf || cliente.bairro) && (
+                                {(cliente.cidade || cliente.bairro) && (
                                     <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
                                         <MapPin size={10}/> 
-                                        {[cliente.cidade_uf, cliente.bairro].filter(Boolean).join(' - ')}
+                                        {[cliente.cidade, cliente.bairro].filter(Boolean).join(' - ')}
                                     </span>
                                 )}
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
@@ -420,7 +420,7 @@ export default function CustomersPage() {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cidade / UF</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.cidade_uf} onChange={e => setFormData({...formData, cidade_uf: e.target.value})} placeholder="Ex: Itajaí / SC"/>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.cidade} onChange={e => setFormData({...formData, cidade: e.target.value})} placeholder="Ex: Itajaí / SC"/>
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Bairro</label>

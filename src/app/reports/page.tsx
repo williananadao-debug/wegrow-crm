@@ -184,7 +184,7 @@ export default function ReportsPage() {
           
           // 2. Se não achar, tenta cruzar pelo NOME
           if (!rawCity) {
-              const rawLeadName = lead.nome_empresa || lead.cliente_nome || lead.nome_cliente || lead.nome || '';
+              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || '';
               const cleanLeadName = rawLeadName.trim().toUpperCase().replace(/\s+/g, ' ');
               rawCity = cidadesByName[cleanLeadName];
           }

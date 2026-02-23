@@ -22,6 +22,7 @@ const getCityCoordinates = (cityName: string) => {
     if (!cityName) return null;
     const name = cityName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     
+    // Litoral e Centros
     if (name.includes('ITAJAI')) return { top: '45%', left: '85%' };
     if (name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
     if (name.includes('JOINVILLE')) return { top: '20%', left: '80%' };
@@ -37,7 +38,7 @@ const getCityCoordinates = (cityName: string) => {
     if (name.includes('PALHOCA')) return { top: '66%', left: '83%' };
     if (name.includes('NAVEGANTES')) return { top: '43%', left: '86%' };
     
-    // Interior e Norte
+    // Alto Vale e Norte
     if (name.includes('RIO DO SUL')) return { top: '50%', left: '65%' };
     if (name.includes('PRESIDENTE GETULIO')) return { top: '47%', left: '67%' };
     if (name.includes('POUSO REDONDO')) return { top: '52%', left: '60%' };
@@ -89,18 +90,17 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('*');
+      let leadsQuery = supabase.from('leads').select('*').limit(10000);
       
       if (!isDirector) {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // 👇 O SEGREDO AQUI: select('*') PUXA TUDO SEM RISCO DE ERRO DE COLUNA
       const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
-        supabase.from('premissas').select('*'),
+        supabase.from('premissas').select('*').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('*') 
+        supabase.from('clientes').select('*').limit(10000) 
       ]);
 
       setRawLeads(leadsRes.data || []);
@@ -136,7 +136,6 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
-      // 👇 GARANTIA DUPLA: Lê cidade ou cidade_uf
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf) }), {});
 
       const baseFiltrada = rawLeads.filter(lead => {
@@ -194,7 +193,7 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO SUPER AVANÇADO ---
+      // --- MOTOR DE VÍNCULO CORRIGIDO (CALIBRAGEM SNIPER) ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           
           let rawCity = cidadesById[lead.client_id];
@@ -210,15 +209,25 @@ export default function ReportsPage() {
                       if (!c.nome_empresa) return false;
                       const cName = normalizeString(c.nome_empresa);
                       
+                      // Match perfeito
                       if (cName === cleanLeadName) return true;
                       
-                      if (cleanLeadName.length > 4 && cName.includes(cleanLeadName)) return true;
-                      if (cName.length > 4 && cleanLeadName.includes(cName)) return true;
+                      // Match contido (Seguro)
+                      if (cleanLeadName.length > 5 && cName.includes(cleanLeadName)) return true;
+                      if (cName.length > 5 && cleanLeadName.includes(cName)) return true;
                       
+                      // Match de cruzamento de palavras
                       const clientWords = cName.split(' ').filter(w => w.length > 3);
-                      if (leadWords.length > 0 && clientWords.length > 0) {
-                          if (leadWords[0] === clientWords[0]) return true;
+                      let matches = 0;
+                      for (let w of leadWords) {
+                          if (clientWords.includes(w)) matches++;
                       }
+                      
+                      // Precisa bater no mínimo 2 palavras pra não ter erro
+                      if (matches >= 2) return true;
+                      
+                      // Se o nome do lead for uma palavra só, e estiver no nome oficial
+                      if (leadWords.length === 1 && clientWords.includes(leadWords[0])) return true;
                       
                       return false;
                   });
@@ -227,12 +236,18 @@ export default function ReportsPage() {
               }
           }
 
-          rawCity = rawCity || 'NÃO INFORMADA';
-          const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); 
+          // Filtro final para limpar a cidade e agrupar
+          if (rawCity && rawCity !== 'NÃO INFORMADA') {
+              const cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase();
+              if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
+              acc[cleanCity].total += Number(lead.valor_total || 0);
+              acc[cleanCity].count += 1;
+          } else {
+              if (!acc['NÃO INFORMADA']) acc['NÃO INFORMADA'] = { nome: 'NÃO INFORMADA', total: 0, count: 0 };
+              acc['NÃO INFORMADA'].total += Number(lead.valor_total || 0);
+              acc['NÃO INFORMADA'].count += 1;
+          }
           
-          if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
-          acc[cleanCity].total += Number(lead.valor_total || 0);
-          acc[cleanCity].count += 1;
           return acc;
       }, {});
 
@@ -402,7 +417,8 @@ export default function ReportsPage() {
                         
                         let heatColor = "bg-blue-500";
                         let textColor = "text-blue-400";
-                        if (idx === 0) { heatColor = "bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"; textColor = "text-red-400"; }
+                        if (cid.nome === 'NÃO INFORMADA') { heatColor = "bg-red-500 opacity-50"; textColor = "text-red-400"; }
+                        else if (idx === 0) { heatColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"; textColor = "text-emerald-400"; }
                         else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
 
                         return (
@@ -447,7 +463,8 @@ export default function ReportsPage() {
 
                 <div className="relative w-full h-full max-w-[500px] max-h-[350px]">
                     {mapaCidades.map((cid: any, idx: number) => {
-                        if (idx > 10) return null; 
+                        if (cid.nome === 'NÃO INFORMADA') return null;
+                        
                         const coords = getCityCoordinates(cid.nome);
                         if (!coords) return null; 
 
@@ -460,10 +477,10 @@ export default function ReportsPage() {
                                 className="absolute flex flex-col items-center justify-center group"
                                 style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
                             >
-                                {isTop1 && <div className="absolute w-12 h-12 bg-red-500/30 rounded-full animate-ping"></div>}
+                                {isTop1 && <div className="absolute w-12 h-12 bg-emerald-500/30 rounded-full animate-ping"></div>}
                                 {isTop3 && <div className="absolute w-8 h-8 bg-orange-500/20 rounded-full animate-ping"></div>}
 
-                                <div className={`relative z-10 w-3 h-3 rounded-full border-2 border-[#0B1120] ${isTop1 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]' : isTop3 ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                                <div className={`relative z-10 w-3 h-3 rounded-full border-2 border-[#0B1120] ${isTop1 ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]' : isTop3 ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
                                 
                                 <div className="absolute top-4 bg-black/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-xl">
                                     <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   Phone, FileText, X, History, CheckCircle2, XCircle, 
-  Loader2, ChevronDown, Building2, User, Upload, Hash 
+  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -15,6 +15,8 @@ type Cliente = {
   telefone: string;
   email?: string;
   cnpj?: string;
+  cidade_uf?: string;  // 👈 USANDO A SUA COLUNA REAL
+  bairro?: string;  
   status: 'ativo' | 'inativo';
   user_id?: string; 
   created_at: string;
@@ -42,7 +44,7 @@ type VendaHistorico = {
 
 const ITEMS_PER_PAGE = 20;
 
-// 👇 Função de Máscara de ID
+// Função de Máscara de ID
 const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
@@ -77,6 +79,8 @@ export default function CustomersPage() {
     telefone: '',
     email: '',
     cnpj: '',
+    cidade_uf: '', // 👈 MAPEADO PRO BANCO
+    bairro: '', 
     status: 'ativo',
     user_id: '' 
   });
@@ -128,7 +132,8 @@ export default function CustomersPage() {
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
         if (busca.trim()) {
-            query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%`);
+            // 👇 BUSCA PODEROSA NA COLUNA CORRETA 👇
+            query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade_uf.ilike.%${busca}%,bairro.ilike.%${busca}%`);
         }
 
         const { data, count, error } = await query;
@@ -178,6 +183,8 @@ export default function CustomersPage() {
         telefone: cliente.telefone || '',
         email: cliente.email || '',
         cnpj: cliente.cnpj || '',
+        cidade_uf: cliente.cidade_uf || '', // 👈 PUXANDO DO BANCO
+        bairro: cliente.bairro || '', 
         status: cliente.status || 'ativo' as any,
         user_id: cliente.user_id || ''
       });
@@ -191,6 +198,8 @@ export default function CustomersPage() {
         telefone: '', 
         email: '', 
         cnpj: '', 
+        cidade_uf: '', 
+        bairro: '', 
         status: 'ativo', 
         user_id: isDirector ? '' : (user?.id || '') 
       });
@@ -289,7 +298,7 @@ export default function CustomersPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
           <input 
             className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:border-[#22C55E] outline-none placeholder:text-slate-600 transition-all"
-            placeholder="Buscar por nome ou CNPJ..."
+            placeholder="Buscar por nome, CNPJ, Cidade ou Bairro..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
@@ -322,12 +331,18 @@ export default function CustomersPage() {
                         <div>
                             <h3 className="text-white font-black text-sm uppercase tracking-wide flex items-center gap-2">
                                 {cliente.nome_empresa}
-                                {/* 👇 ID MASCARADO DO CLIENTE 👇 */}
                                 <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded tracking-widest flex items-center gap-0.5">
                                     <Hash size={10}/> {formatId(cliente.id, 'CL')}
                                 </span>
                             </h3>
-                            <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1">
+                            <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1.5">
+                                {/* 👇 EXIBIÇÃO INTELIGENTE DE CIDADE E BAIRRO 👇 */}
+                                {(cliente.cidade_uf || cliente.bairro) && (
+                                    <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+                                        <MapPin size={10}/> 
+                                        {[cliente.cidade_uf, cliente.bairro].filter(Boolean).join(' - ')}
+                                    </span>
+                                )}
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
                                 {cliente.user_id && (
@@ -398,9 +413,21 @@ export default function CustomersPage() {
                 <form onSubmit={handleSaveCliente} className="space-y-5 pb-2">
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nome Fantasia *</label>
-                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required placeholder="Ex: Nome da Empresa"/>
+                        <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors uppercase" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required placeholder="Ex: Nome da Empresa"/>
                     </div>
                     
+                    {/* 👇 CAMPOS MAPEADOS CORRETAMENTE PRO BANCO 👇 */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cidade / UF</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.cidade_uf} onChange={e => setFormData({...formData, cidade_uf: e.target.value})} placeholder="Ex: Itajaí / SC"/>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Bairro</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.bairro} onChange={e => setFormData({...formData, bairro: e.target.value})} placeholder="Ex: Centro"/>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Telefone</label>

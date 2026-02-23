@@ -5,7 +5,7 @@ import {
   TrendingUp, BarChart3, PieChart, Users, 
   ArrowUpRight, ArrowDownRight, Target, Calendar,
   Download, Zap, Clock, ChevronRight, Filter, 
-  ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle 
+  ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin, Globe2
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -19,10 +19,31 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
+// 👇 DICIONÁRIO GEOGRÁFICO DE SANTA CATARINA 👇
+// Mapeia o nome da cidade para posições aproximadas no nosso Radar visual
+const getCityCoordinates = (cityName: string) => {
+    const name = cityName.toUpperCase();
+    if (name.includes('ITAJAÍ') || name.includes('ITAJAI')) return { top: '45%', left: '85%' };
+    if (name.includes('CAMBORIÚ') || name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
+    if (name.includes('JOINVILLE')) return { top: '20%', left: '80%' };
+    if (name.includes('FLORIPA') || name.includes('FLORIAN')) return { top: '65%', left: '85%' };
+    if (name.includes('BLUMENAU')) return { top: '40%', left: '75%' };
+    if (name.includes('CHAPECÓ') || name.includes('CHAPECO')) return { top: '45%', left: '15%' };
+    if (name.includes('LAGES')) return { top: '60%', left: '50%' };
+    if (name.includes('CRICIÚMA') || name.includes('CRICIUMA')) return { top: '85%', left: '75%' };
+    if (name.includes('TUBARÃO') || name.includes('TUBARAO')) return { top: '80%', left: '80%' };
+    if (name.includes('JARAGUÁ') || name.includes('JARAGUA')) return { top: '25%', left: '75%' };
+    if (name.includes('BRUSQUE')) return { top: '45%', left: '80%' };
+    if (name.includes('JOSÉ') || name.includes('JOSE')) return { top: '63%', left: '83%' };
+    if (name.includes('PALHOÇA') || name.includes('PALHOCA')) return { top: '66%', left: '83%' };
+    if (name.includes('NAVEGANTES')) return { top: '43%', left: '86%' };
+    return null; // Se não for uma destas, não plota o pino no radar (mas aparece na lista)
+};
+
 export default function ReportsPage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DOS FILTROS TRIPLOS ---
@@ -34,6 +55,7 @@ const perfil = auth.perfil;
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
+  const [rawClientes, setRawClientes] = useState<any[]>([]); // 👈 NOVO: PARA PEGAR AS CIDADES
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -50,15 +72,18 @@ const perfil = auth.perfil;
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      const [leadsRes, premissasRes, profilesRes] = await Promise.all([
+      // 👇 BUSCAMOS A TABELA DE CLIENTES JUNTO 👇
+      const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('*'),
-        supabase.from('profiles').select('id, nome')
+        supabase.from('profiles').select('id, nome'),
+        supabase.from('clientes').select('id, cidade_uf, bairro')
       ]);
 
       setRawLeads(leadsRes.data || []);
       setRawPremissas(premissasRes.data || []);
       setRawProfiles(profilesRes.data || []);
+      setRawClientes(clientesRes.data || []);
       
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -78,7 +103,8 @@ const perfil = auth.perfil;
       rankingVendedores, 
       servicosCurva, 
       estrategiasImpacto,
-      performanceUnidades 
+      performanceUnidades,
+      mapaCidades // 👈 NOVO: MAPA DE CALOR
   } = useMemo(() => {
       
       const now = new Date();
@@ -88,6 +114,9 @@ const perfil = auth.perfil;
       const lastDayLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
+      
+      // Mapeia o ID do cliente para a Cidade dele
+      const cidadesMap = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: c.cidade_uf }), {});
 
       // 1. Filtros Unidade e Vendedor
       const baseFiltrada = rawLeads.filter(lead => {
@@ -138,7 +167,7 @@ const perfil = auth.perfil;
         conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0
       };
 
-      // --- PERFORMANCE POR UNIDADE (Corrigido pro TypeScript) ---
+      // --- PERFORMANCE POR UNIDADE ---
       const undObj = currentGanhos.reduce((acc: any, lead) => {
           const und = lead.unidade || 'Sem Unidade Vinculada';
           if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 };
@@ -147,31 +176,39 @@ const perfil = auth.perfil;
           return acc;
       }, {});
       
-      // Aqui mapeamos explicitamente para o TS entender o tipo de dados
       const calcUnidades = Object.values(undObj).map((u: any) => ({
-          nome: u.nome,
-          total: Number(u.total) || 0,
-          count: Number(u.count) || 0
+          nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
+      })).sort((a, b) => b.total - a.total);
+
+      // --- PERFORMANCE POR CIDADE (HEATMAP) 👇 ---
+      const cityObj = currentGanhos.reduce((acc: any, lead) => {
+          // Pega a cidade da tabela de clientes usando o client_id do Lead
+          const rawCity = cidadesMap[lead.client_id] || 'NÃO INFORMADA';
+          const cleanCity = rawCity.split('/')[0].trim().toUpperCase(); // Ex: "Itajaí / SC" vira "ITAJAÍ"
+          
+          if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
+          acc[cleanCity].total += Number(lead.valor_total || 0);
+          acc[cleanCity].count += 1;
+          return acc;
+      }, {});
+
+      const calcCidades = Object.values(cityObj).map((c: any) => ({
+          nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0
       })).sort((a, b) => b.total - a.total);
 
       // --- CURVA ABC SERVIÇOS ---
       const curve = currentGanhos.reduce((acc: any, curr) => {
         let itensArray = [];
-        if (Array.isArray(curr.itens)) {
-            itensArray = curr.itens;
-        } else if (typeof curr.itens === 'string') {
-            try { itensArray = JSON.parse(curr.itens) || []; } catch(e) { itensArray = []; }
-        }
+        if (Array.isArray(curr.itens)) itensArray = curr.itens;
+        else if (typeof curr.itens === 'string') { try { itensArray = JSON.parse(curr.itens) || []; } catch(e) { itensArray = []; } }
 
         itensArray.forEach((item: any) => {
             if (item && item.servico) {
                 acc[item.servico] = (acc[item.servico] || 0) + ((Number(item.precoUnitario) || 0) * (Number(item.quantidade) || 1));
             }
         });
-        
         return acc;
       }, {});
-      
       const calcCurva = Object.entries(curve).sort((a: any, b: any) => Number(b[1]) - Number(a[1]));
 
       // --- RANKING VENDEDORES ---
@@ -190,19 +227,14 @@ const perfil = auth.perfil;
       }, {});
 
       const calcRanking = Object.values(rankObj).map((v: any) => ({
-          nome: v.nome,
-          total: Number(v.total) || 0,
-          conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
+          nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a, b) => b.total - a.total);
 
       // --- IMPACTO DAS ESTRATÉGIAS ---
       const calcImpacto = rawPremissas.map(p => {
           const leadsVinculados = currentLeads.filter(l => {
-              const temPremissa = p.titulo && l.checkin?.includes(p.titulo);
-              const geradoApp = l.checkin?.includes('Meta Gerada');
-              return temPremissa || geradoApp;
+              return (p.titulo && l.checkin?.includes(p.titulo)) || l.checkin?.includes('Meta Gerada');
           });
-          
           const ganhos = leadsVinculados.filter(l => l.status === 'ganho');
           
           return {
@@ -212,9 +244,7 @@ const perfil = auth.perfil;
               conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
               faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
           };
-      }).filter(est => est.gerados > 0)
-        .sort((a, b) => b.faturamento - a.faturamento)
-        .slice(0, 5); 
+      }).filter(est => est.gerados > 0).sort((a, b) => b.faturamento - a.faturamento).slice(0, 5); 
 
       return {
           currentMonth: calcCurrent,
@@ -222,17 +252,18 @@ const perfil = auth.perfil;
           servicosCurva: calcCurva,
           rankingVendedores: calcRanking,
           estrategiasImpacto: calcImpacto,
-          performanceUnidades: calcUnidades
+          performanceUnidades: calcUnidades,
+          mapaCidades: calcCidades // 👈 Exportando as Cidades
       };
 
-  }, [rawLeads, rawPremissas, rawProfiles, filtroPeriodo, filtroUnidade, filtroVendedor]);
+  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, filtroPeriodo, filtroUnidade, filtroVendedor]);
 
   const getGrowth = (current: number, last: number) => {
     if (last === 0) return current > 0 ? 100 : 0;
     return ((current - last) / last) * 100;
   };
 
-  if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-blue-500 font-black animate-pulse">COMPILANDO DADOS...</div>;
+  if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-blue-500 font-black animate-pulse">COMPILANDO DADOS DA SALA DE COMANDO...</div>;
 
   return (
     <div className="p-6 space-y-6 pb-20 animate-in fade-in duration-700">
@@ -242,7 +273,7 @@ const perfil = auth.perfil;
         <div>
           <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Sala de Comando (BI)</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
-            <ShieldCheck size={12} className="text-blue-500"/> Análise Estratégica de Performance e Curva ABC
+            <ShieldCheck size={12} className="text-blue-500"/> Análise Estratégica e Inteligência Geográfica
           </p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
@@ -308,6 +339,108 @@ const perfil = auth.perfil;
             </div>
           );
         })}
+      </div>
+
+      {/* 👇 NOVO: RADAR DE HEATMAP GEOGRÁFICO DE SANTA CATARINA 👇 */}
+      <div className="bg-[#0B1120] border border-white/5 rounded-[40px] shadow-2xl overflow-hidden">
+         <div className="p-8 border-b border-white/5 bg-white/[0.01]">
+            <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+              <Globe2 size={20} className="text-emerald-500" /> Mapa de Calor Regional (SC)
+            </h3>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Concentração Geográfica de Faturamento</p>
+         </div>
+
+         <div className="grid grid-cols-1 lg:grid-cols-3">
+            {/* Lista das Cidades (Tabela/Ranking) */}
+            <div className="lg:col-span-1 p-8 border-r border-white/5 bg-white/[0.01] max-h-[400px] overflow-y-auto custom-scrollbar">
+                <div className="space-y-6">
+                    {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
+                        const cidTotal = Number(cid.total) || 0;
+                        const maxCidTotal = Number(mapaCidades[0]?.total) || 1;
+                        const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
+                        
+                        // Define a cor baseada no "Heat" (Top 1 é mais quente)
+                        let heatColor = "bg-blue-500";
+                        let textColor = "text-blue-400";
+                        if (idx === 0) { heatColor = "bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"; textColor = "text-red-400"; }
+                        else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
+
+                        return (
+                            <div key={cid.nome || idx} className="group">
+                                <div className="flex justify-between items-end mb-1">
+                                    <span className="text-white font-black text-xs uppercase flex items-center gap-1">
+                                        <MapPin size={10} className={textColor} />
+                                        {cid.nome}
+                                    </span>
+                                    <span className={`${textColor} font-black text-[11px]`}>
+                                        R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                                    <div className={`h-full ${heatColor} transition-all duration-1000`} style={{ width: `${Math.min((cidTotal / maxCidTotal) * 100, 100)}%` }} />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                    <p className="text-[9px] text-slate-500 font-bold uppercase">{cid.count} Vendas</p>
+                                    <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
+                                </div>
+                            </div>
+                        );
+                    }) : (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-600 opacity-50 py-10">
+                            <MapPin size={32} className="mb-2" />
+                            <p className="text-xs font-black uppercase text-center">Sem dados de<br/>localização</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Visual Radar Map Area */}
+            <div className="lg:col-span-2 relative h-[400px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120] flex items-center justify-center overflow-hidden">
+                {/* Background Grid Pattern */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
+                <div className="absolute w-[600px] h-[600px] border border-white/5 rounded-full"></div>
+                <div className="absolute w-[400px] h-[400px] border border-white/5 rounded-full"></div>
+                <div className="absolute w-[200px] h-[200px] border border-blue-500/10 rounded-full animate-pulse"></div>
+
+                <div className="text-center absolute z-0 opacity-10 flex flex-col items-center pointer-events-none">
+                    <Globe2 size={250} className="text-blue-500" />
+                </div>
+
+                {/* Plotando os pontos geográficos */}
+                <div className="relative w-full h-full max-w-[500px] max-h-[350px]">
+                    {mapaCidades.map((cid: any, idx: number) => {
+                        if (idx > 10) return null; // Limita o mapa aos Top 10 pra não poluir
+                        const coords = getCityCoordinates(cid.nome);
+                        if (!coords) return null; // Se não tem coordenada, não plota
+
+                        const isTop1 = idx === 0;
+                        const isTop3 = idx > 0 && idx <= 2;
+                        
+                        return (
+                            <div 
+                                key={cid.nome} 
+                                className="absolute flex flex-col items-center justify-center group"
+                                style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
+                            >
+                                {/* Radar Ping Effect */}
+                                {isTop1 && <div className="absolute w-12 h-12 bg-red-500/30 rounded-full animate-ping"></div>}
+                                {isTop3 && <div className="absolute w-8 h-8 bg-orange-500/20 rounded-full animate-ping"></div>}
+
+                                {/* O Pino */}
+                                <div className={`relative z-10 w-3 h-3 rounded-full border-2 border-[#0B1120] ${isTop1 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]' : isTop3 ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                                
+                                {/* Label Tooltip */}
+                                <div className="absolute top-4 bg-black/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-xl">
+                                    <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>
+                                    <p className="text-[9px] font-bold text-[#22C55E]">R$ {Number(cid.total).toLocaleString('pt-BR', { notation: 'compact' })}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded">Radar Otimizado SC</div>
+            </div>
+         </div>
       </div>
 
       {/* BLOCO CENTRAL: CURVA ABC + PERFORMANCE DE VENDAS */}

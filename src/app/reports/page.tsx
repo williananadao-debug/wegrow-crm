@@ -50,7 +50,7 @@ const convertToCSV = (objArray: any[]) => {
         for (let index in array[i]) {
             let val = array[i][index] !== null && array[i][index] !== undefined ? array[i][index] : '';
             if (typeof val === 'object') val = JSON.stringify(val);
-            val = String(val).replace(/"/g, '""'); // Escapa aspas
+            val = String(val).replace(/"/g, '""'); 
             line += '"' + val + '";';
         }
         line = line.slice(0, -1);
@@ -60,7 +60,6 @@ const convertToCSV = (objArray: any[]) => {
 };
 
 const downloadFile = (content: string, fileName: string) => {
-    // O \ufeff força o Excel a entender UTF-8 (acentos corretos)
     const blob = new Blob(["\ufeff", content], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -100,6 +99,7 @@ export default function ReportsPage() {
       if (user) fetchReportData(); 
   }, [user, perfil]);
 
+  // 👇 MOTOR DE BUSCA OTIMIZADO V8 (PARALELISMO) 👇
   async function fetchReportData() {
     setLoading(true);
     try {
@@ -109,30 +109,21 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      const [leadsRes, premissasRes, profilesRes] = await Promise.all([
+      // Dispara todas as buscas AO MESMO TEMPO em vez de uma depois da outra
+      const [leadsRes, premissasRes, profilesRes, cli1, cli2, cli3, cli4] = await Promise.all([
         leadsQuery,
-        supabase.from('premissas').select('*').limit(1000),
+        supabase.from('premissas').select('titulo, tipo_cliente').limit(1000), // Puxa só o necessário
         supabase.from('profiles').select('id, nome'),
+        // Trazendo clientes em blocos massivos instantâneos para evitar loop while lento
+        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(0, 999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(1000, 1999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(2000, 2999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(3000, 3999),
       ]);
 
-      // TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES
-      let allClientes: any[] = [];
-      let page = 0;
-      let fetchMore = true;
-      
-      while(fetchMore) {
-          const { data, error } = await supabase
-              .from('clientes')
-              .select('*')
-              .range(page * 1000, (page + 1) * 1000 - 1);
-              
-          if (data && data.length > 0) {
-              allClientes = [...allClientes, ...data];
-              page++;
-          } else {
-              fetchMore = false; 
-          }
-      }
+      const allClientes = [
+          ...(cli1.data || []), ...(cli2.data || []), ...(cli3.data || []), ...(cli4.data || [])
+      ];
 
       setRawLeads(leadsRes.data || []);
       setRawPremissas(premissasRes.data || []);
@@ -146,14 +137,12 @@ export default function ReportsPage() {
     }
   }
 
-  // --- FUNÇÃO PARA GERAR A VISUALIZAÇÃO NA TELA ---
   const handleGeneratePreview = async () => {
       setIsExporting(true);
       try {
           let dataToExport: any[] = []; 
 
           if (exportType === 'leads') {
-              // Prepara dados de VENDAS
               dataToExport = rawLeads.map(l => ({
                   ID_Venda: l.id,
                   Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
@@ -168,7 +157,6 @@ export default function ReportsPage() {
               }));
 
           } else if (exportType === 'clientes') {
-              // Prepara dados de CLIENTES
               dataToExport = rawClientes.map(c => ({
                   ID_Cliente: c.id,
                   Nome_Fantasia: c.nome_empresa || '',
@@ -181,7 +169,6 @@ export default function ReportsPage() {
               }));
 
           } else if (exportType === 'jobs') {
-              // Busca JOBS (Produção) no banco com Trator
               let allJobs: any[] = [];
               let page = 0;
               let fetchMore = true;
@@ -218,18 +205,14 @@ export default function ReportsPage() {
       }
   };
 
-  // --- FUNÇÃO PARA BAIXAR O CSV (Lê direto do Preview) ---
   const handleDownloadCSV = () => {
       if (!previewData) return;
-      
       const timestamp = new Date().toISOString().split('T')[0];
       const filename = `extracao_${exportType}_${timestamp}.csv`;
-      
       const csvContent = convertToCSV(previewData);
       downloadFile(csvContent, filename);
   };
 
-  // Função para fechar o modal e limpar o preview
   const closeModal = () => {
       setShowExportModal(false);
       setPreviewData(null);
@@ -238,6 +221,7 @@ export default function ReportsPage() {
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
+  // 👇 LÓGICA DE MEMÓRIA (DESAFOGANDO A CPU) 👇
   const { 
       currentMonth, 
       lastMonth, 
@@ -256,7 +240,12 @@ export default function ReportsPage() {
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       
+      // O SEGREDO: Pré-processa os nomes normalizados UMA VEZ SÓ para economizar milhões de cálculos
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf || c.bairro) }), {});
+      const clientesNormalizados = rawClientes.map(c => ({
+          ...c,
+          normName: normalizeString(c.nome_empresa)
+      })).filter(c => c.normName);
 
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -313,7 +302,7 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO GEOGRÁFICO ---
+      // --- MOTOR GEOGRÁFICO OTIMIZADO ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           let rawCity = cidadesById[lead.client_id];
           
@@ -322,14 +311,12 @@ export default function ReportsPage() {
               const cleanLeadName = normalizeString(rawLeadName as string);
               
               if (cleanLeadName && cleanLeadName.length >= 3) {
-                  const clienteEncontrado = rawClientes.find(c => {
-                      if (!c.nome_empresa) return false;
-                      const cName = normalizeString(c.nome_empresa);
-                      if (cName === cleanLeadName) return true;
-                      if (cName.includes(cleanLeadName)) return true;
-                      if (cleanLeadName.includes(cName)) return true;
-                      return false;
-                  });
+                  // A busca é feita no array pré-processado (Instantâneo)
+                  const clienteEncontrado = clientesNormalizados.find(c => 
+                      c.normName === cleanLeadName || 
+                      c.normName.includes(cleanLeadName) || 
+                      cleanLeadName.includes(c.normName)
+                  );
 
                   if (clienteEncontrado) {
                       rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf || clienteEncontrado.bairro;
@@ -430,13 +417,11 @@ export default function ReportsPage() {
           </p>
         </div>
         
-        {/* 👇 BOTÕES DO TOPO (NOVO BOTÃO DE EXTRAÇÃO AQUI) 👇 */}
         <div className="flex gap-2 w-full md:w-auto">
           <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-3 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
             <Zap size={18}/>
           </button>
           
-          {/* BOTÃO MESTRE DE EXTRAÇÃO DE DADOS */}
           <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
             <Database size={16}/> Extrair Dados
           </button>
@@ -501,7 +486,7 @@ export default function ReportsPage() {
       {/* BLOCO 1: CURVA ABC + ELITE DE VENDAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CURVA ABC (Ocupa 2 colunas) */}
+        {/* CURVA ABC */}
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20" />
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8 relative z-10">
@@ -533,7 +518,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* RANKING PERMANENTE (Ocupa 1 coluna) */}
+        {/* RANKING PERMANENTE */}
         <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
             <Users size={20} className="text-purple-500" /> Elite de Vendas
@@ -566,7 +551,7 @@ export default function ReportsPage() {
       {/* BLOCO 2: ESTRATÉGIAS + PERFORMANCE DE UNIDADES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* TABELA DE ESTRATÉGIAS (Ocupa 2 colunas) */}
+        {/* TABELA DE ESTRATÉGIAS */}
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl flex flex-col">
           <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
             <h3 className="text-white font-black uppercase italic flex items-center gap-2">
@@ -621,7 +606,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* PERFORMANCE POR UNIDADE (Ocupa 1 coluna) */}
+        {/* PERFORMANCE POR UNIDADE */}
         <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
             <Building2 size={20} className="text-cyan-400" /> Faturamento por Filial
@@ -713,12 +698,11 @@ export default function ReportsPage() {
          </div>
       </div>
 
-      {/* 👇 MODAL DE EXPORTAÇÃO DE DADOS & PREVIEW DA TABELA 👇 */}
+      {/* MODAL DE EXPORTAÇÃO DE DADOS & PREVIEW DA TABELA */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
             <div className={`bg-[#0B1120] border border-white/10 w-full transition-all duration-300 rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 ${previewData ? 'max-w-7xl h-[85vh]' : 'max-w-lg'}`}>
                 
-                {/* Header do Modal */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02] flex-shrink-0">
                     <div>
                         <h3 className="text-xl font-black text-white uppercase italic tracking-tighter flex items-center gap-2">
@@ -733,7 +717,6 @@ export default function ReportsPage() {
                     </button>
                 </div>
 
-                {/* Corpo do Modal (Alterna entre Seleção e a Tabela de Preview) */}
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {!previewData ? (
                         <div className="p-8 space-y-6 overflow-y-auto">
@@ -798,7 +781,6 @@ export default function ReportsPage() {
                     )}
                 </div>
 
-                {/* Footer do Modal (Botões de Ação) */}
                 <div className="p-6 border-t border-white/10 bg-[#0F172A] flex-shrink-0">
                     {!previewData ? (
                         <button 

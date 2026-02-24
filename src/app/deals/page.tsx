@@ -395,7 +395,7 @@ export default function DealsPage() {
         </head>
         <body>
           <div class="ref-interna">Nº Registro: ${refInterna}</div>
-          <div class="header"><div class="logo">WEGROW / DEMAIS FM</div></div>
+          <div class="header"><div class="logo">DEMAIS FM</div></div>
           <h1>Contrato de Prestação de Serviços Publicitários</h1>
           
           <p><strong>CONTRATADA:</strong> Demais FM, empresa de publicidade e radiodifusão.</p>

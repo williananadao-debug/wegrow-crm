@@ -102,7 +102,6 @@ export default function DealsPage() {
 
   const [metaMensal, setMetaMensal] = useState(1); 
   
-  // 👇 ESTADOS DA REDE 👇
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -134,10 +133,8 @@ export default function DealsPage() {
         });
     } catch (e) {}
 
-    // Garante que só fique Leads válidos
     const leadsFiltrados = leadsBase.filter(l => l && l.id);
 
-    // Se estiver online e buscou do banco, limpa os fantasmas (IDs > 1000000) que já subiram para evitar duplicação visual
     if (navigator.onLine && leadsData) {
         setLeads(leadsFiltrados.filter(l => l.id < 1000000) as Lead[]);
     } else {
@@ -188,11 +185,9 @@ export default function DealsPage() {
   useEffect(() => {
     if (!user) return;
     
-    // Checa o status inicial da rede
     setIsOffline(!navigator.onLine);
     fetchData();
 
-    // 👇 O MOTOR DE EVENTOS DE REDE 👇
     const handleOnline = async () => {
         setIsOffline(false);
         setIsSyncing(true);
@@ -478,7 +473,6 @@ export default function DealsPage() {
       e.stopPropagation();
       if(!confirm("Excluir oportunidade?")) return;
 
-      // Se for um lead fantasma que ainda não subiu, remove só da tela
       if (id > 1000000) {
           setLeads(prev => prev.filter(l => l.id !== id));
           if (isModalOpen) setIsModalOpen(false);
@@ -507,7 +501,7 @@ export default function DealsPage() {
       if(data) {
          const { data: url } = supabase.storage.from('contratos').getPublicUrl(fileName);
          setFotoUrl(url.publicUrl);
-         if(editingLeadId && editingLeadId < 1000000) { // Não tenta atualizar lead fantasma no Supabase
+         if(editingLeadId && editingLeadId < 1000000) { 
              await supabase.from('leads').update({ foto_url: url.publicUrl }).eq('id', editingLeadId);
              setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, foto_url: url.publicUrl } : l));
          }
@@ -553,7 +547,6 @@ export default function DealsPage() {
 
     if (editingLeadId) {
         try {
-            // Se for um lead fantasma que ainda não sincronizou, força a ir pro Offline
             if (editingLeadId > 1000000) throw new Error('Failed to fetch');
 
             const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
@@ -617,7 +610,6 @@ export default function DealsPage() {
         setContratoFim(lead.contrato_fim || '');
         setDesconto(lead.desconto || 0); 
         
-        // Se for um lead fantasma (ainda não sincronizou), não busca histórico na nuvem
         if (navigator.onLine && lead.id < 1000000) {
             const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false });
             setHistorico(data || []);
@@ -670,7 +662,6 @@ export default function DealsPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Pipeline</h1>
           
-          {/* 👇 OS NOVOS INDICADORES DE REDE OFFLINE E SYNC 👇 */}
           <div className="flex items-center gap-2 mt-1">
              <span className="text-blue-400 flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase"><User size={10}/> {perfil?.nome}</span>
              
@@ -759,7 +750,7 @@ export default function DealsPage() {
                             if (!lead || !lead.id) return null;
 
                             const daysLeft = getDaysLeft(lead.contrato_fim);
-                            const isPhantom = lead.id > 1000000; // Identifica se é um lead que ainda não subiu
+                            const isPhantom = lead.id > 1000000;
 
                             return (
                                 <Draggable key={lead.id} draggableId={lead.id.toString()} index={index}>
@@ -813,7 +804,8 @@ export default function DealsPage() {
                                             </div>
 
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
-                                                <h4 className={`font-black text-sm uppercase leading-tight transition-colors truncate max-w-full ${lead.client_id ? 'text-[#22C55E]' : 'text-white group-hover:text-[#22C55E]'}`}>
+                                                {/* 👇 AQUI ESTÁ A FONTE 100% BRANCA AGORA 👇 */}
+                                                <h4 className="font-black text-sm uppercase leading-tight transition-colors truncate max-w-full text-white group-hover:text-slate-200">
                                                     {lead.empresa}
                                                 </h4>
                                                 {lead.unidade && (
@@ -964,6 +956,13 @@ export default function DealsPage() {
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
                                     ))}
+                                {clientesOpcoes.filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase())).length === 0 && (
+                                    <div className="px-4 py-4 text-center text-slate-500 text-xs font-bold uppercase">
+                                        Nenhum cliente encontrado.
+                                        <br/>
+                                        <span className="text-[9px] font-normal normal-case mt-1 block">Cadastre o cliente na aba de Clientes primeiro.</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

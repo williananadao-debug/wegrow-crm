@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import Image from 'next/image'; // 👈 Importação do motor de imagem do Next.js
 import { supabase } from '@/lib/supabase';
 import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2 } from 'lucide-react';
 
@@ -21,15 +22,14 @@ export default function PortalCliente() {
     try {
       const descricaoFormatada = `📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
 
-      // Inserindo na tabela 'leads' EXATAMENTE com os nomes do seu banco!
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
-        telefone: contato, // 👈 Usando a coluna 'telefone' que vi no seu print
-        titulo: titulo, // 👈 Coluna que você acabou de criar
-        descricao: descricaoFormatada, // 👈 Coluna que você acabou de criar
+        telefone: contato, 
+        titulo: titulo, 
+        descricao: descricaoFormatada, 
         status: 'novo', 
-        origem: 'Portal Web', // 👈 Coluna que você acabou de criar
-        valor_total: 0 // 👈 Usando a coluna 'valor_total' que vi no seu print
+        origem: 'Portal Web', 
+        valor_total: 0 
       }]);
 
       if (error) throw error;
@@ -71,11 +71,18 @@ export default function PortalCliente() {
       <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-red-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
       <div className="w-full max-w-3xl mx-auto pt-16 px-6 relative z-10 flex flex-col items-center justify-center gap-4 mb-8">
-        <img 
-          src="/logo-demais.png" 
-          alt="Demais FM" 
-          className="h-20 md:h-24 object-contain drop-shadow-[0_0_15px_rgba(249,115,22,0.3)]"
-        />
+        
+        {/* 👇 O LOGO IMPECÁVEL AQUI 👇 */}
+        <div className="relative h-24 md:h-28 w-64 md:w-80 flex items-center justify-center drop-shadow-[0_0_20px_rgba(249,115,22,0.4)]">
+            <Image 
+              src="/logo-demais.png" 
+              alt="Demais FM" 
+              fill
+              className="object-contain"
+              priority
+            />
+        </div>
+
         <div className="text-center mt-2">
             <span className="text-xs font-black text-orange-500 uppercase tracking-[0.3em]">Portal do Anunciante</span>
         </div>

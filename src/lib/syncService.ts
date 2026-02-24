@@ -1,32 +1,50 @@
 import { supabase } from './supabase';
 import { localDb } from './localDb';
 
-// Função que "Enche o Cofre" do celular
+// 1. DESCE DADOS (Nuvem -> Celular) - O backup de segurança
 export const syncDataToLocal = async () => {
-  // Se estiver sem internet, nem tenta buscar na nuvem
-  if (typeof window !== 'undefined' && !navigator.onLine) {
-    console.log('📱 Modo Offline: Usando dados do cofre local.');
-    return;
+  if (typeof window !== 'undefined' && !navigator.onLine) return;
+  try {
+    const { data: clientes } = await supabase.from('clientes').select('*');
+    if (clientes && clientes.length > 0) await localDb.clientes.bulkPut(clientes); 
+
+    const { data: leads } = await supabase.from('leads').select('*');
+    if (leads && leads.length > 0) await localDb.leads.bulkPut(leads);
+  } catch (error) {
+    console.error('Erro no sync local:', error);
   }
+};
+
+// 2. SOBE DADOS (Celular -> Nuvem) - O Caminhão Forte
+export const syncOfflineDataToCloud = async () => {
+  if (typeof window !== 'undefined' && !navigator.onLine) return;
 
   try {
-    console.log('🔄 Sincronizando dados com a nuvem...');
+    const fila = await localDb.syncQueue.toArray();
+    if (fila.length === 0) return;
 
-    // 1. Puxa TODOS os clientes do Supabase
-    const { data: clientes } = await supabase.from('clientes').select('*');
-    if (clientes && clientes.length > 0) {
-      // Guarda/Atualiza tudo no Dexie (Celular)
-      await localDb.clientes.bulkPut(clientes); 
+    console.log(`🚀 Identificado ${fila.length} registros offline. Subindo para a nuvem...`);
+
+    for (const item of fila) {
+        const { id, operacao, tabela, dados } = item;
+
+        if (operacao === 'INSERT') {
+            // Tira o ID provisório (que usamos no offline) pro Supabase gerar um real
+            const { id: _, ...dadosLimpos } = dados; 
+            const { error } = await supabase.from(tabela).insert([dadosLimpos]);
+            if (!error) await localDb.syncQueue.delete(id); // Limpa da fila se deu certo
+        } 
+        else if (operacao === 'UPDATE') {
+            const { error } = await supabase.from(tabela).update(dados).eq('id', dados.id);
+            if (!error) await localDb.syncQueue.delete(id);
+        }
     }
+    
+    console.log('✅ Dados offline salvos na nuvem com sucesso!');
+    // Avisa a tela do Kanban que os dados subiram para ela se atualizar sozinha
+    window.dispatchEvent(new Event('sync-completed'));
 
-    // 2. Puxa TODOS os Leads
-    const { data: leads } = await supabase.from('leads').select('*');
-    if (leads && leads.length > 0) {
-      await localDb.leads.bulkPut(leads);
-    }
-
-    console.log('✅ Cofre Offline abastecido com sucesso!');
   } catch (error) {
-    console.error('❌ Erro ao encher o cofre:', error);
+    console.error('❌ Erro ao subir dados:', error);
   }
 };

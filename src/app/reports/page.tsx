@@ -6,7 +6,7 @@ import {
   ArrowUpRight, ArrowDownRight, Target, Calendar,
   Download, Zap, Clock, ChevronRight, Filter, 
   ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin,
-  FileSpreadsheet, Database, X, Briefcase
+  FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -91,6 +91,8 @@ export default function ReportsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState('leads');
   const [isExporting, setIsExporting] = useState(false);
+  const [previewData, setPreviewData] = useState<any[] | null>(null);
+  const [previewColumns, setPreviewColumns] = useState<string[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -144,14 +146,11 @@ export default function ReportsPage() {
     }
   }
 
-  // --- FUNÇÃO CENTRAL DE EXPORTAÇÃO ---
-  const handleExport = async () => {
+  // --- FUNÇÃO PARA GERAR A VISUALIZAÇÃO NA TELA ---
+  const handleGeneratePreview = async () => {
       setIsExporting(true);
       try {
-          // 👇 O Ajuste do TypeScript está aqui:
           let dataToExport: any[] = []; 
-          const timestamp = new Date().toISOString().split('T')[0];
-          let filename = `extracao_${exportType}_${timestamp}.csv`;
 
           if (exportType === 'leads') {
               // Prepara dados de VENDAS
@@ -203,21 +202,37 @@ export default function ReportsPage() {
           }
 
           if (dataToExport.length === 0) {
-              alert("Não há dados para exportar neste módulo.");
+              alert("Não há dados para exibir neste módulo.");
               setIsExporting(false);
               return;
           }
 
-          const csvContent = convertToCSV(dataToExport);
-          downloadFile(csvContent, filename);
-          setShowExportModal(false);
+          setPreviewColumns(Object.keys(dataToExport[0]));
+          setPreviewData(dataToExport);
 
       } catch (error) {
-          console.error("Erro na exportação:", error);
-          alert("Ocorreu um erro ao gerar o arquivo.");
+          console.error("Erro ao gerar visualização:", error);
+          alert("Ocorreu um erro ao processar os dados.");
       } finally {
           setIsExporting(false);
       }
+  };
+
+  // --- FUNÇÃO PARA BAIXAR O CSV (Lê direto do Preview) ---
+  const handleDownloadCSV = () => {
+      if (!previewData) return;
+      
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `extracao_${exportType}_${timestamp}.csv`;
+      
+      const csvContent = convertToCSV(previewData);
+      downloadFile(csvContent, filename);
+  };
+
+  // Função para fechar o modal e limpar o preview
+  const closeModal = () => {
+      setShowExportModal(false);
+      setPreviewData(null);
   };
 
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
@@ -698,68 +713,121 @@ export default function ReportsPage() {
          </div>
       </div>
 
-      {/* 👇 MODAL DE EXPORTAÇÃO DE DADOS (NOVO) 👇 */}
+      {/* 👇 MODAL DE EXPORTAÇÃO DE DADOS & PREVIEW DA TABELA 👇 */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className={`bg-[#0B1120] border border-white/10 w-full transition-all duration-300 rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 ${previewData ? 'max-w-7xl h-[85vh]' : 'max-w-lg'}`}>
                 
-                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                {/* Header do Modal */}
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02] flex-shrink-0">
                     <div>
                         <h3 className="text-xl font-black text-white uppercase italic tracking-tighter flex items-center gap-2">
-                            <Database size={20} className="text-purple-500"/> Exportar Dados
+                            <Database size={20} className="text-purple-500"/> {previewData ? 'Visualização da Tabela' : 'Central de Extração'}
                         </h3>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Extração para Excel (.CSV)</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                            {previewData ? `${previewData.length} registros encontrados` : 'Extração bruta para relatórios dinâmicos'}
+                        </p>
                     </div>
-                    <button onClick={() => setShowExportModal(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
+                    <button onClick={closeModal} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
                         <X size={20}/>
                     </button>
                 </div>
 
-                <div className="p-8 space-y-6">
-                    <p className="text-xs text-slate-400 font-medium">Selecione o módulo que deseja extrair. O sistema compilará toda a base de dados em uma tabela bruta para você fazer análises dinâmicas em planilhas.</p>
+                {/* Corpo do Modal (Alterna entre Seleção e a Tabela de Preview) */}
+                <div className="flex-1 overflow-hidden flex flex-col">
+                    {!previewData ? (
+                        <div className="p-8 space-y-6 overflow-y-auto">
+                            <p className="text-xs text-slate-400 font-medium">Selecione o módulo que deseja visualizar. O sistema compilará toda a base de dados para você conferir os números antes de baixar o CSV.</p>
 
-                    <div className="grid grid-cols-1 gap-3">
-                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'leads' ? 'bg-blue-600/10 border-blue-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
-                            <input type="radio" name="exportModule" value="leads" checked={exportType === 'leads'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
-                            <Target size={24} className={exportType === 'leads' ? 'text-blue-500' : 'text-slate-500'} />
-                            <div className="ml-4">
-                                <h4 className={`font-black uppercase text-sm ${exportType === 'leads' ? 'text-white' : 'text-slate-300'}`}>1. Vendas (Oportunidades)</h4>
-                                <p className="text-[10px] text-slate-500 mt-0.5">Tabela com todos os funis, valores, vendedores e contratos.</p>
-                            </div>
-                        </label>
+                            <div className="grid grid-cols-1 gap-3">
+                                <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'leads' ? 'bg-blue-600/10 border-blue-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                                    <input type="radio" name="exportModule" value="leads" checked={exportType === 'leads'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                                    <Target size={24} className={exportType === 'leads' ? 'text-blue-500' : 'text-slate-500'} />
+                                    <div className="ml-4">
+                                        <h4 className={`font-black uppercase text-sm ${exportType === 'leads' ? 'text-white' : 'text-slate-300'}`}>1. Vendas (Oportunidades)</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Tabela com funil de vendas, valores e responsáveis.</p>
+                                    </div>
+                                </label>
 
-                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'clientes' ? 'bg-emerald-500/10 border-emerald-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
-                            <input type="radio" name="exportModule" value="clientes" checked={exportType === 'clientes'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
-                            <Users size={24} className={exportType === 'clientes' ? 'text-emerald-500' : 'text-slate-500'} />
-                            <div className="ml-4">
-                                <h4 className={`font-black uppercase text-sm ${exportType === 'clientes' ? 'text-white' : 'text-slate-300'}`}>2. Base de Clientes</h4>
-                                <p className="text-[10px] text-slate-500 mt-0.5">Cadastro completo com CNPJ, cidades, emails e telefones.</p>
-                            </div>
-                        </label>
+                                <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'clientes' ? 'bg-emerald-500/10 border-emerald-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                                    <input type="radio" name="exportModule" value="clientes" checked={exportType === 'clientes'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                                    <Users size={24} className={exportType === 'clientes' ? 'text-emerald-500' : 'text-slate-500'} />
+                                    <div className="ml-4">
+                                        <h4 className={`font-black uppercase text-sm ${exportType === 'clientes' ? 'text-white' : 'text-slate-300'}`}>2. Base de Clientes</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Cadastro de clientes com CNPJ, contatos e cidades.</p>
+                                    </div>
+                                </label>
 
-                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'jobs' ? 'bg-orange-500/10 border-orange-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
-                            <input type="radio" name="exportModule" value="jobs" checked={exportType === 'jobs'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
-                            <Briefcase size={24} className={exportType === 'jobs' ? 'text-orange-500' : 'text-slate-500'} />
-                            <div className="ml-4">
-                                <h4 className={`font-black uppercase text-sm ${exportType === 'jobs' ? 'text-white' : 'text-slate-300'}`}>3. Produção (Jobs)</h4>
-                                <p className="text-[10px] text-slate-500 mt-0.5">Tabela com roteiros, gravações e prazos de entrega.</p>
+                                <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'jobs' ? 'bg-orange-500/10 border-orange-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                                    <input type="radio" name="exportModule" value="jobs" checked={exportType === 'jobs'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                                    <Briefcase size={24} className={exportType === 'jobs' ? 'text-orange-500' : 'text-slate-500'} />
+                                    <div className="ml-4">
+                                        <h4 className={`font-black uppercase text-sm ${exportType === 'jobs' ? 'text-white' : 'text-slate-300'}`}>3. Produção (Jobs)</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Andamento dos projetos, prazos e prioridades.</p>
+                                    </div>
+                                </label>
                             </div>
-                        </label>
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-auto custom-scrollbar p-6 bg-[#0B1120]">
+                            <div className="border border-white/10 rounded-2xl overflow-hidden shadow-inner">
+                                <table className="w-full text-left">
+                                    <thead className="sticky top-0 bg-[#0F172A] z-10 shadow-md">
+                                        <tr>
+                                            {previewColumns.map((col, idx) => (
+                                                <th key={idx} className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-white/5 whitespace-nowrap">
+                                                    {col.replace(/_/g, ' ')}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {previewData.map((row, rIdx) => (
+                                            <tr key={rIdx} className="hover:bg-white/[0.02] transition-colors">
+                                                {previewColumns.map((col, cIdx) => (
+                                                    <td key={cIdx} className="px-6 py-4 text-xs text-slate-300 whitespace-nowrap">
+                                                        {row[col] || '-'}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                <div className="p-6 border-t border-white/10 bg-white/[0.01]">
-                    <button 
-                        onClick={handleExport} 
-                        disabled={isExporting}
-                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all ${isExporting ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'}`}
-                    >
-                        {isExporting ? (
-                            <><Zap size={16} className="animate-spin"/> COMPILANDO BASE...</>
-                        ) : (
-                            <><FileSpreadsheet size={16}/> BAIXAR ARQUIVO .CSV</>
-                        )}
-                    </button>
+                {/* Footer do Modal (Botões de Ação) */}
+                <div className="p-6 border-t border-white/10 bg-[#0F172A] flex-shrink-0">
+                    {!previewData ? (
+                        <button 
+                            onClick={handleGeneratePreview} 
+                            disabled={isExporting}
+                            className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all ${isExporting ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'}`}
+                        >
+                            {isExporting ? (
+                                <><Zap size={16} className="animate-spin"/> COMPILANDO BASE...</>
+                            ) : (
+                                <><Eye size={16}/> GERAR VISUALIZAÇÃO</>
+                            )}
+                        </button>
+                    ) : (
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setPreviewData(null)} 
+                                className="px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-2 transition-all bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                            >
+                                <ArrowLeft size={16}/> VOLTAR
+                            </button>
+                            <button 
+                                onClick={handleDownloadCSV} 
+                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                            >
+                                <FileSpreadsheet size={16}/> CONFIRMAR E BAIXAR .CSV
+                            </button>
+                        </div>
+                    )}
                 </div>
 
             </div>

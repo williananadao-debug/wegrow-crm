@@ -1,7 +1,19 @@
-import type { NextConfig } from "next";
+import withPWAInit from "@ducanh2912/next-pwa";
 
-const nextConfig: any = {
-  /* Ignorar verificações para o deploy passar */
+const withPWA = withPWAInit({
+  dest: "public",
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  reloadOnOnline: true,
+  disable: process.env.NODE_ENV === "development", // Fica invisível enquanto você programa
+  workboxOptions: {
+    disableDevLogs: true,
+  },
+});
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  /* Blindagem para a Vercel não travar o deploy */
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -10,4 +22,4 @@ const nextConfig: any = {
   },
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);

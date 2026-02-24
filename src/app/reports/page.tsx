@@ -103,7 +103,7 @@ export default function ReportsPage() {
         supabase.from('profiles').select('id, nome'),
       ]);
 
-      // 👇 O TRATOR: BUSCANDO TODOS OS CLIENTES SEM RISCO DE QUEBRAR 👇
+      // TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES
       let allClientes: any[] = [];
       let page = 0;
       let fetchMore = true;
@@ -111,7 +111,7 @@ export default function ReportsPage() {
       while(fetchMore) {
           const { data, error } = await supabase
               .from('clientes')
-              .select('*') // <--- SEGREDO ESTÁ AQUI: Puxa todas as colunas existentes!
+              .select('*')
               .range(page * 1000, (page + 1) * 1000 - 1);
               
           if (data && data.length > 0) {
@@ -212,12 +212,10 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR DE VÍNCULO (Lê IDs novos + IA para leads velhos) ---
+      // --- MOTOR DE VÍNCULO GEOGRÁFICO ---
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          
           let rawCity = cidadesById[lead.client_id];
           
-          // Se for um lead antigo sem ID, tenta pescar pelo nome
           if (!rawCity) {
               const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.empresa || lead.cliente || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
@@ -238,7 +236,6 @@ export default function ReportsPage() {
               }
           }
           
-          // Fallback se a cidade foi digitada no próprio Lead antigamente
           if (!rawCity) rawCity = lead.cidade || lead.cidade_uf;
 
           rawCity = rawCity || 'NÃO INFORMADA';
@@ -449,21 +446,20 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {/* Visual Static Map Area (High Performance) */}
+            {/* 👇 Visual Static Grid Area (High Performance & Zero Images) 👇 */}
             <div className="lg:col-span-2 relative h-[400px] bg-[#0B1120] flex items-center justify-center overflow-hidden border-l border-white/5">
-                {/* Fundo Grid Estático */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
 
-                {/* 👇 O MAPA REAL DE SC (Bypass de Bloqueio + Estático) 👇 */}
-                <div className="absolute inset-0 flex items-center justify-center p-8 md:p-12 pointer-events-none">
-                    <img 
-                        src="https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Santa_Catarina_blank_map.svg/800px-Santa_Catarina_blank_map.svg.png" 
-                        alt="Mapa Santa Catarina" 
-                        className="w-full h-full object-contain filter invert opacity-[0.15] drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]"
-                    />
-                </div>
+                {/* Fundo de Malha Cartesiana (Grid) - 100% Código, Zero Imagens */}
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f1a_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f1a_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+                
+                {/* Eixo Central Escurecido */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_0%,_#0B1120_100%)]"></div>
 
-                {/* CONTAINER DE PINOS (Sem animações pesadas) */}
+                {/* Eixos X e Y Sutis */}
+                <div className="absolute w-full h-[1px] bg-blue-500/10"></div>
+                <div className="absolute h-full w-[1px] bg-blue-500/10"></div>
+
+                {/* CONTAINER DE PINOS */}
                 <div className="relative w-full h-full max-w-[600px] max-h-[400px] pointer-events-none">
                     {mapaCidades.map((cid: any, idx: number) => {
                         if (cid.nome === 'NÃO INFORMADA') return null;
@@ -480,11 +476,11 @@ export default function ReportsPage() {
                                 className="absolute flex flex-col items-center justify-center group pointer-events-auto"
                                 style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
                             >
-                                {/* Pino Fixo e Limpo */}
-                                <div className={`relative z-10 rounded-full border border-[#0B1120] shadow-md transition-transform group-hover:scale-125 ${isTop1 ? 'w-4 h-4 bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTop3 ? 'w-3 h-3 bg-orange-400' : 'w-2.5 h-2.5 bg-blue-500'}`}></div>
+                                {/* Pino Fixo, Limpo e Sem Animação */}
+                                <div className={`relative z-10 rounded-full border border-[#0B1120] transition-transform group-hover:scale-125 ${isTop1 ? 'w-4 h-4 bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTop3 ? 'w-3 h-3 bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.6)]' : 'w-2.5 h-2.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'}`}></div>
                                 
                                 {/* Etiqueta (Aparece no Hover) */}
-                                <div className="absolute top-5 bg-[#0F172A]/95 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
+                                <div className="absolute top-5 bg-[#0F172A] border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-2xl">
                                     <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>
                                     <p className="text-[9px] font-bold text-[#22C55E]">R$ {Number(cid.total).toLocaleString('pt-BR', { notation: 'compact' })}</p>
                                 </div>
@@ -494,9 +490,9 @@ export default function ReportsPage() {
                 </div>
                 
                 {/* Selo Inferior Estático */}
-                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded border border-white/5 flex items-center gap-1 z-30">
-                    <MapPin size={10} className="text-blue-500" />
-                    MAPA DE DISTRIBUIÇÃO (SC)
+                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-lg border border-white/5 flex items-center gap-2 z-30">
+                    <MapPin size={12} className="text-blue-500" />
+                    MALHA GEOGRÁFICA DE RECEITA (SC)
                 </div>
             </div>
 

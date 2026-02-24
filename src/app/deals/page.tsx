@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
 import { localDb } from '@/lib/localDb'; 
-import { syncOfflineDataToCloud } from '@/lib/syncService'; // 👈 IMPORTAÇÃO DO CAMINHÃO FORTE
+import { syncOfflineDataToCloud } from '@/lib/syncService'; 
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
@@ -104,41 +104,42 @@ export default function DealsPage() {
   
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
-  // 👇 NOVA LÓGICA DE CARREGAMENTO (NUVEM + OFFLINE) 👇
   const fetchData = async () => {
     setLoading(true);
     
     let query = supabase.from('leads').select('*');
-    if (!isDirector) {
-      query = query.eq('user_id', user?.id);
-    }
+    if (!isDirector) query = query.eq('user_id', user?.id);
 
-    // 1. Busca da Nuvem
+    // 1. Busca Nuvem
     let { data: leadsData } = await query.order('created_at', { ascending: false });
-    let leadsBase = leadsData || [];
+    let leadsBase: any[] = leadsData || [];
 
-    // 2. Se falhou (sem internet), busca do backup do celular
+    // 2. Busca Celular se Nuvem Falhar
     if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
         leadsBase = await localDb.leads.toArray();
     }
 
-    // 3. A MÁGICA: Mistura com o que está preso na Fila de Espera!
-    const filaPendente = await localDb.syncQueue.where('tabela').equals('leads').toArray();
-    filaPendente.forEach(item => {
-        if (item.operacao === 'INSERT') {
-            // Se for novo, bota no topo da tela
-            leadsBase.unshift(item.dados);
-        } else if (item.operacao === 'UPDATE') {
-            // Se for editado, atualiza o item que já estava na tela
-            leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
-        }
-    });
+    // 3. Mistura com a Fila (Com Proteção)
+    try {
+        const filaPendente = await localDb.syncQueue.where('tabela').equals('leads').toArray();
+        filaPendente.forEach(item => {
+            if (item.operacao === 'INSERT') {
+                if (!leadsBase.find(l => l.id === item.dados.id)) {
+                    leadsBase.unshift(item.dados);
+                }
+            } else if (item.operacao === 'UPDATE') {
+                leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
+            }
+        });
+    } catch (e) {
+        console.warn("Fila offline vazia ou não iniciada.");
+    }
 
     setLeads(leadsBase as Lead[]);
 
-    const userIds = Array.from(new Set(leadsBase.map(l => l.user_id).filter(Boolean)));
+    const userIds = Array.from(new Set(leadsBase.map(l => l?.user_id).filter(Boolean)));
     if (userIds.length > 0) {
-        const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds);
+        const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds as string[]);
         if (perfisData) {
             const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
             setUsersMap(mapa);
@@ -150,13 +151,12 @@ export default function DealsPage() {
         const mesAtual = dataAtual.getMonth() + 1; 
         const anoAtual = dataAtual.getFullYear();
 
-        if (isDirector) {
-            const { data: metaData } = await supabase.from('metas').select('valor_objetivo').is('user_id', null).eq('mes', mesAtual).eq('ano', anoAtual).single();
-            if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
-        } else {
-            const { data: metaData } = await supabase.from('metas').select('valor_objetivo').eq('user_id', user?.id).eq('mes', mesAtual).eq('ano', anoAtual).single();
-            if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
-        }
+        let metaQuery = supabase.from('metas').select('valor_objetivo').eq('mes', mesAtual).eq('ano', anoAtual);
+        if (isDirector) metaQuery = metaQuery.is('user_id', null);
+        else metaQuery = metaQuery.eq('user_id', user?.id);
+
+        const { data: metaData } = await metaQuery.single();
+        if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
     } catch (err) {}
 
     // TRATOR DE CLIENTES
@@ -174,11 +174,7 @@ export default function DealsPage() {
     if (servicosData && servicosData.length > 0) {
         setListaServicos(servicosData);
     } else {
-        setListaServicos([
-            { id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap' },
-            { id: 2, nome: 'Spot', preco: 800, tipo: 'Radio' },
-            { id: 3, nome: 'Chamada', preco: 450, tipo: 'Mic2' }
-        ]);
+        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap' }]);
     }
     setLoading(false);
   };
@@ -187,12 +183,11 @@ export default function DealsPage() {
     if (!user) return;
     fetchData();
 
-    // 👇 O GATILHO QUE DISPARA QUANDO A INTERNET VOLTA 👇
     const handleOnline = async () => {
         setToastMessage("📶 Internet conectada! Subindo dados...");
         setShowToast(true);
         await syncOfflineDataToCloud(); 
-        fetchData(); // Recarrega a tela depois que tudo subiu
+        fetchData(); 
     };
 
     window.addEventListener('online', handleOnline);
@@ -308,49 +303,21 @@ export default function DealsPage() {
 
     let listaItens: ItemVenda[] = [];
     try {
-        if (Array.isArray(lead.itens)) {
-            listaItens = lead.itens;
-        } else if (typeof lead.itens === 'string') {
-            listaItens = JSON.parse(lead.itens);
-        }
-    } catch (err) {
-        listaItens = [];
-    }
+        listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any);
+    } catch { listaItens = []; }
 
-    let itensTexto = "";
-    if (listaItens.length > 0) {
-        itensTexto = listaItens.map(i => {
-             const totalItem = (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-             return `▪️ ${i.quantidade}x *${i.servico}* (R$ ${totalItem})`;
-        }).join('%0A');
-    } else {
-        itensTexto = "▪️ Detalhes a combinar";
-    }
+    let itensTexto = listaItens.length > 0 ? listaItens.map(i => `▪️ ${i.quantidade}x *${i.servico}* (R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join('%0A') : "▪️ Detalhes a combinar";
 
     const totalFormatado = lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const descontoFormatado = (lead.desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-    const nomeConsultor = perfil?.nome || 'Consultor';
+    const msgDesconto = lead.desconto && lead.desconto > 0 ? `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A` : "";
 
-    let msgDesconto = "";
-    if (lead.desconto && lead.desconto > 0) {
-        msgDesconto = `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A`;
-    }
+    const msg = `Olá *${lead.empresa}*! 🚀%0A%0AAqui é o ${perfil?.nome || 'Consultor'} da Demais FM.%0ASegue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A--------------------------------%0A${itensTexto}%0A--------------------------------%0A${msgDesconto}%0A💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0APodemos avançar com a aprovação?`;
 
-    const msg = 
-        `Olá *${lead.empresa}*! 🚀%0A%0A` +
-        `Aqui é o ${nomeConsultor} da Demais FM.%0A` +
-        `Segue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A` +
-        `--------------------------------%0A` +
-        `${itensTexto}%0A` +
-        `--------------------------------%0A` +
-        `${msgDesconto}%0A` +
-        `💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0A` +
-        `Podemos avançar com a aprovação?`;
-
-    const telefoneLimpo = lead.telefone.replace(/\D/g, '');
-    window.open(`https://wa.me/55${telefoneLimpo}?text=${msg}`, '_blank');
+    window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
   };
 
+  // 👇 FUNÇÃO RESTAURADA 👇
   const imprimirProposta = () => {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const total = Math.max(0, subtotal - desconto);
@@ -378,6 +345,7 @@ export default function DealsPage() {
     janela.document.close();
   };
 
+  // 👇 FUNÇÃO RESTAURADA 👇
   const gerarContrato = (lead: Lead) => {
     let listaItens: ItemVenda[] = [];
     try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
@@ -462,8 +430,7 @@ export default function DealsPage() {
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+        const mapsUrl = `https://maps.google.com/?q=$${pos.coords.latitude},${pos.coords.longitude}`;
         const now = new Date();
         const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
         
@@ -476,19 +443,14 @@ export default function DealsPage() {
             setShowToast(true);
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                await localDb.syncQueue.add({
-                    operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString()
-                });
+                await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString() });
                 setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
                 setToastMessage("📍 Salvo no Celular! Sincroniza em breve.");
                 setShowToast(true);
             }
         }
       },
-      (err) => {
-        console.error(err);
-        setToastMessage("Falha no GPS ❌");
-      },
+      (err) => { setToastMessage("Falha no GPS ❌"); },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
@@ -526,32 +488,22 @@ export default function DealsPage() {
       setUploading(false);
   };
 
-  const carregarHistorico = async (id: number) => {
-      if (!navigator.onLine) return; // Histórico muito pesado para offline
-      const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', id).order('created_at', { ascending: false });
-      if(data) setHistorico(data);
-  };
-
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
-      if (!navigator.onLine) { alert("⚠️ Notas só podem ser adicionadas online."); return; }
+      if (!navigator.onLine) return alert("⚠️ Notas só podem ser adicionadas online."); 
       
       const { data } = await supabase.from('historico_leads').insert([{ lead_id: editingLeadId, texto: novaNota }]).select();
       if(data) { 
-          const novaNotaComData = { ...data[0], created_at: data[0].created_at || new Date().toISOString() };
-          setHistorico(prev => [novaNotaComData, ...prev]); 
+          setHistorico(prev => [{ ...data[0], created_at: data[0].created_at || new Date().toISOString() }, ...prev]); 
           setNovaNota(''); 
       }
   };
 
-  // 👇 FUNÇÃO DE SALVAR LEAD BLINDADA 👇
+  // 👇 SALVAMENTO BLINDADO COM ID FANTASMA PARA EVITAR CRASH 👇
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
-    
-    if (!selectedClientId) {
-        return alert("⚠️ ALERTA: Você precisa selecionar um cliente válido na lista suspensa! Digite o nome e clique em uma das opções.");
-    }
+    if (!selectedClientId) return alert("⚠️ ALERTA: Você precisa selecionar um cliente válido na lista suspensa!");
 
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
@@ -581,14 +533,10 @@ export default function DealsPage() {
             setIsModalOpen(false);
             setToastMessage("Lead atualizado!");
             setShowToast(true);
-
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
                 await localDb.syncQueue.add({
-                    operacao: 'UPDATE',
-                    tabela: 'leads',
-                    dados: { id: editingLeadId, ...payload },
-                    data_criacao: new Date().toISOString()
+                    operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, ...payload }, data_criacao: new Date().toISOString()
                 });
                 setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
                 setIsModalOpen(false);
@@ -609,16 +557,14 @@ export default function DealsPage() {
             }
         } catch (error: any) {
              if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                const tempId = Date.now(); // ID Fantasma temporário
+                const tempId = Date.now(); // 👻 GERA UM ID FANTASMA AQUI!
+                const leadOffline = { ...payload, id: tempId, created_at: new Date().toISOString() };
+
                 await localDb.syncQueue.add({
-                    operacao: 'INSERT',
-                    tabela: 'leads',
-                    dados: payload,
-                    data_criacao: new Date().toISOString()
+                    operacao: 'INSERT', tabela: 'leads', dados: leadOffline, data_criacao: new Date().toISOString()
                 });
                 
-                const leadOffline: Lead = { id: tempId, ...payload, created_at: new Date().toISOString() } as Lead;
-                setLeads(prev => [leadOffline, ...prev]);
+                setLeads(prev => [leadOffline as Lead, ...prev]);
                 setIsModalOpen(false);
                 setToastMessage("📶 Sem rede. Lead guardado no cofre!");
                 setShowToast(true);
@@ -627,7 +573,7 @@ export default function DealsPage() {
     }
   };
 
-  const abrirModal = (lead?: Lead) => {
+  const abrirModal = async (lead?: Lead) => {
     setShowClientDropdown(false);
     if (lead) {
         setEditingLeadId(lead.id);
@@ -640,7 +586,10 @@ export default function DealsPage() {
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
         setDesconto(lead.desconto || 0); 
-        carregarHistorico(lead.id);
+        if (navigator.onLine) {
+            const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false });
+            setHistorico(data || []);
+        }
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
@@ -657,24 +606,25 @@ export default function DealsPage() {
     setIsModalOpen(true);
   };
 
-  const totalGanhos = leads.filter(l => l.status === 'ganho').reduce((acc, curr) => acc + curr.valor_total, 0);
-  const totalAberto = leads.filter(l => l.status === 'aberto').reduce((acc, curr) => acc + curr.valor_total, 0);
-  
+  const totalGanhos = leads.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
+  const totalAberto = leads.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const percentMeta = metaMensal > 0 ? Math.min((totalGanhos / metaMensal) * 100, 100) : 0;
   
-  const rankingServicos = leads.filter(l => l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
+  const rankingServicos = leads.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
   const getLeadsByStage = (stageIdx: number) => {
       return leads
-        .filter(l => l.etapa === stageIdx)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        .filter(l => l && l.etapa === stageIdx)
+        .sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        });
   };
 
   const getStageTotal = (stageIdx: number) => {
       return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
   };
-
-  const isMission = (text: string) => text && (text.includes('Meta') || text.includes('Resgate'));
 
   const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
@@ -682,7 +632,6 @@ export default function DealsPage() {
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
       
-      {/* HEADER + META */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-2 mb-2 px-2">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Pipeline</h1>
@@ -694,7 +643,7 @@ export default function DealsPage() {
         <div className="hidden md:block flex-1 max-w-sm px-6">
            <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
               <span className="text-slate-400 flex items-center gap-1">
-                  <Target size={10}/> {isDirector ? 'Meta Global (Mês Atual)' : 'Meta Individual (Mês Atual)'} 
+                  <Target size={10}/> {isDirector ? 'Meta Global' : 'Meta Individual'} 
                   <span className="text-white ml-1 font-mono">R$ {metaMensal.toLocaleString('pt-BR')}</span>
               </span>
               <span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
@@ -709,7 +658,6 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* DASHBOARD CARDS */}
       <div className="flex md:grid md:grid-cols-3 gap-2 overflow-x-auto pb-2 px-1 mb-2 snap-x snap-mandatory">
         <div className="min-w-[160px] md:min-w-0 bg-gradient-to-br from-blue-600/20 to-transparent border border-white/5 p-3 rounded-2xl shadow-xl snap-center">
           <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Pipeline</p>
@@ -731,7 +679,6 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* KANBAN */}
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-3 pb-2 h-[calc(100vh-220px)] md:h-[calc(100vh-200px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
           {Object.entries(STAGES).map(([key, stage]) => {
@@ -758,6 +705,9 @@ export default function DealsPage() {
 
                     <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
                         {leadsDaColuna.map((lead, index) => {
+                            // 👇 ESCUDO ANTI-CRASH AQUI! Ignora itens quebrados na tela
+                            if (!lead || !lead.id) return null;
+
                             const daysLeft = getDaysLeft(lead.contrato_fim);
 
                             return (
@@ -790,9 +740,9 @@ export default function DealsPage() {
                                             </div>
                                             
                                             <div className="mb-2">
-                                                {lead.checkin && isMission(lead.checkin) ? (
+                                                {lead.checkin && lead.checkin.includes('Meta') ? (
                                                     <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
-                                                        {lead.checkin.includes('Resgate') ? <Sparkles size={12} className="text-purple-400"/> : <Crosshair size={12} className="text-purple-400"/>}
+                                                        <Crosshair size={12} className="text-purple-400"/>
                                                         <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
                                                     </div>
                                                 ) : lead.checkin ? (
@@ -812,11 +762,6 @@ export default function DealsPage() {
                                                 {lead.unidade && (
                                                     <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                                         <Building2 size={8}/> {lead.unidade}
-                                                    </span>
-                                                )}
-                                                {lead.origem === 'Portal Web' && (
-                                                    <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                                        🌐 VIA SITE
                                                     </span>
                                                 )}
                                             </div>

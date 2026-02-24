@@ -9,7 +9,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
-import { localDb } from '@/lib/localDb'; // 👈 IMPORTAÇÃO DO NOSSO COFRE OFFLINE ADICIONADA AQUI
+import { localDb } from '@/lib/localDb'; 
+import { syncOfflineDataToCloud } from '@/lib/syncService'; // 👈 IMPORTAÇÃO DO CAMINHÃO FORTE
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
@@ -103,83 +104,104 @@ export default function DealsPage() {
   
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
+  // 👇 NOVA LÓGICA DE CARREGAMENTO (NUVEM + OFFLINE) 👇
+  const fetchData = async () => {
+    setLoading(true);
+    
+    let query = supabase.from('leads').select('*');
+    if (!isDirector) {
+      query = query.eq('user_id', user?.id);
+    }
+
+    // 1. Busca da Nuvem
+    let { data: leadsData } = await query.order('created_at', { ascending: false });
+    let leadsBase = leadsData || [];
+
+    // 2. Se falhou (sem internet), busca do backup do celular
+    if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
+        leadsBase = await localDb.leads.toArray();
+    }
+
+    // 3. A MÁGICA: Mistura com o que está preso na Fila de Espera!
+    const filaPendente = await localDb.syncQueue.where('tabela').equals('leads').toArray();
+    filaPendente.forEach(item => {
+        if (item.operacao === 'INSERT') {
+            // Se for novo, bota no topo da tela
+            leadsBase.unshift(item.dados);
+        } else if (item.operacao === 'UPDATE') {
+            // Se for editado, atualiza o item que já estava na tela
+            leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
+        }
+    });
+
+    setLeads(leadsBase as Lead[]);
+
+    const userIds = Array.from(new Set(leadsBase.map(l => l.user_id).filter(Boolean)));
+    if (userIds.length > 0) {
+        const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds);
+        if (perfisData) {
+            const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
+            setUsersMap(mapa);
+        }
+    }
+
+    try {
+        const dataAtual = new Date();
+        const mesAtual = dataAtual.getMonth() + 1; 
+        const anoAtual = dataAtual.getFullYear();
+
+        if (isDirector) {
+            const { data: metaData } = await supabase.from('metas').select('valor_objetivo').is('user_id', null).eq('mes', mesAtual).eq('ano', anoAtual).single();
+            if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
+        } else {
+            const { data: metaData } = await supabase.from('metas').select('valor_objetivo').eq('user_id', user?.id).eq('mes', mesAtual).eq('ano', anoAtual).single();
+            if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
+        }
+    } catch (err) {}
+
+    // TRATOR DE CLIENTES
+    let allClientes: ClienteOpcao[] = [];
+    let page = 0;
+    let fetchMore = true;
+    while(fetchMore) {
+        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
+        if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
+        else { fetchMore = false; }
+    }
+    setClientesOpcoes(allClientes);
+
+    const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
+    if (servicosData && servicosData.length > 0) {
+        setListaServicos(servicosData);
+    } else {
+        setListaServicos([
+            { id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap' },
+            { id: 2, nome: 'Spot', preco: 800, tipo: 'Radio' },
+            { id: 3, nome: 'Chamada', preco: 450, tipo: 'Mic2' }
+        ]);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!user) return;
-    const fetchData = async () => {
-      setLoading(true);
-      
-      let query = supabase.from('leads').select('*');
-      if (!isDirector) {
-        query = query.eq('user_id', user.id);
-      }
-
-      const { data: leadsData } = await query.order('created_at', { ascending: false });
-      
-      if (leadsData) {
-          setLeads(leadsData);
-          const userIds = Array.from(new Set(leadsData.map(l => l.user_id).filter(Boolean)));
-          if (userIds.length > 0) {
-              const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds);
-              if (perfisData) {
-                  const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
-                  setUsersMap(mapa);
-              }
-          }
-      }
-
-      try {
-          const dataAtual = new Date();
-          const mesAtual = dataAtual.getMonth() + 1; 
-          const anoAtual = dataAtual.getFullYear();
-
-          if (isDirector) {
-              const { data: metaData } = await supabase.from('metas').select('valor_objetivo').is('user_id', null).eq('mes', mesAtual).eq('ano', anoAtual).single();
-              if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
-          } else {
-              const { data: metaData } = await supabase.from('metas').select('valor_objetivo').eq('user_id', user.id).eq('mes', mesAtual).eq('ano', anoAtual).single();
-              if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
-          }
-      } catch (err) {
-          console.log("Aviso: Meta do mês atual não encontrada.");
-      }
-
-      // TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES
-      let allClientes: ClienteOpcao[] = [];
-      let page = 0;
-      let fetchMore = true;
-      
-      while(fetchMore) {
-          const { data, error } = await supabase
-              .from('clientes')
-              .select('id, nome_empresa, telefone, cnpj, email')
-              .eq('status', 'ativo')
-              .order('nome_empresa', { ascending: true })
-              .range(page * 1000, (page + 1) * 1000 - 1);
-              
-          if (data && data.length > 0) {
-              allClientes = [...allClientes, ...(data as any)];
-              page++;
-          } else {
-              fetchMore = false; 
-          }
-      }
-      setClientesOpcoes(allClientes);
-
-      const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
-      
-      if (servicosData && servicosData.length > 0) {
-          setListaServicos(servicosData);
-      } else {
-          setListaServicos([
-              { id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap' },
-              { id: 2, nome: 'Spot', preco: 800, tipo: 'Radio' },
-              { id: 3, nome: 'Chamada', preco: 450, tipo: 'Mic2' }
-          ]);
-      }
-      
-      setLoading(false);
-    };
     fetchData();
+
+    // 👇 O GATILHO QUE DISPARA QUANDO A INTERNET VOLTA 👇
+    const handleOnline = async () => {
+        setToastMessage("📶 Internet conectada! Subindo dados...");
+        setShowToast(true);
+        await syncOfflineDataToCloud(); 
+        fetchData(); // Recarrega a tela depois que tudo subiu
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('sync-completed', fetchData);
+
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('sync-completed', fetchData);
+    };
   }, [user, isDirector]);
 
   const getIcone = (tipo: string | undefined) => {
@@ -236,23 +258,27 @@ export default function DealsPage() {
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
 
-    setLeads(prev => prev.map(l => 
-        l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l
-    ));
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l));
 
-    const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
-    
-    if (!error) {
+    try {
+        const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
+        if (error) throw error;
+
         if (novoStatus === 'ganho') {
             const lead = leads.find(l => l.id === id);
             if (lead) {
-                await Promise.all([
-                    criarJobDeProducao(lead),
-                    gerarCobrancaFinanceira(lead)
-                ]);
+                await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
                 setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
                 setShowToast(true);
             }
+        }
+    } catch (error: any) {
+        if (error.message === 'Failed to fetch' || !navigator.onLine) {
+            await localDb.syncQueue.add({
+                operacao: 'UPDATE', tabela: 'leads', dados: { id, etapa: etapaFinal, status: novoStatus }, data_criacao: new Date().toISOString()
+            });
+            setToastMessage("📶 Movido offline!");
+            setShowToast(true);
         }
     }
   };
@@ -260,7 +286,6 @@ export default function DealsPage() {
   const onDragEnd = async (result: any) => {
     const { destination, draggableId } = result;
     if (!destination) return;
-    
     if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) return;
 
     const novaEtapa = parseInt(destination.droppableId);
@@ -271,9 +296,7 @@ export default function DealsPage() {
     else if (novaEtapa === 5) novoStatus = 'perdido';
     else {
          const leadAtual = leads.find(l => l.id === leadId);
-         if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) {
-             novoStatus = 'aberto';
-         }
+         if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) novoStatus = 'aberto';
     }
 
     await mudarEtapa(leadId, novaEtapa, novoStatus);
@@ -444,14 +467,22 @@ export default function DealsPage() {
         const now = new Date();
         const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
         
-        const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
-
-        if (!error) {
-          setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-          setToastMessage("📍 Check-in realizado com sucesso!");
-          setShowToast(true);
-        } else {
-          alert("Erro ao salvar no banco. Verifique sua conexão.");
+        try {
+            const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
+            if (error) throw error;
+            
+            setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
+            setToastMessage("📍 Check-in realizado com sucesso!");
+            setShowToast(true);
+        } catch (error: any) {
+            if (error.message === 'Failed to fetch' || !navigator.onLine) {
+                await localDb.syncQueue.add({
+                    operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString()
+                });
+                setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
+                setToastMessage("📍 Salvo no Celular! Sincroniza em breve.");
+                setShowToast(true);
+            }
         }
       },
       (err) => {
@@ -465,15 +496,21 @@ export default function DealsPage() {
   const handleDelete = async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
       if(!confirm("Excluir oportunidade?")) return;
-      const { error } = await supabase.from('leads').delete().eq('id', id);
-      if (!error) {
-        setLeads(prev => prev.filter(l => l.id !== id));
-        if (isModalOpen) setIsModalOpen(false);
+      try {
+          const { error } = await supabase.from('leads').delete().eq('id', id);
+          if (error) throw error;
+          setLeads(prev => prev.filter(l => l.id !== id));
+          if (isModalOpen) setIsModalOpen(false);
+      } catch(error: any) {
+          if (error.message === 'Failed to fetch' || !navigator.onLine) {
+              alert("⚠️ Sem internet: Não é possível deletar leads no modo offline por segurança.");
+          }
       }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files?.[0]) return;
+      if (!navigator.onLine) return alert("⚠️ Conecte à internet para enviar arquivos.");
       setUploading(true);
       const file = e.target.files[0];
       const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
@@ -490,12 +527,15 @@ export default function DealsPage() {
   };
 
   const carregarHistorico = async (id: number) => {
+      if (!navigator.onLine) return; // Histórico muito pesado para offline
       const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', id).order('created_at', { ascending: false });
       if(data) setHistorico(data);
   };
 
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
+      if (!navigator.onLine) { alert("⚠️ Notas só podem ser adicionadas online."); return; }
+      
       const { data } = await supabase.from('historico_leads').insert([{ lead_id: editingLeadId, texto: novaNota }]).select();
       if(data) { 
           const novaNotaComData = { ...data[0], created_at: data[0].created_at || new Date().toISOString() };
@@ -504,12 +544,11 @@ export default function DealsPage() {
       }
   };
 
-  // 👇 FUNÇÃO DE SALVAMENTO BLINDADA (ONLINE/OFFLINE) 👇
+  // 👇 FUNÇÃO DE SALVAR LEAD BLINDADA 👇
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
     
-    // Bloqueia se não selecionou o cliente na lista suspensa
     if (!selectedClientId) {
         return alert("⚠️ ALERTA: Você precisa selecionar um cliente válido na lista suspensa! Digite o nome e clique em uma das opções.");
     }
@@ -534,10 +573,9 @@ export default function DealsPage() {
     };
 
     if (editingLeadId) {
-        // --- LÓGICA DE EDIÇÃO ---
         try {
             const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
-            if (error) throw error; // Se a internet cair, força a ir pro catch
+            if (error) throw error; 
 
             setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
             setIsModalOpen(false);
@@ -545,7 +583,6 @@ export default function DealsPage() {
             setShowToast(true);
 
         } catch (error: any) {
-            // SE CAIR A INTERNET, SALVA NO COFRE
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
                 await localDb.syncQueue.add({
                     operacao: 'UPDATE',
@@ -553,22 +590,16 @@ export default function DealsPage() {
                     dados: { id: editingLeadId, ...payload },
                     data_criacao: new Date().toISOString()
                 });
-                
-                // Atualiza a tela fingindo que deu certo
                 setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
                 setIsModalOpen(false);
                 setToastMessage("📶 Sem rede. Alteração salva no celular!");
                 setShowToast(true);
-            } else {
-                console.error("ERRO AO ATUALIZAR:", error);
-                alert(`Erro ao atualizar: ${error.message}`);
             }
         }
     } else {
-        // --- LÓGICA DE CRIAÇÃO ---
         try {
             const { data, error } = await supabase.from('leads').insert([payload]).select();
-            if (error) throw error; // Se a internet cair, força a ir pro catch
+            if (error) throw error; 
 
             if (data) {
                 setLeads(prev => [data[0] as Lead, ...prev]);
@@ -577,11 +608,8 @@ export default function DealsPage() {
                 setShowToast(true);
             }
         } catch (error: any) {
-             // SE CAIR A INTERNET, SALVA NO COFRE
              if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                // Cria um ID temporário gigantesco para não dar conflito na tela
-                const tempId = Date.now(); 
-                
+                const tempId = Date.now(); // ID Fantasma temporário
                 await localDb.syncQueue.add({
                     operacao: 'INSERT',
                     tabela: 'leads',
@@ -589,15 +617,11 @@ export default function DealsPage() {
                     data_criacao: new Date().toISOString()
                 });
                 
-                // Atualiza a tela fingindo que deu certo (apenas visual)
                 const leadOffline: Lead = { id: tempId, ...payload, created_at: new Date().toISOString() } as Lead;
                 setLeads(prev => [leadOffline, ...prev]);
                 setIsModalOpen(false);
                 setToastMessage("📶 Sem rede. Lead guardado no cofre!");
                 setShowToast(true);
-            } else {
-                console.error("ERRO AO CRIAR LEAD:", error);
-                alert(`ERRO DE BANCO: ${error.message}`);
             }
         }
     }
@@ -895,7 +919,6 @@ export default function DealsPage() {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
                     
-                    {/* 👇 O NOVO BUSCADOR INTELIGENTE BLINDADO 👇 */}
                     <div className="mb-4 relative">
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa *</label>
                         <div className="relative">
@@ -905,14 +928,13 @@ export default function DealsPage() {
                                 value={novaEmpresa}
                                 onChange={(e) => {
                                     setNovaEmpresa(e.target.value);
-                                    setSelectedClientId(null); // Se apagar ou mudar o texto, quebra o vínculo!
+                                    setSelectedClientId(null); 
                                     setShowClientDropdown(true);
                                 }}
                                 onFocus={() => setShowClientDropdown(true)}
                                 onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
                                 required
                             />
-                            {/* O Selo de Garantia Verde */}
                             {selectedClientId && (
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
                                     <CheckCircle2 size={12}/> Vinculado
@@ -920,12 +942,11 @@ export default function DealsPage() {
                             )}
                         </div>
                         
-                        {/* A Lista Suspensa do Trator */}
                         {showClientDropdown && !selectedClientId && (
                             <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
                                 {clientesOpcoes
                                     .filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase()))
-                                    .slice(0, 50) // Limita a visualização na tela para não travar o Chrome
+                                    .slice(0, 50) 
                                     .map(c => (
                                         <div 
                                             key={c.id} 

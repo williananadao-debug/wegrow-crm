@@ -5,7 +5,8 @@ import {
   TrendingUp, BarChart3, PieChart, Users, 
   ArrowUpRight, ArrowDownRight, Target, Calendar,
   Download, Zap, Clock, ChevronRight, Filter, 
-  ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin, Globe2
+  ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin,
+  FileSpreadsheet, Database, X, Briefcase
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -18,44 +19,7 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
-// MATRIZ GEOGRÁFICA
-const getCityCoordinates = (cityName: string) => {
-    if (!cityName) return null;
-    const name = cityName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-    
-    if (name.includes('ITAJAI')) return { top: '45%', left: '85%' };
-    if (name.includes('CAMBORIU')) return { top: '48%', left: '86%' };
-    if (name.includes('JOINVILLE')) return { top: '20%', left: '80%' };
-    if (name.includes('FLORIPA') || name.includes('FLORIAN')) return { top: '65%', left: '85%' };
-    if (name.includes('BLUMENAU')) return { top: '40%', left: '75%' };
-    if (name.includes('CHAPECO')) return { top: '45%', left: '15%' };
-    if (name.includes('LAGES')) return { top: '60%', left: '50%' };
-    if (name.includes('CRICIUMA')) return { top: '85%', left: '75%' };
-    if (name.includes('TUBARAO')) return { top: '80%', left: '80%' };
-    if (name.includes('JARAGUA')) return { top: '25%', left: '75%' };
-    if (name.includes('BRUSQUE')) return { top: '45%', left: '80%' };
-    if (name.includes('JOSE')) return { top: '63%', left: '83%' };
-    if (name.includes('PALHOCA')) return { top: '66%', left: '83%' };
-    if (name.includes('NAVEGANTES')) return { top: '43%', left: '86%' };
-    
-    // Alto Vale e Norte
-    if (name.includes('RIO DO SUL')) return { top: '50%', left: '65%' };
-    if (name.includes('PRESIDENTE GETULIO')) return { top: '47%', left: '67%' };
-    if (name.includes('POUSO REDONDO')) return { top: '52%', left: '60%' };
-    if (name.includes('MAFRA')) return { top: '15%', left: '65%' };
-    if (name.includes('ITAIOPOLIS')) return { top: '20%', left: '67%' };
-    if (name.includes('TAIO')) return { top: '50%', left: '62%' };
-    if (name.includes('SALETE')) return { top: '48%', left: '60%' };
-    if (name.includes('SANTA TEREZINHA')) return { top: '43%', left: '62%' };
-    if (name.includes('AGROLANDIA')) return { top: '54%', left: '65%' };
-    if (name.includes('CURITIBANOS')) return { top: '55%', left: '45%' };
-    if (name.includes('RIO NEGRO')) return { top: '14%', left: '65%' };
-    if (name.includes('IBIRAMA')) return { top: '48%', left: '68%' };
-    
-    return null; 
-};
-
-// LIMPACOR DE NOMES
+// LIMPACOR DE NOMES PARA A INTELIGÊNCIA GEOGRÁFICA
 const normalizeString = (str: string) => {
     if (!str) return '';
     return String(str)
@@ -65,6 +29,47 @@ const normalizeString = (str: string) => {
         .trim()
         .toUpperCase()
         .replace(/\s+/g, ' '); 
+};
+
+// --- MOTOR DE EXPORTAÇÃO CSV ---
+const convertToCSV = (objArray: any[]) => {
+    const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
+    let str = '';
+    
+    if (array.length > 0) {
+        let row = '';
+        for (let index in array[0]) {
+            row += '"' + index + '";';
+        }
+        row = row.slice(0, -1);
+        str += row + '\r\n';
+    }
+    
+    for (let i = 0; i < array.length; i++) {
+        let line = '';
+        for (let index in array[i]) {
+            let val = array[i][index] !== null && array[i][index] !== undefined ? array[i][index] : '';
+            if (typeof val === 'object') val = JSON.stringify(val);
+            val = String(val).replace(/"/g, '""'); // Escapa aspas
+            line += '"' + val + '";';
+        }
+        line = line.slice(0, -1);
+        str += line + '\r\n';
+    }
+    return str;
+};
+
+const downloadFile = (content: string, fileName: string) => {
+    // O \ufeff força o Excel a entender UTF-8 (acentos corretos)
+    const blob = new Blob(["\ufeff", content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 export default function ReportsPage() {
@@ -81,6 +86,11 @@ export default function ReportsPage() {
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
   const [rawClientes, setRawClientes] = useState<any[]>([]); 
+
+  // Estados do Modal de Exportação
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState('leads');
+  const [isExporting, setIsExporting] = useState(false);
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -133,6 +143,82 @@ export default function ReportsPage() {
       setLoading(false); 
     }
   }
+
+  // --- FUNÇÃO CENTRAL DE EXPORTAÇÃO ---
+  const handleExport = async () => {
+      setIsExporting(true);
+      try {
+          // 👇 O Ajuste do TypeScript está aqui:
+          let dataToExport: any[] = []; 
+          const timestamp = new Date().toISOString().split('T')[0];
+          let filename = `extracao_${exportType}_${timestamp}.csv`;
+
+          if (exportType === 'leads') {
+              // Prepara dados de VENDAS
+              dataToExport = rawLeads.map(l => ({
+                  ID_Venda: l.id,
+                  Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
+                  Cliente: l.empresa || 'Sem nome',
+                  Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','),
+                  Status: l.status || '',
+                  Fase_Funil: l.etapa || 0,
+                  Unidade: l.unidade || 'Não informada',
+                  Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono',
+                  Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '',
+                  Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '',
+              }));
+
+          } else if (exportType === 'clientes') {
+              // Prepara dados de CLIENTES
+              dataToExport = rawClientes.map(c => ({
+                  ID_Cliente: c.id,
+                  Nome_Fantasia: c.nome_empresa || '',
+                  CNPJ: c.cnpj || '',
+                  Telefone: c.telefone || '',
+                  Email: c.email || '',
+                  Cidade: c.cidade || c.cidade_uf || '',
+                  Bairro: c.bairro || '',
+                  Status: c.status || 'Ativo'
+              }));
+
+          } else if (exportType === 'jobs') {
+              // Busca JOBS (Produção) no banco com Trator
+              let allJobs: any[] = [];
+              let page = 0;
+              let fetchMore = true;
+              while(fetchMore) {
+                  const { data } = await supabase.from('jobs').select('*').range(page * 1000, (page + 1) * 1000 - 1);
+                  if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } 
+                  else { fetchMore = false; }
+              }
+              dataToExport = allJobs.map(j => ({
+                  ID_Job: j.id,
+                  Data_Criacao: j.created_at ? new Date(j.created_at).toLocaleDateString('pt-BR') : '',
+                  Titulo: j.titulo || '',
+                  Fase_Producao: j.stage || '',
+                  Prioridade: j.prioridade || '',
+                  Prazo_Entrega: j.deadline ? new Date(j.deadline).toLocaleDateString('pt-BR') : '',
+                  Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO'
+              }));
+          }
+
+          if (dataToExport.length === 0) {
+              alert("Não há dados para exportar neste módulo.");
+              setIsExporting(false);
+              return;
+          }
+
+          const csvContent = convertToCSV(dataToExport);
+          downloadFile(csvContent, filename);
+          setShowExportModal(false);
+
+      } catch (error) {
+          console.error("Erro na exportação:", error);
+          alert("Ocorreu um erro ao gerar o arquivo.");
+      } finally {
+          setIsExporting(false);
+      }
+  };
 
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
   const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
@@ -325,15 +411,19 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Sala de Comando (BI)</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
-            <ShieldCheck size={12} className="text-blue-500"/> Análise Estratégica e Inteligência Geográfica
+            <ShieldCheck size={12} className="text-blue-500"/> Análise Estratégica e Inteligência de Dados
           </p>
         </div>
+        
+        {/* 👇 BOTÕES DO TOPO (NOVO BOTÃO DE EXTRAÇÃO AQUI) 👇 */}
         <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-3 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0">
+          <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-3 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
             <Zap size={18}/>
           </button>
-          <button className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
-            <Download size={16}/> Exportar PDF
+          
+          {/* BOTÃO MESTRE DE EXTRAÇÃO DE DADOS */}
+          <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
+            <Database size={16}/> Extrair Dados
           </button>
         </div>
       </div>
@@ -362,7 +452,7 @@ export default function ReportsPage() {
           )}
       </div>
 
-      {/* COMPARATIVOS */}
+      {/* COMPARATIVOS KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: `Faturamento (${filtroPeriodo})`, current: currentMonth.faturamento, last: lastMonth.faturamento, prefix: 'R$ ', icon: TrendingUp, color: 'text-[#22C55E]' },
@@ -393,116 +483,10 @@ export default function ReportsPage() {
         })}
       </div>
 
-      {/* 👇 MAPA DE CALOR REGIONAL (SC) 👇 */}
-      <div className="bg-[#0B1120] border border-white/5 rounded-[40px] shadow-2xl overflow-hidden">
-         <div className="p-8 border-b border-white/5 bg-white/[0.01]">
-            <h3 className="text-white font-black uppercase italic flex items-center gap-2">
-              <Globe2 size={20} className="text-emerald-500" /> Mapa de Calor Regional (SC)
-            </h3>
-            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Concentração Geográfica de Faturamento</p>
-         </div>
-
-         <div className="grid grid-cols-1 lg:grid-cols-3">
-            {/* Lista das Cidades */}
-            <div className="lg:col-span-1 p-8 border-r border-white/5 bg-white/[0.01] max-h-[400px] overflow-y-auto custom-scrollbar">
-                <div className="space-y-6">
-                    {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
-                        const cidTotal = Number(cid.total) || 0;
-                        const maxCidTotal = Number(mapaCidades[0]?.total) || 1;
-                        const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
-                        
-                        let heatColor = "bg-blue-500";
-                        let textColor = "text-blue-400";
-                        if (cid.nome === 'NÃO INFORMADA') { heatColor = "bg-red-500 opacity-50"; textColor = "text-red-400"; }
-                        else if (idx === 0) { heatColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"; textColor = "text-emerald-400"; }
-                        else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
-
-                        return (
-                            <div key={cid.nome || idx} className="group">
-                                <div className="flex justify-between items-end mb-1">
-                                    <span className="text-white font-black text-xs uppercase flex items-center gap-1">
-                                        <MapPin size={10} className={textColor} />
-                                        {cid.nome}
-                                    </span>
-                                    <span className={`${textColor} font-black text-[11px]`}>
-                                        R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
-                                    </span>
-                                </div>
-                                <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
-                                    <div className={`h-full ${heatColor} transition-all duration-1000`} style={{ width: `${Math.min((cidTotal / maxCidTotal) * 100, 100)}%` }} />
-                                </div>
-                                <div className="flex justify-between mt-1">
-                                    <p className="text-[9px] text-slate-500 font-bold uppercase">{cid.count} Vendas</p>
-                                    <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
-                                </div>
-                            </div>
-                        );
-                    }) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-600 opacity-50 py-10">
-                            <MapPin size={32} className="mb-2" />
-                            <p className="text-xs font-black uppercase text-center">Sem dados de<br/>localização</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* 👇 Visual Static Grid Area (High Performance & Zero Images) 👇 */}
-            <div className="lg:col-span-2 relative h-[400px] bg-[#0B1120] flex items-center justify-center overflow-hidden border-l border-white/5">
-
-                {/* Fundo de Malha Cartesiana (Grid) - 100% Código, Zero Imagens */}
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f1a_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f1a_1px,transparent_1px)] bg-[size:40px_40px]"></div>
-                
-                {/* Eixo Central Escurecido */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_0%,_#0B1120_100%)]"></div>
-
-                {/* Eixos X e Y Sutis */}
-                <div className="absolute w-full h-[1px] bg-blue-500/10"></div>
-                <div className="absolute h-full w-[1px] bg-blue-500/10"></div>
-
-                {/* CONTAINER DE PINOS */}
-                <div className="relative w-full h-full max-w-[600px] max-h-[400px] pointer-events-none">
-                    {mapaCidades.map((cid: any, idx: number) => {
-                        if (cid.nome === 'NÃO INFORMADA') return null;
-                        
-                        const coords = getCityCoordinates(cid.nome);
-                        if (!coords) return null; 
-
-                        const isTop1 = idx === 0;
-                        const isTop3 = idx > 0 && idx <= 2;
-                        
-                        return (
-                            <div 
-                                key={cid.nome} 
-                                className="absolute flex flex-col items-center justify-center group pointer-events-auto"
-                                style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
-                            >
-                                {/* Pino Fixo, Limpo e Sem Animação */}
-                                <div className={`relative z-10 rounded-full border border-[#0B1120] transition-transform group-hover:scale-125 ${isTop1 ? 'w-4 h-4 bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTop3 ? 'w-3 h-3 bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.6)]' : 'w-2.5 h-2.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'}`}></div>
-                                
-                                {/* Etiqueta (Aparece no Hover) */}
-                                <div className="absolute top-5 bg-[#0F172A] border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-2xl">
-                                    <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>
-                                    <p className="text-[9px] font-bold text-[#22C55E]">R$ {Number(cid.total).toLocaleString('pt-BR', { notation: 'compact' })}</p>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                
-                {/* Selo Inferior Estático */}
-                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-lg border border-white/5 flex items-center gap-2 z-30">
-                    <MapPin size={12} className="text-blue-500" />
-                    MALHA GEOGRÁFICA DE RECEITA (SC)
-                </div>
-            </div>
-
-         </div>
-      </div>
-
-      {/* BLOCO CENTRAL: CURVA ABC + PERFORMANCE DE VENDAS */}
+      {/* BLOCO 1: CURVA ABC + ELITE DE VENDAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CURVA ABC */}
+        {/* CURVA ABC (Ocupa 2 colunas) */}
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20" />
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8 relative z-10">
@@ -534,7 +518,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* RANKING PERMANENTE */}
+        {/* RANKING PERMANENTE (Ocupa 1 coluna) */}
         <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
             <Users size={20} className="text-purple-500" /> Elite de Vendas
@@ -564,10 +548,10 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* BLOCO INFERIOR: ESTRATÉGIAS + PERFORMANCE DE UNIDADES */}
+      {/* BLOCO 2: ESTRATÉGIAS + PERFORMANCE DE UNIDADES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* TABELA DE ESTRATÉGIAS */}
+        {/* TABELA DE ESTRATÉGIAS (Ocupa 2 colunas) */}
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl flex flex-col">
           <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
             <h3 className="text-white font-black uppercase italic flex items-center gap-2">
@@ -622,7 +606,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* PERFORMANCE POR UNIDADE */}
+        {/* PERFORMANCE POR UNIDADE (Ocupa 1 coluna) */}
         <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
             <Building2 size={20} className="text-cyan-400" /> Faturamento por Filial
@@ -656,6 +640,131 @@ export default function ReportsPage() {
         </div>
 
       </div>
+
+      {/* BLOCO 3: DESEMPENHO GEOGRÁFICO PURO E RÁPIDO */}
+      <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl">
+         <div className="flex justify-between items-center mb-8">
+            <div>
+              <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+                <MapPin size={20} className="text-emerald-500" /> Desempenho Geográfico (Cidades)
+              </h3>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Concentração de Receita por Região</p>
+            </div>
+            <span className="bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border border-white/10 hidden md:block">
+              {mapaCidades.length} Regiões Atingidas
+            </span>
+         </div>
+
+         <div className="max-h-[350px] overflow-y-auto custom-scrollbar pr-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
+                {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
+                    const cidTotal = Number(cid.total) || 0;
+                    const maxCidTotal = Number(mapaCidades[0]?.total) || 1;
+                    const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
+                    
+                    let heatColor = "bg-blue-500";
+                    let textColor = "text-blue-400";
+                    if (cid.nome === 'NÃO INFORMADA') { heatColor = "bg-red-500 opacity-50"; textColor = "text-red-400"; }
+                    else if (idx === 0) { heatColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"; textColor = "text-emerald-400"; }
+                    else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
+
+                    return (
+                        <div key={cid.nome || idx} className="group">
+                            <div className="flex justify-between items-end mb-1">
+                                <span className="text-white font-black text-xs uppercase flex items-center gap-1 truncate pr-2">
+                                    <MapPin size={10} className={textColor} />
+                                    {cid.nome}
+                                </span>
+                                <span className={`${textColor} font-black text-[11px] whitespace-nowrap`}>
+                                    R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
+                                </span>
+                            </div>
+                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                <div className={`h-full ${heatColor} transition-all duration-1000`} style={{ width: `${Math.min((cidTotal / maxCidTotal) * 100, 100)}%` }} />
+                            </div>
+                            <div className="flex justify-between mt-1">
+                                <p className="text-[9px] text-slate-500 font-bold uppercase">{cid.count} Vendas</p>
+                                <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
+                            </div>
+                        </div>
+                    );
+                }) : (
+                    <div className="col-span-full flex flex-col items-center justify-center text-slate-600 opacity-50 py-10">
+                        <MapPin size={32} className="mb-2" />
+                        <p className="text-xs font-black uppercase text-center">Sem dados de localização cadastrados.</p>
+                    </div>
+                )}
+            </div>
+         </div>
+      </div>
+
+      {/* 👇 MODAL DE EXPORTAÇÃO DE DADOS (NOVO) 👇 */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className="bg-[#0B1120] border border-white/10 w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                    <div>
+                        <h3 className="text-xl font-black text-white uppercase italic tracking-tighter flex items-center gap-2">
+                            <Database size={20} className="text-purple-500"/> Exportar Dados
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Extração para Excel (.CSV)</p>
+                    </div>
+                    <button onClick={() => setShowExportModal(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
+                        <X size={20}/>
+                    </button>
+                </div>
+
+                <div className="p-8 space-y-6">
+                    <p className="text-xs text-slate-400 font-medium">Selecione o módulo que deseja extrair. O sistema compilará toda a base de dados em uma tabela bruta para você fazer análises dinâmicas em planilhas.</p>
+
+                    <div className="grid grid-cols-1 gap-3">
+                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'leads' ? 'bg-blue-600/10 border-blue-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                            <input type="radio" name="exportModule" value="leads" checked={exportType === 'leads'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                            <Target size={24} className={exportType === 'leads' ? 'text-blue-500' : 'text-slate-500'} />
+                            <div className="ml-4">
+                                <h4 className={`font-black uppercase text-sm ${exportType === 'leads' ? 'text-white' : 'text-slate-300'}`}>1. Vendas (Oportunidades)</h4>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Tabela com todos os funis, valores, vendedores e contratos.</p>
+                            </div>
+                        </label>
+
+                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'clientes' ? 'bg-emerald-500/10 border-emerald-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                            <input type="radio" name="exportModule" value="clientes" checked={exportType === 'clientes'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                            <Users size={24} className={exportType === 'clientes' ? 'text-emerald-500' : 'text-slate-500'} />
+                            <div className="ml-4">
+                                <h4 className={`font-black uppercase text-sm ${exportType === 'clientes' ? 'text-white' : 'text-slate-300'}`}>2. Base de Clientes</h4>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Cadastro completo com CNPJ, cidades, emails e telefones.</p>
+                            </div>
+                        </label>
+
+                        <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'jobs' ? 'bg-orange-500/10 border-orange-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                            <input type="radio" name="exportModule" value="jobs" checked={exportType === 'jobs'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                            <Briefcase size={24} className={exportType === 'jobs' ? 'text-orange-500' : 'text-slate-500'} />
+                            <div className="ml-4">
+                                <h4 className={`font-black uppercase text-sm ${exportType === 'jobs' ? 'text-white' : 'text-slate-300'}`}>3. Produção (Jobs)</h4>
+                                <p className="text-[10px] text-slate-500 mt-0.5">Tabela com roteiros, gravações e prazos de entrega.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-white/10 bg-white/[0.01]">
+                    <button 
+                        onClick={handleExport} 
+                        disabled={isExporting}
+                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all ${isExporting ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]'}`}
+                    >
+                        {isExporting ? (
+                            <><Zap size={16} className="animate-spin"/> COMPILANDO BASE...</>
+                        ) : (
+                            <><FileSpreadsheet size={16}/> BAIXAR ARQUIVO .CSV</>
+                        )}
+                    </button>
+                </div>
+
+            </div>
+        </div>
+      )}
 
     </div>
   );

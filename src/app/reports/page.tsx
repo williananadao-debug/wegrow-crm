@@ -449,21 +449,22 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {/* Visual Radar Map Area */}
-            <div className="lg:col-span-2 relative h-[400px] bg-[#0B1120] rounded-r-3xl flex items-center justify-center overflow-hidden">
-                {/* 1. Fundo Base e Textura */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#0B1120] to-[#0B1120]"></div>
+            {/* Visual Static Map Area (High Performance) */}
+            <div className="lg:col-span-2 relative h-[400px] bg-[#0B1120] flex items-center justify-center overflow-hidden border-l border-white/5">
+                {/* Fundo Grid Estático */}
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
 
-                {/* 2. Globo de Fundo e Miras (Zero Risco de Quebrar) */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <Globe2 size={350} className="text-blue-500/10" strokeWidth={0.5} />
+                {/* 👇 O MAPA REAL DE SC (Bypass de Bloqueio + Estático) 👇 */}
+                <div className="absolute inset-0 flex items-center justify-center p-8 md:p-12 pointer-events-none">
+                    <img 
+                        src="https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Santa_Catarina_blank_map.svg/800px-Santa_Catarina_blank_map.svg.png" 
+                        alt="Mapa Santa Catarina" 
+                        className="w-full h-full object-contain filter invert opacity-[0.15] drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                    />
                 </div>
-                <div className="absolute w-full h-[1px] bg-blue-500/10 pointer-events-none"></div>
-                <div className="absolute h-full w-[1px] bg-blue-500/10 pointer-events-none"></div>
 
-                {/* 3. Área de Renderização dos Pinos (Protegida) */}
-                <div className="absolute w-full h-full max-w-[600px] max-h-[400px] z-20 pointer-events-none">
+                {/* CONTAINER DE PINOS (Sem animações pesadas) */}
+                <div className="relative w-full h-full max-w-[600px] max-h-[400px] pointer-events-none">
                     {mapaCidades.map((cid: any, idx: number) => {
                         if (cid.nome === 'NÃO INFORMADA') return null;
                         
@@ -479,15 +480,11 @@ export default function ReportsPage() {
                                 className="absolute flex flex-col items-center justify-center group pointer-events-auto"
                                 style={{ top: coords.top, left: coords.left, transform: 'translate(-50%, -50%)' }}
                             >
-                                {/* Animação de Pulso (Radar) */}
-                                {isTop1 && <div className="absolute w-12 h-12 bg-emerald-500/30 rounded-full animate-ping"></div>}
-                                {isTop3 && <div className="absolute w-8 h-8 bg-orange-500/20 rounded-full animate-ping"></div>}
-
-                                {/* O Pino Central */}
-                                <div className={`relative w-3 h-3 rounded-full border-2 border-[#0B1120] shadow-xl ${isTop1 ? 'bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,1)] scale-125' : isTop3 ? 'bg-orange-400' : 'bg-blue-500'}`}></div>
+                                {/* Pino Fixo e Limpo */}
+                                <div className={`relative z-10 rounded-full border border-[#0B1120] shadow-md transition-transform group-hover:scale-125 ${isTop1 ? 'w-4 h-4 bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTop3 ? 'w-3 h-3 bg-orange-400' : 'w-2.5 h-2.5 bg-blue-500'}`}></div>
                                 
-                                {/* A Etiqueta (Nome e Valor) */}
-                                <div className="absolute top-4 bg-[#0F172A]/90 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
+                                {/* Etiqueta (Aparece no Hover) */}
+                                <div className="absolute top-5 bg-[#0F172A]/95 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
                                     <p className="text-[10px] font-black text-white uppercase">{cid.nome}</p>
                                     <p className="text-[9px] font-bold text-[#22C55E]">R$ {Number(cid.total).toLocaleString('pt-BR', { notation: 'compact' })}</p>
                                 </div>
@@ -495,14 +492,13 @@ export default function ReportsPage() {
                         );
                     })}
                 </div>
-
-                {/* 4. Etiqueta Inferior Esquerda */}
-                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded border border-white/5 backdrop-blur-sm z-30 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                    SISTEMA DE RASTREAMENTO SC
+                
+                {/* Selo Inferior Estático */}
+                <div className="absolute bottom-4 left-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded border border-white/5 flex items-center gap-1 z-30">
+                    <MapPin size={10} className="text-blue-500" />
+                    MAPA DE DISTRIBUIÇÃO (SC)
                 </div>
             </div>
-
 
          </div>
       </div>

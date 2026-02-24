@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -102,6 +102,10 @@ export default function DealsPage() {
 
   const [metaMensal, setMetaMensal] = useState(1); 
   
+  // 👇 ESTADOS DA REDE 👇
+  const [isOffline, setIsOffline] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   const fetchData = async () => {
@@ -110,16 +114,13 @@ export default function DealsPage() {
     let query = supabase.from('leads').select('*');
     if (!isDirector) query = query.eq('user_id', user?.id);
 
-    // 1. Busca Nuvem
     let { data: leadsData } = await query.order('created_at', { ascending: false });
     let leadsBase: any[] = leadsData || [];
 
-    // 2. Busca Celular se Nuvem Falhar
     if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
         leadsBase = await localDb.leads.toArray();
     }
 
-    // 3. Mistura com a Fila (Com Proteção)
     try {
         const filaPendente = await localDb.syncQueue.where('tabela').equals('leads').toArray();
         filaPendente.forEach(item => {
@@ -131,13 +132,19 @@ export default function DealsPage() {
                 leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
             }
         });
-    } catch (e) {
-        console.warn("Fila offline vazia ou não iniciada.");
+    } catch (e) {}
+
+    // Garante que só fique Leads válidos
+    const leadsFiltrados = leadsBase.filter(l => l && l.id);
+
+    // Se estiver online e buscou do banco, limpa os fantasmas (IDs > 1000000) que já subiram para evitar duplicação visual
+    if (navigator.onLine && leadsData) {
+        setLeads(leadsFiltrados.filter(l => l.id < 1000000) as Lead[]);
+    } else {
+        setLeads(leadsFiltrados as Lead[]);
     }
 
-    setLeads(leadsBase as Lead[]);
-
-    const userIds = Array.from(new Set(leadsBase.map(l => l?.user_id).filter(Boolean)));
+    const userIds = Array.from(new Set(leadsFiltrados.map(l => l?.user_id).filter(Boolean)));
     if (userIds.length > 0) {
         const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds as string[]);
         if (perfisData) {
@@ -159,7 +166,6 @@ export default function DealsPage() {
         if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
     } catch (err) {}
 
-    // TRATOR DE CLIENTES
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
@@ -181,20 +187,35 @@ export default function DealsPage() {
 
   useEffect(() => {
     if (!user) return;
+    
+    // Checa o status inicial da rede
+    setIsOffline(!navigator.onLine);
     fetchData();
 
+    // 👇 O MOTOR DE EVENTOS DE REDE 👇
     const handleOnline = async () => {
+        setIsOffline(false);
+        setIsSyncing(true);
         setToastMessage("📶 Internet conectada! Subindo dados...");
         setShowToast(true);
+        
         await syncOfflineDataToCloud(); 
-        fetchData(); 
+        await fetchData(); 
+        
+        setIsSyncing(false);
+    };
+
+    const handleOffline = () => {
+        setIsOffline(true);
     };
 
     window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     window.addEventListener('sync-completed', fetchData);
 
     return () => {
         window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
         window.removeEventListener('sync-completed', fetchData);
     };
   }, [user, isDirector]);
@@ -317,7 +338,6 @@ export default function DealsPage() {
     window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
   };
 
-  // 👇 FUNÇÃO RESTAURADA 👇
   const imprimirProposta = () => {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const total = Math.max(0, subtotal - desconto);
@@ -345,7 +365,6 @@ export default function DealsPage() {
     janela.document.close();
   };
 
-  // 👇 FUNÇÃO RESTAURADA 👇
   const gerarContrato = (lead: Lead) => {
     let listaItens: ItemVenda[] = [];
     try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
@@ -458,6 +477,14 @@ export default function DealsPage() {
   const handleDelete = async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
       if(!confirm("Excluir oportunidade?")) return;
+
+      // Se for um lead fantasma que ainda não subiu, remove só da tela
+      if (id > 1000000) {
+          setLeads(prev => prev.filter(l => l.id !== id));
+          if (isModalOpen) setIsModalOpen(false);
+          return;
+      }
+
       try {
           const { error } = await supabase.from('leads').delete().eq('id', id);
           if (error) throw error;
@@ -465,7 +492,7 @@ export default function DealsPage() {
           if (isModalOpen) setIsModalOpen(false);
       } catch(error: any) {
           if (error.message === 'Failed to fetch' || !navigator.onLine) {
-              alert("⚠️ Sem internet: Não é possível deletar leads no modo offline por segurança.");
+              alert("⚠️ Sem internet: Não é possível deletar leads do servidor no modo offline por segurança.");
           }
       }
   };
@@ -480,7 +507,7 @@ export default function DealsPage() {
       if(data) {
          const { data: url } = supabase.storage.from('contratos').getPublicUrl(fileName);
          setFotoUrl(url.publicUrl);
-         if(editingLeadId) {
+         if(editingLeadId && editingLeadId < 1000000) { // Não tenta atualizar lead fantasma no Supabase
              await supabase.from('leads').update({ foto_url: url.publicUrl }).eq('id', editingLeadId);
              setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, foto_url: url.publicUrl } : l));
          }
@@ -491,6 +518,7 @@ export default function DealsPage() {
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
       if (!navigator.onLine) return alert("⚠️ Notas só podem ser adicionadas online."); 
+      if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou com o servidor. Aguarde a internet para adicionar notas.");
       
       const { data } = await supabase.from('historico_leads').insert([{ lead_id: editingLeadId, texto: novaNota }]).select();
       if(data) { 
@@ -499,7 +527,6 @@ export default function DealsPage() {
       }
   };
 
-  // 👇 SALVAMENTO BLINDADO COM ID FANTASMA PARA EVITAR CRASH 👇
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
@@ -526,6 +553,9 @@ export default function DealsPage() {
 
     if (editingLeadId) {
         try {
+            // Se for um lead fantasma que ainda não sincronizou, força a ir pro Offline
+            if (editingLeadId > 1000000) throw new Error('Failed to fetch');
+
             const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
             if (error) throw error; 
 
@@ -557,7 +587,7 @@ export default function DealsPage() {
             }
         } catch (error: any) {
              if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                const tempId = Date.now(); // 👻 GERA UM ID FANTASMA AQUI!
+                const tempId = Date.now(); 
                 const leadOffline = { ...payload, id: tempId, created_at: new Date().toISOString() };
 
                 await localDb.syncQueue.add({
@@ -586,9 +616,13 @@ export default function DealsPage() {
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
         setDesconto(lead.desconto || 0); 
-        if (navigator.onLine) {
+        
+        // Se for um lead fantasma (ainda não sincronizou), não busca histórico na nuvem
+        if (navigator.onLine && lead.id < 1000000) {
             const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false });
             setHistorico(data || []);
+        } else {
+            setHistorico([]);
         }
     } else {
         setEditingLeadId(null);
@@ -635,9 +669,26 @@ export default function DealsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-2 mb-2 px-2">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Pipeline</h1>
-          <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold tracking-widest uppercase">
-             <span className="text-blue-400 flex items-center gap-1"><User size={10}/> {perfil?.nome}</span>
+          
+          {/* 👇 OS NOVOS INDICADORES DE REDE OFFLINE E SYNC 👇 */}
+          <div className="flex items-center gap-2 mt-1">
+             <span className="text-blue-400 flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase"><User size={10}/> {perfil?.nome}</span>
+             
+             {isOffline ? (
+                <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+                    <WifiOff size={10} /> Offline
+                </span>
+             ) : isSyncing ? (
+                <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <RefreshCcw size={10} className="animate-spin" /> Sincronizando
+                </span>
+             ) : (
+                <span className="bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <CheckCircle2 size={10} /> Online
+                </span>
+             )}
           </div>
+
         </div>
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
@@ -705,10 +756,10 @@ export default function DealsPage() {
 
                     <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
                         {leadsDaColuna.map((lead, index) => {
-                            // 👇 ESCUDO ANTI-CRASH AQUI! Ignora itens quebrados na tela
                             if (!lead || !lead.id) return null;
 
                             const daysLeft = getDaysLeft(lead.contrato_fim);
+                            const isPhantom = lead.id > 1000000; // Identifica se é um lead que ainda não subiu
 
                             return (
                                 <Draggable key={lead.id} draggableId={lead.id.toString()} index={index}>
@@ -724,9 +775,15 @@ export default function DealsPage() {
                                                     <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
                                                         <Edit2 size={10} className="text-slate-500"/>
                                                     </div>
-                                                    <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
-                                                        <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
-                                                    </span>
+                                                    {isPhantom ? (
+                                                        <span className="text-[8px] font-black text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5 animate-pulse">
+                                                            <RefreshCcw size={8}/> OFFLINE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
+                                                            <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="flex flex-col md:flex-row gap-2 md:gap-2">
@@ -844,7 +901,7 @@ export default function DealsPage() {
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
                       {editingLeadId ? `Editar Oportunidade ` : 'Novo Negócio'}
-                      {editingLeadId && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
+                      {editingLeadId && editingLeadId < 1000000 && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
                   </h2>
                   <div className="flex items-center gap-2">
                       {editingLeadId && (
@@ -907,13 +964,6 @@ export default function DealsPage() {
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
                                     ))}
-                                {clientesOpcoes.filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase())).length === 0 && (
-                                    <div className="px-4 py-4 text-center text-slate-500 text-xs font-bold uppercase">
-                                        Nenhum cliente encontrado.
-                                        <br/>
-                                        <span className="text-[9px] font-normal normal-case mt-1 block">Cadastre o cliente na aba de Clientes primeiro.</span>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

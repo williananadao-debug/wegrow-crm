@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { localDb } from './localDb';
 
-// 1. DESCE DADOS (Nuvem -> Celular) - O backup de segurança
+// 1. DESCE DADOS (Nuvem -> Celular)
 export const syncDataToLocal = async () => {
   if (typeof window !== 'undefined' && !navigator.onLine) return;
   try {
@@ -15,11 +15,18 @@ export const syncDataToLocal = async () => {
   }
 };
 
-// 2. SOBE DADOS (Celular -> Nuvem) - O Caminhão Forte
+// 👇 A TRAVA DE SEGURANÇA 👇
+let isSyncing = false; 
+
+// 2. SOBE DADOS (Celular -> Nuvem)
 export const syncOfflineDataToCloud = async () => {
   if (typeof window !== 'undefined' && !navigator.onLine) return;
+  
+  // Se já estiver sincronizando, bloqueia execução dupla!
+  if (isSyncing) return; 
 
   try {
+    isSyncing = true; // Tranca a porta
     const fila = await localDb.syncQueue.toArray();
     if (fila.length === 0) return;
 
@@ -28,23 +35,24 @@ export const syncOfflineDataToCloud = async () => {
     for (const item of fila) {
         const { id, operacao, tabela, dados } = item;
 
+        // Limpa a fila PRIMEIRO para evitar duplicar se der oscilação de rede
+        await localDb.syncQueue.delete(id); 
+
         if (operacao === 'INSERT') {
-            // Tira o ID provisório (que usamos no offline) pro Supabase gerar um real
             const { id: _, ...dadosLimpos } = dados; 
-            const { error } = await supabase.from(tabela).insert([dadosLimpos]);
-            if (!error) await localDb.syncQueue.delete(id); // Limpa da fila se deu certo
+            await supabase.from(tabela).insert([dadosLimpos]);
         } 
         else if (operacao === 'UPDATE') {
-            const { error } = await supabase.from(tabela).update(dados).eq('id', dados.id);
-            if (!error) await localDb.syncQueue.delete(id);
+            await supabase.from(tabela).update(dados).eq('id', dados.id);
         }
     }
     
     console.log('✅ Dados offline salvos na nuvem com sucesso!');
-    // Avisa a tela do Kanban que os dados subiram para ela se atualizar sozinha
     window.dispatchEvent(new Event('sync-completed'));
 
   } catch (error) {
     console.error('❌ Erro ao subir dados:', error);
+  } finally {
+    isSyncing = false; // Destranca a porta ao terminar
   }
 };

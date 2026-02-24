@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
+import { localDb } from '@/lib/localDb'; // 👈 IMPORTAÇÃO DO NOSSO COFRE OFFLINE ADICIONADA AQUI
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
@@ -74,7 +75,7 @@ export default function DealsPage() {
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
-  const [showClientDropdown, setShowClientDropdown] = useState(false); // 👈 Controle do novo dropdown
+  const [showClientDropdown, setShowClientDropdown] = useState(false); 
   
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
@@ -142,7 +143,7 @@ export default function DealsPage() {
           console.log("Aviso: Meta do mês atual não encontrada.");
       }
 
-      // 👇 O TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES 👇
+      // TRATOR: BUSCANDO TODOS OS CLIENTES SEM LIMITES
       let allClientes: ClienteOpcao[] = [];
       let page = 0;
       let fetchMore = true;
@@ -392,7 +393,7 @@ export default function DealsPage() {
           <div class="header"><div class="logo">WEGROW / DEMAIS FM</div></div>
           <h1>Contrato de Prestação de Serviços Publicitários</h1>
           
-          <p><strong>CONTRATADA:</strong> WEGROW LTDA, empresa de publicidade e radiodifusão.</p>
+          <p><strong>CONTRATADA:</strong> Demais FM, empresa de publicidade e radiodifusão.</p>
           <p><strong>CONTRATANTE:</strong> ${lead.empresa}, doravante denominada simplesmente CONTRATANTE.</p>
           <p>As partes acima qualificadas celebram o presente contrato, que se regerá pelas seguintes cláusulas:</p>
           
@@ -503,7 +504,7 @@ export default function DealsPage() {
       }
   };
 
-  // 👇 TRAVA DE SEGURANÇA NA HORA DE SALVAR 👇
+  // 👇 FUNÇÃO DE SALVAMENTO BLINDADA (ONLINE/OFFLINE) 👇
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
@@ -529,30 +530,75 @@ export default function DealsPage() {
         contrato_fim: contratoFim || null,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
-        client_id: selectedClientId // 👈 ID GRAVADO COM SUCESSO SEMPRE!
+        client_id: selectedClientId 
     };
 
     if (editingLeadId) {
-        const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
-        if (!error) {
+        // --- LÓGICA DE EDIÇÃO ---
+        try {
+            const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
+            if (error) throw error; // Se a internet cair, força a ir pro catch
+
             setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
             setIsModalOpen(false);
             setToastMessage("Lead atualizado!");
             setShowToast(true);
-        } else {
-            console.error("ERRO AO ATUALIZAR:", error);
-            alert(`Erro ao atualizar: ${error.message}`);
+
+        } catch (error: any) {
+            // SE CAIR A INTERNET, SALVA NO COFRE
+            if (error.message === 'Failed to fetch' || !navigator.onLine) {
+                await localDb.syncQueue.add({
+                    operacao: 'UPDATE',
+                    tabela: 'leads',
+                    dados: { id: editingLeadId, ...payload },
+                    data_criacao: new Date().toISOString()
+                });
+                
+                // Atualiza a tela fingindo que deu certo
+                setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
+                setIsModalOpen(false);
+                setToastMessage("📶 Sem rede. Alteração salva no celular!");
+                setShowToast(true);
+            } else {
+                console.error("ERRO AO ATUALIZAR:", error);
+                alert(`Erro ao atualizar: ${error.message}`);
+            }
         }
     } else {
-        const { data, error } = await supabase.from('leads').insert([payload]).select();
-        if (error) {
-            console.error("ERRO AO CRIAR LEAD:", error);
-            alert(`ERRO DE BANCO: ${error.message}`);
-        } else if (data) {
-            setLeads(prev => [data[0] as Lead, ...prev]);
-            setIsModalOpen(false);
-            setToastMessage("Lead criado com sucesso! 🚀");
-            setShowToast(true);
+        // --- LÓGICA DE CRIAÇÃO ---
+        try {
+            const { data, error } = await supabase.from('leads').insert([payload]).select();
+            if (error) throw error; // Se a internet cair, força a ir pro catch
+
+            if (data) {
+                setLeads(prev => [data[0] as Lead, ...prev]);
+                setIsModalOpen(false);
+                setToastMessage("Lead criado com sucesso! 🚀");
+                setShowToast(true);
+            }
+        } catch (error: any) {
+             // SE CAIR A INTERNET, SALVA NO COFRE
+             if (error.message === 'Failed to fetch' || !navigator.onLine) {
+                // Cria um ID temporário gigantesco para não dar conflito na tela
+                const tempId = Date.now(); 
+                
+                await localDb.syncQueue.add({
+                    operacao: 'INSERT',
+                    tabela: 'leads',
+                    dados: payload,
+                    data_criacao: new Date().toISOString()
+                });
+                
+                // Atualiza a tela fingindo que deu certo (apenas visual)
+                const leadOffline: Lead = { id: tempId, ...payload, created_at: new Date().toISOString() } as Lead;
+                setLeads(prev => [leadOffline, ...prev]);
+                setIsModalOpen(false);
+                setToastMessage("📶 Sem rede. Lead guardado no cofre!");
+                setShowToast(true);
+            } else {
+                console.error("ERRO AO CRIAR LEAD:", error);
+                alert(`ERRO DE BANCO: ${error.message}`);
+            }
         }
     }
   };

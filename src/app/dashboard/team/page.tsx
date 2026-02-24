@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, User as UserIcon, ShieldAlert, Building2, Trash2, Plus, Mail } from 'lucide-react';
+import { Edit2, X, User as UserIcon, ShieldAlert, Building2, Trash2, Plus, Loader2 } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 
 export default function TeamPage() {
@@ -14,6 +14,7 @@ export default function TeamPage() {
 
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -67,7 +68,9 @@ export default function TeamPage() {
     const confirmacao = window.confirm(`Tem certeza que deseja EXCLUIR o usuário ${editingUser.nome}? Esta ação não pode ser desfeita.`);
     
     if (confirmacao) {
+        setSaving(true);
         try {
+            // Nota: Isso exclui do seu banco de dados, não exclui a autenticação do supabase auth (mas bloqueia o acesso ao sistema)
             const { error } = await supabase.from('profiles').delete().eq('id', editingUser.id);
             if (error) throw error;
 
@@ -77,45 +80,71 @@ export default function TeamPage() {
             carregarEquipe();
         } catch (error: any) {
             alert(`Erro ao excluir: ${error.message}`);
+        } finally {
+            setSaving(false);
         }
     }
   };
 
   const salvarEdicao = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
 
     try {
-      const payload = {
-          nome: editNome,
-          cargo: editCargo,
-          unidade: editUnidade,
-      };
-
       if (editingUser) {
           // ATUALIZAR USUÁRIO EXISTENTE
+          const payload = {
+              nome: editNome,
+              cargo: editCargo,
+              unidade: editUnidade,
+          };
           const { error } = await supabase.from('profiles').update(payload).eq('id', editingUser.id);
           if (error) throw error;
+          
           setToastMessage("Perfil atualizado com sucesso! ✅");
+          setShowToast(true);
+          setIsModalOpen(false);
+          carregarEquipe();
       } else {
-          // CRIAR NOVO PERFIL (Manual)
-          // Nota: Para o usuário conseguir logar, ele precisará criar a conta na tela de registro com este mesmo email.
-          const novoId = crypto.randomUUID(); 
-          const { error } = await supabase.from('profiles').insert([{ 
-              id: novoId, 
-              email: editEmail, 
-              ...payload 
-          }]);
-          if (error) throw error;
-          setToastMessage("Novo membro adicionado! 🎉");
-      }
+          // CRIAR NOVO USUÁRIO COM ACESSO COMPLETO
+          // Usamos signUp sem deslogar o admin via API
+          const { data, error } = await supabase.auth.signUp({
+            email: editEmail,
+            password: 'WeGrow@123', // Senha padrão corporativa
+            options: {
+                data: {
+                    full_name: editNome, // A trigger SQL vai criar o profile sozinha!
+                }
+            }
+          });
 
-      setShowToast(true);
-      setIsModalOpen(false);
-      carregarEquipe();
+          if (error) {
+              if (error.message.includes('already registered')) {
+                  alert("Esse E-mail já está cadastrado no sistema!");
+                  return;
+              }
+              throw error;
+          }
+
+          // Atualiza as permissões do perfil que o robô SQL acabou de criar
+          if (data.user) {
+              await supabase.from('profiles').update({
+                  cargo: editCargo,
+                  unidade: editUnidade
+              }).eq('id', data.user.id);
+          }
+
+          setToastMessage("Acesso Criado! (Senha: WeGrow@123) 🎉");
+          setShowToast(true);
+          setIsModalOpen(false);
+          carregarEquipe();
+      }
 
     } catch (error: any) {
       console.error("Erro ao salvar:", error);
       alert(`Erro no banco de dados: ${error.message}`);
+    } finally {
+        setSaving(false);
     }
   };
 
@@ -201,6 +230,16 @@ export default function TeamPage() {
               </div>
 
               <div className="p-6 overflow-y-auto custom-scrollbar">
+                
+                {!editingUser && (
+                    <div className="mb-4 bg-blue-600/10 border border-blue-500/30 p-3 rounded-xl">
+                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wide leading-relaxed">
+                            Ao criar um acesso, o sistema enviará a permissão para este e-mail. A senha padrão gerada será: <br/>
+                            <span className="font-mono text-white bg-blue-600/30 px-1 py-0.5 rounded text-xs">WeGrow@123</span>
+                        </p>
+                    </div>
+                )}
+
                 <form id="userForm" onSubmit={salvarEdicao} className="space-y-4">
                     
                     <div>
@@ -233,13 +272,13 @@ export default function TeamPage() {
               </div>
 
               <div className="p-5 border-t border-white/10 bg-[#0F172A] flex flex-col gap-3 flex-shrink-0">
-                  <button type="submit" form="userForm" className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-transform shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-                      Salvar Configurações
+                  <button type="submit" form="userForm" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-transform shadow-[0_0_15px_rgba(34,197,94,0.2)] flex items-center justify-center gap-2 disabled:opacity-50">
+                      {saving ? <Loader2 size={16} className="animate-spin"/> : 'Salvar Configurações'}
                   </button>
                   
                   {/* BOTÃO DE EXCLUIR SÓ APARECE SE ESTIVER EDITANDO ALGUÉM */}
                   {editingUser && (
-                      <button type="button" onClick={excluirUsuario} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2">
+                      <button type="button" onClick={excluirUsuario} disabled={saving} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                           <Trash2 size={16}/> Apagar Usuário
                       </button>
                   )}

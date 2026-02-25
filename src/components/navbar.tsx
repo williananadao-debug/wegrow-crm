@@ -24,9 +24,10 @@ export default function Navbar() {
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
   const isManager = perfil?.cargo === 'gerente';
 
-  // 👇 1. O INTERRUPTOR DE EMPRESA 👇
-  const ID_DA_RADIO = 'COLE_AQUI_O_ID_DA_DEMAIS_FM';
-  const mostrarFinanceiro = perfil?.empresa_id !== ID_DA_RADIO;
+  // 👇 1. O INTERRUPTOR DE EMPRESA CORRIGIDO 👇
+  const ID_DA_RADIO = '11111111-1111-1111-1111-111111111111';
+  // A mágica aqui: Ele verifica se o "empresa_id" existe PRIMEIRO, para não mostrar no "piscar" de carregamento
+  const mostrarFinanceiro = Boolean(perfil?.empresa_id && perfil.empresa_id !== ID_DA_RADIO);
 
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },

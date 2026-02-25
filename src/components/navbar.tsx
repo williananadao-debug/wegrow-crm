@@ -24,6 +24,10 @@ export default function Navbar() {
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
   const isManager = perfil?.cargo === 'gerente';
 
+  // 👇 1. O INTERRUPTOR DE EMPRESA 👇
+  const ID_DA_RADIO = 'COLE_AQUI_O_ID_DA_DEMAIS_FM';
+  const mostrarFinanceiro = perfil?.empresa_id !== ID_DA_RADIO;
+
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
     { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
@@ -32,6 +36,12 @@ export default function Navbar() {
     { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
   ];
 
+  // 👇 2. INJEÇÃO DO MENU FINANCEIRO 👇
+  if (mostrarFinanceiro) {
+    menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/financeiro' });
+  }
+
+  // Lógica de Cargos que você já tinha
   if (isDirector || isManager) {
     if (isDirector) {
       menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });

@@ -10,8 +10,8 @@ import { Toast } from '@/components/Toast';
 
 export default function GoalsPage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string>('global');
@@ -52,7 +52,6 @@ const perfil = auth.perfil;
     try {
       const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
 
-      // 1. Busca Metas do Ano Selecionado
       let metaQuery = supabase.from('metas').select('*').eq('ano', anoFiltro);
       if (targetUser) metaQuery = metaQuery.eq('user_id', targetUser);
       else metaQuery = metaQuery.is('user_id', null);
@@ -61,7 +60,6 @@ const perfil = auth.perfil;
       setMetaAno(metasData?.find(m => m.mes === null)?.valor_objetivo || 0);
       setMetasMensais(metasData?.filter(m => m.mes !== null) || []);
 
-      // 2. Busca Realizado (Vendas Ganhas) no Período
       let vendasQuery = supabase.from('leads')
         .select('valor_total, created_at')
         .eq('status', 'ganho')
@@ -92,9 +90,9 @@ const perfil = auth.perfil;
     if (!isDirector) return;
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
 
-    // UPSERT: Garante que o registro seja criado ou atualizado
     const { error } = await supabase.from('metas').upsert({
       user_id: targetUser, 
+      empresa_id: perfil?.empresa_id, // 👈 CARIMBO SAAS
       ano: anoFiltro,
       mes: mes,
       valor_objetivo: Number(valor),
@@ -104,7 +102,7 @@ const perfil = auth.perfil;
     if (!error) {
       setToastMessage("Meta salva com sucesso! 🚀");
       setShowToast(true);
-      fetchMetasERealizado(); // Recarrega para atualizar os gráficos
+      fetchMetasERealizado(); 
     } else {
       console.error("Erro ao salvar:", error.message);
       alert(`Erro no banco: ${error.message}`);
@@ -119,6 +117,7 @@ const perfil = auth.perfil;
     const valorMensal = metaAno / 12;
     const novasMetas = Array.from({ length: 12 }).map((_, i) => ({
       user_id: targetUser,
+      empresa_id: perfil?.empresa_id, // 👈 CARIMBO SAAS
       ano: anoFiltro,
       mes: i + 1,
       valor_objetivo: valorMensal,

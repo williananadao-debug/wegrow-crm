@@ -10,12 +10,12 @@ import { Toast } from '@/components/Toast';
 
 export default function PremisesPage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [premissas, setPremissas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai'); // Começa na aba Inteligente
+  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai');
 
   // Form Manual
   const [selectedVendedor, setSelectedVendedor] = useState('');
@@ -47,23 +47,22 @@ const perfil = auth.perfil;
     setPremissas(data || []);
   };
 
-  // --- ESTRATÉGIA 1: Geração Manual (Placeholder) ---
   const gerarManual = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Cria registro na tabela Premissas
       await supabase.from('premissas').insert([{
         titulo: `Prospecção ${regiao}`,
         quantidade, regiao, tipo_cliente: 'Anunciante',
-        user_id: selectedVendedor, criado_por: user.id
+        user_id: selectedVendedor, criado_por: user.id,
+        empresa_id: perfil?.empresa_id // 👈 CARIMBO SAAS
       }]);
 
-      // Cria Leads Placeholders
       const leads = Array.from({ length: Number(quantidade) }).map((_, i) => ({
         empresa: `🎯 Visita #${i + 1}: ${regiao}`,
         tipo: 'Anunciante', status: 'aberto', etapa: 0,
-        user_id: selectedVendedor, checkin: 'Meta de Prospecção'
+        user_id: selectedVendedor, checkin: 'Meta de Prospecção',
+        empresa_id: perfil?.empresa_id // 👈 CARIMBO SAAS
       }));
       await supabase.from('leads').insert(leads);
 
@@ -74,16 +73,16 @@ const perfil = auth.perfil;
     setLoading(false);
   };
 
-  // --- ESTRATÉGIA 2: Inteligência Artificial (Baseada em Dados) ---
   const gerarInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      // Chama a função RPC do Supabase (O motor SQL que criamos)
+      // Nota: Como é RPC, ele roda no banco. Se o script RPC não tiver empresa_id, precisa ser atualizado depois. 
+      // Mas para a segurança do painel atual, a política RLS já bloqueia vazamentos.
       const { data, error } = await supabase.rpc('gerar_premissas_inteligentes', {
         dias_sem_compra: diasInativo,
-        vendedor_alvo: selectedVendedor || null, // Se vazio, roda pra todos
+        vendedor_alvo: selectedVendedor || null, 
         criado_por_id: user.id
       });
 

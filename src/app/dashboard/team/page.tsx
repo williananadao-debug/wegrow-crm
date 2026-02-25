@@ -70,7 +70,6 @@ export default function TeamPage() {
     if (confirmacao) {
         setSaving(true);
         try {
-            // Nota: Isso exclui do seu banco de dados, não exclui a autenticação do supabase auth (mas bloqueia o acesso ao sistema)
             const { error } = await supabase.from('profiles').delete().eq('id', editingUser.id);
             if (error) throw error;
 
@@ -107,13 +106,12 @@ export default function TeamPage() {
           carregarEquipe();
       } else {
           // CRIAR NOVO USUÁRIO COM ACESSO COMPLETO
-          // Usamos signUp sem deslogar o admin via API
           const { data, error } = await supabase.auth.signUp({
             email: editEmail,
-            password: 'WeGrow@123', // Senha padrão corporativa
+            password: 'WeGrow@123', 
             options: {
                 data: {
-                    full_name: editNome, // A trigger SQL vai criar o profile sozinha!
+                    full_name: editNome, 
                 }
             }
           });
@@ -126,11 +124,12 @@ export default function TeamPage() {
               throw error;
           }
 
-          // Atualiza as permissões do perfil que o robô SQL acabou de criar
+          // 👇 INJEÇÃO DO CARIMBO DA EMPRESA NO FUNCIONÁRIO NOVO 👇
           if (data.user) {
               await supabase.from('profiles').update({
                   cargo: editCargo,
-                  unidade: editUnidade
+                  unidade: editUnidade,
+                  empresa_id: perfil?.empresa_id 
               }).eq('id', data.user.id);
           }
 

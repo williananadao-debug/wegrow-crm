@@ -15,14 +15,15 @@ type Lancamento = {
   categoria: string;
   status: 'pago' | 'pendente';
   data_vencimento: string;
+  empresa_id?: string;
 };
 
 const ITEMS_PER_PAGE = 20;
 
 export default function FinancePage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   
   // Estados de Dados
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
@@ -131,14 +132,11 @@ const perfil = auth.perfil;
       fetchDadosFinanceiros(nextPage, false);
   };
 
-  // --- NOVA FUNÇÃO: MUDAR STATUS (PAGO/PENDENTE) ---
   const toggleStatus = async (id: number, currentStatus: string, tipo: string, valor: number) => {
     const newStatus = currentStatus === 'pago' ? 'pendente' : 'pago';
     
-    // Atualiza Visualmente (Optimistic)
     setLancamentos(prev => prev.map(l => l.id === id ? { ...l, status: newStatus as any } : l));
 
-    // Atualiza Totais Visualmente
     if (newStatus === 'pago') {
         setResumoMensal(prev => ({
             entradas: tipo === 'entrada' ? prev.entradas + valor : prev.entradas,
@@ -153,7 +151,6 @@ const perfil = auth.perfil;
         }));
     }
 
-    // Salva no Banco
     await supabase.from('lancamentos').update({ status: newStatus }).eq('id', id);
   };
 
@@ -161,7 +158,14 @@ const perfil = auth.perfil;
     e.preventDefault();
     if (!formData.titulo || !formData.valor) return alert("Preencha campos");
 
-    const payload = { ...formData, valor: parseFloat(formData.valor), user_id: user?.id };
+    // 👇 INJEÇÃO DO CARIMBO DA EMPRESA 👇
+    const payload = { 
+        ...formData, 
+        valor: parseFloat(formData.valor), 
+        user_id: user?.id,
+        empresa_id: perfil?.empresa_id
+    };
+    
     const isSameMonth = payload.data_vencimento.startsWith(mesSelecionado);
 
     const { data, error } = await supabase.from('lancamentos').insert([payload]).select();

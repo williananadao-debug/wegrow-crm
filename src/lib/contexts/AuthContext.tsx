@@ -25,9 +25,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('id', session.user.id)
           .single();
 
+        // LOG DE SEGURANÇA (Opcional, bom para você ver a mágica SaaS acontecendo)
+        if (profile) console.log('🏢 Empresa Conectada:', profile.empresa_id);
+
         setPerfil(profile);
       } else {
-        // 👇 AQUI ESTÁ A MÁGICA! A LISTA VIP DO LEÃO DE CHÁCARA
+        // 👇 A LISTA VIP DO LEÃO DE CHÁCARA
         const isPublicPage = window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
         
         if (!isPublicPage) {

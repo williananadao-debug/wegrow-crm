@@ -32,6 +32,7 @@ type Lead = {
   localizacao_url?: string; 
   foto_url?: string;
   user_id?: string;    
+  empresa_id?: string; // 👈 Adicionado tipo SaaS
   filial_id?: number;
   client_id?: number;
   contrato_inicio?: string; 
@@ -246,6 +247,7 @@ export default function DealsPage() {
         briefing: briefingAutomatico,
         client_id: lead.client_id,
         user_id: user?.id,
+        empresa_id: perfil?.empresa_id, // 👈 Job também ganha o carimbo!
         stage: 'roteiro',
         prioridade: 'media',
         deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
@@ -260,7 +262,8 @@ export default function DealsPage() {
           categoria: 'vendas',
           status: 'pendente',
           data_vencimento: new Date().toISOString().split('T')[0],
-          user_id: user?.id
+          user_id: user?.id,
+          empresa_id: perfil?.empresa_id // 👈 Financeiro também ganha o carimbo!
       }]);
   };
 
@@ -514,7 +517,12 @@ export default function DealsPage() {
       if (!navigator.onLine) return alert("⚠️ Notas só podem ser adicionadas online."); 
       if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou com o servidor. Aguarde a internet para adicionar notas.");
       
-      const { data } = await supabase.from('historico_leads').insert([{ lead_id: editingLeadId, texto: novaNota }]).select();
+      const { data } = await supabase.from('historico_leads').insert([{ 
+          lead_id: editingLeadId, 
+          texto: novaNota,
+          empresa_id: perfil?.empresa_id // 👈 Nota com carimbo!
+      }]).select();
+      
       if(data) { 
           setHistorico(prev => [{ ...data[0], created_at: data[0].created_at || new Date().toISOString() }, ...prev]); 
           setNovaNota(''); 
@@ -529,6 +537,7 @@ export default function DealsPage() {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
 
+    // 👇 O CARIMBO MÁGICO MULTI-EMPRESA 👇
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
@@ -542,7 +551,8 @@ export default function DealsPage() {
         contrato_fim: contratoFim || null,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
-        client_id: selectedClientId 
+        client_id: selectedClientId,
+        empresa_id: perfil?.empresa_id // 👈 Garante que o Lead pertence à rádio certa
     };
 
     if (editingLeadId) {
@@ -804,7 +814,6 @@ export default function DealsPage() {
                                             </div>
 
                                             <div className="mb-1 flex items-center gap-2 flex-wrap">
-                                                {/* 👇 AQUI ESTÁ A FONTE 100% BRANCA AGORA 👇 */}
                                                 <h4 className="font-black text-sm uppercase leading-tight transition-colors truncate max-w-full text-white group-hover:text-slate-200">
                                                     {lead.empresa}
                                                 </h4>

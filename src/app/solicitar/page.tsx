@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import Image from 'next/image'; // 👈 Importação do motor de imagem do Next.js
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2 } from 'lucide-react';
 
@@ -29,7 +29,9 @@ export default function PortalCliente() {
         descricao: descricaoFormatada, 
         status: 'novo', 
         origem: 'Portal Web', 
-        valor_total: 0 
+        valor_total: 0,
+        // 👇 COMO O USUÁRIO NÃO ESTÁ LOGADO, MANDAMOS PARA A SUA MATRIZ POR PADRÃO
+        empresa_id: '11111111-1111-1111-1111-111111111111' 
       }]);
 
       if (error) throw error;
@@ -72,7 +74,6 @@ export default function PortalCliente() {
 
       <div className="w-full max-w-3xl mx-auto pt-16 px-6 relative z-10 flex flex-col items-center justify-center gap-4 mb-8">
         
-        {/* 👇 O LOGO IMPECÁVEL AQUI 👇 */}
         <div className="relative h-24 md:h-28 w-64 md:w-80 flex items-center justify-center drop-shadow-[0_0_20px_rgba(249,115,22,0.4)]">
             <Image 
               src="/logo-demais.png" 

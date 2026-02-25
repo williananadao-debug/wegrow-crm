@@ -15,10 +15,11 @@ type Cliente = {
   telefone: string;
   email?: string;
   cnpj?: string;
-  cidade?: string;  // 👈 CORRIGIDO PARA BATER COM SEU BANCO
+  cidade?: string;  
   bairro?: string;  
   status: 'ativo' | 'inativo';
   user_id?: string; 
+  empresa_id?: string; // 👈 Adicionado tipo SaaS
   created_at: string;
 };
 
@@ -44,7 +45,6 @@ type VendaHistorico = {
 
 const ITEMS_PER_PAGE = 20;
 
-// Função de Máscara de ID
 const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
@@ -79,7 +79,7 @@ export default function CustomersPage() {
     telefone: '',
     email: '',
     cnpj: '',
-    cidade: '', // 👈 CORRIGIDO
+    cidade: '', 
     bairro: '', 
     status: 'ativo',
     user_id: '' 
@@ -132,7 +132,6 @@ export default function CustomersPage() {
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         
         if (busca.trim()) {
-            // 👇 BUSCA PODEROSA NA COLUNA CORRETA (cidade) 👇
             query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade.ilike.%${busca}%,bairro.ilike.%${busca}%`);
         }
 
@@ -183,7 +182,7 @@ export default function CustomersPage() {
         telefone: cliente.telefone || '',
         email: cliente.email || '',
         cnpj: cliente.cnpj || '',
-        cidade: cliente.cidade || '', // 👈 PUXANDO DO BANCO
+        cidade: cliente.cidade || '', 
         bairro: cliente.bairro || '', 
         status: cliente.status || 'ativo' as any,
         user_id: cliente.user_id || ''
@@ -214,7 +213,12 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
 
-    const payload = { ...formData };
+    // 👇 O CARIMBO MÁGICO MULTI-EMPRESA 👇
+    const payload = { 
+        ...formData,
+        empresa_id: perfil?.empresa_id // Garante que o cliente pertence à rádio certa
+    };
+    
     if (!payload.user_id) payload.user_id = user?.id;
 
     try {
@@ -336,7 +340,6 @@ export default function CustomersPage() {
                                 </span>
                             </h3>
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1.5">
-                                {/* 👇 EXIBIÇÃO INTELIGENTE DE CIDADE E BAIRRO 👇 */}
                                 {(cliente.cidade || cliente.bairro) && (
                                     <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
                                         <MapPin size={10}/> 
@@ -416,7 +419,6 @@ export default function CustomersPage() {
                         <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors uppercase" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required placeholder="Ex: Nome da Empresa"/>
                     </div>
                     
-                    {/* 👇 CAMPOS MAPEADOS CORRETAMENTE PRO BANCO 👇 */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cidade / UF</label>

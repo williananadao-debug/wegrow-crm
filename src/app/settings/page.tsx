@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 type ServicoConfig = {
-  id: string; // String para gerenciar IDs temporários e do banco
+  id: string; 
   nome: string;
   preco: number;
   tipo: string;
@@ -13,14 +13,13 @@ type ServicoConfig = {
 
 export default function SettingsPage() {
   const auth = useAuth() || {};
-const user = auth.user;
-const perfil = auth.perfil;
+  const user = auth.user;
+  const perfil = auth.perfil;
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
 
-  // 1. CARREGA DO SUPABASE
   useEffect(() => {
     if(user) carregarDados();
   }, [user]);
@@ -32,7 +31,6 @@ const perfil = auth.perfil;
     if (error) console.error("Erro ao carregar:", error);
 
     if (data && data.length > 0) {
-      // Normaliza os dados (converte ID numérico para string para compatibilidade)
       const formatados = data.map((item: any) => ({
         id: item.id.toString(),
         nome: item.nome,
@@ -46,7 +44,6 @@ const perfil = auth.perfil;
     setLoading(false);
   };
 
-  // 2. SALVAR NO SUPABASE (OTIMIZADO COM PROMISE.ALL)
   const salvarConfiguracoes = async () => {
     setSaving(true);
     setFeedback(null);
@@ -57,19 +54,17 @@ const perfil = auth.perfil;
 
         const promises = [];
 
-        // A) Inserir Novos (Batch Insert é mais rápido)
         if (novos.length > 0) {
             const payload = novos.map(s => ({
                 nome: s.nome,
                 preco: s.preco,
-                tipo: s.tipo
+                tipo: s.tipo,
+                empresa_id: perfil?.empresa_id // 👈 CARIMBO SAAS
             }));
             promises.push(supabase.from('servicos').insert(payload));
         }
 
-        // B) Atualizar Existentes (Paralelo)
         existentes.forEach(s => {
-            // Só manda update se tiver ID válido
             promises.push(
                 supabase.from('servicos').update({
                     nome: s.nome,
@@ -79,10 +74,8 @@ const perfil = auth.perfil;
             );
         });
 
-        // Executa tudo de uma vez
         const results = await Promise.all(promises);
         
-        // Verifica erros
         const errors = results.filter(r => r.error);
         if (errors.length > 0) throw new Error("Falha ao salvar alguns itens.");
 
@@ -109,7 +102,6 @@ const perfil = auth.perfil;
 
   const removerServico = async (id: string) => {
     if (!id.startsWith('temp-')) {
-        // Remove do banco imediatamente para não ficar "pendente" visualmente
         const { error } = await supabase.from('servicos').delete().eq('id', parseInt(id));
         if (error) return alert("Erro ao excluir do banco.");
     }
@@ -120,7 +112,6 @@ const perfil = auth.perfil;
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
   };
 
-  // --- VISUAL ---
   return (
     <div className="h-full overflow-y-auto custom-scrollbar p-4 md:p-8 pb-20 animate-in fade-in duration-500">
       
@@ -159,7 +150,6 @@ const perfil = auth.perfil;
             {servicos.map((servico) => (
                 <div key={servico.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 group hover:border-white/10 transition-all hover:bg-white/[0.04]">
                     
-                    {/* ÍCONE */}
                     <div className="col-span-1 flex justify-center md:justify-start pl-0 md:pl-2">
                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
                             {servico.tipo === 'Zap' && <Zap className="text-yellow-400" size={16} />}
@@ -168,7 +158,6 @@ const perfil = auth.perfil;
                         </div>
                     </div>
                     
-                    {/* NOME */}
                     <div className="col-span-12 md:col-span-5">
                         <input 
                             value={servico.nome} 
@@ -178,7 +167,6 @@ const perfil = auth.perfil;
                         />
                     </div>
 
-                    {/* PREÇO */}
                     <div className="col-span-6 md:col-span-3 flex items-center gap-2 bg-[#0F172A] rounded-lg px-3 py-2 border border-white/5 focus-within:border-[#22C55E] transition-colors">
                         <span className="text-[10px] font-black text-slate-500">R$</span>
                         <input 
@@ -190,7 +178,6 @@ const perfil = auth.perfil;
                         />
                     </div>
 
-                    {/* TIPO */}
                     <div className="col-span-5 md:col-span-2 relative">
                         <select 
                             value={servico.tipo}
@@ -203,7 +190,6 @@ const perfil = auth.perfil;
                         </select>
                     </div>
 
-                    {/* AÇÕES */}
                     <div className="col-span-1 flex justify-end">
                         <button onClick={() => removerServico(servico.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-500 transition-all">
                             <Trash2 size={16} />

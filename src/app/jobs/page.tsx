@@ -17,6 +17,7 @@ type Job = {
   deadline: string;
   created_at: string;
   user_id: string;
+  empresa_id?: string;
   unidade?: string;
   vendedor_nome?: string;
 };
@@ -28,7 +29,6 @@ const STAGES = {
   aprovacao: { title: 'Aprovação', icon: <Clock size={14}/>, color: 'border-yellow-500' }
 };
 
-// 👇 Função de Máscara de ID
 const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
@@ -142,9 +142,11 @@ export default function JobsPage() {
       e.preventDefault();
       if (!formData.titulo) return alert("Título obrigatório");
 
+      // 👇 INJEÇÃO DO CARIMBO DA EMPRESA 👇
       const payload = {
           ...formData,
           user_id: user?.id,
+          empresa_id: perfil?.empresa_id,
           vendedor_nome: formData.vendedor_nome || perfil?.nome,
           ...(editingJobId ? {} : { stage: 'roteiro' }) 
       };
@@ -284,7 +286,6 @@ export default function JobsPage() {
                               )}
 
                               <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1 mb-2">
-                                  {/* 👇 ID MASCARADO AQUI 👇 */}
                                   <div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono font-bold tracking-widest bg-white/5 px-2 py-0.5 rounded">
                                       <Hash size={10}/> {formatId(job.id, 'JB')}
                                   </div>

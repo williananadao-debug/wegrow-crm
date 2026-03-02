@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -36,7 +36,6 @@ export default function SettingsPage() {
         id: item.id.toString(),
         nome: item.nome,
         preco: item.preco, 
-        // Mantemos o valor original, se for antigo, e assumimos Comercial Gravado como padrão
         tipo: item.tipo || 'Comercial Gravado',
         unidade: item.unidade || '' 
       }));
@@ -116,18 +115,21 @@ export default function SettingsPage() {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
   };
 
-  // 👇 Mapeamento de Ícones Corrigido 👇
   const getIconeCategoria = (tipo: string) => {
     switch (tipo) {
         case 'Comercial Gravado':
-        case 'Mic2': // Legado
+        case 'Mic2': 
             return <Mic2 className="text-blue-400" size={16} />;
         case 'Feito ao Vivo':
-        case 'Zap': // Legado
             return <Megaphone className="text-yellow-400" size={16} />;
+        case 'Blitz':
+        case 'Zap': 
+            return <Zap className="text-yellow-400" size={16} />;
         case 'Patrocínio':
-        case 'Radio': // Legado
+        case 'Radio': 
             return <Radio className="text-purple-400" size={16} />;
+        case 'Impacto Jornalístico': // 👈 NOVO ÍCONE JORNALISMO
+            return <Newspaper className="text-red-400" size={16} />;
         case 'Digital':
             return <Smartphone className="text-green-400" size={16} />;
         case 'Podcast':
@@ -216,22 +218,22 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="col-span-4 md:col-span-2 relative">
-                        <select 
+                        <input 
+                            list={`categorias-list-${servico.id}`}
                             value={servico.tipo}
                             onChange={(e) => atualizarServico(servico.id, 'tipo', e.target.value)}
-                            className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer rounded-lg px-2 py-2.5 appearance-none border border-white/5 focus:border-white/20"
-                        >
-                            {/* Opções Antigas para não quebrar compatibilidade */}
-                            <option value="Zap" className="bg-[#0B1120] text-slate-500">⚡ Rápido (Legado)</option>
-                            <option value="Mic2" className="bg-[#0B1120] text-slate-500">🎙️ Gravação (Legado)</option>
-                            <option value="Radio" className="bg-[#0B1120] text-slate-500">📻 Rádio (Legado)</option>
-                            {/* Novas Opções do Manual */}
-                            <option value="Comercial Gravado" className="bg-[#0B1120]">🎙️ Comercial Gravado</option>
-                            <option value="Feito ao Vivo" className="bg-[#0B1120]">📣 Feito ao Vivo</option>
-                            <option value="Patrocínio" className="bg-[#0B1120]">📻 Patrocínio</option>
-                            <option value="Digital" className="bg-[#0B1120]">📱 Digital</option>
-                            <option value="Podcast" className="bg-[#0B1120]">🎧 Podcast</option>
-                        </select>
+                            className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none rounded-lg px-2 py-2.5 border border-white/5 focus:border-blue-500 transition-colors"
+                            placeholder="Categoria..."
+                        />
+                        <datalist id={`categorias-list-${servico.id}`}>
+                            <option value="Comercial Gravado" />
+                            <option value="Feito ao Vivo" />
+                            <option value="Blitz" />
+                            <option value="Patrocínio" />
+                            <option value="Impacto Jornalístico" /> {/* 👈 ADICIONADO NA LISTA */}
+                            <option value="Digital" />
+                            <option value="Podcast" />
+                        </datalist>
                     </div>
 
                     <div className="col-span-2 md:col-span-1 flex justify-end">

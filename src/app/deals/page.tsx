@@ -101,9 +101,6 @@ export default function DealsPage() {
   const [contratoFim, setContratoFim] = useState('');
   
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
-  const [servicoAtual, setServicoAtual] = useState('');
-  const [qtdAtual, setQtdAtual] = useState(1);
-  const [precoAtual, setPrecoAtual] = useState(0);
   const [desconto, setDesconto] = useState(0); 
 
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
@@ -229,7 +226,6 @@ export default function DealsPage() {
     };
   }, [user, isDirector]);
 
-  // 👇 Mapeamento de Ícones Corrigido 👇
   const getIcone = (tipo: string | undefined) => {
     switch (tipo) {
         case 'Comercial Gravado':
@@ -763,7 +759,6 @@ export default function DealsPage() {
   const categoriasDisponiveis = Array.from(new Set(servicosFiltradosDaUnidade.map(s => s.tipo || 'Comercial Gravado')));
   const produtosDaCategoria = servicosFiltradosDaUnidade.filter(s => (s.tipo || 'Comercial Gravado') === categoriaSelecionada);
 
-
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
       
@@ -1150,7 +1145,7 @@ export default function DealsPage() {
                         />
                     </div>
 
-                    {/* 👇 O NOVO PDV (GAVETAS) 👇 */}
+                    {/* 👇 O NOVO PDV BLINDADO 👇 */}
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">
                             <div>
@@ -1217,35 +1212,27 @@ export default function DealsPage() {
                             </div>
                         )}
 
-                        <div className="flex gap-2 border-t border-white/5 pt-4 mt-4">
-                            <input className="flex-1 bg-[#0F172A] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500" placeholder="Serviço Manual..." value={servicoAtual} onChange={e => setServicoAtual(e.target.value)} />
-                            <input type="number" className="w-14 bg-[#0F172A] border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none text-center focus:border-blue-500" placeholder="Qtd" value={qtdAtual} onChange={e => setQtdAtual(Number(e.target.value))} />
-                            <input type="number" className="w-20 bg-[#0F172A] border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none focus:border-blue-500" placeholder="R$" value={precoAtual} onChange={e => setPrecoAtual(Number(e.target.value))} />
-                            <button type="button" onClick={() => {
-                                if(!servicoAtual) return;
-                                setItensTemporarios([...itensTemporarios, { servico: servicoAtual, quantidade: qtdAtual, precoUnitario: precoAtual }]);
-                                setServicoAtual(''); setPrecoAtual(0);
-                            }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded-lg font-bold transition-colors">+</button>
-                        </div>
-
-                        <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
-                            {itensTemporarios.map((item, i) => (
-                                <div key={i} className="flex justify-between items-center bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => {
-                                            const novosItens = [...itensTemporarios];
-                                            novosItens[i].quantidade = Number(e.target.value);
-                                            setItensTemporarios(novosItens);
-                                        }}/>
-                                        <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
+                        {/* O Carrinho só aparece se tiver itens */}
+                        {itensTemporarios.length > 0 && (
+                            <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
+                                {itensTemporarios.map((item, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => {
+                                                const novosItens = [...itensTemporarios];
+                                                novosItens[i].quantidade = Number(e.target.value);
+                                                setItensTemporarios(novosItens);
+                                            }}/>
+                                            <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                            <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
-                                        <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {editingLeadId && (

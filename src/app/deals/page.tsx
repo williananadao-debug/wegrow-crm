@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, Info
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, Info, Lock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -42,6 +42,7 @@ type Lead = {
   cidade?: string;      
   descricao?: string;   
   notas?: Historico[];  
+  status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; // 👈 NOVA ALÇADA
 };
 
 type ClienteOpcao = {
@@ -70,6 +71,11 @@ export default function DealsPage() {
   const user = auth.user;
   const perfil = auth.perfil;
   
+  // 👇 A REGRA DE OURO DA DIRETORIA 👇
+  const LIMITE_DESCONTO_MAXIMO = 10; // Em Porcentagem (10%)
+  const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({}); 
@@ -111,8 +117,6 @@ export default function DealsPage() {
   
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
   const fetchData = async () => {
     setLoading(true);
@@ -274,6 +278,20 @@ export default function DealsPage() {
   };
 
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
+    const lead = leads.find(l => l.id === id);
+    
+    // 👇 BLOQUEIO DA ALÇADA DE DESCONTO 👇
+    if (novoStatus === 'ganho' || novaEtapa === 4) {
+        if (lead?.status_aprovacao === 'pendente') {
+            alert("⚠️ NEGÓCIO BLOQUEADO: Este lead está aguardando aprovação da Liderança devido ao alto desconto.");
+            return; // Impede a venda
+        }
+        if (lead?.status_aprovacao === 'recusado') {
+            alert("❌ O desconto foi RECUSADO pela diretoria. Ajuste os valores na edição antes de dar o Ganho.");
+            return; // Impede a venda
+        }
+    }
+
     let etapaFinal = novaEtapa;
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
@@ -284,13 +302,10 @@ export default function DealsPage() {
         const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
         if (error) throw error;
 
-        if (novoStatus === 'ganho') {
-            const lead = leads.find(l => l.id === id);
-            if (lead) {
-                await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
-                setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
-                setShowToast(true);
-            }
+        if (novoStatus === 'ganho' && lead) {
+            await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
+            setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
+            setShowToast(true);
         }
     } catch (error: any) {
         if (error.message === 'Failed to fetch' || !navigator.onLine) {
@@ -549,6 +564,21 @@ export default function DealsPage() {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
 
+    // 👇 MATEMÁTICA DA ALÇADA DE DESCONTO 👇
+    const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
+    let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
+
+    if (!isLideranca) {
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) {
+            novoStatusAprovacao = 'pendente';
+        } else {
+            novoStatusAprovacao = null; // Se baixou o desconto pro aceitável, libera o lead
+        }
+    } else {
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado'; // Liderança auto-aprova
+        else novoStatusAprovacao = null;
+    }
+
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
@@ -563,6 +593,7 @@ export default function DealsPage() {
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
         contrato_fim: contratoFim || null,
+        status_aprovacao: novoStatusAprovacao, // 👈 Registra o cadeado no banco
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
         client_id: selectedClientId,
@@ -618,6 +649,14 @@ export default function DealsPage() {
             }
         }
     }
+  };
+
+  const handleAprovacao = async (id: number, decisao: 'aprovado' | 'recusado') => {
+      await supabase.from('leads').update({ status_aprovacao: decisao }).eq('id', id);
+      setLeads(prev => prev.map(l => l.id === id ? { ...l, status_aprovacao: decisao } : l));
+      setIsModalOpen(false);
+      setToastMessage(decisao === 'aprovado' ? "✅ Desconto Aprovado!" : "❌ Desconto Recusado!");
+      setShowToast(true);
   };
 
   const abrirModal = async (lead?: Lead) => {
@@ -676,6 +715,7 @@ export default function DealsPage() {
 
   const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
+  const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
@@ -783,6 +823,20 @@ export default function DealsPage() {
                                         {...provided.dragHandleProps}
                                         className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
                                     >
+                                            {/* 👇 SELOS DE APROVAÇÃO NO KANBAN 👇 */}
+                                            {lead.status_aprovacao === 'pendente' && (
+                                                <div className="bg-orange-500/20 border border-orange-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-orange-400">
+                                                    <Lock size={12}/>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest animate-pulse">Aprovação Pendente</span>
+                                                </div>
+                                            )}
+                                            {lead.status_aprovacao === 'recusado' && (
+                                                <div className="bg-red-500/20 border border-red-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-red-400">
+                                                    <X size={12}/>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Desconto Recusado</span>
+                                                </div>
+                                            )}
+
                                             <div className="flex justify-between items-start mb-1">
                                                 <div className="flex items-center gap-2">
                                                     <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
@@ -809,7 +863,6 @@ export default function DealsPage() {
                                                 </div>
                                             </div>
                                             
-                                            {/* 👇 MÁGICA 2: EXIBIR BRIEFING E AVISO DO PORTAL 👇 */}
                                             {(lead.origem === 'Portal Web' || lead.descricao) && (
                                                 <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg mt-2 mb-2">
                                                     <div className="flex items-center gap-1 mb-1">
@@ -891,7 +944,12 @@ export default function DealsPage() {
                                                         AVANÇAR ETAPA
                                                     </button>
                                                     <div className="grid grid-cols-2 gap-2">
-                                                        <button onClick={() => mudarEtapa(lead.id, 4, 'ganho')} className="py-1.5 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A] rounded text-[9px] font-black uppercase tracking-wider transition-colors">GANHO</button>
+                                                        <button 
+                                                            onClick={() => mudarEtapa(lead.id, 4, 'ganho')} 
+                                                            className={`py-1.5 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${lead.status_aprovacao === 'pendente' ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]'}`}
+                                                        >
+                                                            GANHO
+                                                        </button>
                                                         <button onClick={() => mudarEtapa(lead.id, 5, 'perdido')} className="py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors">PERDIDO</button>
                                                     </div>
                                                 </div>
@@ -1033,13 +1091,13 @@ export default function DealsPage() {
                         </div>
                     </div>
 
-                    {/* 👇 NOVO BLOCO: BRIEFING DO CLIENTE (PORTAL) 👇 */}
                     <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl">
                         <label className="text-[10px] font-black uppercase text-blue-400 mb-2 flex items-center gap-1"><Info size={12}/> Briefing / Descrição (Portal)</label>
                         <textarea
-                            className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-slate-300 text-sm font-medium outline-none focus:border-blue-500 min-h-[80px] custom-scrollbar"
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-slate-400 text-sm font-medium outline-none min-h-[80px] custom-scrollbar cursor-not-allowed"
                             value={novaDescricao}
-                            onChange={e => setNovaDescricao(e.target.value)}
+                            readOnly
+                            title="O briefing original do cliente não pode ser alterado. Use as Notas para adicionar informações."
                             placeholder="O que o cliente precisa..."
                         />
                     </div>
@@ -1062,6 +1120,11 @@ export default function DealsPage() {
                                 <p className="text-sm font-black text-white bg-[#22C55E]/20 px-3 py-1 rounded-lg border border-[#22C55E]/30 inline-block">
                                     Final: R$ {totalModalFinal.toLocaleString()}
                                 </p>
+                                {percModal > 0 && (
+                                    <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${percModal > LIMITE_DESCONTO_MAXIMO ? 'text-red-400' : 'text-[#22C55E]'}`}>
+                                        ({percModal.toFixed(1)}% OFF)
+                                    </p>
+                                )}
                             </div>
                         </div>
                         
@@ -1132,12 +1195,30 @@ export default function DealsPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* 👇 PAINEL DE APROVAÇÃO (SÓ APARECE SE PASSAR DO LIMITE) 👇 */}
+                    {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
+                        <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
+                            <Lock className="text-orange-400 mx-auto mb-2" size={24}/>
+                            <h3 className="text-orange-400 font-black uppercase text-sm">Alçada de Desconto</h3>
+                            <p className="text-orange-200/70 text-[10px] mb-4 mt-1">Este negócio solicita <strong>{percModal.toFixed(1)}% de desconto</strong>. O limite do vendedor é {LIMITE_DESCONTO_MAXIMO}%.</p>
+                            
+                            {isLideranca ? (
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => handleAprovacao(editingLeadId, 'aprovado')} className="flex-1 bg-[#22C55E] text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:scale-105 transition-all">Aprovar Desconto</button>
+                                    <button type="button" onClick={() => handleAprovacao(editingLeadId, 'recusado')} className="flex-1 bg-red-500 text-white font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:scale-105 transition-all">Recusar</button>
+                                </div>
+                            ) : (
+                                <p className="text-orange-400 font-black text-xs uppercase animate-pulse border border-orange-500/20 py-2 rounded-xl bg-orange-500/10">Aguardando Diretor/Gerente</p>
+                            )}
+                        </div>
+                    )}
                 </form>
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId ? 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
-                      {editingLeadId ? 'Salvar Alterações' : 'Criar Oportunidade'}
+                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                      {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>
 

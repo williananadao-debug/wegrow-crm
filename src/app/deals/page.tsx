@@ -71,7 +71,7 @@ export default function DealsPage() {
   const user = auth.user;
   const perfil = auth.perfil;
   
-  const LIMITE_DESCONTO_MAXIMO = 10; 
+  const LIMITE_DESCONTO_MAXIMO = 5; 
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 

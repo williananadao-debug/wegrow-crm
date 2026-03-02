@@ -6,7 +6,7 @@ import {
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
-  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -73,7 +73,6 @@ export default function DealsPage() {
   const user = auth.user;
   const perfil = auth.perfil;
   
-  // 👇 A REGRA DE OURO DA DIRETORIA 👇
   const LIMITE_DESCONTO_MAXIMO = 5; 
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
@@ -107,7 +106,6 @@ export default function DealsPage() {
   const [precoAtual, setPrecoAtual] = useState(0);
   const [desconto, setDesconto] = useState(0); 
 
-  // 👇 ESTADO DO NOVO PDV (GAVETAS) 👇
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
   
   const [fotoUrl, setFotoUrl] = useState('');
@@ -231,13 +229,25 @@ export default function DealsPage() {
     };
   }, [user, isDirector]);
 
+  // 👇 Mapeamento de Ícones Corrigido 👇
   const getIcone = (tipo: string | undefined) => {
-      if(tipo === 'Comercial Gravado') return <Mic2 className="text-blue-400" size={14} />;
-      if(tipo === 'Feito ao Vivo') return <Megaphone className="text-yellow-400" size={14} />;
-      if(tipo === 'Patrocínio') return <Radio className="text-purple-400" size={14} />;
-      if(tipo === 'Digital') return <Smartphone className="text-green-400" size={14} />;
-      if(tipo === 'Podcast') return <Headphones className="text-orange-400" size={14} />;
-      return <Mic2 className="text-blue-400" size={14} />;
+    switch (tipo) {
+        case 'Comercial Gravado':
+        case 'Mic2': 
+            return <Mic2 className="text-blue-400" size={18} />;
+        case 'Feito ao Vivo':
+        case 'Zap': 
+            return <Megaphone className="text-yellow-400" size={18} />;
+        case 'Patrocínio':
+        case 'Radio': 
+            return <Radio className="text-purple-400" size={18} />;
+        case 'Digital':
+            return <Smartphone className="text-green-400" size={18} />;
+        case 'Podcast':
+            return <Headphones className="text-orange-400" size={18} />;
+        default:
+            return <Package className="text-slate-400" size={18} />;
+    }
   };
 
   const formatarData = (dataIso: string) => {
@@ -288,7 +298,6 @@ export default function DealsPage() {
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
     const lead = leads.find(l => l.id === id);
     
-    // 👇 BLOQUEIO DA ALÇADA DE DESCONTO 👇
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') {
             alert("⚠️ NEGÓCIO BLOQUEADO: Este lead está aguardando aprovação da Liderança devido ao alto desconto.");
@@ -689,7 +698,7 @@ export default function DealsPage() {
 
   const abrirModal = async (lead?: Lead) => {
     setShowClientDropdown(false); 
-    setCategoriaSelecionada(null); // Reseta a UX do PDV
+    setCategoriaSelecionada(null); 
     if (lead) {
         setEditingLeadId(lead.id);
         setNovaEmpresa(lead.empresa);
@@ -1193,11 +1202,11 @@ export default function DealsPage() {
                             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-2">
-                                        <button type="button" onClick={() => setCategoriaSelecionada(null)} className="p-1.5 bg-white/5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"><ArrowLeft size={14}/></button>
+                                        <button type="button" onClick={() => setCategoriaSelecionada(null)} className="p-1.5 bg-white/5 rounded-lg hover:bg-blue-600 hover:text-white text-slate-400 transition-colors"><ArrowLeft size={16}/></button>
                                         <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{categoriaSelecionada}</span>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                                     {produtosDaCategoria.map((s) => (
                                         <button key={s.id} type="button" onClick={() => setItensTemporarios([...itensTemporarios, { servico: s.nome, quantidade: 1, precoUnitario: s.preco }])} className="flex flex-col items-start bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/50 border border-white/10 p-3 rounded-xl transition-colors text-left group">
                                             <span className="text-[10px] text-slate-300 font-bold uppercase mb-1 line-clamp-2 leading-tight group-hover:text-blue-200">{s.nome}</span>
@@ -1216,7 +1225,7 @@ export default function DealsPage() {
                                 if(!servicoAtual) return;
                                 setItensTemporarios([...itensTemporarios, { servico: servicoAtual, quantidade: qtdAtual, precoUnitario: precoAtual }]);
                                 setServicoAtual(''); setPrecoAtual(0);
-                            }} className="bg-blue-600 text-white px-3 rounded-lg font-bold">+</button>
+                            }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded-lg font-bold transition-colors">+</button>
                         </div>
 
                         <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
@@ -1232,7 +1241,7 @@ export default function DealsPage() {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
-                                        <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 rounded"><Trash2 size={12}/></button>
+                                        <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
                                     </div>
                                 </div>
                             ))}
@@ -1275,7 +1284,7 @@ export default function DealsPage() {
                         </div>
                     )}
 
-                    {/* 👇 PAINEL DE APROVAÇÃO 👇 */}
+                    {/* 👇 PAINEL DE APROVAÇÃO (SÓ APARECE SE PASSAR DO LIMITE) 👇 */}
                     {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
                         <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
                             <Lock className="text-orange-400 mx-auto mb-2" size={24}/>
@@ -1296,7 +1305,7 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>

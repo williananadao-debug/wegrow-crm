@@ -36,6 +36,7 @@ export default function SettingsPage() {
         id: item.id.toString(),
         nome: item.nome,
         preco: item.preco, 
+        // Mantemos o valor original, se for antigo, e assumimos Comercial Gravado como padrão
         tipo: item.tipo || 'Comercial Gravado',
         unidade: item.unidade || '' 
       }));
@@ -115,13 +116,25 @@ export default function SettingsPage() {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
   };
 
+  // 👇 Mapeamento de Ícones Corrigido 👇
   const getIconeCategoria = (tipo: string) => {
-    if(tipo === 'Comercial Gravado') return <Mic2 className="text-blue-400" size={16} />;
-    if(tipo === 'Feito ao Vivo') return <Megaphone className="text-yellow-400" size={16} />;
-    if(tipo === 'Patrocínio') return <Radio className="text-purple-400" size={16} />;
-    if(tipo === 'Digital') return <Smartphone className="text-green-400" size={16} />;
-    if(tipo === 'Podcast') return <Headphones className="text-orange-400" size={16} />;
-    return <Mic2 className="text-blue-400" size={16} />;
+    switch (tipo) {
+        case 'Comercial Gravado':
+        case 'Mic2': // Legado
+            return <Mic2 className="text-blue-400" size={16} />;
+        case 'Feito ao Vivo':
+        case 'Zap': // Legado
+            return <Megaphone className="text-yellow-400" size={16} />;
+        case 'Patrocínio':
+        case 'Radio': // Legado
+            return <Radio className="text-purple-400" size={16} />;
+        case 'Digital':
+            return <Smartphone className="text-green-400" size={16} />;
+        case 'Podcast':
+            return <Headphones className="text-orange-400" size={16} />;
+        default:
+            return <Package className="text-slate-400" size={16} />;
+    }
   };
 
   return (
@@ -208,8 +221,13 @@ export default function SettingsPage() {
                             onChange={(e) => atualizarServico(servico.id, 'tipo', e.target.value)}
                             className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer rounded-lg px-2 py-2.5 appearance-none border border-white/5 focus:border-white/20"
                         >
-                            <option value="Comercial Gravado" className="bg-[#0B1120]">🎙️ Gravado</option>
-                            <option value="Feito ao Vivo" className="bg-[#0B1120]">📣 Ao Vivo</option>
+                            {/* Opções Antigas para não quebrar compatibilidade */}
+                            <option value="Zap" className="bg-[#0B1120] text-slate-500">⚡ Rápido (Legado)</option>
+                            <option value="Mic2" className="bg-[#0B1120] text-slate-500">🎙️ Gravação (Legado)</option>
+                            <option value="Radio" className="bg-[#0B1120] text-slate-500">📻 Rádio (Legado)</option>
+                            {/* Novas Opções do Manual */}
+                            <option value="Comercial Gravado" className="bg-[#0B1120]">🎙️ Comercial Gravado</option>
+                            <option value="Feito ao Vivo" className="bg-[#0B1120]">📣 Feito ao Vivo</option>
                             <option value="Patrocínio" className="bg-[#0B1120]">📻 Patrocínio</option>
                             <option value="Digital" className="bg-[#0B1120]">📱 Digital</option>
                             <option value="Podcast" className="bg-[#0B1120]">🎧 Podcast</option>

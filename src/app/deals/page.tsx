@@ -39,9 +39,9 @@ type Lead = {
   contrato_fim?: string; 
   origem?: string;
   unidade?: string; 
-  cidade?: string;      // 👈 Tubagem do Portal adicionada
-  descricao?: string;   // 👈 Tubagem do Portal adicionada
-  notas?: Historico[];  // 👈 Tubagem das Notas adicionada
+  cidade?: string;      
+  descricao?: string;   
+  notas?: Historico[];  
 };
 
 type ClienteOpcao = {
@@ -84,8 +84,8 @@ export default function DealsPage() {
   
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
-  const [novaCidade, setNovaCidade] = useState('');     // 👈 Estado Novo
-  const [novaDescricao, setNovaDescricao] = useState(''); // 👈 Estado Novo
+  const [novaCidade, setNovaCidade] = useState('');     
+  const [novaDescricao, setNovaDescricao] = useState(''); 
   
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
@@ -518,7 +518,6 @@ export default function DealsPage() {
       setUploading(false);
   };
 
-  // 👇 MÁGICA 1: AS NOTAS AGORA SÃO SALVAS DIRETAMENTE NO LEAD (SEM RLS BLOQUEANDO)
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
       if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou com o servidor. Aguarde a internet para adicionar notas.");
@@ -531,12 +530,10 @@ export default function DealsPage() {
       
       const novasNotas = [novaNotaObj, ...historico];
 
-      // Atualiza o visual instantaneamente
       setHistorico(novasNotas);
       setNovaNota('');
       setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
       
-      // Atualiza o banco de dados se tiver internet
       if (navigator.onLine) {
           await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
       } else {
@@ -556,9 +553,9 @@ export default function DealsPage() {
         empresa: novaEmpresa,
         telefone: novoTelefone,
         unidade: novaUnidade, 
-        cidade: novaCidade,       // 👈 Garante que não apaga a cidade do portal
-        descricao: novaDescricao, // 👈 Garante que não apaga o briefing do portal
-        notas: historico,         // 👈 Salva as notas junto
+        cidade: novaCidade,       
+        descricao: novaDescricao, 
+        notas: historico,         
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
         desconto: desconto, 
@@ -630,16 +627,14 @@ export default function DealsPage() {
         setNovaEmpresa(lead.empresa);
         setNovoTelefone(lead.telefone || '');
         setNovaUnidade(lead.unidade || ''); 
-        setNovaCidade(lead.cidade || '');       // Carrega dados do portal
-        setNovaDescricao(lead.descricao || ''); // Carrega dados do portal
+        setNovaCidade(lead.cidade || '');       
+        setNovaDescricao(lead.descricao || ''); 
         setSelectedClientId(lead.client_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
         setDesconto(lead.desconto || 0); 
-        
-        // Carrega as notas da nova coluna JSON
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
     } else {
         setEditingLeadId(null);
@@ -814,14 +809,14 @@ export default function DealsPage() {
                                                 </div>
                                             </div>
                                             
-                                            {/* 👇 MÁGICA 2: EXIBIR BRIEFING E CIDADE DO PORTAL 👇 */}
-                                            {lead.descricao && (
+                                            {/* 👇 MÁGICA 2: EXIBIR BRIEFING E AVISO DO PORTAL 👇 */}
+                                            {(lead.origem === 'Portal Web' || lead.descricao) && (
                                                 <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg mt-2 mb-2">
                                                     <div className="flex items-center gap-1 mb-1">
                                                         <Info size={10} className="text-blue-400"/>
                                                         <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Veio do Portal</span>
                                                     </div>
-                                                    <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>
+                                                    {lead.descricao && <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>}
                                                     {lead.cidade && (
                                                         <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>
                                                     )}
@@ -1036,6 +1031,17 @@ export default function DealsPage() {
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
                             <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
                         </div>
+                    </div>
+
+                    {/* 👇 NOVO BLOCO: BRIEFING DO CLIENTE (PORTAL) 👇 */}
+                    <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl">
+                        <label className="text-[10px] font-black uppercase text-blue-400 mb-2 flex items-center gap-1"><Info size={12}/> Briefing / Descrição (Portal)</label>
+                        <textarea
+                            className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-slate-300 text-sm font-medium outline-none focus:border-blue-500 min-h-[80px] custom-scrollbar"
+                            value={novaDescricao}
+                            onChange={e => setNovaDescricao(e.target.value)}
+                            placeholder="O que o cliente precisa..."
+                        />
                     </div>
 
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">

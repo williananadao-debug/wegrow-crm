@@ -15,7 +15,7 @@ import { syncOfflineDataToCloud } from '@/lib/syncService';
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
 type Historico = { id: number; texto: string; created_at: string; }; 
-type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string };
+type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; }; // 👈 Unidade adicionada no tipo
 
 type Lead = { 
   id: number; 
@@ -42,7 +42,7 @@ type Lead = {
   cidade?: string;      
   descricao?: string;   
   notas?: Historico[];  
-  status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; // 👈 NOVA ALÇADA
+  status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
 };
 
 type ClienteOpcao = {
@@ -71,8 +71,7 @@ export default function DealsPage() {
   const user = auth.user;
   const perfil = auth.perfil;
   
-  // 👇 A REGRA DE OURO DA DIRETORIA 👇
-  const LIMITE_DESCONTO_MAXIMO = 10; // Em Porcentagem (10%)
+  const LIMITE_DESCONTO_MAXIMO = 10; 
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
@@ -184,11 +183,12 @@ export default function DealsPage() {
     }
     setClientesOpcoes(allClientes);
 
+    // 👇 O CATÁLOGO AGORA TRAZ A UNIDADE JUNTO 👇
     const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
     if (servicosData && servicosData.length > 0) {
         setListaServicos(servicosData);
     } else {
-        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap' }]);
+        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap', unidade: '' }]);
     }
     setLoading(false);
   };
@@ -280,15 +280,14 @@ export default function DealsPage() {
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
     const lead = leads.find(l => l.id === id);
     
-    // 👇 BLOQUEIO DA ALÇADA DE DESCONTO 👇
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') {
             alert("⚠️ NEGÓCIO BLOQUEADO: Este lead está aguardando aprovação da Liderança devido ao alto desconto.");
-            return; // Impede a venda
+            return; 
         }
         if (lead?.status_aprovacao === 'recusado') {
             alert("❌ O desconto foi RECUSADO pela diretoria. Ajuste os valores na edição antes de dar o Ganho.");
-            return; // Impede a venda
+            return; 
         }
     }
 
@@ -564,7 +563,6 @@ export default function DealsPage() {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
 
-    // 👇 MATEMÁTICA DA ALÇADA DE DESCONTO 👇
     const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
     let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
 
@@ -572,10 +570,10 @@ export default function DealsPage() {
         if (percDesconto > LIMITE_DESCONTO_MAXIMO) {
             novoStatusAprovacao = 'pendente';
         } else {
-            novoStatusAprovacao = null; // Se baixou o desconto pro aceitável, libera o lead
+            novoStatusAprovacao = null; 
         }
     } else {
-        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado'; // Liderança auto-aprova
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado';
         else novoStatusAprovacao = null;
     }
 
@@ -593,7 +591,7 @@ export default function DealsPage() {
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
         contrato_fim: contratoFim || null,
-        status_aprovacao: novoStatusAprovacao, // 👈 Registra o cadeado no banco
+        status_aprovacao: novoStatusAprovacao, 
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
         client_id: selectedClientId,
@@ -716,6 +714,12 @@ export default function DealsPage() {
   const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
   const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
+
+  // 👇 FILTRO MÁGICO DE SERVIÇOS POR UNIDADE 👇
+  const servicosFiltradosDaUnidade = listaServicos.filter(s => {
+      // Se o serviço não tem unidade cadastrada (é Geral) ou se a unidade do serviço for igual à unidade selecionada no Lead
+      return !s.unidade || s.unidade === novaUnidade;
+  });
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
@@ -1066,13 +1070,14 @@ export default function DealsPage() {
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial *</label>
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" 
                                 value={novaUnidade} 
                                 onChange={e => setNovaUnidade(e.target.value)}
+                                required
                             >
-                                <option value="" className="bg-[#0B1120]">Nenhuma específica</option>
+                                <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
                                 <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
                                 <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
                                 <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
@@ -1128,16 +1133,28 @@ export default function DealsPage() {
                             </div>
                         </div>
                         
-                        <div className="flex flex-wrap gap-2 pb-2">
-                            {listaServicos.map((s) => (
-                                <button key={s.id} type="button" onClick={() => { setServicoAtual(s.nome); setPrecoAtual(s.preco); }} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-xl text-[9px] text-slate-300 font-bold uppercase transition-colors">
-                                    {getIcone(s.tipo)} {s.nome}
-                                </button>
-                            ))}
-                        </div>
+                        {/* 👇 A MÁGICA DOS SERVIÇOS POR UNIDADE 👇 */}
+                        {!novaUnidade ? (
+                            <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl text-center">
+                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest animate-pulse">Selecione a Unidade/Filial acima para ver os preços!</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2 pb-2">
+                                {servicosFiltradosDaUnidade.length === 0 ? (
+                                    <p className="text-[10px] font-bold text-slate-500 italic w-full text-center py-2">Nenhum serviço cadastrado para esta unidade.</p>
+                                ) : (
+                                    servicosFiltradosDaUnidade.map((s) => (
+                                        <button key={s.id} type="button" onClick={() => { setServicoAtual(s.nome); setPrecoAtual(s.preco); }} className="flex flex-col items-start bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-xl transition-colors min-w-[120px] text-left">
+                                            <span className="flex items-center gap-1 text-[9px] text-slate-300 font-bold uppercase mb-1">{getIcone(s.tipo)} {s.nome}</span>
+                                            <span className="text-xs font-black text-[#22C55E]">R$ {s.preco.toLocaleString('pt-BR')}</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
 
                         <div className="flex gap-2">
-                            <input className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none" placeholder="Serviço" value={servicoAtual} onChange={e => setServicoAtual(e.target.value)} />
+                            <input className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none" placeholder="Serviço Manual..." value={servicoAtual} onChange={e => setServicoAtual(e.target.value)} />
                             <input type="number" className="w-14 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none text-center" placeholder="Qtd" value={qtdAtual} onChange={e => setQtdAtual(Number(e.target.value))} />
                             <input type="number" className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none" placeholder="R$" value={precoAtual} onChange={e => setPrecoAtual(Number(e.target.value))} />
                             <button type="button" onClick={() => {
@@ -1196,7 +1213,6 @@ export default function DealsPage() {
                         </div>
                     )}
 
-                    {/* 👇 PAINEL DE APROVAÇÃO (SÓ APARECE SE PASSAR DO LIMITE) 👇 */}
                     {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
                         <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
                             <Lock className="text-orange-400 mx-auto mb-2" size={24}/>
@@ -1217,7 +1233,7 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>

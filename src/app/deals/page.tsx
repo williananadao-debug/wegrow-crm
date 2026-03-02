@@ -6,7 +6,7 @@ import {
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
-  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -188,7 +188,7 @@ export default function DealsPage() {
     if (servicosData && servicosData.length > 0) {
         setListaServicos(servicosData);
     } else {
-        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Comercial Gravado', unidade: '' }]);
+        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Blitz', unidade: '' }]);
     }
     setLoading(false);
   };
@@ -232,11 +232,15 @@ export default function DealsPage() {
         case 'Mic2': 
             return <Mic2 className="text-blue-400" size={18} />;
         case 'Feito ao Vivo':
-        case 'Zap': 
             return <Megaphone className="text-yellow-400" size={18} />;
+        case 'Blitz': 
+        case 'Zap': 
+            return <Zap className="text-yellow-400" size={18} />;
         case 'Patrocínio':
         case 'Radio': 
             return <Radio className="text-purple-400" size={18} />;
+        case 'Impacto Jornalístico': // 👈 NOVO ÍCONE JORNALISMO
+            return <Newspaper className="text-red-400" size={18} />;
         case 'Digital':
             return <Smartphone className="text-green-400" size={18} />;
         case 'Podcast':
@@ -1145,7 +1149,7 @@ export default function DealsPage() {
                         />
                     </div>
 
-                    {/* 👇 O NOVO PDV BLINDADO 👇 */}
+                    {/* 👇 O NOVO PDV BLINDADO SEM CAMPO MANUAL 👇 */}
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">
                             <div>

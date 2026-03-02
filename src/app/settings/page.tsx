@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2 } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -9,7 +9,7 @@ type ServicoConfig = {
   nome: string;
   preco: number;
   tipo: string;
-  unidade: string; // 👈 NOVA PROPRIEDADE
+  unidade: string;
 };
 
 export default function SettingsPage() {
@@ -36,8 +36,8 @@ export default function SettingsPage() {
         id: item.id.toString(),
         nome: item.nome,
         preco: item.preco, 
-        tipo: item.tipo || 'Zap',
-        unidade: item.unidade || '' // 👈 Carrega a unidade do banco
+        tipo: item.tipo || 'Comercial Gravado',
+        unidade: item.unidade || '' 
       }));
       setServicos(formatados);
     } else {
@@ -53,7 +53,6 @@ export default function SettingsPage() {
     try {
         const novos = servicos.filter(s => s.id.startsWith('temp-'));
         const existentes = servicos.filter(s => !s.id.startsWith('temp-'));
-
         const promises = [];
 
         if (novos.length > 0) {
@@ -61,7 +60,7 @@ export default function SettingsPage() {
                 nome: s.nome,
                 preco: s.preco,
                 tipo: s.tipo,
-                unidade: s.unidade, // 👈 Salva a unidade
+                unidade: s.unidade,
                 empresa_id: perfil?.empresa_id 
             }));
             promises.push(supabase.from('servicos').insert(payload));
@@ -73,13 +72,12 @@ export default function SettingsPage() {
                     nome: s.nome,
                     preco: s.preco,
                     tipo: s.tipo,
-                    unidade: s.unidade // 👈 Atualiza a unidade
+                    unidade: s.unidade
                 }).eq('id', parseInt(s.id))
             );
         });
 
         const results = await Promise.all(promises);
-        
         const errors = results.filter(r => r.error);
         if (errors.length > 0) throw new Error("Falha ao salvar alguns itens.");
 
@@ -99,8 +97,8 @@ export default function SettingsPage() {
       id: `temp-${Date.now()}`,
       nome: 'Novo Serviço',
       preco: 0,
-      tipo: 'Zap',
-      unidade: '' // 👈 Começa como "Geral"
+      tipo: 'Comercial Gravado',
+      unidade: '' 
     };
     setServicos([...servicos, novo]);
   };
@@ -115,6 +113,15 @@ export default function SettingsPage() {
 
   const atualizarServico = (id: string, campo: keyof ServicoConfig, valor: any) => {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
+  };
+
+  const getIconeCategoria = (tipo: string) => {
+    if(tipo === 'Comercial Gravado') return <Mic2 className="text-blue-400" size={16} />;
+    if(tipo === 'Feito ao Vivo') return <Megaphone className="text-yellow-400" size={16} />;
+    if(tipo === 'Patrocínio') return <Radio className="text-purple-400" size={16} />;
+    if(tipo === 'Digital') return <Smartphone className="text-green-400" size={16} />;
+    if(tipo === 'Podcast') return <Headphones className="text-orange-400" size={16} />;
+    return <Mic2 className="text-blue-400" size={16} />;
   };
 
   return (
@@ -155,16 +162,12 @@ export default function SettingsPage() {
             {servicos.map((servico) => (
                 <div key={servico.id} className="grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 group hover:border-white/10 transition-all hover:bg-white/[0.04]">
                     
-                    {/* ÍCONE (1 Coluna) */}
                     <div className="col-span-2 md:col-span-1 flex justify-center md:justify-start pl-0 md:pl-2">
                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                            {servico.tipo === 'Zap' && <Zap className="text-yellow-400" size={16} />}
-                            {servico.tipo === 'Mic2' && <Mic2 className="text-blue-400" size={16} />}
-                            {servico.tipo === 'Radio' && <Radio className="text-purple-400" size={16} />}
+                            {getIconeCategoria(servico.tipo)}
                         </div>
                     </div>
                     
-                    {/* NOME DO SERVIÇO (3 Colunas) */}
                     <div className="col-span-10 md:col-span-3">
                         <input 
                             value={servico.nome} 
@@ -174,7 +177,6 @@ export default function SettingsPage() {
                         />
                     </div>
 
-                    {/* UNIDADE / FILIAL (3 Colunas) */}
                     <div className="col-span-12 md:col-span-3 relative flex items-center bg-[#0F172A] rounded-lg px-3 py-1.5 border border-white/5 focus-within:border-blue-500 transition-colors">
                         <Building2 size={14} className="text-slate-500 mr-2 shrink-0"/>
                         <select 
@@ -189,7 +191,6 @@ export default function SettingsPage() {
                         </select>
                     </div>
 
-                    {/* PREÇO (2 Colunas) */}
                     <div className="col-span-6 md:col-span-2 flex items-center gap-2 bg-[#0F172A] rounded-lg px-3 py-2 border border-white/5 focus-within:border-[#22C55E] transition-colors">
                         <span className="text-[10px] font-black text-slate-500">R$</span>
                         <input 
@@ -201,20 +202,20 @@ export default function SettingsPage() {
                         />
                     </div>
 
-                    {/* TIPO (2 Colunas) */}
                     <div className="col-span-4 md:col-span-2 relative">
                         <select 
                             value={servico.tipo}
                             onChange={(e) => atualizarServico(servico.id, 'tipo', e.target.value)}
                             className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer rounded-lg px-2 py-2.5 appearance-none border border-white/5 focus:border-white/20"
                         >
-                            <option value="Zap" className="bg-[#0B1120]">⚡ Rápido</option>
-                            <option value="Mic2" className="bg-[#0B1120]">🎙️ Gravação</option>
-                            <option value="Radio" className="bg-[#0B1120]">📻 Rádio</option>
+                            <option value="Comercial Gravado" className="bg-[#0B1120]">🎙️ Gravado</option>
+                            <option value="Feito ao Vivo" className="bg-[#0B1120]">📣 Ao Vivo</option>
+                            <option value="Patrocínio" className="bg-[#0B1120]">📻 Patrocínio</option>
+                            <option value="Digital" className="bg-[#0B1120]">📱 Digital</option>
+                            <option value="Podcast" className="bg-[#0B1120]">🎧 Podcast</option>
                         </select>
                     </div>
 
-                    {/* LIXEIRA (1 Coluna) */}
                     <div className="col-span-2 md:col-span-1 flex justify-end">
                         <button onClick={() => removerServico(servico.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-500 transition-all">
                             <Trash2 size={16} />

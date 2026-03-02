@@ -4,7 +4,9 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, Info, Lock
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
+  Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -15,7 +17,7 @@ import { syncOfflineDataToCloud } from '@/lib/syncService';
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
 type Historico = { id: number; texto: string; created_at: string; }; 
-type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; }; // 👈 Unidade adicionada no tipo
+type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; };
 
 type Lead = { 
   id: number; 
@@ -71,6 +73,7 @@ export default function DealsPage() {
   const user = auth.user;
   const perfil = auth.perfil;
   
+  // 👇 A REGRA DE OURO DA DIRETORIA 👇
   const LIMITE_DESCONTO_MAXIMO = 5; 
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
@@ -103,6 +106,9 @@ export default function DealsPage() {
   const [qtdAtual, setQtdAtual] = useState(1);
   const [precoAtual, setPrecoAtual] = useState(0);
   const [desconto, setDesconto] = useState(0); 
+
+  // 👇 ESTADO DO NOVO PDV (GAVETAS) 👇
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
   
   const [fotoUrl, setFotoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -183,12 +189,11 @@ export default function DealsPage() {
     }
     setClientesOpcoes(allClientes);
 
-    // 👇 O CATÁLOGO AGORA TRAZ A UNIDADE JUNTO 👇
     const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
     if (servicosData && servicosData.length > 0) {
         setListaServicos(servicosData);
     } else {
-        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Zap', unidade: '' }]);
+        setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Comercial Gravado', unidade: '' }]);
     }
     setLoading(false);
   };
@@ -227,9 +232,12 @@ export default function DealsPage() {
   }, [user, isDirector]);
 
   const getIcone = (tipo: string | undefined) => {
-      if(tipo === 'Zap') return <Zap size={14} className="text-yellow-400" />;
-      if(tipo === 'Radio') return <Radio size={14} className="text-purple-400" />;
-      return <Mic2 size={14} className="text-blue-400" />;
+      if(tipo === 'Comercial Gravado') return <Mic2 className="text-blue-400" size={14} />;
+      if(tipo === 'Feito ao Vivo') return <Megaphone className="text-yellow-400" size={14} />;
+      if(tipo === 'Patrocínio') return <Radio className="text-purple-400" size={14} />;
+      if(tipo === 'Digital') return <Smartphone className="text-green-400" size={14} />;
+      if(tipo === 'Podcast') return <Headphones className="text-orange-400" size={14} />;
+      return <Mic2 className="text-blue-400" size={14} />;
   };
 
   const formatarData = (dataIso: string) => {
@@ -280,6 +288,7 @@ export default function DealsPage() {
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
     const lead = leads.find(l => l.id === id);
     
+    // 👇 BLOQUEIO DA ALÇADA DE DESCONTO 👇
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') {
             alert("⚠️ NEGÓCIO BLOQUEADO: Este lead está aguardando aprovação da Liderança devido ao alto desconto.");
@@ -366,13 +375,33 @@ export default function DealsPage() {
 
     janela.document.write(`
       <html>
-        <head><title>Proposta - ${novaEmpresa}</title><style>body{font-family:sans-serif;padding:40px;color:#333}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:30px}.logo{font-size:24px;font-weight:bold;font-style:italic}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{text-align:left;border-bottom:1px solid #ccc;padding:10px;font-size:12px;text-transform:uppercase}td{padding:10px;border-bottom:1px solid #eee}.total-box{text-align:right;font-size:16px;margin-top:5px;}.total-final{text-align:right;font-size:20px;font-weight:bold;margin-top:10px;color:#22C55E;}</style></head>
+        <head>
+          <title>Proposta - ${novaEmpresa}</title>
+          <style>
+            body{font-family:sans-serif;padding:40px;color:#333}
+            .header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:30px}
+            .logo{font-size:24px;font-weight:bold;font-style:italic}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px}
+            th{text-align:left;border-bottom:1px solid #ccc;padding:10px;font-size:12px;text-transform:uppercase}
+            td{padding:10px;border-bottom:1px solid #eee}
+            .total-box{text-align:right;font-size:16px;margin-top:5px;}
+            .total-final{text-align:right;font-size:20px;font-weight:bold;margin-top:10px;color:#22C55E;}
+          </style>
+        </head>
         <body>
-          <div class="header"><div class="logo">WEGROW</div><div>Proposta Comercial<br>${dataHoje}</div></div>
+          <div class="header">
+            <div class="logo">WEGROW</div>
+            <div>Proposta Comercial<br>${dataHoje}</div>
+          </div>
           <h3>Cliente: ${novaEmpresa}</h3>
-          <table><thead><tr><th>Item</th><th>Qtd</th><th>Valor</th><th>Total</th></tr></thead><tbody>
-          ${itensTemporarios.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade*i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}
-          </tbody></table>
+          <table>
+            <thead>
+              <tr><th>Item</th><th>Qtd</th><th>Valor</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+              ${itensTemporarios.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade*i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}
+            </tbody>
+          </table>
           <div class="total-box">Subtotal: R$ ${subtotal.toLocaleString('pt-BR')}</div>
           ${desconto > 0 ? `<div class="total-box" style="color:red">Desconto: - R$ ${desconto.toLocaleString('pt-BR')}</div>` : ''}
           <div class="total-final">Total Final: R$ ${total.toLocaleString('pt-BR')}</div>
@@ -401,20 +430,21 @@ export default function DealsPage() {
 
     janela.document.write(`
       <html>
-        <head><title>Contrato - ${lead.empresa}</title>
-        <style>
-          body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; line-height: 1.6; text-align: justify; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .ref-interna { text-align: right; font-size: 10px; color: #666; font-family: sans-serif; margin-bottom: 20px; }
-          .logo { font-size: 28px; font-weight: bold; font-style: italic; font-family: sans-serif; }
-          h1 { font-size: 18px; text-transform: uppercase; text-align: center; text-decoration: underline; margin-bottom: 30px; }
-          h2 { font-size: 14px; font-weight: bold; margin-top: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: sans-serif; font-size: 12px;}
-          th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-          th { background-color: #f0f0f0; }
-          .assinaturas { margin-top: 60px; display: flex; justify-content: space-between; gap: 40px;}
-          .assinatura-box { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 5px; }
-        </style>
+        <head>
+          <title>Contrato - ${lead.empresa}</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; line-height: 1.6; text-align: justify; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .ref-interna { text-align: right; font-size: 10px; color: #666; font-family: sans-serif; margin-bottom: 20px; }
+            .logo { font-size: 28px; font-weight: bold; font-style: italic; font-family: sans-serif; }
+            h1 { font-size: 18px; text-transform: uppercase; text-align: center; text-decoration: underline; margin-bottom: 30px; }
+            h2 { font-size: 14px; font-weight: bold; margin-top: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: sans-serif; font-size: 12px;}
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+            th { background-color: #f0f0f0; }
+            .assinaturas { margin-top: 60px; display: flex; justify-content: space-between; gap: 40px;}
+            .assinatura-box { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 5px; }
+          </style>
         </head>
         <body>
           <div class="ref-interna">Nº Registro: ${refInterna}</div>
@@ -658,7 +688,8 @@ export default function DealsPage() {
   };
 
   const abrirModal = async (lead?: Lead) => {
-    setShowClientDropdown(false);
+    setShowClientDropdown(false); 
+    setCategoriaSelecionada(null); // Reseta a UX do PDV
     if (lead) {
         setEditingLeadId(lead.id);
         setNovaEmpresa(lead.empresa);
@@ -715,11 +746,14 @@ export default function DealsPage() {
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
   const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
 
-  // 👇 FILTRO MÁGICO DE SERVIÇOS POR UNIDADE 👇
+  // 👇 FILTRO MÁGICO DE SERVIÇOS POR UNIDADE E CATEGORIA 👇
   const servicosFiltradosDaUnidade = listaServicos.filter(s => {
-      // Se o serviço não tem unidade cadastrada (é Geral) ou se a unidade do serviço for igual à unidade selecionada no Lead
       return !s.unidade || s.unidade === novaUnidade;
   });
+  
+  const categoriasDisponiveis = Array.from(new Set(servicosFiltradosDaUnidade.map(s => s.tipo || 'Comercial Gravado')));
+  const produtosDaCategoria = servicosFiltradosDaUnidade.filter(s => (s.tipo || 'Comercial Gravado') === categoriaSelecionada);
+
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2">
@@ -768,7 +802,7 @@ export default function DealsPage() {
 
       <div className="flex md:grid md:grid-cols-3 gap-2 overflow-x-auto pb-2 px-1 mb-2 snap-x snap-mandatory">
         <div className="min-w-[160px] md:min-w-0 bg-gradient-to-br from-blue-600/20 to-transparent border border-white/5 p-3 rounded-2xl shadow-xl snap-center">
-          <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Pipeline</p>
+          <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Pipeline Aberto</p>
           <p className="text-lg md:text-xl font-black text-white italic">R$ {totalAberto.toLocaleString('pt-BR', { notation: "compact" })}</p>
         </div>
         
@@ -1074,7 +1108,7 @@ export default function DealsPage() {
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" 
                                 value={novaUnidade} 
-                                onChange={e => setNovaUnidade(e.target.value)}
+                                onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }}
                                 required
                             >
                                 <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
@@ -1107,9 +1141,13 @@ export default function DealsPage() {
                         />
                     </div>
 
+                    {/* 👇 O NOVO PDV (GAVETAS) 👇 */}
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
-                        <div className="flex justify-between items-start">
-                            <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest mt-1">Itens da Proposta</p>
+                        <div className="flex justify-between items-start border-b border-white/5 pb-4">
+                            <div>
+                                <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest mt-1">Montar Proposta</p>
+                                {novaUnidade && <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Tabela: {novaUnidade}</p>}
+                            </div>
                             <div className="text-right">
                                 <p className="text-[10px] font-bold text-slate-400">Subtotal: R$ {subtotalModal.toLocaleString()}</p>
                                 <div className="flex items-center justify-end gap-2 mt-1 mb-1">
@@ -1133,30 +1171,47 @@ export default function DealsPage() {
                             </div>
                         </div>
                         
-                        {/* 👇 A MÁGICA DOS SERVIÇOS POR UNIDADE 👇 */}
                         {!novaUnidade ? (
-                            <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl text-center">
-                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest animate-pulse">Selecione a Unidade/Filial acima para ver os preços!</p>
+                            <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-center">
+                                <p className="text-xs font-black text-orange-400 uppercase tracking-widest animate-pulse">Selecione a Unidade para abrir a tabela de preços!</p>
+                            </div>
+                        ) : !categoriaSelecionada ? (
+                            <div>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Escolha a Categoria</p>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {categoriasDisponiveis.map(cat => (
+                                        <button key={cat} type="button" onClick={() => setCategoriaSelecionada(cat)} className="flex flex-col items-center justify-center p-4 bg-[#0F172A] border border-white/10 rounded-xl hover:border-blue-500 hover:bg-blue-600/10 transition-all group">
+                                            <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                {getIcone(cat)}
+                                            </div>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase text-center">{cat}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         ) : (
-                            <div className="flex flex-wrap gap-2 pb-2">
-                                {servicosFiltradosDaUnidade.length === 0 ? (
-                                    <p className="text-[10px] font-bold text-slate-500 italic w-full text-center py-2">Nenhum serviço cadastrado para esta unidade.</p>
-                                ) : (
-                                    servicosFiltradosDaUnidade.map((s) => (
-                                        <button key={s.id} type="button" onClick={() => { setServicoAtual(s.nome); setPrecoAtual(s.preco); }} className="flex flex-col items-start bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-xl transition-colors min-w-[120px] text-left">
-                                            <span className="flex items-center gap-1 text-[9px] text-slate-300 font-bold uppercase mb-1">{getIcone(s.tipo)} {s.nome}</span>
+                            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => setCategoriaSelecionada(null)} className="p-1.5 bg-white/5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"><ArrowLeft size={14}/></button>
+                                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{categoriaSelecionada}</span>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                                    {produtosDaCategoria.map((s) => (
+                                        <button key={s.id} type="button" onClick={() => setItensTemporarios([...itensTemporarios, { servico: s.nome, quantidade: 1, precoUnitario: s.preco }])} className="flex flex-col items-start bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/50 border border-white/10 p-3 rounded-xl transition-colors text-left group">
+                                            <span className="text-[10px] text-slate-300 font-bold uppercase mb-1 line-clamp-2 leading-tight group-hover:text-blue-200">{s.nome}</span>
                                             <span className="text-xs font-black text-[#22C55E]">R$ {s.preco.toLocaleString('pt-BR')}</span>
                                         </button>
-                                    ))
-                                )}
+                                    ))}
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex gap-2">
-                            <input className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none" placeholder="Serviço Manual..." value={servicoAtual} onChange={e => setServicoAtual(e.target.value)} />
-                            <input type="number" className="w-14 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none text-center" placeholder="Qtd" value={qtdAtual} onChange={e => setQtdAtual(Number(e.target.value))} />
-                            <input type="number" className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none" placeholder="R$" value={precoAtual} onChange={e => setPrecoAtual(Number(e.target.value))} />
+                        <div className="flex gap-2 border-t border-white/5 pt-4 mt-4">
+                            <input className="flex-1 bg-[#0F172A] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500" placeholder="Serviço Manual..." value={servicoAtual} onChange={e => setServicoAtual(e.target.value)} />
+                            <input type="number" className="w-14 bg-[#0F172A] border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none text-center focus:border-blue-500" placeholder="Qtd" value={qtdAtual} onChange={e => setQtdAtual(Number(e.target.value))} />
+                            <input type="number" className="w-20 bg-[#0F172A] border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none focus:border-blue-500" placeholder="R$" value={precoAtual} onChange={e => setPrecoAtual(Number(e.target.value))} />
                             <button type="button" onClick={() => {
                                 if(!servicoAtual) return;
                                 setItensTemporarios([...itensTemporarios, { servico: servicoAtual, quantidade: qtdAtual, precoUnitario: precoAtual }]);
@@ -1164,13 +1219,20 @@ export default function DealsPage() {
                             }} className="bg-blue-600 text-white px-3 rounded-lg font-bold">+</button>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
                             {itensTemporarios.map((item, i) => (
-                                <div key={i} className="flex justify-between items-center bg-white/5 p-2 rounded-lg text-[10px] text-slate-300">
-                                    <span>{item.quantidade}x {item.servico}</span>
+                                <div key={i} className="flex justify-between items-center bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
                                     <div className="flex items-center gap-2">
-                                        <span>R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
-                                        <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white"><Trash2 size={12}/></button>
+                                        <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => {
+                                            const novosItens = [...itensTemporarios];
+                                            novosItens[i].quantidade = Number(e.target.value);
+                                            setItensTemporarios(novosItens);
+                                        }}/>
+                                        <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                        <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 rounded"><Trash2 size={12}/></button>
                                     </div>
                                 </div>
                             ))}
@@ -1213,6 +1275,7 @@ export default function DealsPage() {
                         </div>
                     )}
 
+                    {/* 👇 PAINEL DE APROVAÇÃO 👇 */}
                     {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
                         <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
                             <Lock className="text-orange-400 mx-auto mb-2" size={24}/>

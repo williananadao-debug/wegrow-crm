@@ -21,6 +21,7 @@ export default function Navbar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // Apenas o Diretor (ou Admin) vai ver as Configurações
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
   const isManager = perfil?.cargo === 'gerente';
 
@@ -94,9 +95,12 @@ export default function Navbar() {
           ))}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-            <Link href="/settings" onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <Settings size={20} /> Configurações
-            </Link>
+            {/* 👇 CADEADO MOBILE: SÓ DIRETOR VÊ CONFIGURAÇÕES 👇 */}
+            {isDirector && (
+              <Link href="/settings" onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                <Settings size={20} /> Configurações
+              </Link>
+            )}
             <button onClick={() => { setIsMobileOpen(false); signOut(); }} className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm text-red-500 hover:bg-red-500/10">
               <LogOut size={20} /> Sair
             </button>
@@ -132,10 +136,13 @@ export default function Navbar() {
               ))}
 
               <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-                <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
-                  <Settings size={20} />
-                  <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
-                </Link>
+                {/* 👇 CADEADO DESKTOP: SÓ DIRETOR VÊ CONFIGURAÇÕES 👇 */}
+                {isDirector && (
+                  <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
+                    <Settings size={20} />
+                    <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
+                  </Link>
+                )}
                 <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
                   <LogOut size={20} />
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>

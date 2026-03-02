@@ -20,17 +20,18 @@ export default function PortalCliente() {
     setLoading(true);
 
     try {
-      const descricaoFormatada = `📍 Unidade/Região: ${unidade || 'Não informada'}\n\n📝 O que precisa:\n${briefing}`;
-
+      // ✅ TUBAGEM CORRIGIDA: Sem a duplicata 'empresa' que causava o erro ts(1117)
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
         telefone: contato, 
-        titulo: titulo, 
-        descricao: descricaoFormatada, 
-        status: 'novo', 
+        unidade: unidade,     
+        cidade: unidade,      
+        descricao: briefing,  
+        status: 'aberto', 
         origem: 'Portal Web', 
         valor_total: 0,
-        // 👇 COMO O USUÁRIO NÃO ESTÁ LOGADO, MANDAMOS PARA A SUA MATRIZ POR PADRÃO
+        etapa: 0, // Garante que cai na primeira coluna do Kanban
+        // 👇 SUA MATRIZ (Demais FM)
         empresa_id: '11111111-1111-1111-1111-111111111111' 
       }]);
 
@@ -57,7 +58,14 @@ export default function PortalCliente() {
             Nossa equipe comercial já recebeu os seus dados e entrará em contato em breve com uma proposta exclusiva.
           </p>
           <button 
-            onClick={() => { setSucesso(false); setTitulo(''); setBriefing(''); }}
+            onClick={() => { 
+              setSucesso(false); 
+              setEmpresa(''); 
+              setContato(''); 
+              setUnidade(''); 
+              setTitulo(''); 
+              setBriefing(''); 
+            }}
             className="w-full bg-white/5 hover:bg-white/10 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors text-xs"
           >
             Fazer nova solicitação
@@ -105,7 +113,7 @@ export default function PortalCliente() {
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1 mb-1"><Building2 size={12}/> Cidade / Região</label>
-                  <input placeholder="Opcional" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600 uppercase" value={unidade} onChange={e => setUnidade(e.target.value)} />
+                  <input placeholder="Ex: Itajaí, Balneário..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600 uppercase" value={unidade} onChange={e => setUnidade(e.target.value)} />
                 </div>
             </div>
 

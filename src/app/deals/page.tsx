@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, Info
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -32,13 +32,16 @@ type Lead = {
   localizacao_url?: string; 
   foto_url?: string;
   user_id?: string;    
-  empresa_id?: string; // 👈 Adicionado tipo SaaS
+  empresa_id?: string;
   filial_id?: number;
   client_id?: number;
   contrato_inicio?: string; 
   contrato_fim?: string; 
   origem?: string;
   unidade?: string; 
+  cidade?: string;      // 👈 Tubagem do Portal adicionada
+  descricao?: string;   // 👈 Tubagem do Portal adicionada
+  notas?: Historico[];  // 👈 Tubagem das Notas adicionada
 };
 
 type ClienteOpcao = {
@@ -81,6 +84,9 @@ export default function DealsPage() {
   
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
+  const [novaCidade, setNovaCidade] = useState('');     // 👈 Estado Novo
+  const [novaDescricao, setNovaDescricao] = useState(''); // 👈 Estado Novo
+  
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   
@@ -247,7 +253,7 @@ export default function DealsPage() {
         briefing: briefingAutomatico,
         client_id: lead.client_id,
         user_id: user?.id,
-        empresa_id: perfil?.empresa_id, // 👈 Job também ganha o carimbo!
+        empresa_id: perfil?.empresa_id,
         stage: 'roteiro',
         prioridade: 'media',
         deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
@@ -263,7 +269,7 @@ export default function DealsPage() {
           status: 'pendente',
           data_vencimento: new Date().toISOString().split('T')[0],
           user_id: user?.id,
-          empresa_id: perfil?.empresa_id // 👈 Financeiro também ganha o carimbo!
+          empresa_id: perfil?.empresa_id 
       }]);
   };
 
@@ -512,20 +518,29 @@ export default function DealsPage() {
       setUploading(false);
   };
 
+  // 👇 MÁGICA 1: AS NOTAS AGORA SÃO SALVAS DIRETAMENTE NO LEAD (SEM RLS BLOQUEANDO)
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
-      if (!navigator.onLine) return alert("⚠️ Notas só podem ser adicionadas online."); 
       if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou com o servidor. Aguarde a internet para adicionar notas.");
       
-      const { data } = await supabase.from('historico_leads').insert([{ 
-          lead_id: editingLeadId, 
-          texto: novaNota,
-          empresa_id: perfil?.empresa_id // 👈 Nota com carimbo!
-      }]).select();
+      const novaNotaObj: Historico = { 
+          id: Date.now(), 
+          texto: novaNota, 
+          created_at: new Date().toISOString() 
+      };
       
-      if(data) { 
-          setHistorico(prev => [{ ...data[0], created_at: data[0].created_at || new Date().toISOString() }, ...prev]); 
-          setNovaNota(''); 
+      const novasNotas = [novaNotaObj, ...historico];
+
+      // Atualiza o visual instantaneamente
+      setHistorico(novasNotas);
+      setNovaNota('');
+      setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
+      
+      // Atualiza o banco de dados se tiver internet
+      if (navigator.onLine) {
+          await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
+      } else {
+          await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas }, data_criacao: new Date().toISOString() });
       }
   };
 
@@ -537,11 +552,13 @@ export default function DealsPage() {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
 
-    // 👇 O CARIMBO MÁGICO MULTI-EMPRESA 👇
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
         unidade: novaUnidade, 
+        cidade: novaCidade,       // 👈 Garante que não apaga a cidade do portal
+        descricao: novaDescricao, // 👈 Garante que não apaga o briefing do portal
+        notas: historico,         // 👈 Salva as notas junto
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
         desconto: desconto, 
@@ -552,7 +569,7 @@ export default function DealsPage() {
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         user_id: user.id,
         client_id: selectedClientId,
-        empresa_id: perfil?.empresa_id // 👈 Garante que o Lead pertence à rádio certa
+        empresa_id: perfil?.empresa_id 
     };
 
     if (editingLeadId) {
@@ -613,6 +630,8 @@ export default function DealsPage() {
         setNovaEmpresa(lead.empresa);
         setNovoTelefone(lead.telefone || '');
         setNovaUnidade(lead.unidade || ''); 
+        setNovaCidade(lead.cidade || '');       // Carrega dados do portal
+        setNovaDescricao(lead.descricao || ''); // Carrega dados do portal
         setSelectedClientId(lead.client_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
@@ -620,17 +639,15 @@ export default function DealsPage() {
         setContratoFim(lead.contrato_fim || '');
         setDesconto(lead.desconto || 0); 
         
-        if (navigator.onLine && lead.id < 1000000) {
-            const { data } = await supabase.from('historico_leads').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false });
-            setHistorico(data || []);
-        } else {
-            setHistorico([]);
-        }
+        // Carrega as notas da nova coluna JSON
+        setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
         setNovoTelefone('');
         setNovaUnidade('');
+        setNovaCidade('');
+        setNovaDescricao('');
         setSelectedClientId(null);
         setItensTemporarios([]);
         setFotoUrl('');
@@ -797,7 +814,21 @@ export default function DealsPage() {
                                                 </div>
                                             </div>
                                             
-                                            <div className="mb-2">
+                                            {/* 👇 MÁGICA 2: EXIBIR BRIEFING E CIDADE DO PORTAL 👇 */}
+                                            {lead.descricao && (
+                                                <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg mt-2 mb-2">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <Info size={10} className="text-blue-400"/>
+                                                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Veio do Portal</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>
+                                                    {lead.cidade && (
+                                                        <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="mb-2 mt-2">
                                                 {lead.checkin && lead.checkin.includes('Meta') ? (
                                                     <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
                                                         <Crosshair size={12} className="text-purple-400"/>
@@ -1063,7 +1094,7 @@ export default function DealsPage() {
                     {editingLeadId && (
                         <div className="grid grid-cols-1 gap-4">
                             <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 flex flex-col">
-                                <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Notas</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Notas Rápidas</p>
                                 <div className="flex-1 overflow-y-auto max-h-32 custom-scrollbar space-y-2 mb-2">
                                     {historico.map(h => {
                                         const rawDate = h.created_at || new Date().toISOString();

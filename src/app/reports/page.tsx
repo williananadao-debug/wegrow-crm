@@ -6,7 +6,7 @@ import {
   ArrowUpRight, ArrowDownRight, Target, Calendar,
   Download, Zap, Clock, ChevronRight, Filter, 
   ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin,
-  FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft
+  FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft, CalendarDays
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -111,6 +111,7 @@ export default function ReportsPage() {
         leadsQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         supabase.from('profiles').select('id, nome'),
+        // 👇 A COLUNA 'cidade' ESTÁ AQUI NA BUSCA 👇
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(0, 999),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(1000, 1999),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(2000, 2999),
@@ -140,7 +141,8 @@ export default function ReportsPage() {
       servicosCurva, 
       estrategiasImpacto,
       performanceUnidades,
-      mapaCidades 
+      mapaCidades,
+      vendasPorDia
   } = useMemo(() => {
       
       const now = new Date();
@@ -163,8 +165,8 @@ export default function ReportsPage() {
           return true;
       });
 
-      let currentLeads = [];
-      let pastLeads = []; 
+      let currentLeads: any[] = [];
+      let pastLeads: any[] = []; 
 
       if (filtroPeriodo === 'Ano Atual') {
           currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayAnoAtual);
@@ -210,17 +212,17 @@ export default function ReportsPage() {
       
       const calcUnidades = Object.values(undObj).map((u: any) => ({
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
-      })).sort((a, b) => b.total - a.total);
+      })).sort((a: any, b: any) => b.total - a.total);
 
       // 👇 O SUPER MOTOR GEOGRÁFICO DE CAÇA ÀS CIDADES 👇
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          let rawCity = lead.cidade; // 1º Tenta a cidade amarrada direto no Lead
+          let rawCity = lead.cidade; 
           
-          if (!rawCity && lead.client_id) { // 2º Tenta via ID do cliente
+          if (!rawCity && lead.client_id) { 
               rawCity = cidadesById[lead.client_id];
           }
 
-          if (!rawCity) { // 3º Tenta vasculhar pelo Nome do Lead na base de Clientes
+          if (!rawCity) { 
               const rawLeadName = lead.empresa || lead.nome_empresa || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
               
@@ -239,9 +241,7 @@ export default function ReportsPage() {
 
           rawCity = rawCity || 'NÃO INFORMADA';
           
-          // Trata formatos como "TAIO / SC" -> "TAIO"
           let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
-          // Remove acentos para juntar "TAIÓ" e "TAIO" no mesmo grupo
           cleanCity = cleanCity.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
@@ -252,7 +252,25 @@ export default function ReportsPage() {
 
       const calcCidades = Object.values(cityObj).map((c: any) => ({
           nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0
-      })).sort((a, b) => b.total - a.total);
+      })).sort((a: any, b: any) => b.total - a.total);
+
+      // 👇 CÁLCULO: VENDAS POR DIA DA SEMANA 👇
+      const diasSemanaNomes = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
+      const diaObj = currentGanhos.reduce((acc: any, lead) => {
+          if (!lead.created_at) return acc;
+          const diaIdx = new Date(lead.created_at).getDay();
+          const nomeDia = diasSemanaNomes[diaIdx];
+
+          if (!acc[nomeDia]) acc[nomeDia] = { nome: nomeDia, total: 0, count: 0 };
+          acc[nomeDia].total += Number(lead.valor_total || 0);
+          acc[nomeDia].count += 1;
+          return acc;
+      }, {});
+      
+      const calcDiasSemana = Object.values(diaObj).map((d: any) => ({
+          nome: d.nome, total: Number(d.total) || 0, count: Number(d.count) || 0
+      })).sort((a: any, b: any) => b.total - a.total);
+
 
       const curve = currentGanhos.reduce((acc: any, curr) => {
         let itensArray = [];
@@ -284,7 +302,7 @@ export default function ReportsPage() {
 
       const calcRanking = Object.values(rankObj).map((v: any) => ({
           nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
-      })).sort((a, b) => b.total - a.total);
+      })).sort((a: any, b: any) => b.total - a.total);
 
       const calcImpacto = rawPremissas.map(p => {
           const leadsVinculados = currentLeads.filter(l => {
@@ -299,7 +317,7 @@ export default function ReportsPage() {
               conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
               faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
           };
-      }).filter(est => est.gerados > 0).sort((a, b) => b.faturamento - a.faturamento).slice(0, 5); 
+      }).filter(est => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
 
       return {
           currentMonth: calcCurrent,
@@ -308,7 +326,8 @@ export default function ReportsPage() {
           rankingVendedores: calcRanking,
           estrategiasImpacto: calcImpacto,
           performanceUnidades: calcUnidades,
-          mapaCidades: calcCidades 
+          mapaCidades: calcCidades,
+          vendasPorDia: calcDiasSemana 
       };
 
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, filtroPeriodo, filtroUnidade, filtroVendedor]);
@@ -435,36 +454,27 @@ export default function ReportsPage() {
       </div>
 
       {/* --- BARRA DE FILTROS TRIPLOS (BI) --- */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl p-1 shadow-lg">
-            <div className="pl-3 pr-2 py-1 text-slate-500">
-                <Filter size={14} />
-            </div>
-            
-            <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
+      <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-max shadow-lg mb-4">
+          <Filter size={14} className="text-slate-400 ml-4 mr-2" />
+          
+          <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
               <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
               <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
               <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
               <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
-            </select>
+          </select>
 
-            <div className="h-4 w-px bg-white/10"></div>
-
-            <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
+          <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
               <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
               {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-            </select>
+          </select>
 
-            {isDirector && (
-              <>
-                <div className="h-4 w-px bg-white/10"></div>
-                <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 hover:text-blue-300 text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
-                  <option value="Todos" className="bg-[#0B1120]">Todos Vendedores</option>
+          {isDirector && (
+              <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-xs font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-3 hover:bg-white/5 transition-colors">
+                  <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
                   {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
-                </select>
-              </>
-            )}
-        </div>
+              </select>
+          )}
       </div>
 
       {/* COMPARATIVOS KPI */}
@@ -541,7 +551,8 @@ export default function ReportsPage() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
             {rankingVendedores.length > 0 ? rankingVendedores.map((vend: any, idx: number) => {
               const vendTotal = Number(vend.total) || 0;
-              const maxVendTotal = Number(rankingVendedores[0]?.total) || 1;
+              // 👇 TS FIX AQUI 👇
+              const maxVendTotal = Number((rankingVendedores[0] as any)?.total) || 1;
               
               return (
                 <div key={vend.nome || idx} className="flex items-center gap-4 group">
@@ -586,7 +597,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {estrategiasImpacto.length > 0 ? estrategiasImpacto.map((est, i) => (
+                {estrategiasImpacto.length > 0 ? estrategiasImpacto.map((est: any, i: number) => (
                   <tr key={i} className="hover:bg-white/[0.02] transition-all group">
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
@@ -629,7 +640,8 @@ export default function ReportsPage() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
             {performanceUnidades.length > 0 ? performanceUnidades.map((und: any, idx: number) => {
               const undTotal = Number(und.total) || 0;
-              const maxUndTotal = Number(performanceUnidades[0]?.total) || 1;
+              // 👇 TS FIX AQUI 👇
+              const maxUndTotal = Number((performanceUnidades[0] as any)?.total) || 1;
               const share = currentMonth.faturamento > 0 ? Math.round((undTotal / currentMonth.faturamento) * 100) : 0;
 
               return (
@@ -656,61 +668,99 @@ export default function ReportsPage() {
 
       </div>
 
-      {/* BLOCO 3: DESEMPENHO GEOGRÁFICO PURO E RÁPIDO */}
-      <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl">
-         <div className="flex justify-between items-center mb-8">
-            <div>
-              <h3 className="text-white font-black uppercase italic flex items-center gap-2">
-                <MapPin size={20} className="text-emerald-500" /> Desempenho Geográfico (Cidades)
-              </h3>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Concentração de Receita por Região</p>
+      {/* BLOCO 3: DESEMPENHO GEOGRÁFICO E DIAS DA SEMANA */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* GEOGRÁFICO */}
+          <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+                    <MapPin size={20} className="text-emerald-500" /> Desempenho Geográfico (Cidades)
+                  </h3>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Concentração de Receita por Região</p>
+                </div>
+                <span className="bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border border-white/10 hidden md:block">
+                  {mapaCidades.length} Regiões Atingidas
+                </span>
             </div>
-            <span className="bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border border-white/10 hidden md:block">
-              {mapaCidades.length} Regiões Atingidas
-            </span>
-         </div>
 
-         <div className="max-h-[350px] overflow-y-auto custom-scrollbar pr-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
-                {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
-                    const cidTotal = Number(cid.total) || 0;
-                    const maxCidTotal = Number(mapaCidades[0]?.total) || 1;
-                    const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
-                    
-                    let heatColor = "bg-blue-500";
-                    let textColor = "text-blue-400";
-                    if (cid.nome === 'NÃO INFORMADA') { heatColor = "bg-red-500 opacity-50"; textColor = "text-red-400"; }
-                    else if (idx === 0) { heatColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"; textColor = "text-emerald-400"; }
-                    else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
+            <div className="flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                    {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
+                        const cidTotal = Number(cid.total) || 0;
+                        // 👇 TS FIX AQUI 👇
+                        const maxCidTotal = Number((mapaCidades[0] as any)?.total) || 1;
+                        const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
+                        
+                        let heatColor = "bg-blue-500";
+                        let textColor = "text-blue-400";
+                        if (cid.nome === 'NÃO INFORMADA') { heatColor = "bg-red-500 opacity-50"; textColor = "text-red-400"; }
+                        else if (idx === 0) { heatColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"; textColor = "text-emerald-400"; }
+                        else if (idx === 1 || idx === 2) { heatColor = "bg-orange-500"; textColor = "text-orange-400"; }
 
-                    return (
-                        <div key={cid.nome || idx} className="group">
-                            <div className="flex justify-between items-end mb-1">
-                                <span className="text-white font-black text-xs uppercase flex items-center gap-1 truncate pr-2" title={cid.nome}>
-                                    <MapPin size={10} className={textColor} />
-                                    {cid.nome}
-                                </span>
-                                <span className={`${textColor} font-black text-[11px] whitespace-nowrap`}>
-                                    R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
-                                </span>
+                        return (
+                            <div key={cid.nome || idx} className="group">
+                                <div className="flex justify-between items-end mb-1">
+                                    <span className="text-white font-black text-xs uppercase flex items-center gap-1 truncate pr-2" title={cid.nome}>
+                                        <MapPin size={10} className={textColor} />
+                                        {cid.nome}
+                                    </span>
+                                    <span className={`${textColor} font-black text-[11px] whitespace-nowrap`}>
+                                        R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                    <div className={`h-full ${heatColor} transition-all duration-1000`} style={{ width: `${Math.min((cidTotal / maxCidTotal) * 100, 100)}%` }} />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                    <p className="text-[9px] text-slate-500 font-bold uppercase">{cid.count} Vendas</p>
+                                    <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
+                                </div>
                             </div>
-                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                                <div className={`h-full ${heatColor} transition-all duration-1000`} style={{ width: `${Math.min((cidTotal / maxCidTotal) * 100, 100)}%` }} />
-                            </div>
-                            <div className="flex justify-between mt-1">
-                                <p className="text-[9px] text-slate-500 font-bold uppercase">{cid.count} Vendas</p>
-                                <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
-                            </div>
+                        );
+                    }) : (
+                        <div className="col-span-full flex flex-col items-center justify-center text-slate-600 opacity-50 py-10">
+                            <MapPin size={32} className="mb-2" />
+                            <p className="text-xs font-black uppercase text-center">Sem dados de localização cadastrados.</p>
                         </div>
-                    );
+                    )}
+                </div>
+            </div>
+          </div>
+
+          {/* 👇 NOVO: DIAS DA SEMANA 👇 */}
+          <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
+              <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
+                <CalendarDays size={20} className="text-amber-500" /> Pico por Dia da Semana
+              </h3>
+              <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
+                {vendasPorDia.length > 0 ? vendasPorDia.map((dia: any, idx: number) => {
+                  const diaTotal = Number(dia.total) || 0;
+                  // 👇 TS FIX AQUI 👇
+                  const maxDiaTotal = vendasPorDia.length > 0 ? Number((vendasPorDia[0] as any).total) : 1;
+                  const share = currentMonth.faturamento > 0 ? Math.round((diaTotal / currentMonth.faturamento) * 100) : 0;
+
+                  return (
+                    <div key={dia.nome || idx}>
+                      <div className="flex justify-between items-end mb-1">
+                        <span className="text-white font-black text-xs uppercase truncate pr-2">{dia.nome}</span>
+                        <span className="text-amber-500 font-black text-[11px] whitespace-nowrap">R$ {diaTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                      </div>
+                      <ProgressBar value={diaTotal} max={maxDiaTotal} color="bg-amber-500" />
+                      <div className="flex justify-between mt-1">
+                          <p className="text-[9px] text-slate-500 font-bold uppercase">{dia.count} Fechamentos</p>
+                          <p className="text-[9px] text-slate-400 font-black uppercase">Share: {share}%</p>
+                      </div>
+                    </div>
+                  );
                 }) : (
-                    <div className="col-span-full flex flex-col items-center justify-center text-slate-600 opacity-50 py-10">
-                        <MapPin size={32} className="mb-2" />
-                        <p className="text-xs font-black uppercase text-center">Sem dados de localização cadastrados.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-slate-600 opacity-50">
+                        <CalendarDays size={32} className="mb-2" />
+                        <p className="text-xs font-black uppercase">Sem dados diários</p>
                     </div>
                 )}
-            </div>
-         </div>
+              </div>
+          </div>
       </div>
 
       {/* MODAL DE EXPORTAÇÃO DE DADOS & PREVIEW DA TABELA */}

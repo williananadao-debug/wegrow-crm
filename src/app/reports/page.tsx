@@ -19,7 +19,7 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
-// LIMPACOR DE NOMES PARA A INTELIGÊNCIA GEOGRÁFICA
+// LIMPADOR DE NOMES PARA A INTELIGÊNCIA GEOGRÁFICA
 const normalizeString = (str: string) => {
     if (!str) return '';
     return String(str)
@@ -109,12 +109,10 @@ export default function ReportsPage() {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      // Dispara todas as buscas AO MESMO TEMPO em vez de uma depois da outra
       const [leadsRes, premissasRes, profilesRes, cli1, cli2, cli3, cli4] = await Promise.all([
         leadsQuery,
-        supabase.from('premissas').select('titulo, tipo_cliente').limit(1000), // Puxa só o necessário
+        supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        // Trazendo clientes em blocos massivos instantâneos para evitar loop while lento
         supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(0, 999),
         supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(1000, 1999),
         supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(2000, 2999),
@@ -137,91 +135,7 @@ export default function ReportsPage() {
     }
   }
 
-  const handleGeneratePreview = async () => {
-      setIsExporting(true);
-      try {
-          let dataToExport: any[] = []; 
-
-          if (exportType === 'leads') {
-              dataToExport = rawLeads.map(l => ({
-                  ID_Venda: l.id,
-                  Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
-                  Cliente: l.empresa || 'Sem nome',
-                  Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','),
-                  Status: l.status || '',
-                  Fase_Funil: l.etapa || 0,
-                  Unidade: l.unidade || 'Não informada',
-                  Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono',
-                  Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '',
-                  Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '',
-              }));
-
-          } else if (exportType === 'clientes') {
-              dataToExport = rawClientes.map(c => ({
-                  ID_Cliente: c.id,
-                  Nome_Fantasia: c.nome_empresa || '',
-                  CNPJ: c.cnpj || '',
-                  Telefone: c.telefone || '',
-                  Email: c.email || '',
-                  Cidade: c.cidade || c.cidade_uf || '',
-                  Bairro: c.bairro || '',
-                  Status: c.status || 'Ativo'
-              }));
-
-          } else if (exportType === 'jobs') {
-              let allJobs: any[] = [];
-              let page = 0;
-              let fetchMore = true;
-              while(fetchMore) {
-                  const { data } = await supabase.from('jobs').select('*').range(page * 1000, (page + 1) * 1000 - 1);
-                  if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } 
-                  else { fetchMore = false; }
-              }
-              dataToExport = allJobs.map(j => ({
-                  ID_Job: j.id,
-                  Data_Criacao: j.created_at ? new Date(j.created_at).toLocaleDateString('pt-BR') : '',
-                  Titulo: j.titulo || '',
-                  Fase_Producao: j.stage || '',
-                  Prioridade: j.prioridade || '',
-                  Prazo_Entrega: j.deadline ? new Date(j.deadline).toLocaleDateString('pt-BR') : '',
-                  Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO'
-              }));
-          }
-
-          if (dataToExport.length === 0) {
-              alert("Não há dados para exibir neste módulo.");
-              setIsExporting(false);
-              return;
-          }
-
-          setPreviewColumns(Object.keys(dataToExport[0]));
-          setPreviewData(dataToExport);
-
-      } catch (error) {
-          console.error("Erro ao gerar visualização:", error);
-          alert("Ocorreu um erro ao processar os dados.");
-      } finally {
-          setIsExporting(false);
-      }
-  };
-
-  const handleDownloadCSV = () => {
-      if (!previewData) return;
-      const timestamp = new Date().toISOString().split('T')[0];
-      const filename = `extracao_${exportType}_${timestamp}.csv`;
-      const csvContent = convertToCSV(previewData);
-      downloadFile(csvContent, filename);
-  };
-
-  const closeModal = () => {
-      setShowExportModal(false);
-      setPreviewData(null);
-  };
-
-  const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
-  const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
-
-  // 👇 LÓGICA DE MEMÓRIA (DESAFOGANDO A CPU) 👇
+  // LÓGICA DE MEMÓRIA (DESAFOGANDO A CPU)
   const { 
       currentMonth, 
       lastMonth, 
@@ -311,7 +225,6 @@ export default function ReportsPage() {
               const cleanLeadName = normalizeString(rawLeadName as string);
               
               if (cleanLeadName && cleanLeadName.length >= 3) {
-                  // A busca é feita no array pré-processado (Instantâneo)
                   const clienteEncontrado = clientesNormalizados.find(c => 
                       c.normName === cleanLeadName || 
                       c.normName.includes(cleanLeadName) || 
@@ -397,6 +310,98 @@ export default function ReportsPage() {
       };
 
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, filtroPeriodo, filtroUnidade, filtroVendedor]);
+
+  const handleGeneratePreview = async () => {
+      setIsExporting(true);
+      try {
+          let dataToExport: any[] = []; 
+
+          if (exportType === 'leads') {
+              dataToExport = rawLeads.map(l => ({
+                  ID_Venda: l.id,
+                  Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
+                  Cliente: l.empresa || 'Sem nome',
+                  Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','),
+                  Status: l.status || '',
+                  Fase_Funil: l.etapa || 0,
+                  Unidade: l.unidade || 'Não informada',
+                  Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono',
+                  Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '',
+                  Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '',
+              }));
+
+          } else if (exportType === 'clientes') {
+              dataToExport = rawClientes.map(c => ({
+                  ID_Cliente: c.id,
+                  Nome_Fantasia: c.nome_empresa || '',
+                  CNPJ: c.cnpj || '',
+                  Telefone: c.telefone || '',
+                  Email: c.email || '',
+                  Cidade: c.cidade || c.cidade_uf || '',
+                  Bairro: c.bairro || '',
+                  Status: c.status || 'Ativo'
+              }));
+
+          } else if (exportType === 'jobs') {
+              let allJobs: any[] = [];
+              let page = 0;
+              let fetchMore = true;
+              while(fetchMore) {
+                  const { data } = await supabase.from('jobs').select('*').range(page * 1000, (page + 1) * 1000 - 1);
+                  if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } 
+                  else { fetchMore = false; }
+              }
+              dataToExport = allJobs.map(j => ({
+                  ID_Job: j.id,
+                  Data_Criacao: j.created_at ? new Date(j.created_at).toLocaleDateString('pt-BR') : '',
+                  Titulo: j.titulo || '',
+                  Fase_Producao: j.stage || '',
+                  Prioridade: j.prioridade || '',
+                  Prazo_Entrega: j.deadline ? new Date(j.deadline).toLocaleDateString('pt-BR') : '',
+                  Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO'
+              }));
+          } else if (exportType === 'cidades') {
+              // 👇 NOVA EXPORTAÇÃO GEOGRÁFICA 👇
+              dataToExport = mapaCidades.map((c: any) => ({
+                  Regiao_Cidade: c.nome,
+                  Total_Vendas: c.count,
+                  Faturamento_Bruto: c.total.toFixed(2).replace('.', ','),
+                  Ticket_Medio: c.count > 0 ? (c.total / c.count).toFixed(2).replace('.', ',') : '0,00'
+              }));
+          }
+
+          if (dataToExport.length === 0) {
+              alert("Não há dados para exibir neste módulo.");
+              setIsExporting(false);
+              return;
+          }
+
+          setPreviewColumns(Object.keys(dataToExport[0]));
+          setPreviewData(dataToExport);
+
+      } catch (error) {
+          console.error("Erro ao gerar visualização:", error);
+          alert("Ocorreu um erro ao processar os dados.");
+      } finally {
+          setIsExporting(false);
+      }
+  };
+
+  const handleDownloadCSV = () => {
+      if (!previewData) return;
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `extracao_${exportType}_${timestamp}.csv`;
+      const csvContent = convertToCSV(previewData);
+      downloadFile(csvContent, filename);
+  };
+
+  const closeModal = () => {
+      setShowExportModal(false);
+      setPreviewData(null);
+  };
+
+  const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
+  const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
   const getGrowth = (current: number, last: number) => {
     if (last === 0) return current > 0 ? 100 : 0;
@@ -747,6 +752,16 @@ export default function ReportsPage() {
                                     <div className="ml-4">
                                         <h4 className={`font-black uppercase text-sm ${exportType === 'jobs' ? 'text-white' : 'text-slate-300'}`}>3. Produção (Jobs)</h4>
                                         <p className="text-[10px] text-slate-500 mt-0.5">Andamento dos projetos, prazos e prioridades.</p>
+                                    </div>
+                                </label>
+
+                                {/* 👇 NOVA OPÇÃO DE EXPORTAÇÃO GEOGRÁFICA 👇 */}
+                                <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'cidades' ? 'bg-indigo-500/10 border-indigo-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
+                                    <input type="radio" name="exportModule" value="cidades" checked={exportType === 'cidades'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
+                                    <MapPin size={24} className={exportType === 'cidades' ? 'text-indigo-500' : 'text-slate-500'} />
+                                    <div className="ml-4">
+                                        <h4 className={`font-black uppercase text-sm ${exportType === 'cidades' ? 'text-white' : 'text-slate-300'}`}>4. Desempenho Geográfico</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Faturamento e volume de vendas consolidados por cidade.</p>
                                     </div>
                                 </label>
                             </div>

@@ -6,7 +6,7 @@ import {
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
-  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -117,6 +117,11 @@ export default function DealsPage() {
   
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // 👇 ESTADOS DA TORRE DE CONTROLE (FILTROS) 👇
+  const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
+  const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
+  const [filtroData, setFiltroData] = useState<string>(''); // YYYY-MM
 
   const fetchData = async () => {
     setLoading(true);
@@ -239,7 +244,7 @@ export default function DealsPage() {
         case 'Patrocínio':
         case 'Radio': 
             return <Radio className="text-purple-400" size={18} />;
-        case 'Impacto Jornalístico': // 👈 NOVO ÍCONE JORNALISMO
+        case 'Impacto Jornalístico': 
             return <Newspaper className="text-red-400" size={18} />;
         case 'Digital':
             return <Smartphone className="text-green-400" size={18} />;
@@ -731,14 +736,22 @@ export default function DealsPage() {
     setIsModalOpen(true);
   };
 
-  const totalGanhos = leads.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
-  const totalAberto = leads.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
+  // 👇 LÓGICA DO FILTRO DA LIDERANÇA APLICADA AQUI 👇
+  const leadsAtivos = leads.filter(l => {
+      if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
+      if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
+      if (filtroData && !l.created_at.startsWith(filtroData)) return false;
+      return true;
+  });
+
+  const totalGanhos = leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
+  const totalAberto = leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const percentMeta = metaMensal > 0 ? Math.min((totalGanhos / metaMensal) * 100, 100) : 0;
   
-  const rankingServicos = leads.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
+  const rankingServicos = leadsAtivos.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
   const getLeadsByStage = (stageIdx: number) => {
-      return leads
+      return leadsAtivos
         .filter(l => l && l.etapa === stageIdx)
         .sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -755,7 +768,6 @@ export default function DealsPage() {
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
   const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
 
-  // 👇 FILTRO MÁGICO DE SERVIÇOS POR UNIDADE E CATEGORIA 👇
   const servicosFiltradosDaUnidade = listaServicos.filter(s => {
       return !s.unidade || s.unidade === novaUnidade;
   });
@@ -787,7 +799,6 @@ export default function DealsPage() {
                 </span>
              )}
           </div>
-
         </div>
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
@@ -806,6 +817,56 @@ export default function DealsPage() {
         <div>
             <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-2"><Plus size={16} strokeWidth={3} /> Gerar</button>
         </div>
+      </div>
+
+      {/* 👇 BARRA DE FILTROS DA LIDERANÇA 👇 */}
+      <div className="flex flex-wrap items-center gap-2 px-2 mb-2">
+        <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 gap-3 flex-wrap">
+            <div className="flex items-center gap-1 text-slate-400">
+                <Filter size={12} /> <span className="text-[9px] font-bold uppercase tracking-widest">Filtros:</span>
+            </div>
+            
+            {isLideranca && (
+              <select 
+                value={filtroVendedor} 
+                onChange={e => setFiltroVendedor(e.target.value)}
+                className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer"
+              >
+                <option value="todos" className="bg-[#0B1120]">👤 Todos os Vendedores</option>
+                {Object.entries(usersMap).map(([id, nome]) => (
+                  <option key={id} value={id} className="bg-[#0B1120]">{nome}</option>
+                ))}
+              </select>
+            )}
+            
+            {isLideranca && <span className="text-white/10">|</span>}
+
+            <select 
+              value={filtroUnidade} 
+              onChange={e => setFiltroUnidade(e.target.value)}
+              className="bg-transparent border-none text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer"
+            >
+              <option value="todas" className="bg-[#0B1120]">🏢 Todas as Unidades</option>
+              <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
+              <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
+              <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
+            </select>
+
+            <span className="text-white/10">|</span>
+
+            <input 
+              type="month" 
+              value={filtroData} 
+              onChange={e => setFiltroData(e.target.value)}
+              className="bg-transparent border-none text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer"
+            />
+        </div>
+        
+        {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroData !== '') && (
+            <button onClick={() => {setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroData('');}} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-lg transition-colors text-[9px] font-bold uppercase px-3 py-2 flex items-center gap-1">
+                <X size={10}/> Limpar
+            </button>
+        )}
       </div>
 
       <div className="flex md:grid md:grid-cols-3 gap-2 overflow-x-auto pb-2 px-1 mb-2 snap-x snap-mandatory">
@@ -830,7 +891,7 @@ export default function DealsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 pb-2 h-[calc(100vh-220px)] md:h-[calc(100vh-200px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
+        <div className="flex gap-3 pb-2 h-[calc(100vh-260px)] md:h-[calc(100vh-240px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
           {Object.entries(STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);
@@ -949,7 +1010,14 @@ export default function DealsPage() {
                                                 )}
                                             </div>
 
-                                            <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
+                                            {/* 👇 ETIQUETA COM O NOME DO VENDEDOR 👇 */}
+                                            {isLideranca && lead.user_id && usersMap[lead.user_id] && (
+                                                <div className="mb-2 mt-1 inline-flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">
+                                                    <User size={8} /> {usersMap[lead.user_id]}
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2 mt-1">
                                                 {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
                                                     <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
                                                 ))}

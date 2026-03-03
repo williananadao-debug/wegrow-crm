@@ -47,12 +47,14 @@ type Lead = {
   status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
 };
 
+// 👇 ERRO DE TS CORRIGIDO AQUI (Adicionado cidade?: string) 👇
 type ClienteOpcao = {
   id: number;
   nome_empresa: string;
   telefone: string; 
   cnpj?: string;
   email?: string;
+  cidade?: string; 
 };
 
 const STAGES = {
@@ -183,7 +185,8 @@ export default function DealsPage() {
     let page = 0;
     let fetchMore = true;
     while(fetchMore) {
-        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
+        // 👇 BUSCA DA CIDADE ADICIONADA NA QUERY AQUI 👇
+        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
         if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
         else { fetchMore = false; }
     }
@@ -819,52 +822,56 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS DA LIDERANÇA REFINADA 👇 */}
-      <div className="flex flex-wrap items-center gap-2 px-2 mb-2">
-        <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl px-3 py-1.5 gap-3 flex-wrap shadow-lg">
-            <div className="flex items-center gap-1 text-slate-400">
-                <Filter size={12} /> <span className="text-[9px] font-bold uppercase tracking-widest">Filtros:</span>
+      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA 👇 */}
+      <div className="flex flex-wrap items-center gap-3 px-2 mb-4">
+        <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2 shadow-lg">
+            <div className="flex items-center gap-2 text-slate-400">
+                <Filter size={14} /> <span className="text-[10px] font-bold uppercase tracking-widest">Filtros</span>
             </div>
             
             {isLideranca && (
-              <select 
-                value={filtroVendedor} 
-                onChange={e => setFiltroVendedor(e.target.value)}
-                className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer"
-              >
-                <option value="todos" className="bg-[#0B1120]">👤 Todos os Vendedores</option>
-                {Object.entries(usersMap).map(([id, nome]) => (
-                  <option key={id} value={id} className="bg-[#0B1120]">{nome}</option>
-                ))}
-              </select>
+              <>
+                <div className="h-4 w-px bg-white/10 ml-2"></div>
+                <select 
+                  value={filtroVendedor} 
+                  onChange={e => setFiltroVendedor(e.target.value)}
+                  className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
+                >
+                  <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
+                  {Object.entries(usersMap).map(([id, nome]) => (
+                    <option key={id} value={id} className="bg-[#0F172A]">{nome}</option>
+                  ))}
+                </select>
+              </>
             )}
             
-            {isLideranca && <span className="text-white/10">|</span>}
-
+            <div className="h-4 w-px bg-white/10 ml-2"></div>
             <select 
               value={filtroUnidade} 
               onChange={e => setFiltroUnidade(e.target.value)}
-              className="bg-transparent border-none text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer"
+              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
             >
-              <option value="todas" className="bg-[#0B1120]">🏢 Todas as Unidades</option>
-              <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
-              <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
-              <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
+              <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
+              <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
+              <option value="DEMAIS FM 107,9" className="bg-[#0F172A]">DEMAIS FM 107,9</option>
+              <option value="DEMAIS FM 101,1" className="bg-[#0F172A]">DEMAIS FM 101,1</option>
             </select>
 
-            <span className="text-white/10">|</span>
-
-            <input 
-              type="month" 
-              value={filtroData} 
-              onChange={e => setFiltroData(e.target.value)}
-              className="bg-transparent border-none text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer"
-            />
+            <div className="h-4 w-px bg-white/10 ml-2"></div>
+            <div className="relative flex items-center ml-2">
+                <input 
+                  type="month" 
+                  value={filtroData} 
+                  onChange={e => setFiltroData(e.target.value)}
+                  className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
+                  title="Filtrar por Mês"
+                />
+            </div>
         </div>
         
         {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroData !== '') && (
-            <button onClick={() => {setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroData('');}} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-lg transition-colors text-[9px] font-bold uppercase px-3 py-2 flex items-center gap-1 shadow-lg">
-                <X size={10}/> Limpar
+            <button onClick={() => {setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroData('');}} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-4 py-2.5 flex items-center gap-2 shadow-lg">
+                <X size={14}/> Limpar
             </button>
         )}
       </div>
@@ -891,7 +898,7 @@ export default function DealsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 pb-2 h-[calc(100vh-260px)] md:h-[calc(100vh-240px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
+        <div className="flex gap-3 pb-2 h-[calc(100vh-280px)] md:h-[calc(100vh-260px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
           {Object.entries(STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);
@@ -1021,7 +1028,7 @@ export default function DealsPage() {
                                                 {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
                                                     <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
                                                 ))}
-                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} itens...</p>}
+                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} items...</p>}
                                             </div>
 
                                             <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
@@ -1156,6 +1163,7 @@ export default function DealsPage() {
                                                 setNovaEmpresa(c.nome_empresa);
                                                 setSelectedClientId(c.id);
                                                 setNovoTelefone(c.telefone || '');
+                                                if (c.cidade) setNovaCidade(c.cidade as string);
                                                 setShowClientDropdown(false);
                                             }}
                                         >
@@ -1217,7 +1225,6 @@ export default function DealsPage() {
                         />
                     </div>
 
-                    {/* 👇 O NOVO PDV BLINDADO SEM CAMPO MANUAL 👇 */}
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">
                             <div>
@@ -1284,7 +1291,6 @@ export default function DealsPage() {
                             </div>
                         )}
 
-                        {/* O Carrinho só aparece se tiver itens */}
                         {itensTemporarios.length > 0 && (
                             <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
                                 {itensTemporarios.map((item, i) => (
@@ -1343,7 +1349,6 @@ export default function DealsPage() {
                         </div>
                     )}
 
-                    {/* 👇 PAINEL DE APROVAÇÃO (SÓ APARECE SE PASSAR DO LIMITE) 👇 */}
                     {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
                         <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
                             <Lock className="text-orange-400 mx-auto mb-2" size={24}/>

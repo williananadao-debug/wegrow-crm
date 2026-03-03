@@ -111,10 +111,10 @@ export default function ReportsPage() {
         leadsQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(0, 999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(1000, 1999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(2000, 2999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, cidade_uf, bairro, telefone, email, cnpj, status').range(3000, 3999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(0, 999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(1000, 1999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(2000, 2999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(3000, 3999),
       ]);
 
       const allClientes = [
@@ -150,8 +150,13 @@ export default function ReportsPage() {
       const lastDayLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
-      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf || c.bairro) }), {});
+      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       
+      const clientesNormalizados = rawClientes.map(c => ({
+          ...c,
+          normName: normalizeString(c.nome_empresa)
+      })).filter(c => c.normName);
+
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
@@ -207,16 +212,37 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // 👇 MOTOR GEOGRÁFICO CORRIGIDO (Puxa primeiro do Lead, depois do Cliente) 👇
+      // 👇 O SUPER MOTOR GEOGRÁFICO DE CAÇA ÀS CIDADES 👇
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          let rawCity = lead.cidade || lead.cidade_uf; // Tenta pegar direto do lead primeiro
+          let rawCity = lead.cidade; // 1º Tenta a cidade amarrada direto no Lead
           
-          if (!rawCity && lead.client_id) { // Se não tiver no lead, tenta no cadastro de clientes
+          if (!rawCity && lead.client_id) { // 2º Tenta via ID do cliente
               rawCity = cidadesById[lead.client_id];
           }
 
+          if (!rawCity) { // 3º Tenta vasculhar pelo Nome do Lead na base de Clientes
+              const rawLeadName = lead.empresa || lead.nome_empresa || '';
+              const cleanLeadName = normalizeString(rawLeadName as string);
+              
+              if (cleanLeadName && cleanLeadName.length >= 3) {
+                  const clienteEncontrado = clientesNormalizados.find(c => 
+                      c.normName === cleanLeadName || 
+                      c.normName.includes(cleanLeadName) || 
+                      cleanLeadName.includes(c.normName)
+                  );
+
+                  if (clienteEncontrado) {
+                      rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro;
+                  }
+              }
+          }
+
           rawCity = rawCity || 'NÃO INFORMADA';
-          const cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
+          
+          // Trata formatos como "TAIO / SC" -> "TAIO"
+          let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
+          // Remove acentos para juntar "TAIÓ" e "TAIO" no mesmo grupo
+          cleanCity = cleanCity.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
           acc[cleanCity].total += Number(lead.valor_total || 0);
@@ -313,7 +339,7 @@ export default function ReportsPage() {
                   CNPJ: c.cnpj || '',
                   Telefone: c.telefone || '',
                   Email: c.email || '',
-                  Cidade: c.cidade || c.cidade_uf || '',
+                  Cidade: c.cidade || '',
                   Bairro: c.bairro || '',
                   Status: c.status || 'Ativo'
               }));
@@ -409,27 +435,36 @@ export default function ReportsPage() {
       </div>
 
       {/* --- BARRA DE FILTROS TRIPLOS (BI) --- */}
-      <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-max shadow-lg mb-4">
-          <Filter size={14} className="text-slate-400 ml-4 mr-2" />
-          
-          <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl p-1 shadow-lg">
+            <div className="pl-3 pr-2 py-1 text-slate-500">
+                <Filter size={14} />
+            </div>
+            
+            <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
               <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
               <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
               <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
               <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
-          </select>
+            </select>
 
-          <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
+            <div className="h-4 w-px bg-white/10"></div>
+
+            <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
               <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
               {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-          </select>
+            </select>
 
-          {isDirector && (
-              <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-xs font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-3 hover:bg-white/5 transition-colors">
-                  <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
+            {isDirector && (
+              <>
+                <div className="h-4 w-px bg-white/10"></div>
+                <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 hover:text-blue-300 text-[10px] font-bold uppercase outline-none cursor-pointer py-1.5 px-2 appearance-none">
+                  <option value="Todos" className="bg-[#0B1120]">Todos Vendedores</option>
                   {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
-              </select>
-          )}
+                </select>
+              </>
+            )}
+        </div>
       </div>
 
       {/* COMPARATIVOS KPI */}
@@ -651,7 +686,7 @@ export default function ReportsPage() {
                     return (
                         <div key={cid.nome || idx} className="group">
                             <div className="flex justify-between items-end mb-1">
-                                <span className="text-white font-black text-xs uppercase flex items-center gap-1 truncate pr-2">
+                                <span className="text-white font-black text-xs uppercase flex items-center gap-1 truncate pr-2" title={cid.nome}>
                                     <MapPin size={10} className={textColor} />
                                     {cid.nome}
                                 </span>

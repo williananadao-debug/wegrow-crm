@@ -47,14 +47,13 @@ type Lead = {
   status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
 };
 
-// 👇 ERRO DE TS CORRIGIDO AQUI (Adicionado cidade?: string) 👇
 type ClienteOpcao = {
   id: number;
   nome_empresa: string;
   telefone: string; 
   cnpj?: string;
   email?: string;
-  cidade?: string; 
+  cidade?: string;
 };
 
 const STAGES = {
@@ -115,7 +114,8 @@ export default function DealsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  const [metaMensal, setMetaMensal] = useState(1); 
+  // 👇 NOVO ESTADO PARA AS METAS 👇
+  const [metasBase, setMetasBase] = useState<any[]>([]); 
   
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -168,24 +168,21 @@ export default function DealsPage() {
         }
     }
 
+    // 👇 NOVA LÓGICA DA BÚSSOLA DE METAS 👇
     try {
-        const dataAtual = new Date();
-        const mesAtual = dataAtual.getMonth() + 1; 
-        const anoAtual = dataAtual.getFullYear();
-
-        let metaQuery = supabase.from('metas').select('valor_objetivo').eq('mes', mesAtual).eq('ano', anoAtual);
+        const anoAtual = new Date().getFullYear();
+        let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
         if (isDirector) metaQuery = metaQuery.is('user_id', null);
         else metaQuery = metaQuery.eq('user_id', user?.id);
 
-        const { data: metaData } = await metaQuery.single();
-        if (metaData && metaData.valor_objetivo) setMetaMensal(Number(metaData.valor_objetivo));
+        const { data: metaData } = await metaQuery;
+        if (metaData) setMetasBase(metaData);
     } catch (err) {}
 
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
     while(fetchMore) {
-        // 👇 BUSCA DA CIDADE ADICIONADA NA QUERY AQUI 👇
         const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
         if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
         else { fetchMore = false; }
@@ -303,6 +300,48 @@ export default function DealsPage() {
       }]);
   };
 
+  // 👇 AJUSTADO: CHECK-IN AUTOMÁTICO 👇
+  const fazerCheckin = (id: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!navigator.geolocation) {
+        setToastMessage("⚠️ Seu navegador não suporta geolocalização.");
+        setShowToast(true);
+        return;
+    }
+    
+    setToastMessage("🛰️ Obtendo localização exata...");
+    setShowToast(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const mapsUrl = `https://maps.google.com/?q=$${pos.coords.latitude},${pos.coords.longitude}`;
+        const now = new Date();
+        const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        
+        try {
+            const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
+            if (error) throw error;
+            
+            setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
+            setToastMessage("📍 Check-in realizado com sucesso!");
+            setShowToast(true);
+        } catch (error: any) {
+            if (error.message === 'Failed to fetch' || !navigator.onLine) {
+                await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString() });
+                setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
+                setToastMessage("📍 Salvo no Celular! Sincroniza em breve.");
+                setShowToast(true);
+            }
+        }
+      },
+      (err) => { 
+          setToastMessage("Falha no GPS ❌ Verifique as permissões."); 
+          setShowToast(true);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
   const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
     const lead = leads.find(l => l.id === id);
     
@@ -315,6 +354,11 @@ export default function DealsPage() {
             alert("❌ O desconto foi RECUSADO pela diretoria. Ajuste os valores na edição antes de dar o Ganho.");
             return; 
         }
+    }
+
+    // 👇 O GATILHO DO CHECK-IN AUTOMÁTICO 👇
+    if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) {
+        fazerCheckin(id);
     }
 
     let etapaFinal = novaEtapa;
@@ -503,40 +547,6 @@ export default function DealsPage() {
       </html>
     `);
     janela.document.close();
-  };
-
-  const fazerCheckin = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    if (!navigator.geolocation) return alert("Seu navegador ou dispositivo não suporta geolocalização.");
-    
-    setToastMessage("🛰️ Obtendo localização exata...");
-    setShowToast(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const mapsUrl = `https://maps.google.com/?q=$${pos.coords.latitude},${pos.coords.longitude}`;
-        const now = new Date();
-        const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-        
-        try {
-            const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
-            if (error) throw error;
-            
-            setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-            setToastMessage("📍 Check-in realizado com sucesso!");
-            setShowToast(true);
-        } catch (error: any) {
-            if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString() });
-                setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-                setToastMessage("📍 Salvo no Celular! Sincroniza em breve.");
-                setShowToast(true);
-            }
-        }
-      },
-      (err) => { setToastMessage("Falha no GPS ❌"); },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
   };
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
@@ -749,7 +759,19 @@ export default function DealsPage() {
 
   const totalGanhos = leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const totalAberto = leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
-  const percentMeta = metaMensal > 0 ? Math.min((totalGanhos / metaMensal) * 100, 100) : 0;
+  
+  // 👇 CÁLCULO INTELIGENTE DA META MENSAL OU ANUAL 👇
+  let valorMetaAlvo = 0;
+  if (filtroData) {
+      const [anoStr, mesStr] = filtroData.split('-');
+      const metaMes = metasBase.find(m => m.ano === parseInt(anoStr) && m.mes === parseInt(mesStr));
+      if (metaMes) valorMetaAlvo = Number(metaMes.valor_objetivo);
+  } else {
+      valorMetaAlvo = metasBase.reduce((acc, curr) => acc + Number(curr.valor_objetivo), 0);
+  }
+  const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
+  const percentMeta = Math.min((totalGanhos / metaValidaParaCalculo) * 100, 100);
+  const labelMeta = filtroData ? (isDirector ? 'Meta Mês (Global)' : 'Meta Mês') : (isDirector ? 'Meta Anual (Global)' : 'Meta Anual');
   
   const rankingServicos = leadsAtivos.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
@@ -806,9 +828,10 @@ export default function DealsPage() {
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
            <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
+              {/* 👇 TEXTO DA META AJUSTADO AQUI 👇 */}
               <span className="text-slate-400 flex items-center gap-1">
-                  <Target size={10}/> {isDirector ? 'Meta Global' : 'Meta Individual'} 
-                  <span className="text-white ml-1 font-mono">R$ {metaMensal.toLocaleString('pt-BR')}</span>
+                  <Target size={10}/> {labelMeta} 
+                  <span className="text-white ml-1 font-mono">R$ {valorMetaAlvo.toLocaleString('pt-BR')}</span>
               </span>
               <span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
            </div>
@@ -822,7 +845,7 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA 👇 */}
+      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA (SEM EMOJIS) 👇 */}
       <div className="flex flex-wrap items-center gap-3 px-2 mb-4">
         <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-slate-400">
@@ -971,7 +994,8 @@ export default function DealsPage() {
                                                     <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
                                                         <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
                                                     </button>
-                                                    <button onClick={(e) => fazerCheckin(e, lead.id)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
+                                                    {/* 👇 PASSANDO O EVENTO COMO SEGUNDO PARÂMETRO 👇 */}
+                                                    <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
                                                         <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
                                                     </button>
                                                 </div>
@@ -1028,7 +1052,7 @@ export default function DealsPage() {
                                                 {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
                                                     <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
                                                 ))}
-                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} items...</p>}
+                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} itens...</p>}
                                             </div>
 
                                             <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">

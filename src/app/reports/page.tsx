@@ -86,7 +86,6 @@ export default function ReportsPage() {
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
   const [rawClientes, setRawClientes] = useState<any[]>([]); 
 
-  // Estados do Modal de Exportação
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState('leads');
   const [isExporting, setIsExporting] = useState(false);
@@ -99,7 +98,6 @@ export default function ReportsPage() {
       if (user) fetchReportData(); 
   }, [user, perfil]);
 
-  // 👇 MOTOR DE BUSCA OTIMIZADO V8 (PARALELISMO) 👇
   async function fetchReportData() {
     setLoading(true);
     try {
@@ -135,7 +133,6 @@ export default function ReportsPage() {
     }
   }
 
-  // LÓGICA DE MEMÓRIA (DESAFOGANDO A CPU)
   const { 
       currentMonth, 
       lastMonth, 
@@ -153,14 +150,8 @@ export default function ReportsPage() {
       const lastDayLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
-      
-      // O SEGREDO: Pré-processa os nomes normalizados UMA VEZ SÓ para economizar milhões de cálculos
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.cidade_uf || c.bairro) }), {});
-      const clientesNormalizados = rawClientes.map(c => ({
-          ...c,
-          normName: normalizeString(c.nome_empresa)
-      })).filter(c => c.normName);
-
+      
       const baseFiltrada = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
@@ -216,28 +207,13 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a, b) => b.total - a.total);
 
-      // --- MOTOR GEOGRÁFICO OTIMIZADO ---
+      // 👇 MOTOR GEOGRÁFICO CORRIGIDO (Puxa primeiro do Lead, depois do Cliente) 👇
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          let rawCity = cidadesById[lead.client_id];
+          let rawCity = lead.cidade || lead.cidade_uf; // Tenta pegar direto do lead primeiro
           
-          if (!rawCity) {
-              const rawLeadName = lead.nome_empresa || lead['empresa cliente'] || lead.empresa_cliente || lead.cliente_nome || lead.nome_cliente || lead.nome || lead.empresa || lead.cliente || '';
-              const cleanLeadName = normalizeString(rawLeadName as string);
-              
-              if (cleanLeadName && cleanLeadName.length >= 3) {
-                  const clienteEncontrado = clientesNormalizados.find(c => 
-                      c.normName === cleanLeadName || 
-                      c.normName.includes(cleanLeadName) || 
-                      cleanLeadName.includes(c.normName)
-                  );
-
-                  if (clienteEncontrado) {
-                      rawCity = clienteEncontrado.cidade || clienteEncontrado.cidade_uf || clienteEncontrado.bairro;
-                  }
-              }
+          if (!rawCity && lead.client_id) { // Se não tiver no lead, tenta no cadastro de clientes
+              rawCity = cidadesById[lead.client_id];
           }
-          
-          if (!rawCity) rawCity = lead.cidade || lead.cidade_uf;
 
           rawCity = rawCity || 'NÃO INFORMADA';
           const cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
@@ -361,7 +337,6 @@ export default function ReportsPage() {
                   Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO'
               }));
           } else if (exportType === 'cidades') {
-              // 👇 NOVA EXPORTAÇÃO GEOGRÁFICA 👇
               dataToExport = mapaCidades.map((c: any) => ({
                   Regiao_Cidade: c.nome,
                   Total_Vendas: c.count,
@@ -755,7 +730,6 @@ export default function ReportsPage() {
                                     </div>
                                 </label>
 
-                                {/* 👇 NOVA OPÇÃO DE EXPORTAÇÃO GEOGRÁFICA 👇 */}
                                 <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'cidades' ? 'bg-indigo-500/10 border-indigo-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
                                     <input type="radio" name="exportModule" value="cidades" checked={exportType === 'cidades'} onChange={(e) => setExportType(e.target.value)} className="hidden" />
                                     <MapPin size={24} className={exportType === 'cidades' ? 'text-indigo-500' : 'text-slate-500'} />

@@ -118,7 +118,7 @@ export default function DealsPage() {
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 👇 ESTADOS DA TORRE DE CONTROLE (FILTROS) 👇
+  // ESTADOS DA TORRE DE CONTROLE (FILTROS)
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
   const [filtroData, setFiltroData] = useState<string>(''); // YYYY-MM
@@ -819,9 +819,9 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS DA LIDERANÇA 👇 */}
+      {/* 👇 BARRA DE FILTROS DA LIDERANÇA REFINADA 👇 */}
       <div className="flex flex-wrap items-center gap-2 px-2 mb-2">
-        <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 gap-3 flex-wrap">
+        <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl px-3 py-1.5 gap-3 flex-wrap shadow-lg">
             <div className="flex items-center gap-1 text-slate-400">
                 <Filter size={12} /> <span className="text-[9px] font-bold uppercase tracking-widest">Filtros:</span>
             </div>
@@ -863,7 +863,7 @@ export default function DealsPage() {
         </div>
         
         {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroData !== '') && (
-            <button onClick={() => {setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroData('');}} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-lg transition-colors text-[9px] font-bold uppercase px-3 py-2 flex items-center gap-1">
+            <button onClick={() => {setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroData('');}} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-lg transition-colors text-[9px] font-bold uppercase px-3 py-2 flex items-center gap-1 shadow-lg">
                 <X size={10}/> Limpar
             </button>
         )}

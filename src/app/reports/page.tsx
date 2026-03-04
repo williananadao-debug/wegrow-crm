@@ -111,7 +111,6 @@ export default function ReportsPage() {
         leadsQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        // 👇 A COLUNA 'cidade' ESTÁ AQUI NA BUSCA 👇
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(0, 999),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(1000, 1999),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(2000, 2999),
@@ -214,33 +213,21 @@ export default function ReportsPage() {
           nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
       })).sort((a: any, b: any) => b.total - a.total);
 
-      // 👇 O SUPER MOTOR GEOGRÁFICO DE CAÇA ÀS CIDADES 👇
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
           let rawCity = lead.cidade; 
+          if (!rawCity && lead.client_id) rawCity = cidadesById[lead.client_id];
           
-          if (!rawCity && lead.client_id) { 
-              rawCity = cidadesById[lead.client_id];
-          }
-
           if (!rawCity) { 
               const rawLeadName = lead.empresa || lead.nome_empresa || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
-              
               if (cleanLeadName && cleanLeadName.length >= 3) {
                   const clienteEncontrado = clientesNormalizados.find(c => 
-                      c.normName === cleanLeadName || 
-                      c.normName.includes(cleanLeadName) || 
-                      cleanLeadName.includes(c.normName)
+                      c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)
                   );
-
-                  if (clienteEncontrado) {
-                      rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro;
-                  }
+                  if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro;
               }
           }
-
           rawCity = rawCity || 'NÃO INFORMADA';
-          
           let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
           cleanCity = cleanCity.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           
@@ -249,27 +236,28 @@ export default function ReportsPage() {
           acc[cleanCity].count += 1;
           return acc;
       }, {});
+      const calcCidades = Object.values(cityObj).map((c: any) => ({ nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0 })).sort((a: any, b: any) => b.total - a.total);
 
-      const calcCidades = Object.values(cityObj).map((c: any) => ({
-          nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0
-      })).sort((a: any, b: any) => b.total - a.total);
-
-      // 👇 CÁLCULO: VENDAS POR DIA DA SEMANA 👇
+      // 👇 NOVO CÁLCULO: ORDEM CRONOLÓGICA COM DIAS VAZIOS PREENCHIDOS 👇
       const diasSemanaNomes = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
-      const diaObj = currentGanhos.reduce((acc: any, lead) => {
-          if (!lead.created_at) return acc;
-          const diaIdx = new Date(lead.created_at).getDay();
-          const nomeDia = diasSemanaNomes[diaIdx];
-
-          if (!acc[nomeDia]) acc[nomeDia] = { nome: nomeDia, total: 0, count: 0 };
-          acc[nomeDia].total += Number(lead.valor_total || 0);
-          acc[nomeDia].count += 1;
+      
+      const diaObj = diasSemanaNomes.reduce((acc: any, nome, idx) => {
+          acc[nome] = { nome, total: 0, count: 0, idx }; // Index para ordenar corretamente
           return acc;
       }, {});
+
+      currentGanhos.forEach((lead: any) => {
+          if (!lead.created_at) return;
+          const diaIdx = new Date(lead.created_at).getDay();
+          const nomeDia = diasSemanaNomes[diaIdx];
+          if (diaObj[nomeDia]) {
+              diaObj[nomeDia].total += Number(lead.valor_total || 0);
+              diaObj[nomeDia].count += 1;
+          }
+      });
       
-      const calcDiasSemana = Object.values(diaObj).map((d: any) => ({
-          nome: d.nome, total: Number(d.total) || 0, count: Number(d.count) || 0
-      })).sort((a: any, b: any) => b.total - a.total);
+      // Ordena pelo index (0 = Domingo, 6 = Sábado) em vez de ordenar pelo valor total
+      const calcDiasSemana = Object.values(diaObj).sort((a: any, b: any) => a.idx - b.idx);
 
 
       const curve = currentGanhos.reduce((acc: any, curr) => {
@@ -317,7 +305,7 @@ export default function ReportsPage() {
               conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
               faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
           };
-      }).filter(est => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
+      }).filter(est => est.gerados > 0).sort((a, b) => b.faturamento - a.faturamento).slice(0, 5); 
 
       return {
           currentMonth: calcCurrent,
@@ -551,7 +539,6 @@ export default function ReportsPage() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
             {rankingVendedores.length > 0 ? rankingVendedores.map((vend: any, idx: number) => {
               const vendTotal = Number(vend.total) || 0;
-              // 👇 TS FIX AQUI 👇
               const maxVendTotal = Number((rankingVendedores[0] as any)?.total) || 1;
               
               return (
@@ -640,7 +627,6 @@ export default function ReportsPage() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
             {performanceUnidades.length > 0 ? performanceUnidades.map((und: any, idx: number) => {
               const undTotal = Number(und.total) || 0;
-              // 👇 TS FIX AQUI 👇
               const maxUndTotal = Number((performanceUnidades[0] as any)?.total) || 1;
               const share = currentMonth.faturamento > 0 ? Math.round((undTotal / currentMonth.faturamento) * 100) : 0;
 
@@ -688,7 +674,6 @@ export default function ReportsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                     {mapaCidades.length > 0 ? mapaCidades.map((cid: any, idx: number) => {
                         const cidTotal = Number(cid.total) || 0;
-                        // 👇 TS FIX AQUI 👇
                         const maxCidTotal = Number((mapaCidades[0] as any)?.total) || 1;
                         const share = currentMonth.faturamento > 0 ? Math.round((cidTotal / currentMonth.faturamento) * 100) : 0;
                         
@@ -728,7 +713,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* 👇 NOVO: DIAS DA SEMANA 👇 */}
+          {/* 👇 NOVO: DIAS DA SEMANA COM ORDEM CRONOLÓGICA 👇 */}
           <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
               <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
                 <CalendarDays size={20} className="text-amber-500" /> Pico por Dia da Semana
@@ -736,8 +721,10 @@ export default function ReportsPage() {
               <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
                 {vendasPorDia.length > 0 ? vendasPorDia.map((dia: any, idx: number) => {
                   const diaTotal = Number(dia.total) || 0;
-                  // 👇 TS FIX AQUI 👇
-                  const maxDiaTotal = vendasPorDia.length > 0 ? Number((vendasPorDia[0] as any).total) : 1;
+                  
+                  // TS FIX: Calcula o valor máximo dentre os dias (necessário porque os dias agora não estão ordenados por valor)
+                  const maxDiaTotal = Math.max(...vendasPorDia.map((d: any) => Number(d.total)), 1);
+                  
                   const share = currentMonth.faturamento > 0 ? Math.round((diaTotal / currentMonth.faturamento) * 100) : 0;
 
                   return (

@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
+  Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter
 } from 'lucide-react';
@@ -81,6 +81,8 @@ export default function DealsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({}); 
+  // 👇 NOVO ESTADO: Guarda TODOS os perfis para o filtro
+  const [todosPerfis, setTodosPerfis] = useState<{id: string, nome: string}[]>([]); 
   const [clientesOpcoes, setClientesOpcoes] = useState<ClienteOpcao[]>([]);
   const [listaServicos, setListaServicos] = useState<ServicoConfig[]>([]);
   
@@ -119,7 +121,6 @@ export default function DealsPage() {
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // ESTADOS DA TORRE DE CONTROLE (FILTROS)
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
   const [filtroData, setFiltroData] = useState<string>(''); // YYYY-MM
@@ -158,13 +159,12 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    const userIds = Array.from(new Set(leadsFiltrados.map(l => l?.user_id).filter(Boolean)));
-    if (userIds.length > 0) {
-        const { data: perfisData } = await supabase.from('profiles').select('id, nome').in('id', userIds as string[]);
-        if (perfisData) {
-            const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
-            setUsersMap(mapa);
-        }
+    // 👇 SOLUÇÃO: Busca TODA a equipe do Banco para o Filtro 👇
+    const { data: perfisData } = await supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
+    if (perfisData) {
+        setTodosPerfis(perfisData);
+        const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
+        setUsersMap(mapa);
     }
 
     try {
@@ -760,7 +760,6 @@ export default function DealsPage() {
   const totalGanhos = leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const totalAberto = leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   
-  // 👇 CÁLCULO INTELIGENTE DA META MENSAL OU ANUAL (CORRIGIDO PARA NÃO DUPLICAR) 👇
   let valorMetaAlvo = 0;
   if (filtroData) {
       const [anoStr, mesStr] = filtroData.split('-');
@@ -850,7 +849,6 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA (CLEAN DESIGN) 👇 */}
       <div className="flex flex-wrap items-center gap-3 px-2 mb-4">
         <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-slate-400">
@@ -863,11 +861,12 @@ export default function DealsPage() {
                 <select 
                   value={filtroVendedor} 
                   onChange={e => setFiltroVendedor(e.target.value)}
-                  className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer ml-2"
+                  className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
                 >
                   <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
-                  {Object.entries(usersMap).map(([id, nome]) => (
-                    <option key={id} value={id} className="bg-[#0F172A]">{nome}</option>
+                  {/* 👇 AQUI ESTÁ O MAPA DE TODOS OS PERFIS 👇 */}
+                  {todosPerfis.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-[#0F172A]">{p.nome}</option>
                   ))}
                 </select>
               </>
@@ -877,7 +876,7 @@ export default function DealsPage() {
             <select 
               value={filtroUnidade} 
               onChange={e => setFiltroUnidade(e.target.value)}
-              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer ml-2"
+              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
             >
               <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
               <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
@@ -965,7 +964,6 @@ export default function DealsPage() {
                                         {...provided.dragHandleProps}
                                         className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
                                     >
-                                            {/* 👇 SELOS DE APROVAÇÃO NO KANBAN 👇 */}
                                             {lead.status_aprovacao === 'pendente' && (
                                                 <div className="bg-orange-500/20 border border-orange-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-orange-400">
                                                     <Lock size={12}/>
@@ -1045,7 +1043,6 @@ export default function DealsPage() {
                                                 )}
                                             </div>
 
-                                            {/* 👇 ETIQUETA COM O NOME DO VENDEDOR 👇 */}
                                             {isLideranca && lead.user_id && usersMap[lead.user_id] && (
                                                 <div className="mb-2 mt-1 inline-flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">
                                                     <User size={8} /> {usersMap[lead.user_id]}

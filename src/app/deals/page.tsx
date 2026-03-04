@@ -114,7 +114,6 @@ export default function DealsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // 👇 NOVO ESTADO PARA AS METAS 👇
   const [metasBase, setMetasBase] = useState<any[]>([]); 
   
   const [isOffline, setIsOffline] = useState(false);
@@ -168,7 +167,6 @@ export default function DealsPage() {
         }
     }
 
-    // 👇 NOVA LÓGICA DA BÚSSOLA DE METAS 👇
     try {
         const anoAtual = new Date().getFullYear();
         let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
@@ -300,16 +298,15 @@ export default function DealsPage() {
       }]);
   };
 
-  // 👇 AJUSTADO: CHECK-IN AUTOMÁTICO 👇
   const fazerCheckin = (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!navigator.geolocation) {
-        setToastMessage("⚠️ Seu navegador não suporta geolocalização.");
+        setToastMessage("⚠️ Seu navegador/dispositivo não suporta GPS.");
         setShowToast(true);
         return;
     }
     
-    setToastMessage("🛰️ Obtendo localização exata...");
+    setToastMessage("🛰️ Puxando GPS do satélite...");
     setShowToast(true);
 
     navigator.geolocation.getCurrentPosition(
@@ -323,22 +320,27 @@ export default function DealsPage() {
             if (error) throw error;
             
             setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-            setToastMessage("📍 Check-in realizado com sucesso!");
+            setToastMessage("📍 Check-in cravado com sucesso!");
             setShowToast(true);
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
                 await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString() });
                 setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-                setToastMessage("📍 Salvo no Celular! Sincroniza em breve.");
+                setToastMessage("📍 Check-in Salvo Offline!");
                 setShowToast(true);
             }
         }
       },
       (err) => { 
-          setToastMessage("Falha no GPS ❌ Verifique as permissões."); 
+          let erroMsg = "Falha no GPS ❌";
+          if (err.code === 1) erroMsg = "⚠️ GPS Bloqueado! Vá aos Ajustes do Safari/Navegador e permita a Localização.";
+          if (err.code === 2) erroMsg = "🛰️ Sinal de GPS indisponível no momento.";
+          if (err.code === 3) erroMsg = "⏳ Tempo limite do GPS excedido.";
+          
+          setToastMessage(erroMsg); 
           setShowToast(true);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
@@ -356,7 +358,6 @@ export default function DealsPage() {
         }
     }
 
-    // 👇 O GATILHO DO CHECK-IN AUTOMÁTICO 👇
     if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) {
         fazerCheckin(id);
     }
@@ -749,7 +750,6 @@ export default function DealsPage() {
     setIsModalOpen(true);
   };
 
-  // 👇 LÓGICA DO FILTRO DA LIDERANÇA APLICADA AQUI 👇
   const leadsAtivos = leads.filter(l => {
       if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
       if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
@@ -760,14 +760,20 @@ export default function DealsPage() {
   const totalGanhos = leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const totalAberto = leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   
-  // 👇 CÁLCULO INTELIGENTE DA META MENSAL OU ANUAL 👇
+  // 👇 CÁLCULO INTELIGENTE DA META MENSAL OU ANUAL (CORRIGIDO PARA NÃO DUPLICAR) 👇
   let valorMetaAlvo = 0;
   if (filtroData) {
       const [anoStr, mesStr] = filtroData.split('-');
       const metaMes = metasBase.find(m => m.ano === parseInt(anoStr) && m.mes === parseInt(mesStr));
       if (metaMes) valorMetaAlvo = Number(metaMes.valor_objetivo);
   } else {
-      valorMetaAlvo = metasBase.reduce((acc, curr) => acc + Number(curr.valor_objetivo), 0);
+      const metasMensais = metasBase.filter(m => m.mes >= 1 && m.mes <= 12);
+      if (metasMensais.length > 0) {
+          valorMetaAlvo = metasMensais.reduce((acc, curr) => acc + Number(curr.valor_objetivo), 0);
+      } else {
+          const metaAnual = metasBase.find(m => !m.mes || m.mes === 0);
+          if (metaAnual) valorMetaAlvo = Number(metaAnual.valor_objetivo);
+      }
   }
   const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
   const percentMeta = Math.min((totalGanhos / metaValidaParaCalculo) * 100, 100);
@@ -828,7 +834,6 @@ export default function DealsPage() {
         
         <div className="hidden md:block flex-1 max-w-sm px-6">
            <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
-              {/* 👇 TEXTO DA META AJUSTADO AQUI 👇 */}
               <span className="text-slate-400 flex items-center gap-1">
                   <Target size={10}/> {labelMeta} 
                   <span className="text-white ml-1 font-mono">R$ {valorMetaAlvo.toLocaleString('pt-BR')}</span>
@@ -845,7 +850,7 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA (SEM EMOJIS) 👇 */}
+      {/* 👇 BARRA DE FILTROS PREMIUM DA LIDERANÇA (CLEAN DESIGN) 👇 */}
       <div className="flex flex-wrap items-center gap-3 px-2 mb-4">
         <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2 shadow-lg">
             <div className="flex items-center gap-2 text-slate-400">
@@ -858,7 +863,7 @@ export default function DealsPage() {
                 <select 
                   value={filtroVendedor} 
                   onChange={e => setFiltroVendedor(e.target.value)}
-                  className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
+                  className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer ml-2"
                 >
                   <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
                   {Object.entries(usersMap).map(([id, nome]) => (
@@ -872,7 +877,7 @@ export default function DealsPage() {
             <select 
               value={filtroUnidade} 
               onChange={e => setFiltroUnidade(e.target.value)}
-              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
+              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer ml-2"
             >
               <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
               <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
@@ -994,7 +999,6 @@ export default function DealsPage() {
                                                     <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
                                                         <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
                                                     </button>
-                                                    {/* 👇 PASSANDO O EVENTO COMO SEGUNDO PARÂMETRO 👇 */}
                                                     <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
                                                         <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
                                                     </button>
@@ -1052,7 +1056,7 @@ export default function DealsPage() {
                                                 {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
                                                     <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
                                                 ))}
-                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} itens...</p>}
+                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} items...</p>}
                                             </div>
 
                                             <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
@@ -1287,11 +1291,8 @@ export default function DealsPage() {
                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Escolha a Categoria</p>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                     {categoriasDisponiveis.map(cat => (
-                                        <button key={cat} type="button" onClick={() => setCategoriaSelecionada(cat)} className="flex flex-col items-center justify-center p-4 bg-[#0F172A] border border-white/10 rounded-xl hover:border-blue-500 hover:bg-blue-600/10 transition-all group">
-                                            <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                                                {getIcone(cat)}
-                                            </div>
-                                            <span className="text-[10px] font-black text-slate-300 uppercase text-center">{cat}</span>
+                                        <button key={cat} type="button" onClick={() => setCategoriaSelecionada(cat)} className="flex items-center justify-center p-4 bg-[#0F172A] border border-white/10 rounded-xl hover:border-blue-500 hover:bg-blue-600/10 transition-all group">
+                                            <span className="text-[11px] font-black text-slate-300 uppercase text-center group-hover:text-blue-400">{cat}</span>
                                         </button>
                                     ))}
                                 </div>

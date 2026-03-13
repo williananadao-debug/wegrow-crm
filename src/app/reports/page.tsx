@@ -93,6 +93,7 @@ export default function ReportsPage() {
   const [previewColumns, setPreviewColumns] = useState<string[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isGerente = perfil?.cargo === 'gerente';
 
   useEffect(() => { 
       if (user) fetchReportData(); 
@@ -101,25 +102,27 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('*').limit(10000);
+      // 🔥 OTIMIZAÇÃO 1: Redução Extrema de Payload. Não usamos "select('*')"
+      let leadsQuery = supabase.from('leads')
+        .select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens')
+        .order('created_at', { ascending: false })
+        .limit(10000);
       
-      if (!isDirector) {
+      if (isGerente && perfil?.unidade) {
+          leadsQuery = leadsQuery.eq('unidade', perfil.unidade);
+      } else if (!isDirector) {
           leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       }
 
-      const [leadsRes, premissasRes, profilesRes, cli1, cli2, cli3, cli4] = await Promise.all([
+      const [leadsRes, premissasRes, profilesRes, cli1, cli2] = await Promise.all([
         leadsQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(0, 999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(1000, 1999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(2000, 2999),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').range(3000, 3999),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).limit(1000),
+        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).range(1000, 1999)
       ]);
 
-      const allClientes = [
-          ...(cli1.data || []), ...(cli2.data || []), ...(cli3.data || []), ...(cli4.data || [])
-      ];
+      const allClientes = [...(cli1.data || []), ...(cli2.data || [])];
 
       setRawLeads(leadsRes.data || []);
       setRawPremissas(premissasRes.data || []);
@@ -144,39 +147,41 @@ export default function ReportsPage() {
       vendasPorDia
   } = useMemo(() => {
       
-      const now = new Date();
-      const firstDayAnoAtual = new Date(now.getFullYear(), 0, 1).toISOString();
-      const firstDayCurrent = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const firstDayLast = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-      const lastDayLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
-
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       
       const clientesNormalizados = rawClientes.map(c => ({
-          ...c,
-          normName: normalizeString(c.nome_empresa)
+          ...c, normName: normalizeString(c.nome_empresa)
       })).filter(c => c.normName);
 
       const baseFiltrada = rawLeads.filter(lead => {
-          if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
+          if (isGerente && lead.unidade !== perfil?.unidade) return false;
+          if (!isGerente && filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
           return true;
       });
+
+      // 🔥 OTIMIZAÇÃO 2: Strings em vez de "new Date()" no Loop
+      const hoje = new Date();
+      const anoAtualStr = hoje.getFullYear().toString();
+      const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
+      const mesAtualCompleto = `${anoAtualStr}-${mesAtualStr}`;
+
+      const mesPassadoObj = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+      const anoPassadoStr = mesPassadoObj.getFullYear().toString();
+      const mesPassadoStr = (mesPassadoObj.getMonth() + 1).toString().padStart(2, '0');
+      const mesPassadoCompleto = `${anoPassadoStr}-${mesPassadoStr}`;
 
       let currentLeads: any[] = [];
       let pastLeads: any[] = []; 
 
       if (filtroPeriodo === 'Ano Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayAnoAtual);
+          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(anoAtualStr));
       } else if (filtroPeriodo === 'Mês Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayCurrent);
-          pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayLast && l.created_at <= lastDayLast);
+          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesAtualCompleto));
+          pastLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesPassadoCompleto));
       } else if (filtroPeriodo === 'Mês Passado') {
-          currentLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayLast && l.created_at <= lastDayLast);
-          const firstDayRetrasado = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
-          const lastDayRetrasado = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59).toISOString();
-          pastLeads = baseFiltrada.filter(l => l.created_at && l.created_at >= firstDayRetrasado && l.created_at <= lastDayRetrasado);
+          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesPassadoCompleto));
       } else {
           currentLeads = baseFiltrada;
       }
@@ -218,7 +223,7 @@ export default function ReportsPage() {
           if (!rawCity && lead.client_id) rawCity = cidadesById[lead.client_id];
           
           if (!rawCity) { 
-              const rawLeadName = lead.empresa || lead.nome_empresa || '';
+              const rawLeadName = lead.empresa || '';
               const cleanLeadName = normalizeString(rawLeadName as string);
               if (cleanLeadName && cleanLeadName.length >= 3) {
                   const clienteEncontrado = clientesNormalizados.find(c => 
@@ -238,11 +243,9 @@ export default function ReportsPage() {
       }, {});
       const calcCidades = Object.values(cityObj).map((c: any) => ({ nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0 })).sort((a: any, b: any) => b.total - a.total);
 
-      // 👇 NOVO CÁLCULO: ORDEM CRONOLÓGICA COM DIAS VAZIOS PREENCHIDOS 👇
       const diasSemanaNomes = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
-      
       const diaObj = diasSemanaNomes.reduce((acc: any, nome, idx) => {
-          acc[nome] = { nome, total: 0, count: 0, idx }; // Index para ordenar corretamente
+          acc[nome] = { nome, total: 0, count: 0, idx }; 
           return acc;
       }, {});
 
@@ -255,10 +258,7 @@ export default function ReportsPage() {
               diaObj[nomeDia].count += 1;
           }
       });
-      
-      // Ordena pelo index (0 = Domingo, 6 = Sábado) em vez de ordenar pelo valor total
       const calcDiasSemana = Object.values(diaObj).sort((a: any, b: any) => a.idx - b.idx);
-
 
       const curve = currentGanhos.reduce((acc: any, curr) => {
         let itensArray = [];
@@ -292,20 +292,56 @@ export default function ReportsPage() {
           nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a: any, b: any) => b.total - a.total);
 
-      const calcImpacto = rawPremissas.map(p => {
+
+      // 👇 OTIMIZAÇÃO: MOTOR INTELIGENTE DE ROI DE ESTRATÉGIAS 👇
+      const leadsJaContabilizados = new Set();
+
+      let estrategiasProcessadas = rawPremissas.map(p => {
+          if (!p.titulo) return null;
+          const tituloLower = p.titulo.toLowerCase().trim();
+
           const leadsVinculados = currentLeads.filter(l => {
-              return (p.titulo && l.checkin?.includes(p.titulo)) || l.checkin?.includes('Meta Gerada');
+              if (leadsJaContabilizados.has(l.id)) return false;
+              
+              // Procura o nome da premissa na origem, na descrição ou no checkin
+              const origem = (l.origem || '').toLowerCase();
+              const desc = (l.descricao || '').toLowerCase();
+              const check = (l.checkin || '').toLowerCase();
+
+              const matched = origem.includes(tituloLower) || desc.includes(tituloLower) || check.includes(tituloLower);
+              if (matched) leadsJaContabilizados.add(l.id);
+              return matched;
           });
+
           const ganhos = leadsVinculados.filter(l => l.status === 'ganho');
           
           return {
-              titulo: p.titulo || 'Estratégia sem nome',
+              titulo: p.titulo,
               tipo: p.tipo_cliente || 'Geral',
               gerados: leadsVinculados.length,
               conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
               faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
           };
-      }).filter(est => est.gerados > 0).sort((a, b) => b.faturamento - a.faturamento).slice(0, 5); 
+      }).filter(Boolean);
+
+      // CATCH-ALL: Salva qualquer lead que veio da "Estratégia" mas não deu match com o nome exato
+      const leadsEstrategiaGenerica = currentLeads.filter(l => {
+          return !leadsJaContabilizados.has(l.id) && l.origem === 'Estratégia';
+      });
+
+      if (leadsEstrategiaGenerica.length > 0) {
+          const ganhos = leadsEstrategiaGenerica.filter(l => l.status === 'ganho');
+          estrategiasProcessadas.push({
+              titulo: 'Outras Campanhas / Diversos',
+              tipo: 'Estratégia Avulsa',
+              gerados: leadsEstrategiaGenerica.length,
+              conversao: leadsEstrategiaGenerica.length > 0 ? (ganhos.length / leadsEstrategiaGenerica.length) * 100 : 0,
+              faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
+          });
+      }
+
+      const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
+      // 👆 FIM DO MOTOR DE ROI 👆
 
       return {
           currentMonth: calcCurrent,
@@ -326,13 +362,20 @@ export default function ReportsPage() {
           let dataToExport: any[] = []; 
 
           if (exportType === 'leads') {
-              dataToExport = rawLeads.map(l => ({
+              let leadsToExport = rawLeads;
+              
+              if (isGerente && perfil?.unidade) {
+                  leadsToExport = leadsToExport.filter(l => l.unidade === perfil.unidade);
+              }
+
+              dataToExport = leadsToExport.map(l => ({
                   ID_Venda: l.id,
                   Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
                   Cliente: l.empresa || 'Sem nome',
                   Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','),
                   Status: l.status || '',
                   Fase_Funil: l.etapa || 0,
+                  Origem: l.origem || 'Manual',
                   Unidade: l.unidade || 'Não informada',
                   Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono',
                   Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '',
@@ -356,7 +399,7 @@ export default function ReportsPage() {
               let page = 0;
               let fetchMore = true;
               while(fetchMore) {
-                  const { data } = await supabase.from('jobs').select('*').range(page * 1000, (page + 1) * 1000 - 1);
+                  const { data } = await supabase.from('jobs').select('id, created_at, titulo, stage, prioridade, deadline, aprovado_cliente').range(page * 1000, (page + 1) * 1000 - 1);
                   if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } 
                   else { fetchMore = false; }
               }
@@ -408,8 +451,12 @@ export default function ReportsPage() {
       setPreviewData(null);
   };
 
+  let leadsParaFiltroVendedor = rawLeads;
+  if (isGerente && perfil?.unidade) {
+      leadsParaFiltroVendedor = rawLeads.filter(l => l.unidade === perfil.unidade);
+  }
+  const vendedoresDisponiveis = Array.from(new Set(leadsParaFiltroVendedor.map(l => l.vendedor_nome).filter(Boolean))) as string[];
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
-  const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
 
   const getGrowth = (current: number, last: number) => {
     if (last === 0) return current > 0 ? 100 : 0;
@@ -426,7 +473,8 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Sala de Comando (BI)</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
-            <ShieldCheck size={12} className="text-blue-500"/> Análise Estratégica e Inteligência de Dados
+            <ShieldCheck size={12} className="text-blue-500"/> 
+            {isGerente ? `Análise Estratégica: ${perfil?.unidade || 'Sua Unidade'}` : 'Análise Estratégica e Inteligência de Dados'}
           </p>
         </div>
         
@@ -452,12 +500,14 @@ export default function ReportsPage() {
               <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
           </select>
 
-          <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
-              <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
-              {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-          </select>
-
           {isDirector && (
+              <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
+                  <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
+                  {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+              </select>
+          )}
+
+          {(isDirector || isGerente) && (
               <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-xs font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-3 hover:bg-white/5 transition-colors">
                   <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
                   {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
@@ -588,7 +638,7 @@ export default function ReportsPage() {
                   <tr key={i} className="hover:bg-white/[0.02] transition-all group">
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
-                          {est.titulo?.includes('Resgate') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
+                          {est.titulo?.includes('Resgate') || est.titulo?.includes('Outras') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
                           <span className="text-white font-bold text-sm uppercase italic group-hover:text-[#22C55E] transition-colors">{est.titulo}</span>
                       </div>
                     </td>
@@ -598,7 +648,7 @@ export default function ReportsPage() {
                     <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
                     <td className="px-8 py-5 text-center">
                       <div className="flex flex-col items-center">
-                          <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) > 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
+                          <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) >= 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
                           <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
                               <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
                           </div>
@@ -713,7 +763,6 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* 👇 NOVO: DIAS DA SEMANA COM ORDEM CRONOLÓGICA 👇 */}
           <div className="bg-[#0B1120] border border-white/5 rounded-[40px] p-8 shadow-2xl flex flex-col">
               <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-8">
                 <CalendarDays size={20} className="text-amber-500" /> Pico por Dia da Semana
@@ -721,10 +770,7 @@ export default function ReportsPage() {
               <div className="space-y-6 flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
                 {vendasPorDia.length > 0 ? vendasPorDia.map((dia: any, idx: number) => {
                   const diaTotal = Number(dia.total) || 0;
-                  
-                  // TS FIX: Calcula o valor máximo dentre os dias (necessário porque os dias agora não estão ordenados por valor)
                   const maxDiaTotal = Math.max(...vendasPorDia.map((d: any) => Number(d.total)), 1);
-                  
                   const share = currentMonth.faturamento > 0 ? Math.round((diaTotal / currentMonth.faturamento) * 100) : 0;
 
                   return (

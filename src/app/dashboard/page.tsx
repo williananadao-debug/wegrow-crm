@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   TrendingUp, Users, Radio, DollarSign, 
   BarChart3, Calendar, Loader2, 
@@ -11,7 +11,6 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 type RankingItem = { id: string; nome: string; total: number; count: number; };
 
 export default function DashboardPage() {
-  // BLINDAGEM ANTI-VERCEL AQUI 👇
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
@@ -19,7 +18,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
-  // --- ESTADOS DOS FILTROS ---
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Ano Atual');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
@@ -29,7 +27,6 @@ export default function DashboardPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // ESTADOS DE DADOS BRUTOS
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
   const [rawJobs, setRawJobs] = useState<any[]>([]);
@@ -37,14 +34,13 @@ export default function DashboardPage() {
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
-  useEffect(() => {
-    if (user) carregarDadosOtimizado();
-  }, [user, perfil]);
-
-  const carregarDadosOtimizado = async () => {
+  const carregarDadosOtimizado = useCallback(async () => {
     setLoading(true);
     try {
-        let leadsQuery = supabase.from('leads').select('*');
+        // 🔥 OTIMIZAÇÃO 1: Redução drástica de Payload da Rede. Busca só o que o Dashboard usa!
+        let leadsQuery = supabase
+          .from('leads')
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa');
 
         if (!isDirector) {
             leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
@@ -69,14 +65,26 @@ export default function DashboardPage() {
     } finally {
         setLoading(false);
     }
-  };
+  }, [isDirector, user?.id, perfil?.nome]);
 
-  const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
-  const vendedoresDisponiveis = Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[];
+  useEffect(() => {
+    if (user) carregarDadosOtimizado();
+  }, [user, perfil, carregarDadosOtimizado]);
+
+  const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
+  const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[], [rawLeads]);
 
   const { ranking, statsComercial, statsProducao, statsFinanceiro } = useMemo(() => {
       
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
+
+      // 🔥 OTIMIZAÇÃO 2: Pré-cálculo de datas fora do Loop (Salva a CPU)
+      const hoje = new Date();
+      const anoAtual = hoje.getFullYear();
+      const mesAtual = hoje.getMonth() + 1; // 1-12
+      const mesPassadoObj = new Date(anoAtual, hoje.getMonth() - 1, 1);
+      const anoMesPassado = mesPassadoObj.getFullYear();
+      const mesMesPassado = mesPassadoObj.getMonth() + 1;
 
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -84,16 +92,16 @@ export default function DashboardPage() {
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
           }
           if (filtroPeriodo !== 'Todo o Período') {
-              const dataLead = new Date(lead.created_at);
-              const hoje = new Date();
+              // Extração ultra rápida por String (sem instanciar Objetos Date)
+              const anoLead = parseInt(lead.created_at.substring(0, 4), 10);
+              const mesLead = parseInt(lead.created_at.substring(5, 7), 10);
               
               if (filtroPeriodo === 'Mês Atual') {
-                  if (dataLead.getMonth() !== hoje.getMonth() || dataLead.getFullYear() !== hoje.getFullYear()) return false;
+                  if (anoLead !== anoAtual || mesLead !== mesAtual) return false;
               } else if (filtroPeriodo === 'Mês Passado') {
-                  const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-                  if (dataLead.getMonth() !== mesPassado.getMonth() || dataLead.getFullYear() !== mesPassado.getFullYear()) return false;
+                  if (anoLead !== anoMesPassado || mesLead !== mesMesPassado) return false;
               } else if (filtroPeriodo === 'Ano Atual') {
-                  if (dataLead.getFullYear() !== hoje.getFullYear()) return false;
+                  if (anoLead !== anoAtual) return false;
               }
           }
           return true;
@@ -111,25 +119,32 @@ export default function DashboardPage() {
       
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
-      const fat = leadsFiltrados
-        .filter(l => l.status === 'ganho')
-        .reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0);
-
-      const visitas = leadsFiltrados.filter(l => l.checkin).length;
-      const ganhos = leadsFiltrados.filter(l => l.status === 'ganho').length;
-      const totalFinal = leadsFiltrados.filter(l => l.status === 'ganho' || l.status === 'perdido').length;
-      const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
-      
-      const comVisita = leadsFiltrados.filter(l => l.checkin && l.checkin.length > 5).length; 
-      const semVisita = leadsFiltrados.length - comVisita;
-
+      let fat = 0;
+      let ganhos = 0;
+      let perdidos = 0;
+      let visitas = 0;
+      let comVisita = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
+      
+      // Único Loop para todos os status (Mais rápido que fazer vários .filter)
       leadsFiltrados.forEach(l => {
           const st = l.status;
           const et = Number(l.etapa);
-          if (st === 'ganho') funil.ganho++;
-          else if (st === 'perdido') funil.perdido++;
-          else {
+          const hasCheckin = l.checkin && l.checkin.length > 5;
+
+          if (hasCheckin) {
+              visitas++;
+              comVisita++;
+          }
+
+          if (st === 'ganho') {
+              fat += (Number(l.valor_total) || 0);
+              ganhos++;
+              funil.ganho++;
+          } else if (st === 'perdido') {
+              perdidos++;
+              funil.perdido++;
+          } else {
               if (et === 0) funil.novos++;
               if (et === 1) funil.contato++;
               if (et === 2) funil.proposta++;
@@ -137,18 +152,24 @@ export default function DashboardPage() {
           }
       });
 
-      const diasNoMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const totalFinal = ganhos + perdidos;
+      const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
+      const semVisita = leadsFiltrados.length - comVisita;
+
+      const diasNoMes = new Date(anoAtual, mesAtual, 0).getDate();
       const vendasPorDiaArray = Array.from({ length: diasNoMes }, (_, i) => ({
           dia: (i + 1).toString(),
           valor: 0
       }));
 
       if (filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') {
-          leadsFiltrados.filter(l => l.status === 'ganho').forEach(l => {
-              const dataCriacao = new Date(l.created_at);
-              const diaIndex = dataCriacao.getDate() - 1; 
-              if (vendasPorDiaArray[diaIndex]) {
-                  vendasPorDiaArray[diaIndex].valor += (Number(l.valor_total) || 0);
+          leadsFiltrados.forEach(l => {
+              if (l.status === 'ganho') {
+                  // Pega apenas os 2 caracteres do dia na string ISO: "2023-10-15T..."
+                  const diaIndex = parseInt(l.created_at.substring(8, 10), 10) - 1; 
+                  if (vendasPorDiaArray[diaIndex]) {
+                      vendasPorDiaArray[diaIndex].valor += (Number(l.valor_total) || 0);
+                  }
               }
           });
       }
@@ -169,7 +190,7 @@ export default function DashboardPage() {
           statsComercial: {
             faturamentoMês: fat,
             metaMes: 100000,
-            leadsAbertos: leadsFiltrados.filter(l => l.status === 'aberto').length,
+            leadsAbertos: leadsFiltrados.length - ganhos - perdidos,
             totalVisitas: visitas,
             taxaConversao: Math.round(conversao),
             propostasEnviadas: leadsFiltrados.length,

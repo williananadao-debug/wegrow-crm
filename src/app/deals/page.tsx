@@ -1,10 +1,10 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Crosshair, Calendar, CalendarDays, AlertTriangle, 
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter
 } from 'lucide-react';
@@ -33,7 +33,7 @@ type Lead = {
   checkin?: string;         
   localizacao_url?: string; 
   foto_url?: string;
-  user_id?: string;    
+  user_id?: string;   
   empresa_id?: string;
   filial_id?: number;
   client_id?: number;
@@ -41,10 +41,13 @@ type Lead = {
   contrato_fim?: string; 
   origem?: string;
   unidade?: string; 
-  cidade?: string;      
+  cidade?: string;    
   descricao?: string;   
   notas?: Historico[];  
   status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
+  cnpj?: string;
+  parcelas?: string;
+  vencimento?: string;
 };
 
 type ClienteOpcao = {
@@ -69,20 +72,219 @@ const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
 
+// 👇 COMPONENTE CARD MEMOIZADO (Alta Performance) 👇
+const LeadCard = React.memo(({ 
+    lead, 
+    index, 
+    isDirector, 
+    isLideranca, 
+    usersMap, 
+    abrirModal, 
+    enviarWhatsapp, 
+    fazerCheckin, 
+    mudarEtapa, 
+    imprimirContrato 
+}: any) => {
+    const isPhantom = lead.id > 1000000;
+    
+    const formatarData = (dataIso: string) => {
+        if (!dataIso) return '';
+        const parts = dataIso.split('T')[0].split('-');
+        if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        return new Date(dataIso).toLocaleDateString('pt-BR');
+    };
+
+    const daysLeft = useMemo(() => {
+        if (!lead.contrato_fim) return null;
+        const today = new Date(); today.setHours(0,0,0,0);
+        const end = new Date(lead.contrato_fim + 'T00:00:00');
+        return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }, [lead.contrato_fim]);
+
+    return (
+        <Draggable draggableId={lead.id.toString()} index={index}>
+            {(provided, snapshot) => (
+            <div
+                ref={provided.innerRef}
+                {...provided.draggableProps}
+                {...provided.dragHandleProps}
+                className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
+            >
+                    {!lead.user_id && isDirector && (
+                        <div className="bg-yellow-500/20 border border-yellow-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-yellow-400">
+                            <Sparkles size={12}/>
+                            <span className="text-[9px] font-black uppercase tracking-widest animate-pulse">LEAD DO PORTAL (ATRIBUIR)</span>
+                        </div>
+                    )}
+
+                    {lead.status_aprovacao === 'pendente' && (
+                        <div className="bg-orange-500/20 border border-orange-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-orange-400">
+                            <Lock size={12}/>
+                            <span className="text-[9px] font-black uppercase tracking-widest animate-pulse">Aprovação Pendente</span>
+                        </div>
+                    )}
+                    {lead.status_aprovacao === 'recusado' && (
+                        <div className="bg-red-500/20 border border-red-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-red-400">
+                            <X size={12}/>
+                            <span className="text-[9px] font-black uppercase tracking-widest">Desconto Recusado</span>
+                        </div>
+                    )}
+
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="flex items-center gap-2">
+                            <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
+                                <Edit2 size={10} className="text-slate-500"/>
+                            </div>
+                            {isPhantom ? (
+                                <span className="text-[8px] font-black text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5 animate-pulse">
+                                    <RefreshCcw size={8}/> OFFLINE
+                                </span>
+                            ) : (
+                                <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
+                                    <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
+                                </span>
+                            )}
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row gap-2 md:gap-2">
+                            <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
+                                <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
+                            </button>
+                            <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
+                                <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* 👇 ETIQUETAS DE ORIGEM DISTINTAS 👇 */}
+                    {(lead.origem === 'Portal Web' || lead.descricao) && (
+                        <div className={`border p-2 rounded-lg mt-2 mb-2 ${lead.origem === 'Estratégia' ? 'bg-[#22C55E]/10 border-[#22C55E]/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                                {lead.origem === 'Estratégia' ? <Megaphone size={10} className="text-[#22C55E]"/> : <Info size={10} className="text-blue-400"/>}
+                                <span className={`text-[8px] font-black uppercase tracking-widest ${lead.origem === 'Estratégia' ? 'text-[#22C55E]' : 'text-blue-400'}`}>
+                                    {lead.origem === 'Estratégia' ? 'Veio da Estratégia' : 'Veio do Portal'}
+                                </span>
+                            </div>
+                            {lead.descricao && <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>}
+                            {lead.cidade && <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>}
+                        </div>
+                    )}
+
+                    <div className="mb-2 mt-2">
+                        {lead.checkin && lead.checkin.includes('Meta') ? (
+                            <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
+                                <Crosshair size={12} className="text-purple-400"/>
+                                <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
+                            </div>
+                        ) : lead.checkin ? (
+                            <div className="flex items-center gap-1 mb-1">
+                                <MapPin size={10} className="text-pink-500" />
+                                <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
+                            </div>
+                        ) : (
+                            lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
+                        )}
+                    </div>
+
+                    <div className="mb-1 flex items-center gap-2 flex-wrap">
+                        <h4 className="font-black text-sm uppercase leading-tight transition-colors truncate max-w-full text-white group-hover:text-slate-200">
+                            {lead.empresa}
+                        </h4>
+                        {lead.unidade && (
+                            <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <Building2 size={8}/> {lead.unidade}
+                            </span>
+                        )}
+                    </div>
+
+                    {isLideranca && (
+                        <div className="mb-2 mt-1 inline-flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">
+                            <User size={8} /> {lead.user_id && usersMap[lead.user_id] ? usersMap[lead.user_id] : 'Sem Dono'}
+                        </div>
+                    )}
+
+                    <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2 mt-1">
+                        {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item: any, i: number) => (
+                            <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
+                        ))}
+                        {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} items...</p>}
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
+                        R$ {(lead.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        {lead.desconto && lead.desconto > 0 ? <span className="text-[8px] text-red-400 ml-1 bg-red-500/10 px-1 py-0.5 rounded">COM DESCONTO</span> : null}
+                    </div>
+
+                    {lead.contrato_inicio && lead.contrato_fim && (
+                        <div className="mb-2 flex items-center gap-2 p-1.5 bg-white/[0.02] border border-white/5 rounded-lg">
+                            <CalendarDays size={12} className="text-slate-500" />
+                            <div className="flex flex-col">
+                                <span className="text-[8px] font-black uppercase text-slate-500">Contrato</span>
+                                <span className="text-[9px] text-slate-300 font-mono leading-none">
+                                    {formatarData(lead.contrato_inicio)} até {formatarData(lead.contrato_fim)}
+                                </span>
+                            </div>
+                            
+                            {daysLeft !== null && daysLeft <= 30 && daysLeft >= 0 && (
+                                <div className="ml-auto flex items-center gap-1 bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase animate-pulse border border-red-500/30">
+                                    <AlertTriangle size={10}/> {daysLeft}D
+                                </div>
+                            )}
+                            {daysLeft !== null && daysLeft < 0 && (
+                                <div className="ml-auto flex items-center bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] font-black uppercase">
+                                    VENCIDO
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {lead.status === 'aberto' ? (
+                        <div className="space-y-2 pt-1">
+                            <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
+                                AVANÇAR ETAPA
+                            </button>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                    onClick={() => mudarEtapa(lead.id, 4, 'ganho')} 
+                                    className={`py-1.5 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${lead.status_aprovacao === 'pendente' ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]'}`}
+                                >
+                                    GANHO
+                                </button>
+                                <button onClick={() => mudarEtapa(lead.id, 5, 'perdido')} className="py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors">PERDIDO</button>
+                            </div>
+                        </div>
+                    ) : lead.status === 'ganho' ? (
+                        <div className="mt-2 flex gap-2 pt-2 border-t border-white/5">
+                            <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
+                                <Briefcase size={10}/> PRODUÇÃO
+                            </a>
+                            <button onClick={(e) => imprimirContrato(e, lead)} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
+                                <FileText size={10}/> CONTRATO
+                            </button>
+                        </div>
+                    ) : null}
+            </div>
+            )}
+        </Draggable>
+    );
+});
+LeadCard.displayName = 'LeadCard';
+// 👆 FIM DO COMPONENTE MEMOIZADO 👆
+
 export default function DealsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
   
   const LIMITE_DESCONTO_MAXIMO = 5; 
-  const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente' || perfil?.email === 'admin@wegrow.com';
+  
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isGerente = perfil?.cargo === 'gerente';
+  const isLideranca = isDirector || isGerente;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({}); 
-  // 👇 NOVO ESTADO: Guarda TODOS os perfis para o filtro
-  const [todosPerfis, setTodosPerfis] = useState<{id: string, nome: string}[]>([]); 
   const [clientesOpcoes, setClientesOpcoes] = useState<ClienteOpcao[]>([]);
   const [listaServicos, setListaServicos] = useState<ServicoConfig[]>([]);
   
@@ -103,8 +305,14 @@ export default function DealsPage() {
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
   
+  const [novoCnpj, setNovoCnpj] = useState('');
+  const [parcelas, setParcelas] = useState('1');
+  const [vencimento, setVencimento] = useState('');
+  
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
   const [desconto, setDesconto] = useState(0); 
+
+  const [leadUserId, setLeadUserId] = useState<string>('');
 
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
   
@@ -123,13 +331,20 @@ export default function DealsPage() {
 
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
-  const [filtroData, setFiltroData] = useState<string>(''); // YYYY-MM
+  const [filtroData, setFiltroData] = useState<string>(''); 
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     
     let query = supabase.from('leads').select('*');
-    if (!isDirector) query = query.eq('user_id', user?.id);
+    
+    if (isDirector) {
+        // Diretor vê todas as unidades sem restrição
+    } else if (isGerente && perfil?.unidade) {
+        query = query.eq('unidade', perfil.unidade);
+    } else {
+        query = query.eq('user_id', user?.id);
+    }
 
     let { data: leadsData } = await query.order('created_at', { ascending: false });
     let leadsBase: any[] = leadsData || [];
@@ -151,7 +366,11 @@ export default function DealsPage() {
         });
     } catch (e) {}
 
-    const leadsFiltrados = leadsBase.filter(l => l && l.id);
+    const leadsFiltrados = leadsBase.filter(l => l && l.id).filter(l => {
+        if (isDirector) return true; 
+        if (!l.user_id) return false; 
+        return true;
+    });
 
     if (navigator.onLine && leadsData) {
         setLeads(leadsFiltrados.filter(l => l.id < 1000000) as Lead[]);
@@ -159,17 +378,21 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    // 👇 SOLUÇÃO: Busca TODA a equipe do Banco para o Filtro 👇
     const { data: perfisData } = await supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
     if (perfisData) {
-        setTodosPerfis(perfisData);
         const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
         setUsersMap(mapa);
     }
 
+    // 👇 CORREÇÃO 1: BUSCAR METAS ISOLANDO A EMPRESA 👇
     try {
         const anoAtual = new Date().getFullYear();
         let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
+        
+        if (perfil?.empresa_id) {
+            metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
+        }
+        
         if (isDirector) metaQuery = metaQuery.is('user_id', null);
         else metaQuery = metaQuery.eq('user_id', user?.id);
 
@@ -194,11 +417,10 @@ export default function DealsPage() {
         setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Blitz', unidade: '' }]);
     }
     setLoading(false);
-  };
+  }, [isDirector, isGerente, perfil?.unidade, perfil?.empresa_id, user?.id]);
 
   useEffect(() => {
     if (!user) return;
-    
     setIsOffline(!navigator.onLine);
     fetchData();
 
@@ -207,16 +429,12 @@ export default function DealsPage() {
         setIsSyncing(true);
         setToastMessage("📶 Internet conectada! Subindo dados...");
         setShowToast(true);
-        
         await syncOfflineDataToCloud(); 
         await fetchData(); 
-        
         setIsSyncing(false);
     };
 
-    const handleOffline = () => {
-        setIsOffline(true);
-    };
+    const handleOffline = () => setIsOffline(true);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -227,49 +445,22 @@ export default function DealsPage() {
         window.removeEventListener('offline', handleOffline);
         window.removeEventListener('sync-completed', fetchData);
     };
-  }, [user, isDirector]);
+  }, [user, fetchData]);
 
-  const getIcone = (tipo: string | undefined) => {
-    switch (tipo) {
-        case 'Comercial Gravado':
-        case 'Mic2': 
-            return <Mic2 className="text-blue-400" size={18} />;
-        case 'Feito ao Vivo':
-            return <Megaphone className="text-yellow-400" size={18} />;
-        case 'Blitz': 
-        case 'Zap': 
-            return <Zap className="text-yellow-400" size={18} />;
-        case 'Patrocínio':
-        case 'Radio': 
-            return <Radio className="text-purple-400" size={18} />;
-        case 'Impacto Jornalístico': 
-            return <Newspaper className="text-red-400" size={18} />;
-        case 'Digital':
-            return <Smartphone className="text-green-400" size={18} />;
-        case 'Podcast':
-            return <Headphones className="text-orange-400" size={18} />;
-        default:
-            return <Package className="text-slate-400" size={18} />;
-    }
-  };
+  const handleContratoInicio = useCallback((val: string) => {
+      setContratoInicio(val);
+      if (!vencimento && val) {
+          const [year, month, day] = val.split('-');
+          const start = new Date(Number(year), Number(month) - 1, Number(day));
+          start.setMonth(start.getMonth() + 1); 
+          const newY = start.getFullYear();
+          const newM = String(start.getMonth() + 1).padStart(2, '0');
+          const newD = String(start.getDate()).padStart(2, '0');
+          setVencimento(`${newY}-${newM}-${newD}`);
+      }
+  }, [vencimento]);
 
-  const formatarData = (dataIso: string) => {
-    if (!dataIso) return '';
-    const parts = dataIso.split('T')[0].split('-');
-    if(parts.length === 3) return `${parts[2]}/${parts[1]}`;
-    return new Date(dataIso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  };
-
-  const getDaysLeft = (endDate?: string) => {
-    if (!endDate) return null;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const end = new Date(endDate + 'T00:00:00');
-    const diffTime = end.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
-  const criarJobDeProducao = async (lead: Lead) => {
+  const criarJobDeProducao = useCallback(async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
     const briefingAutomatico = `VENDA APROVADA ✅ (Ref: ${formatId(lead.id, 'LD')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
     
@@ -283,29 +474,28 @@ export default function DealsPage() {
         prioridade: 'media',
         deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
     }]);
-  };
+  }, [user?.id, perfil?.empresa_id]);
 
-  const gerarCobrancaFinanceira = async (lead: Lead) => {
+  const gerarCobrancaFinanceira = useCallback(async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
           titulo: `VENDA: ${lead.empresa} (${lead.unidade || 'Geral'}) - OS: ${formatId(lead.id, 'LD')}`,
           valor: lead.valor_total,
           tipo: 'entrada',
           categoria: 'vendas',
           status: 'pendente',
-          data_vencimento: new Date().toISOString().split('T')[0],
+          data_vencimento: lead.vencimento ? lead.vencimento : new Date().toISOString().split('T')[0],
           user_id: user?.id,
           empresa_id: perfil?.empresa_id 
       }]);
-  };
+  }, [user?.id, perfil?.empresa_id]);
 
-  const fazerCheckin = (id: number, e?: React.MouseEvent) => {
+  const fazerCheckin = useCallback((id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!navigator.geolocation) {
-        setToastMessage("⚠️ Seu navegador/dispositivo não suporta GPS.");
+        setToastMessage("⚠️ Seu navegador não suporta GPS.");
         setShowToast(true);
         return;
     }
-    
     setToastMessage("🛰️ Puxando GPS do satélite...");
     setShowToast(true);
 
@@ -318,7 +508,6 @@ export default function DealsPage() {
         try {
             const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
             if (error) throw error;
-            
             setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
             setToastMessage("📍 Check-in cravado com sucesso!");
             setShowToast(true);
@@ -332,35 +521,21 @@ export default function DealsPage() {
         }
       },
       (err) => { 
-          let erroMsg = "Falha no GPS ❌";
-          if (err.code === 1) erroMsg = "⚠️ GPS Bloqueado! Vá aos Ajustes do Safari/Navegador e permita a Localização.";
-          if (err.code === 2) erroMsg = "🛰️ Sinal de GPS indisponível no momento.";
-          if (err.code === 3) erroMsg = "⏳ Tempo limite do GPS excedido.";
-          
-          setToastMessage(erroMsg); 
+          setToastMessage("Falha no GPS ❌"); 
           setShowToast(true);
       },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
-  };
+  }, []);
 
-  const mudarEtapa = async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
+  const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
     const lead = leads.find(l => l.id === id);
-    
     if (novoStatus === 'ganho' || novaEtapa === 4) {
-        if (lead?.status_aprovacao === 'pendente') {
-            alert("⚠️ NEGÓCIO BLOQUEADO: Este lead está aguardando aprovação da Liderança devido ao alto desconto.");
-            return; 
-        }
-        if (lead?.status_aprovacao === 'recusado') {
-            alert("❌ O desconto foi RECUSADO pela diretoria. Ajuste os valores na edição antes de dar o Ganho.");
-            return; 
-        }
+        if (lead?.status_aprovacao === 'pendente') return alert("⚠️ NEGÓCIO BLOQUEADO: Aguardando aprovação.");
+        if (lead?.status_aprovacao === 'recusado') return alert("❌ O desconto foi RECUSADO. Ajuste antes de dar o Ganho.");
     }
 
-    if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) {
-        fazerCheckin(id);
-    }
+    if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) fazerCheckin(id);
 
     let etapaFinal = novaEtapa;
     if (novoStatus === 'ganho') etapaFinal = 4;
@@ -371,31 +546,26 @@ export default function DealsPage() {
     try {
         const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
         if (error) throw error;
-
         if (novoStatus === 'ganho' && lead) {
             await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
-            setToastMessage("🎉 Venda Confirmada! Enviado para Produção e Financeiro.");
+            setToastMessage("🎉 Venda Confirmada!");
             setShowToast(true);
         }
     } catch (error: any) {
         if (error.message === 'Failed to fetch' || !navigator.onLine) {
-            await localDb.syncQueue.add({
-                operacao: 'UPDATE', tabela: 'leads', dados: { id, etapa: etapaFinal, status: novoStatus }, data_criacao: new Date().toISOString()
-            });
+            await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, etapa: etapaFinal, status: novoStatus }, data_criacao: new Date().toISOString() });
             setToastMessage("📶 Movido offline!");
             setShowToast(true);
         }
     }
-  };
+  }, [leads, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
 
-  const onDragEnd = async (result: any) => {
+  const onDragEnd = useCallback(async (result: any) => {
     const { destination, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) return;
-
     const novaEtapa = parseInt(destination.droppableId);
     const leadId = parseInt(draggableId);
-
     let novoStatus: 'aberto' | 'ganho' | 'perdido' = 'aberto';
     if (novaEtapa === 4) novoStatus = 'ganho';
     else if (novaEtapa === 5) novoStatus = 'perdido';
@@ -403,38 +573,28 @@ export default function DealsPage() {
          const leadAtual = leads.find(l => l.id === leadId);
          if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) novoStatus = 'aberto';
     }
-
     await mudarEtapa(leadId, novaEtapa, novoStatus);
-  };
+  }, [leads, mudarEtapa]);
 
-  const enviarWhatsapp = (e: React.MouseEvent, lead: Lead) => {
+  const enviarWhatsapp = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
     if (!lead.telefone) return alert("Cadastre o WhatsApp na edição!"); 
-
     let listaItens: ItemVenda[] = [];
-    try {
-        listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any);
-    } catch { listaItens = []; }
-
+    try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
     let itensTexto = listaItens.length > 0 ? listaItens.map(i => `▪️ ${i.quantidade}x *${i.servico}* (R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join('%0A') : "▪️ Detalhes a combinar";
-
     const totalFormatado = lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const descontoFormatado = (lead.desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const msgDesconto = lead.desconto && lead.desconto > 0 ? `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A` : "";
-
     const msg = `Olá *${lead.empresa}*! 🚀%0A%0AAqui é o ${perfil?.nome || 'Consultor'} da Demais FM.%0ASegue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A--------------------------------%0A${itensTexto}%0A--------------------------------%0A${msgDesconto}%0A💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0APodemos avançar com a aprovação?`;
-
     window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
-  };
+  }, [perfil?.nome]);
 
-  const imprimirProposta = () => {
+  const imprimirProposta = useCallback(() => {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const total = Math.max(0, subtotal - desconto);
-    
     const dataHoje = new Date().toLocaleDateString('pt-BR');
     const janela = window.open('', '', 'width=800,height=600');
     if(!janela) return alert("Habilite popups");
-
     janela.document.write(`
       <html>
         <head>
@@ -472,94 +632,152 @@ export default function DealsPage() {
       </html>
     `);
     janela.document.close();
+  }, [itensTemporarios, desconto, novaEmpresa]);
+
+  const formatarData = (dataIso: string) => {
+    if (!dataIso) return '';
+    const parts = dataIso.split('T')[0].split('-');
+    if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return new Date(dataIso).toLocaleDateString('pt-BR');
   };
 
-  const gerarContrato = (lead: Lead) => {
+  const imprimirContrato = useCallback((e: React.MouseEvent, lead: Lead) => {
+    e.stopPropagation();
+    
+    const CONFIG_EMISSORAS: Record<string, { razao: string, endereco: string, cnpj: string }> = {
+      "DEMAIS FM 104,7": {
+        razao: "SERRANA DE RADIODIFUSÃO LTDA",
+        endereco: "Av. Nereu Ramos, 226 - Centro, na cidade de Taió - Estado de Santa Catarina",
+        cnpj: "75.835.629/0001-50"
+      },
+      "DEMAIS FM 107,9": {
+        razao: "REDE SERRANA DE RADIODIFUSÃO LTDA",
+        endereco: "R. Curt Hering, 665 - Sala 103 - Centro, na cidade de Presidente Getúlio - Estado de Santa Catarina",
+        cnpj: "75.835.629/0003-12"
+      },
+      "DEMAIS FM 101,1": {
+        razao: "RÁDIO CIDADE DE ITAIÓPOLIS LTDA",
+        endereco: "R. Alexandre Ricardo Worell, 465 - Sala 4 - Bairro Vila Nova IOS, na cidade de Itaiópolis - Estado de Santa Catarina",
+        cnpj: "75.789.966/0001-59"
+      }
+    };
+
+    const dadosEmissora = CONFIG_EMISSORAS[lead.unidade || ""] || CONFIG_EMISSORAS["DEMAIS FM 104,7"];
+
+    const janela = window.open('', '', 'width=900,height=800');
+    if(!janela) return alert("Habilite popups no seu navegador!");
+
     let listaItens: ItemVenda[] = [];
-    try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
-    
-    const total = lead.valor_total;
-    const descontoAplicado = lead.desconto || 0;
-    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { }
 
-    const dataIni = lead.contrato_inicio ? formatarData(lead.contrato_inicio) : '_____/_____/_____';
-    const dataFim = lead.contrato_fim ? formatarData(lead.contrato_fim) : '_____/_____/_____';
-    
-    const refInterna = formatId(lead.id, 'LD');
-
-    const janela = window.open('', '', 'width=800,height=800');
-    if(!janela) return alert("Habilite os popups no seu navegador para gerar o contrato.");
+    const itensHtml = listaItens.map(i => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}</td>
+        <td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${i.quantidade}</td>
+        <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+      </tr>
+    `).join('');
 
     janela.document.write(`
       <html>
         <head>
           <title>Contrato - ${lead.empresa}</title>
           <style>
-            body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; line-height: 1.6; text-align: justify; }
+            body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
             .header { text-align: center; margin-bottom: 20px; }
-            .ref-interna { text-align: right; font-size: 10px; color: #666; font-family: sans-serif; margin-bottom: 20px; }
-            .logo { font-size: 28px; font-weight: bold; font-style: italic; font-family: sans-serif; }
-            h1 { font-size: 18px; text-transform: uppercase; text-align: center; text-decoration: underline; margin-bottom: 30px; }
-            h2 { font-size: 14px; font-weight: bold; margin-top: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: sans-serif; font-size: 12px;}
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-            th { background-color: #f0f0f0; }
-            .assinaturas { margin-top: 60px; display: flex; justify-content: space-between; gap: 40px;}
-            .assinatura-box { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 5px; }
+            .header img { max-height: 80px; margin-bottom: 10px; }
+            .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+            .texto-base { text-align: justify; margin-bottom: 20px; line-height: 1.6; }
+            .cliente-box { margin-bottom: 20px; line-height: 1.8; }
+            .secao-titulo { font-weight: bold; margin-top: 25px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+            th { background-color: #f0f0f0; font-size: 11px; text-align: center; border: 1px solid #000; padding: 8px; }
+            .condicoes { font-size: 11px; margin-bottom: 20px; }
+            .condicoes p { margin: 4px 0; }
+            .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
+            .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
           </style>
         </head>
         <body>
-          <div class="ref-interna">Nº Registro: ${refInterna}</div>
-          <div class="header"><div class="logo">DEMAIS FM</div></div>
-          <h1>Contrato de Prestação de Serviços Publicitários</h1>
-          
-          <p><strong>CONTRATADA:</strong> Demais FM, empresa de publicidade e radiodifusão.</p>
-          <p><strong>CONTRATANTE:</strong> ${lead.empresa}, doravante denominada simplesmente CONTRATANTE.</p>
-          <p>As partes acima qualificadas celebram o presente contrato, que se regerá pelas seguintes cláusulas:</p>
-          
-          <h2>CLÁUSULA 1ª - DO OBJETO</h2>
-          <p>O presente contrato tem como objeto a veiculação e prestação dos seguintes serviços publicitários para a CONTRATANTE${lead.unidade ? ` na unidade <strong>${lead.unidade}</strong>` : ''}:</p>
+          <div class="header">
+            <img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />
+            <h2>Contrato para Veiculação de Publicidade</h2>
+          </div>
+          <div class="texto-base">
+            Que entre si fazem de um lado a empresa <strong>${dadosEmissora.razao}</strong>, emissora de radiodifusão com sede à ${dadosEmissora.endereco}, CNPJ: ${dadosEmissora.cnpj}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:
+          </div>
+          <div class="cliente-box">
+            <strong>CLIENTE:</strong> ${lead.empresa.toUpperCase()}<br/>
+            <strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/>
+            <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
+            <div style="display: flex; gap: 40px;">
+              <div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
+              <div><strong>Inscrição Estadual:</strong> </div>
+            </div>
+            <div style="display: flex; gap: 40px;">
+              <div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div>
+              <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
+            </div>
+          </div>
+          <div class="texto-base">
+            Visando a veiculação e divulgação da publicidade do CLIENTE acima, por meio da emissora de FM da EXECUTANTE, tudo conforme as condições a seguir indicadas.
+          </div>
+          <div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE:</div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;">
+            <div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div>
+            <div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div>
+          </div>
           <table>
-            <thead><tr><th>Serviço</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th></tr></thead>
+            <thead>
+              <tr>
+                <th>PROGRAMAÇÃO</th>
+                <th>QUANT.</th>
+                <th>VALOR R$</th>
+              </tr>
+            </thead>
             <tbody>
-              ${listaItens.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}
+              ${itensHtml}
+              <tr>
+                <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td>
+                <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+              </tr>
             </tbody>
           </table>
-
-          <h2>CLÁUSULA 2ª - DOS VALORES E PAGAMENTO</h2>
-          <p>Pela prestação dos serviços, a CONTRATANTE pagará à CONTRATADA o valor total de <strong>R$ ${total.toLocaleString('pt-BR')}</strong>.</p>
-          ${descontoAplicado > 0 ? `<p><em>* Foi aplicado um desconto comercial especial no valor de R$ ${descontoAplicado.toLocaleString('pt-BR')} sobre o valor original da tabela.</em></p>` : ''}
-
-          <h2>CLÁUSULA 3ª - DA VIGÊNCIA E VEICULAÇÃO</h2>
-          <p>A prestação dos serviços terá início oficial em <strong>${dataIni}</strong> e término previsto para <strong>${dataFim}</strong>.</p>
-
-          <h2>CLÁUSULA 4ª - FORO</h2>
-          <p>As partes elegem o foro da comarca da CONTRATADA para dirimir quaisquer dúvidas oriundas deste contrato, renunciando a qualquer outro por mais privilegiado que seja.</p>
-
-          <p style="text-align: right; margin-top: 60px;">Local e Data: ____________________________, ${dataHoje}.</p>
-
-          <div class="assinaturas">
-            <div class="assinatura-box">CONTRATADA<br>Equipe Comercial</div>
-            <div class="assinatura-box">CONTRATANTE<br>${lead.empresa}</div>
+          <div class="secao-titulo">2. OUTRAS CONDIÇÕES:</div>
+          <div class="condicoes">
+            <p>1) O presente contrato tem caráter irrevogável;</p>
+            <p>2) As inserções objeto do presente contrato são intransferíveis;</p>
+            <p>3) As parcelas pagas fora do prazo de seus vencimentos incidirão em juros e mora estabelecidos na fatura;</p>
+            <p>4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;</p>
+            <p>5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.</p>
+            <p>6) Fica eleito o Fórum da Cidade de Taió para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
           </div>
-
-          <script>window.onload=function(){window.print()}</script>
+          <div class="secao-titulo">3. FORMA DE PAGAMENTO:</div>
+          <div class="cliente-box">
+            <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
+            <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/>
+            <strong>Contato para envio da Fatura: WhatsApp:</strong> ${lead.telefone || '___________________'}<br/>
+            <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
+          </div>
+          <div class="assinaturas">
+            <div>Assinatura do Cliente</div>
+            <div>Representante da Demais FM</div>
+          </div>
+          <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
     `);
     janela.document.close();
-  };
+  }, []);
 
-  const handleDelete = async (e: React.MouseEvent, id: number) => {
+  const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
       if(!confirm("Excluir oportunidade?")) return;
-
       if (id > 1000000) {
           setLeads(prev => prev.filter(l => l.id !== id));
           if (isModalOpen) setIsModalOpen(false);
           return;
       }
-
       try {
           const { error } = await supabase.from('leads').delete().eq('id', id);
           if (error) throw error;
@@ -567,10 +785,10 @@ export default function DealsPage() {
           if (isModalOpen) setIsModalOpen(false);
       } catch(error: any) {
           if (error.message === 'Failed to fetch' || !navigator.onLine) {
-              alert("⚠️ Sem internet: Não é possível deletar leads do servidor no modo offline por segurança.");
+              alert("⚠️ Sem internet: Não é possível deletar offline.");
           }
       }
-  };
+  }, [isModalOpen]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files?.[0]) return;
@@ -592,20 +810,12 @@ export default function DealsPage() {
 
   const adicionarNota = async () => {
       if(!novaNota || !editingLeadId) return;
-      if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou com o servidor. Aguarde a internet para adicionar notas.");
-      
-      const novaNotaObj: Historico = { 
-          id: Date.now(), 
-          texto: novaNota, 
-          created_at: new Date().toISOString() 
-      };
-      
+      if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou. Aguarde a internet.");
+      const novaNotaObj: Historico = { id: Date.now(), texto: novaNota, created_at: new Date().toISOString() };
       const novasNotas = [novaNotaObj, ...historico];
-
       setHistorico(novasNotas);
       setNovaNota('');
       setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
-      
       if (navigator.onLine) {
           await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
       } else {
@@ -616,7 +826,7 @@ export default function DealsPage() {
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
-    if (!selectedClientId) return alert("⚠️ ALERTA: Você precisa selecionar um cliente válido na lista suspensa!");
+    if (!selectedClientId) return alert("⚠️ ALERTA: Selecione um cliente da lista suspensa!");
 
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
@@ -625,11 +835,8 @@ export default function DealsPage() {
     let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
 
     if (!isLideranca) {
-        if (percDesconto > LIMITE_DESCONTO_MAXIMO) {
-            novoStatusAprovacao = 'pendente';
-        } else {
-            novoStatusAprovacao = null; 
-        }
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'pendente';
+        else novoStatusAprovacao = null; 
     } else {
         if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado';
         else novoStatusAprovacao = null;
@@ -649,9 +856,12 @@ export default function DealsPage() {
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
         contrato_fim: contratoFim || null,
+        cnpj: novoCnpj,
+        parcelas: parcelas,
+        vencimento: vencimento || null,
         status_aprovacao: novoStatusAprovacao, 
+        user_id: isLideranca ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
-        user_id: user.id,
         client_id: selectedClientId,
         empresa_id: perfil?.empresa_id 
     };
@@ -659,14 +869,13 @@ export default function DealsPage() {
     if (editingLeadId) {
         try {
             if (editingLeadId > 1000000) throw new Error('Failed to fetch');
-
             const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
             if (error) throw error; 
-
             setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
             setIsModalOpen(false);
-            setToastMessage("Lead atualizado!");
+            setToastMessage("Lead atualizado e distribuído!");
             setShowToast(true);
+            fetchData();
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
                 await localDb.syncQueue.add({
@@ -682,22 +891,20 @@ export default function DealsPage() {
         try {
             const { data, error } = await supabase.from('leads').insert([payload]).select();
             if (error) throw error; 
-
             if (data) {
                 setLeads(prev => [data[0] as Lead, ...prev]);
                 setIsModalOpen(false);
                 setToastMessage("Lead criado com sucesso! 🚀");
                 setShowToast(true);
+                fetchData();
             }
         } catch (error: any) {
              if (error.message === 'Failed to fetch' || !navigator.onLine) {
                 const tempId = Date.now(); 
                 const leadOffline = { ...payload, id: tempId, created_at: new Date().toISOString() };
-
                 await localDb.syncQueue.add({
                     operacao: 'INSERT', tabela: 'leads', dados: leadOffline, data_criacao: new Date().toISOString()
                 });
-                
                 setLeads(prev => [leadOffline as Lead, ...prev]);
                 setIsModalOpen(false);
                 setToastMessage("📶 Sem rede. Lead guardado no cofre!");
@@ -715,7 +922,7 @@ export default function DealsPage() {
       setShowToast(true);
   };
 
-  const abrirModal = async (lead?: Lead) => {
+  const abrirModal = useCallback((lead?: Lead) => {
     setShowClientDropdown(false); 
     setCategoriaSelecionada(null); 
     if (lead) {
@@ -730,13 +937,17 @@ export default function DealsPage() {
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
+        setNovoCnpj(lead.cnpj || '');
+        setParcelas(lead.parcelas || '1');
+        setVencimento(lead.vencimento || '');
         setDesconto(lead.desconto || 0); 
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
+        setLeadUserId(lead.user_id || ''); 
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
         setNovoTelefone('');
-        setNovaUnidade('');
+        setNovaUnidade(perfil?.unidade || '');
         setNovaCidade('');
         setNovaDescricao('');
         setSelectedClientId(null);
@@ -744,43 +955,59 @@ export default function DealsPage() {
         setFotoUrl('');
         setContratoInicio('');
         setContratoFim('');
+        setNovoCnpj('');
+        setParcelas('1');
+        setVencimento('');
         setDesconto(0); 
         setHistorico([]);
+        setLeadUserId(user?.id || ''); 
     }
     setIsModalOpen(true);
-  };
+  }, [perfil?.unidade, user?.id]);
 
-  const leadsAtivos = leads.filter(l => {
-      if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
-      if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
-      if (filtroData && !l.created_at.startsWith(filtroData)) return false;
-      return true;
-  });
+  const leadsAtivos = useMemo(() => {
+      return leads.filter(l => {
+          if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
+          if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
+          if (filtroData && !l.created_at.startsWith(filtroData)) return false;
+          return true;
+      });
+  }, [leads, filtroVendedor, filtroUnidade, filtroData]);
 
-  const totalGanhos = leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
-  const totalAberto = leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
-  
+  const totalAberto = useMemo(() => leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
+  const totalGanhos = useMemo(() => leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
+
+  // 👇 CORREÇÃO 2: CÁLCULO ALINHADO DA META E PROGRESSO 👇
   let valorMetaAlvo = 0;
   if (filtroData) {
       const [anoStr, mesStr] = filtroData.split('-');
       const metaMes = metasBase.find(m => m.ano === parseInt(anoStr) && m.mes === parseInt(mesStr));
       if (metaMes) valorMetaAlvo = Number(metaMes.valor_objetivo);
   } else {
-      const metasMensais = metasBase.filter(m => m.mes >= 1 && m.mes <= 12);
-      if (metasMensais.length > 0) {
-          valorMetaAlvo = metasMensais.reduce((acc, curr) => acc + Number(curr.valor_objetivo), 0);
+      const metaAnual = metasBase.find(m => !m.mes || m.mes === 0);
+      if (metaAnual) {
+          valorMetaAlvo = Number(metaAnual.valor_objetivo);
       } else {
-          const metaAnual = metasBase.find(m => !m.mes || m.mes === 0);
-          if (metaAnual) valorMetaAlvo = Number(metaAnual.valor_objetivo);
+          const metasMensais = metasBase.filter(m => m.mes >= 1 && m.mes <= 12);
+          valorMetaAlvo = metasMensais.reduce((acc, curr) => acc + Number(curr.valor_objetivo), 0);
       }
   }
+
+  const anoAtualStr = new Date().getFullYear().toString();
+  const ganhosParaMeta = leadsAtivos.filter(l => {
+      if (l.status !== 'ganho') return false;
+      if (!filtroData && l.created_at) return l.created_at.startsWith(anoAtualStr);
+      return true;
+  }).reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
+
   const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
-  const percentMeta = Math.min((totalGanhos / metaValidaParaCalculo) * 100, 100);
+  const percentMeta = Math.min((ganhosParaMeta / metaValidaParaCalculo) * 100, 100);
   const labelMeta = filtroData ? (isDirector ? 'Meta Mês (Global)' : 'Meta Mês') : (isDirector ? 'Meta Anual (Global)' : 'Meta Anual');
-  
+  // 👆 FIM DA CORREÇÃO 2 👆
+
   const rankingServicos = leadsAtivos.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
-  const getLeadsByStage = (stageIdx: number) => {
+  const getLeadsByStage = useCallback((stageIdx: number) => {
       return leadsAtivos
         .filter(l => l && l.etapa === stageIdx)
         .sort((a, b) => {
@@ -788,11 +1015,11 @@ export default function DealsPage() {
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
         });
-  };
+  }, [leadsAtivos]);
 
-  const getStageTotal = (stageIdx: number) => {
+  const getStageTotal = useCallback((stageIdx: number) => {
       return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
-  };
+  }, [getLeadsByStage]);
 
   const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
   const totalModalFinal = Math.max(0, subtotalModal - desconto);
@@ -813,7 +1040,7 @@ export default function DealsPage() {
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Pipeline</h1>
           
           <div className="flex items-center gap-2 mt-1">
-             <span className="text-blue-400 flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase"><User size={10}/> {perfil?.nome}</span>
+             <span className="text-blue-400 flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase"><User size={10}/> {perfil?.nome} {isGerente ? '(GERENTE)' : ''}</span>
              
              {isOffline ? (
                 <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.2)]">
@@ -864,25 +1091,28 @@ export default function DealsPage() {
                   className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
                 >
                   <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
-                  {/* 👇 AQUI ESTÁ O MAPA DE TODOS OS PERFIS 👇 */}
-                  {todosPerfis.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-[#0F172A]">{p.nome}</option>
+                  {Object.entries(usersMap).map(([id, nome]) => (
+                    <option key={id} value={id} className="bg-[#0F172A]">{nome}</option>
                   ))}
                 </select>
               </>
             )}
             
-            <div className="h-4 w-px bg-white/10 ml-2"></div>
-            <select 
-              value={filtroUnidade} 
-              onChange={e => setFiltroUnidade(e.target.value)}
-              className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
-            >
-              <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
-              <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
-              <option value="DEMAIS FM 107,9" className="bg-[#0F172A]">DEMAIS FM 107,9</option>
-              <option value="DEMAIS FM 101,1" className="bg-[#0F172A]">DEMAIS FM 101,1</option>
-            </select>
+            {isDirector && (
+                <>
+                <div className="h-4 w-px bg-white/10 ml-2"></div>
+                <select 
+                  value={filtroUnidade} 
+                  onChange={e => setFiltroUnidade(e.target.value)}
+                  className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none ml-2"
+                >
+                  <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
+                  <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
+                  <option value="DEMAIS FM 107,9" className="bg-[#0F172A]">DEMAIS FM 107,9</option>
+                  <option value="DEMAIS FM 101,1" className="bg-[#0F172A]">DEMAIS FM 101,1</option>
+                </select>
+                </>
+            )}
 
             <div className="h-4 w-px bg-white/10 ml-2"></div>
             <div className="relative flex items-center ml-2">
@@ -951,167 +1181,20 @@ export default function DealsPage() {
                     <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
                         {leadsDaColuna.map((lead, index) => {
                             if (!lead || !lead.id) return null;
-
-                            const daysLeft = getDaysLeft(lead.contrato_fim);
-                            const isPhantom = lead.id > 1000000;
-
                             return (
-                                <Draggable key={lead.id} draggableId={lead.id.toString()} index={index}>
-                                    {(provided, snapshot) => (
-                                    <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
-                                    >
-                                            {lead.status_aprovacao === 'pendente' && (
-                                                <div className="bg-orange-500/20 border border-orange-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-orange-400">
-                                                    <Lock size={12}/>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest animate-pulse">Aprovação Pendente</span>
-                                                </div>
-                                            )}
-                                            {lead.status_aprovacao === 'recusado' && (
-                                                <div className="bg-red-500/20 border border-red-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-red-400">
-                                                    <X size={12}/>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Desconto Recusado</span>
-                                                </div>
-                                            )}
-
-                                            <div className="flex justify-between items-start mb-1">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="cursor-pointer bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors" onClick={() => abrirModal(lead)}>
-                                                        <Edit2 size={10} className="text-slate-500"/>
-                                                    </div>
-                                                    {isPhantom ? (
-                                                        <span className="text-[8px] font-black text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5 animate-pulse">
-                                                            <RefreshCcw size={8}/> OFFLINE
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-[9px] font-black text-slate-400 bg-white/5 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5">
-                                                            <Hash size={8}/>LD-{String(lead.id).padStart(4, '0')}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                
-                                                <div className="flex flex-col md:flex-row gap-2 md:gap-2">
-                                                    <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
-                                                        <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
-                                                    </button>
-                                                    <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
-                                                        <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            
-                                            {(lead.origem === 'Portal Web' || lead.descricao) && (
-                                                <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg mt-2 mb-2">
-                                                    <div className="flex items-center gap-1 mb-1">
-                                                        <Info size={10} className="text-blue-400"/>
-                                                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Veio do Portal</span>
-                                                    </div>
-                                                    {lead.descricao && <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>}
-                                                    {lead.cidade && (
-                                                        <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            <div className="mb-2 mt-2">
-                                                {lead.checkin && lead.checkin.includes('Meta') ? (
-                                                    <div className="bg-purple-600/20 border border-purple-500/30 p-1.5 rounded-lg flex items-center gap-2 mb-1">
-                                                        <Crosshair size={12} className="text-purple-400"/>
-                                                        <span className="text-[9px] font-bold text-purple-200 uppercase truncate">{lead.checkin}</span>
-                                                    </div>
-                                                ) : lead.checkin ? (
-                                                    <div className="flex items-center gap-1 mb-1">
-                                                        <MapPin size={10} className="text-pink-500" />
-                                                        <span className="text-[9px] font-bold text-blue-400 uppercase truncate">Visitado {lead.checkin.split(',')[0]}</span>
-                                                    </div>
-                                                ) : (
-                                                    lead.status === 'aberto' && <div className="flex items-center gap-1 mb-2"><MapPinOff size={10} className="text-red-500" /><span className="text-[9px] font-black text-red-500 uppercase">PENDENTE</span></div>
-                                                )}
-                                            </div>
-
-                                            <div className="mb-1 flex items-center gap-2 flex-wrap">
-                                                <h4 className="font-black text-sm uppercase leading-tight transition-colors truncate max-w-full text-white group-hover:text-slate-200">
-                                                    {lead.empresa}
-                                                </h4>
-                                                {lead.unidade && (
-                                                    <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                                        <Building2 size={8}/> {lead.unidade}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {isLideranca && lead.user_id && usersMap[lead.user_id] && (
-                                                <div className="mb-2 mt-1 inline-flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">
-                                                    <User size={8} /> {usersMap[lead.user_id]}
-                                                </div>
-                                            )}
-
-                                            <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2 mt-1">
-                                                {Array.isArray(lead.itens) && lead.itens.slice(0, 2).map((item, i) => (
-                                                    <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
-                                                ))}
-                                                {Array.isArray(lead.itens) && lead.itens.length > 2 && <p className="text-[9px] text-slate-500 italic">+{lead.itens.length - 2} items...</p>}
-                                            </div>
-
-                                            <div className="flex items-center gap-1 text-[#22C55E] font-black text-sm mb-2">
-                                                R$ {lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                                {lead.desconto && lead.desconto > 0 ? <span className="text-[8px] text-red-400 ml-1 bg-red-500/10 px-1 py-0.5 rounded">COM DESCONTO</span> : null}
-                                            </div>
-
-                                            {lead.contrato_inicio && lead.contrato_fim && (
-                                                <div className="mb-2 flex items-center gap-2 p-1.5 bg-white/[0.02] border border-white/5 rounded-lg">
-                                                    <CalendarDays size={12} className="text-slate-500" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[8px] font-black uppercase text-slate-500">Contrato</span>
-                                                        <span className="text-[9px] text-slate-300 font-mono leading-none">
-                                                            {formatarData(lead.contrato_inicio)} até {formatarData(lead.contrato_fim)}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    {daysLeft !== null && daysLeft <= 30 && daysLeft >= 0 && (
-                                                        <div className="ml-auto flex items-center gap-1 bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase animate-pulse border border-red-500/30">
-                                                            <AlertTriangle size={10}/> {daysLeft}D
-                                                        </div>
-                                                    )}
-                                                    {daysLeft !== null && daysLeft < 0 && (
-                                                        <div className="ml-auto flex items-center bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] font-black uppercase">
-                                                            VENCIDO
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {lead.status === 'aberto' ? (
-                                                <div className="space-y-2 pt-1">
-                                                    <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
-                                                        AVANÇAR ETAPA
-                                                    </button>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <button 
-                                                            onClick={() => mudarEtapa(lead.id, 4, 'ganho')} 
-                                                            className={`py-1.5 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${lead.status_aprovacao === 'pendente' ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]'}`}
-                                                        >
-                                                            GANHO
-                                                        </button>
-                                                        <button onClick={() => mudarEtapa(lead.id, 5, 'perdido')} className="py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors">PERDIDO</button>
-                                                    </div>
-                                                </div>
-                                            ) : lead.status === 'ganho' ? (
-                                                <div className="mt-2 flex gap-2 pt-2 border-t border-white/5">
-                                                    <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                                                        <Briefcase size={10}/> PRODUÇÃO
-                                                    </a>
-                                                    <button onClick={(e) => { e.stopPropagation(); gerarContrato(lead); }} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
-                                                        <FileText size={10}/> CONTRATO
-                                                    </button>
-                                                </div>
-                                            ) : null}
-                                    </div>
-                                    )}
-                                </Draggable>
+                                <LeadCard 
+                                    key={lead.id} 
+                                    lead={lead} 
+                                    index={index} 
+                                    isDirector={isDirector} 
+                                    isLideranca={isLideranca} 
+                                    usersMap={usersMap} 
+                                    abrirModal={abrirModal} 
+                                    enviarWhatsapp={enviarWhatsapp} 
+                                    fazerCheckin={fazerCheckin} 
+                                    mudarEtapa={mudarEtapa} 
+                                    imprimirContrato={imprimirContrato} 
+                                />
                             );
                         })}
                         {provided.placeholder}
@@ -1189,6 +1272,7 @@ export default function DealsPage() {
                                                 setSelectedClientId(c.id);
                                                 setNovoTelefone(c.telefone || '');
                                                 if (c.cidade) setNovaCidade(c.cidade as string);
+                                                if (c.cnpj) setNovoCnpj(c.cnpj as string); 
                                                 setShowClientDropdown(false);
                                             }}
                                         >
@@ -1209,11 +1293,7 @@ export default function DealsPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">WhatsApp</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Building2 size={10}/> Unidade / Filial *</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" 
                                 value={novaUnidade} 
@@ -1226,16 +1306,48 @@ export default function DealsPage() {
                                 <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                        </div>
                     </div>
+
+                    {/* 👇 CAMPO DE DISTRIBUIÇÃO EXCLUSIVO PARA LIDERANÇA 👇 */}
+                    {isLideranca && (
+                        <div className="bg-yellow-500/5 border border-yellow-500/20 p-4 rounded-2xl">
+                            <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1 mb-2"><User size={12}/> Vendedor Responsável (Distribuição)</label>
+                            <select 
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-yellow-500 cursor-pointer appearance-none" 
+                                value={leadUserId} 
+                                onChange={e => setLeadUserId(e.target.value)}
+                            >
+                                <option value="" className="bg-[#0B1120]">Nenhum (Fila Geral do Diretor)</option>
+                                {Object.entries(usersMap).map(([id, nome]) => (
+                                    <option key={id} value={id} className="bg-[#0B1120]">{nome}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
-                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => setContratoInicio(e.target.value)} />
+                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => handleContratoInicio(e.target.value)} />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
                             <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Hash size={10}/> Qtd. Parcelas</label>
+                            <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => setParcelas(e.target.value)} placeholder="Ex: 3" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> 1º Vencimento</label>
+                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => setVencimento(e.target.value)} title="Calculado automaticamente para 1 mês" />
                         </div>
                     </div>
 
@@ -1363,7 +1475,7 @@ export default function DealsPage() {
                                 <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Anexos</p>
                                 <label className="block w-full text-center border border-dashed border-white/10 rounded-xl p-3 cursor-pointer hover:bg-white/5 transition-all">
                                     <Upload size={16} className="mx-auto text-slate-500 mb-1"/>
-                                    <span className="text-[10px] text-slate-400">{uploading ? 'Enviando...' : 'Anexar Contrato'}</span>
+                                    <span className="text-[10px] text-slate-400">{uploading ? 'Enviando...' : 'Anexar Arquivo'}</span>
                                     <input type="file" className="hidden" onChange={handleUpload}/>
                                 </label>
                                 {fotoUrl && <a href={fotoUrl} target="_blank" className="block text-[10px] text-blue-400 mt-2 text-center hover:underline">Ver Anexo Atual</a>}

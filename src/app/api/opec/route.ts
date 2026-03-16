@@ -5,7 +5,6 @@ import { gerarJsonOpec } from '@/lib/opecIntegration';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 🔒 A NOSSA CHAVE MESTRA (A que a equipa da OPEC vai usar no Postman/Sistema deles)
 const NOSSO_TOKEN_SECRETO = "WEGROW_OPEC_2026_MASTER_KEY";
 
 export async function GET(request: Request) {
@@ -16,26 +15,27 @@ export async function GET(request: Request) {
     }
 
     try {
-        // 👇 Robô VIP ativado com o CRACHÁ DE DONO (Bypassa o bloqueio de segurança RLS do Supabase)
         const supabaseAdmin = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!, // 🔥 CHAVE SECRETA DE PRODUÇÃO
+            process.env.SUPABASE_SERVICE_ROLE_KEY!, 
             { auth: { persistSession: false } }
         );
 
-        // 1. Busca APENAS os Jobs Finalizados
+        // 1. Busca os Jobs Finalizados que AINDA NÃO FORAM ENVIADOS (Carimbo = falso ou vazio)
         const { data: jobsProntos } = await supabaseAdmin
             .from('jobs')
             .select('*')
-            .eq('stage', 'entregue') // 🔥 FILTRO DE SEGURANÇA ATIVADO
+            .eq('stage', 'entregue')
+            .neq('enviado_opec', true) // 🔥 O FILTRO INTELIGENTE AQUI
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(50); // Reduzimos para 50 por lote para ficar ainda mais rápido
 
         if (!jobsProntos || jobsProntos.length === 0) {
             return NextResponse.json([], { status: 200 }); 
         }
 
         let contratosParaOpec = [];
+        let idsParaCarimbar = []; // 👈 Vamos guardar os IDs para carimbar depois
 
         // 2. Monta o SUPER JSON limpo
         for (const job of jobsProntos) {
@@ -57,7 +57,6 @@ export async function GET(request: Request) {
             
             const pacoteFinal = {
                 ...opecData[0], 
-
                 producao: {
                     id_job: job.id,
                     titulo_referencia: job.titulo,
@@ -69,7 +68,6 @@ export async function GET(request: Request) {
                     arquivo_audio_url: job.audio_url || null,
                     roteiro_locucao: job.briefing 
                 },
-
                 veiculacao: {
                     num_pi: job.num_pi || leadData?.num_pi || null,
                     data_inicio: job.data_inicio || leadData?.contrato_inicio || null,
@@ -79,7 +77,6 @@ export async function GET(request: Request) {
                     tabela_unidade: job.unidade || leadData?.unidade || 'Não informada',
                     itens_midia: job.itens_opec || leadData?.itens || []
                 },
-
                 comercial: {
                     id_lead: leadData?.id || null,
                     codigo_contrato: leadData ? `LD-${String(leadData.id).padStart(4, '0')}` : null,
@@ -89,7 +86,6 @@ export async function GET(request: Request) {
                     parcelas: leadData?.parcelas || 1,
                     primeiro_vencimento: leadData?.vencimento || null,
                 },
-
                 cliente: {
                     id_cliente: clienteData?.id || job.client_id || null,
                     nome_fantasia: job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
@@ -102,8 +98,18 @@ export async function GET(request: Request) {
             };
 
             contratosParaOpec.push(pacoteFinal);
+            idsParaCarimbar.push(job.id); // 👈 Guarda o ID deste job na lista do carimbo
         }
 
+        // 3. 🛡️ BATE O CARIMBO NO BANCO DE DADOS (Atualiza para enviado_opec = true)
+        if (idsParaCarimbar.length > 0) {
+            await supabaseAdmin
+                .from('jobs')
+                .update({ enviado_opec: true })
+                .in('id', idsParaCarimbar);
+        }
+
+        // 4. Entrega a encomenda para a rádio
         return NextResponse.json(contratosParaOpec, { status: 200 });
 
     } catch (error) {

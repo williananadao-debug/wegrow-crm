@@ -15,43 +15,55 @@ export default function Navbar() {
   
   // BLINDAGEM CONTRA A VERCEL
   const auth = useAuth() || {};
+  const user = auth.user; // 👈 O COFRE DE USUÁRIO (Onde o email realmente mora)
   const perfil = auth.perfil;
   const signOut = auth.signOut || (() => {});
   
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // 👇 1. O CADEADO DA OPEC CORRIGIDO 👇
+  const isOpec = user?.email === 'opec@wegrow.com.br';
+
   // Apenas o Diretor (ou Admin) vai ver as Configurações
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor' || user?.email === 'admin@wegrow.com';
   const isManager = perfil?.cargo === 'gerente';
 
-  // 👇 1. O INTERRUPTOR DE EMPRESA CORRIGIDO 👇
+  // O INTERRUPTOR DE EMPRESA CORRIGIDO
   const ID_DA_RADIO = '11111111-1111-1111-1111-111111111111';
-  // A mágica aqui: Ele verifica se o "empresa_id" existe PRIMEIRO, para não mostrar no "piscar" de carregamento
   const mostrarFinanceiro = Boolean(perfil?.empresa_id && perfil.empresa_id !== ID_DA_RADIO);
 
-  const menuItems = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
-    { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
-    { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' }, 
-    { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' },
-    { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
-  ];
+  // 👇 2. A QUARENTENA DE MENU 👇
+  let menuItems: any[] = [];
 
-  // 👇 2. INJEÇÃO DO MENU FINANCEIRO 👇
-  if (mostrarFinanceiro) {
-    menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/financeiro' });
-  }
+  if (isOpec) {
+    // Se for a OPEC, o menu tem apenas UM item.
+    menuItems = [
+      { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' }
+    ];
+  } else {
+    // Se NÃO for a OPEC, carrega o menu normal da sua empresa
+    menuItems = [
+      { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
+      { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
+      { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' }, 
+      { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' },
+      { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
+    ];
 
-  // Lógica de Cargos que você já tinha
-  if (isDirector || isManager) {
-    if (isDirector) {
-      menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });
-      menuItems.splice(2, 0, { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
-    } else {
-      menuItems.push({ name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
+    if (mostrarFinanceiro) {
+      menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/financeiro' });
     }
-    menuItems.push({ name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' });
+
+    if (isDirector || isManager) {
+      if (isDirector) {
+        menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });
+        menuItems.splice(2, 0, { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
+      } else {
+        menuItems.push({ name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
+      }
+      menuItems.push({ name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' });
+    }
   }
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -68,7 +80,8 @@ export default function Navbar() {
             <span className="text-lg font-black italic text-white tracking-tighter">WEGROW</span>
           </div>
         </div>
-        <NotificationBell />
+        {/* Esconde as notificações para a OPEC não ver fofoca interna */}
+        {!isOpec && <NotificationBell />}
       </div>
 
       {isMobileOpen && (
@@ -81,7 +94,7 @@ export default function Navbar() {
               <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className="flex flex-col leading-none">
                 <span className="font-bold text-lg tracking-tighter uppercase italic">WEGROW</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || 'Membro'}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || (isOpec ? 'Parceiro' : 'Membro')}</span>
               </div>
             </div>
             <button onClick={() => setIsMobileOpen(false)} className="text-slate-500 hover:text-white bg-white/5 p-2 rounded-full"><X size={18}/></button>
@@ -95,7 +108,6 @@ export default function Navbar() {
           ))}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-            {/* 👇 CADEADO MOBILE: SÓ DIRETOR VÊ CONFIGURAÇÕES 👇 */}
             {isDirector && (
               <Link href="/settings" onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                 <Settings size={20} /> Configurações
@@ -118,7 +130,7 @@ export default function Navbar() {
               <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 <span className="font-bold text-lg tracking-tighter uppercase italic leading-none">wegrow</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || 'Visitante'}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || (isOpec ? 'Parceiro' : 'Visitante')}</span>
               </div>
             </div>
 
@@ -136,7 +148,6 @@ export default function Navbar() {
               ))}
 
               <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-                {/* 👇 CADEADO DESKTOP: SÓ DIRETOR VÊ CONFIGURAÇÕES 👇 */}
                 {isDirector && (
                   <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                     <Settings size={20} />

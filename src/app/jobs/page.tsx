@@ -57,18 +57,19 @@ const getPriorityColor = (p: string) => {
 };
 
 // 👇 CARD EM MODELO F1 (React.memo) PARA ALTA PERFORMANCE 👇
-const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirector, abrirModal, handleFinalizar }: any) => {
+const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirector, abrirModal, handleFinalizar, isOpec }: any) => {
     const leadRef = job.briefing?.match(/LD-\d+/)?.[0] || '';
     const isFinalizado = job.stage === 'entregue';
 
     return (
-        <Draggable draggableId={job.id.toString()} index={index}>
+        // 👇 CADEADO: isDragDisabled bloqueia o arrastar se for OPEC
+        <Draggable draggableId={job.id.toString()} index={index} isDragDisabled={isOpec}>
           {(prov, snap) => (
             <div
               ref={prov.innerRef}
               {...prov.draggableProps}
               {...prov.dragHandleProps}
-              className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all cursor-grab active:cursor-grabbing relative flex flex-col ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''} ${isFinalizado ? 'opacity-70 hover:opacity-100 grayscale hover:grayscale-0' : ''}`}
+              className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all ${isOpec ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} relative flex flex-col ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''} ${isFinalizado ? 'opacity-70 hover:opacity-100 grayscale hover:grayscale-0' : ''}`}
               onClick={() => abrirModal(job)} 
             >
               <div className="flex justify-between items-start mb-2">
@@ -136,8 +137,8 @@ const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirec
                   </div>
               </div>
 
-              {/* Botão de Finalizar só aparece se o card ainda não estiver finalizado */}
-              {!isFinalizado && (
+              {/* 👇 CADEADO: Botão de Finalizar só aparece se não for OPEC e se não estiver finalizado */}
+              {!isFinalizado && !isOpec && (
                   <button 
                       onClick={(e) => handleFinalizar(e, job.id)}
                       className="w-full mt-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]"
@@ -154,9 +155,12 @@ JobCard.displayName = 'JobCard';
 
 export default function JobsPage() {
   const auth = useAuth() || {};
-  const user = auth.user;
+  const user = auth.user; // 👈 Puxando o user
   const perfil = auth.perfil;
   
+  // 👇 IDENTIFICA SE O USUÁRIO LOGADO É A OPEC (CORRIGIDO) 👇
+  const isOpec = user?.email === 'opec@wegrow.com.br';
+
   const [rawJobs, setRawJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -164,7 +168,6 @@ export default function JobsPage() {
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
   
-  // 👇 NOVO ESTADO: Botão de Ver Finalizados
   const [mostrarFinalizados, setMostrarFinalizados] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -175,19 +178,19 @@ export default function JobsPage() {
       data_inicio: '', hora_inicio: '', data_fim: '', hora_fim: '', itens_opec: []
   });
 
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor' || user?.email === 'admin@wegrow.com';
 
   useEffect(() => {
     const fetchJobs = async () => {
       setLoading(true);
       let query = supabase.from('jobs').select('*').order('created_at', { ascending: false });
       
-      // Se não estiver a ver os finalizados, filtra fora os entregues
       if (!mostrarFinalizados) {
           query = query.neq('stage', 'entregue');
       }
 
-      if (!isDirector) query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
+      // Se for a OPEC, ela precisa ver TODOS os jobs, então ignoramos o filtro de vendedor/unidade para ela.
+      if (!isDirector && !isOpec) query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       
       const { data } = await query;
       if (data) setRawJobs(data as any);
@@ -195,7 +198,7 @@ export default function JobsPage() {
     };
 
     if (user) fetchJobs();
-  }, [user, perfil, mostrarFinalizados, isDirector]); // Recarrega se o botão de finalizados for clicado
+  }, [user, perfil, mostrarFinalizados, isDirector, isOpec]); 
 
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawJobs.map(j => j.unidade).filter(Boolean))) as string[], [rawJobs]);
   const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawJobs.map(j => j.vendedor_nome).filter(Boolean))) as string[], [rawJobs]);
@@ -219,19 +222,23 @@ export default function JobsPage() {
   }), [rawJobs, filtroUnidade, filtroVendedor, filtroPeriodo]);
 
   const onDragEnd = useCallback(async (result: any) => {
+    // 👇 CADEADO: Segurança dupla, se por acaso a OPEC tentar arrastar, a função aborta.
+    if (isOpec) return;
+
     const { destination, draggableId } = result;
     if (!destination) return;
     const newStage = destination.droppableId;
     const id = parseInt(draggableId);
     setRawJobs(prev => prev.map(job => job.id === id ? { ...job, stage: newStage } : job));
     await supabase.from('jobs').update({ stage: newStage }).eq('id', id);
-  }, []);
+  }, [isOpec]);
 
   const handleFinalizar = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation(); 
+      if(isOpec) return; // Segurança dupla
+
       if(!confirm("Deseja finalizar a produção? O Job ficará disponível na API para o sistema OPEC importar.")) return;
       
-      // Se a coluna de finalizados estiver aberta, apenas move o card. Se estiver fechada, tira o card da tela.
       setRawJobs(prev => 
           mostrarFinalizados 
               ? prev.map(j => j.id === id ? { ...j, stage: 'entregue' } : j)
@@ -240,7 +247,7 @@ export default function JobsPage() {
       
       await supabase.from('jobs').update({ stage: 'entregue' }).eq('id', id);
       alert("✅ Produção Finalizada! Os dados e a ordem de inserção estão liberados para o sistema da OPEC consumir.");
-  }, [mostrarFinalizados]);
+  }, [mostrarFinalizados, isOpec]);
 
   const abrirModal = useCallback((job?: Job) => {
       if (job) {
@@ -267,6 +274,8 @@ export default function JobsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
+      if(isOpec) return; // Segurança dupla
+
       if (!formData.titulo) return alert("Título obrigatório");
 
       const payload = {
@@ -289,17 +298,18 @@ export default function JobsPage() {
 
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation(); 
+      if(isOpec) return; // Segurança dupla
+
       if(!confirm("Tem certeza que deseja excluir este Job de Produção? Esta ação não pode ser desfeita.")) return;
       const { error } = await supabase.from('jobs').delete().eq('id', id);
       if(!error) {
           setRawJobs(prev => prev.filter(j => j.id !== id));
           setIsModalOpen(false);
       }
-  }, []);
+  }, [isOpec]);
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white font-black animate-pulse">CARREGANDO PRODUÇÃO...</div>;
 
-  // Renderiza as colunas visíveis. Se o "Ver Finalizados" estiver ativo, a 5ª coluna é adicionada magicamente!
   const VISIBLE_STAGES = mostrarFinalizados 
     ? { ...STAGES, entregue: { title: 'Finalizados (OPEC)', icon: <Archive size={14}/>, color: 'border-slate-500' } } 
     : STAGES;
@@ -332,7 +342,6 @@ export default function JobsPage() {
                     </select>
                 )}
                 
-                {/* 👇 O BOTÃO MÁGICO PARA VER FINALIZADOS 👇 */}
                 <button 
                     onClick={() => setMostrarFinalizados(!mostrarFinalizados)}
                     className={`bg-transparent text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-4 transition-colors ${mostrarFinalizados ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-white/5'}`}
@@ -341,11 +350,14 @@ export default function JobsPage() {
                 </button>
             </div>
 
-            <div className="flex items-center gap-4 w-full md:w-auto">
-                <button onClick={() => abrirModal()} className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all">
-                    <Plus size={18} /> Novo Job
-                </button>
-            </div>
+            {/* 👇 CADEADO: Botão Novo Job desaparece para OPEC 👇 */}
+            {!isOpec && (
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <button onClick={() => abrirModal()} className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all">
+                        <Plus size={18} /> Novo Job
+                    </button>
+                </div>
+            )}
         </div>
       </div>
 
@@ -355,7 +367,7 @@ export default function JobsPage() {
             const stageJobs = jobsFiltrados.filter(j => j.stage === key);
             
             return (
-              <Droppable key={key} droppableId={key}>
+              <Droppable key={key} droppableId={key} isDropDisabled={isOpec}>
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-3 h-full flex flex-col min-w-[280px] md:flex-1`}>
                     <div className="flex items-center gap-2 mb-4 px-1 pt-1">
@@ -366,7 +378,7 @@ export default function JobsPage() {
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-10">
                       {stageJobs.map((job, index) => (
-                         <JobCard key={job.id} job={job} index={index} filtroUnidade={filtroUnidade} filtroVendedor={filtroVendedor} isDirector={isDirector} abrirModal={abrirModal} handleFinalizar={handleFinalizar} />
+                         <JobCard key={job.id} job={job} index={index} filtroUnidade={filtroUnidade} filtroVendedor={filtroVendedor} isDirector={isDirector} abrirModal={abrirModal} handleFinalizar={handleFinalizar} isOpec={isOpec} />
                       ))}
                       {provided.placeholder}
                     </div>
@@ -392,9 +404,12 @@ export default function JobsPage() {
                                 <FileText size={14}/> {formData.briefing?.match(/LD-\d+/)?.[0]}
                             </span>
                         )}
+                        {/* 👇 AVISO VISUAL DE QUE ESTÁ BLOQUEADO 👇 */}
+                        {isOpec && <span className="text-orange-500 text-[10px] border border-orange-500/30 bg-orange-500/10 px-2 py-1 ml-2 rounded font-black tracking-widest uppercase">Somente Leitura</span>}
                     </h2>
                     <div className="flex items-center gap-2">
-                        {editingJobId && (
+                        {/* 👇 CADEADO: Lixeira some para OPEC 👇 */}
+                        {editingJobId && !isOpec && (
                             <button type="button" onClick={(e) => handleDelete(e, editingJobId)} className="bg-red-500/10 p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-colors" title="Excluir Job">
                                 <Trash2 size={20}/>
                             </button>
@@ -410,11 +425,10 @@ export default function JobsPage() {
                         
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                             
-                            {/* COLUNA ESQUERDA: INFOS DO JOB E DATAS GERAIS */}
                             <div className="lg:col-span-4 space-y-6">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Título do Job (Referência)</label>
-                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 uppercase" placeholder="Ex: Spot 30s Dia das Mães" value={formData.titulo || ''} onChange={e => setFormData({...formData, titulo: e.target.value})} required />
+                                    <input disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 uppercase disabled:opacity-70" placeholder="Ex: Spot 30s Dia das Mães" value={formData.titulo || ''} onChange={e => setFormData({...formData, titulo: e.target.value})} required />
                                 </div>
 
                                 <div className="bg-blue-500/5 border border-blue-500/20 p-5 rounded-2xl space-y-4">
@@ -423,23 +437,23 @@ export default function JobsPage() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Início</label>
-                                            <input type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500" value={formData.data_inicio || ''} onChange={e => setFormData({...formData, data_inicio: e.target.value})} />
+                                            <input disabled={isOpec} type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_inicio || ''} onChange={e => setFormData({...formData, data_inicio: e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Início</label>
-                                            <input type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500" value={formData.hora_inicio || ''} onChange={e => setFormData({...formData, hora_inicio: e.target.value})} />
+                                            <input disabled={isOpec} type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_inicio || ''} onChange={e => setFormData({...formData, hora_inicio: e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Fim</label>
-                                            <input type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500" value={formData.data_fim || ''} onChange={e => setFormData({...formData, data_fim: e.target.value})} />
+                                            <input disabled={isOpec} type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_fim || ''} onChange={e => setFormData({...formData, data_fim: e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Fim</label>
-                                            <input type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500" value={formData.hora_fim || ''} onChange={e => setFormData({...formData, hora_fim: e.target.value})} />
+                                            <input disabled={isOpec} type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_fim || ''} onChange={e => setFormData({...formData, hora_fim: e.target.value})} />
                                         </div>
                                         <div className="col-span-2">
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Nº PI (Opcional)</label>
-                                            <input className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500" value={formData.num_pi || ''} onChange={e => setFormData({...formData, num_pi: e.target.value})} placeholder="Ex: 089144" />
+                                            <input disabled={isOpec} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.num_pi || ''} onChange={e => setFormData({...formData, num_pi: e.target.value})} placeholder="Ex: 089144" />
                                         </div>
                                     </div>
                                 </div>
@@ -447,17 +461,17 @@ export default function JobsPage() {
                                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-4">
                                     <div>
                                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Vendedor Origem</label>
-                                        <input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector} />
+                                        <input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector || isOpec} />
                                     </div>
                                     <hr className="border-white/5" />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 text-red-400">Deadline (Prazo)</label>
-                                            <input type="date" className="w-full bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-3 py-3 text-xs font-bold outline-none focus:border-red-500" value={formData.deadline || ''} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+                                            <input disabled={isOpec} type="date" className="w-full bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-3 py-3 text-xs font-bold outline-none focus:border-red-500 disabled:opacity-70" value={formData.deadline || ''} onChange={e => setFormData({...formData, deadline: e.target.value})} />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Prioridade</label>
-                                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 appearance-none cursor-pointer" value={formData.prioridade || 'media'} onChange={e => setFormData({...formData, prioridade: e.target.value as any})}>
+                                            <select disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 appearance-none disabled:opacity-70" value={formData.prioridade || 'media'} onChange={e => setFormData({...formData, prioridade: e.target.value as any})}>
                                                 <option value="baixa" className="bg-[#0B1120]">Baixa</option>
                                                 <option value="media" className="bg-[#0B1120]">Média</option>
                                                 <option value="alta" className="bg-[#0B1120]">Alta Urgência</option>
@@ -467,10 +481,7 @@ export default function JobsPage() {
                                 </div>
                             </div>
 
-                            {/* COLUNA DIREITA: TABELA E ROTEIRO */}
                             <div className="lg:col-span-8 space-y-6">
-                                
-                                {/* 👇 TABELA DE MÍDIA COM CAMPOS DE HORA EDITÁVEIS 👇 */}
                                 <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
                                     <h3 className="text-xs font-black text-[#22C55E] uppercase mb-4 flex items-center gap-2"><AlignLeft size={16}/> Tabela de Mídia Contratada (Defina os Horários)</h3>
                                     
@@ -497,7 +508,8 @@ export default function JobsPage() {
                                                                 <div className="flex items-center gap-1">
                                                                     <input 
                                                                         type="time" 
-                                                                        className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500" 
+                                                                        disabled={isOpec}
+                                                                        className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" 
                                                                         value={item.horario_inicial || ''} 
                                                                         onChange={(e) => {
                                                                             const novosItens = [...formData.itens_opec];
@@ -508,7 +520,8 @@ export default function JobsPage() {
                                                                     <span className="text-slate-500 font-mono">às</span>
                                                                     <input 
                                                                         type="time" 
-                                                                        className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500" 
+                                                                        disabled={isOpec}
+                                                                        className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" 
                                                                         value={item.horario_final || ''} 
                                                                         onChange={(e) => {
                                                                             const novosItens = [...formData.itens_opec];
@@ -533,7 +546,7 @@ export default function JobsPage() {
 
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Roteiro / Texto do Locutor / Briefing</label>
-                                    <textarea className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[220px] resize-none custom-scrollbar leading-relaxed" placeholder="Cole o roteiro de gravação ou orientações do cliente aqui..." value={formData.briefing || ''} onChange={e => setFormData({...formData, briefing: e.target.value})} />
+                                    <textarea disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[220px] resize-none custom-scrollbar leading-relaxed disabled:opacity-70" placeholder="Cole o roteiro de gravação ou orientações do cliente aqui..." value={formData.briefing || ''} onChange={e => setFormData({...formData, briefing: e.target.value})} />
                                 </div>
                             </div>
 
@@ -543,9 +556,16 @@ export default function JobsPage() {
                 </div>
                 
                 <div className="p-6 border-t border-white/10 bg-[#0F172A] flex-shrink-0 rounded-b-[32px] flex justify-end items-center">
-                    <button type="submit" form="jobForm" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">
-                        {editingJobId ? 'Salvar Edições' : 'Criar Job Manual'}
-                    </button>
+                    {/* 👇 CADEADO: O botão muda se for OPEC 👇 */}
+                    {isOpec ? (
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white/10 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-white/20 transition-all">
+                            Fechar Visualização
+                        </button>
+                    ) : (
+                        <button type="submit" form="jobForm" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+                            {editingJobId ? 'Salvar Edições' : 'Criar Job Manual'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

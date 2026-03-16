@@ -11,16 +11,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const authHeader = request.headers.get('authorization');
     
-    // 🛡️ Segurança básica
     if (authHeader !== `Bearer ${NOSSO_TOKEN_SECRETO}`) {
-        return NextResponse.json({ erro: "Acesso Negado." }, { status: 401 });
+        return NextResponse.json({ erro: "Acesso Negado. Token inválido." }, { status: 401 });
     }
 
-    // 🔍 Capturando os novos filtros da URL
-    const dataInicial = searchParams.get('data_inicial'); // Ex: 2025-11-27
-    const dataFinal = searchParams.get('data_final');     // Ex: 2025-11-28
+    // 🔍 Capturando TODOS os filtros que a OPEC pediu
+    const dataInicial = searchParams.get('data_inicial'); 
+    const dataFinal = searchParams.get('data_final');     
     const status = searchParams.get('status') || 'entregue'; 
     const idJob = searchParams.get('id');
+    const numeroContrato = searchParams.get('numero_contrato'); // 👈 NOVIDADE AQUI
 
     try {
         const supabaseAdmin = createClient(
@@ -29,44 +29,58 @@ export async function GET(request: Request) {
             { auth: { persistSession: false } }
         );
 
-        // 1. Montando a Query Dinâmica
         let query = supabaseAdmin.from('jobs').select('*');
 
-        // Filtro por ID específico (se houver)
-        if (idJob) {
-            query = query.eq('id', idJob);
-        } else {
-            // Filtros gerais
-            query = query.eq('stage', status);
+        // 🚦 LÓGICA DE FILTROS INTELIGENTES
+        if (numeroContrato) {
+            // Limpa o texto (se ele mandar "LD-0597", vira apenas "0597")
+            const idLimpo = numeroContrato.replace(/\D/g, '');
             
-            if (dataInicial) {
-                query = query.gte('created_at', dataInicial);
+            // Procura quem é o cliente dono desse contrato
+            const { data: leadReferencia } = await supabaseAdmin
+                .from('leads')
+                .select('client_id')
+                .eq('id', idLimpo)
+                .single();
+
+            if (leadReferencia && leadReferencia.client_id) {
+                // Filtra os Jobs desse cliente específico
+                query = query.eq('client_id', leadReferencia.client_id);
+            } else {
+                return NextResponse.json([], { status: 200 }); // Retorna vazio se não achar
             }
-            if (dataFinal) {
-                // Adicionamos as 23:59:59 para pegar o dia inteiro
-                query = query.lte('created_at', `${dataFinal}T23:59:59`);
-            }
+        } 
+        else if (idJob) {
+            query = query.eq('id', idJob);
+        } 
+        else {
+            // Se não buscou por ID específico, usa as datas e status
+            query = query.eq('stage', status);
+            if (dataInicial) query = query.gte('created_at', dataInicial);
+            if (dataFinal) query = query.lte('created_at', `${dataFinal}T23:59:59`);
         }
 
-        const { data: jobsProntos, error: queryError } = await query
+        // Executa a busca
+        const { data: jobsProntos } = await query
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(100);
 
-        if (queryError) throw queryError;
-        if (!jobsProntos || jobsProntos.length === 0) return NextResponse.json([]);
+        if (!jobsProntos || jobsProntos.length === 0) {
+            return NextResponse.json([], { status: 200 }); 
+        }
 
-        // 2. Processamento dos dados (Mesma lógica anterior)
         let contratosParaOpec = [];
 
+        // Monta o SUPER JSON
         for (const job of jobsProntos) {
             let leadData = null;
             let clienteData = null;
 
             if (job.client_id) {
-                const { data: lData } = await supabaseAdmin.from('leads').select('*').eq('client_id', job.client_id).limit(1).maybeSingle();
+                const { data: lData } = await supabaseAdmin.from('leads').select('*').eq('client_id', job.client_id).order('created_at', { ascending: false }).limit(1).single();
                 if(lData) leadData = lData;
                 
-                const { data: cData } = await supabaseAdmin.from('clientes').select('*').eq('id', job.client_id).maybeSingle();
+                const { data: cData } = await supabaseAdmin.from('clientes').select('*').eq('id', job.client_id).single();
                 if(cData) clienteData = cData;
             }
 
@@ -75,35 +89,55 @@ export async function GET(request: Request) {
                  if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome });
             } catch(e) {}
             
-            contratosParaOpec.push({
-                ...opecData[0],
+            const pacoteFinal = {
+                ...opecData[0], 
                 producao: {
                     id_job: job.id,
+                    titulo_referencia: job.titulo,
                     status: job.stage,
-                    data_criacao: job.created_at,
+                    prioridade: job.prioridade,
+                    deadline_producao: job.deadline,
+                    data_criacao_job: job.created_at,
+                    data_liberacao_opec: new Date().toISOString(),
                     arquivo_audio_url: job.audio_url || null,
-                    roteiro: job.briefing 
+                    roteiro_locucao: job.briefing 
                 },
                 veiculacao: {
                     num_pi: job.num_pi || leadData?.num_pi || null,
                     data_inicio: job.data_inicio || leadData?.contrato_inicio || null,
                     data_fim: job.data_fim || leadData?.contrato_fim || null,
+                    hora_inicio: job.hora_inicio || null,
+                    hora_fim: job.hora_fim || null,
+                    tabela_unidade: job.unidade || leadData?.unidade || 'Não informada',
+                    itens_midia: job.itens_opec || leadData?.itens || []
                 },
                 comercial: {
+                    id_lead: leadData?.id || null,
+                    codigo_contrato: leadData ? `LD-${String(leadData.id).padStart(4, '0')}` : null,
                     vendedor: job.vendedor_nome || leadData?.vendedor_nome || 'Não informado',
                     valor_total: leadData?.valor_total || 0,
+                    desconto_aplicado: leadData?.desconto || 0,
+                    parcelas: leadData?.parcelas || 1,
+                    primeiro_vencimento: leadData?.vencimento || null,
                 },
                 cliente: {
-                    nome: job.cliente || clienteData?.nome_empresa || 'Não Informado',
+                    id_cliente: clienteData?.id || job.client_id || null,
+                    nome_fantasia: job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
+                    razao_social: clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
                     cnpj: clienteData?.cnpj || leadData?.cnpj || null,
+                    telefone_whatsapp: clienteData?.telefone || leadData?.telefone || null,
+                    cidade: clienteData?.cidade || leadData?.cidade || null,
+                    agencia: job.agencia || (leadData?.tipo === 'Agência' ? leadData?.empresa : null)
                 }
-            });
+            };
+
+            contratosParaOpec.push(pacoteFinal);
         }
 
         return NextResponse.json(contratosParaOpec, { status: 200 });
 
     } catch (error) {
-        console.error("Erro API OPEC:", error);
-        return NextResponse.json({ erro: "Erro ao buscar dados." }, { status: 500 });
+        console.error("Erro na API OPEC:", error);
+        return NextResponse.json({ erro: "Erro interno no servidor do CRM." }, { status: 500 });
     }
 }

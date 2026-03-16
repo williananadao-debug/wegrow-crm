@@ -176,9 +176,14 @@ export default function CustomersPage() {
 
             const analise = avaliarRisco(data.capital_social, est.data_inicio_atividade);
 
+            // 👇 CORREÇÃO AQUI: Usando formData em vez de prev 👇
+            const nomeFantasiaLimpo = est.nome_fantasia ? String(est.nome_fantasia).trim() : '';
+            const razaoSocialLimpa = data.razao_social ? String(data.razao_social).trim() : '';
+            const nomeFinal = nomeFantasiaLimpo || razaoSocialLimpa || formData.nome_empresa;
+
             setFormData(prev => ({
                 ...prev,
-                nome_empresa: est.nome_fantasia || data.razao_social || prev.nome_empresa,
+                nome_empresa: nomeFinal,
                 cep: est.cep || prev.cep || "",
                 endereco: ruaFormatada || prev.endereco || "",
                 numero: est.numero || prev.numero || "",
@@ -202,9 +207,14 @@ export default function CustomersPage() {
             const data2 = await res2.json();
             const analise = avaliarRisco(data2.capital_social, data2.data_inicio_atividade);
 
+            // 👇 CORREÇÃO AQUI: Usando formData em vez de prev 👇
+            const nomeFantasiaLimpo2 = data2.nome_fantasia ? String(data2.nome_fantasia).trim() : '';
+            const razaoSocialLimpa2 = data2.razao_social ? String(data2.razao_social).trim() : '';
+            const nomeFinal2 = nomeFantasiaLimpo2 || razaoSocialLimpa2 || formData.nome_empresa;
+
             setFormData(prev => ({
                 ...prev,
-                nome_empresa: data2.nome_fantasia || data2.razao_social || prev.nome_empresa,
+                nome_empresa: nomeFinal2,
                 cep: data2.cep || prev.cep || "",
                 endereco: data2.logradouro || prev.endereco || "",
                 numero: data2.numero || prev.numero || "",

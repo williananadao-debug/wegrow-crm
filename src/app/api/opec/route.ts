@@ -15,12 +15,15 @@ export async function GET(request: Request) {
         return NextResponse.json({ erro: "Acesso Negado. Token inválido." }, { status: 401 });
     }
 
-    // 🔍 Capturando TODOS os filtros que a OPEC pediu
+    // 🔍 Capturando os filtros da OPEC
     const dataInicial = searchParams.get('data_inicial'); 
     const dataFinal = searchParams.get('data_final');     
     const status = searchParams.get('status') || 'entregue'; 
     const idJob = searchParams.get('id');
-    const numeroContrato = searchParams.get('numero_contrato'); // 👈 NOVIDADE AQUI
+    const numeroContrato = searchParams.get('numero_contrato'); 
+    
+    // 👇 NOVIDADE: Filtro pela Rádio (Emissora) Cliente 👇
+    const codigoEmissora = searchParams.get('codigo_emissora'); 
 
     try {
         const supabaseAdmin = createClient(
@@ -31,12 +34,15 @@ export async function GET(request: Request) {
 
         let query = supabaseAdmin.from('jobs').select('*');
 
+        // 👇 NOVIDADE: Trava de segurança para multi-clientes 👇
+        // Se a OPEC mandar o código da emissora, filtramos só para ela!
+        if (codigoEmissora) {
+            query = query.eq('empresa_id', codigoEmissora);
+        }
+
         // 🚦 LÓGICA DE FILTROS INTELIGENTES
         if (numeroContrato) {
-            // Limpa o texto (se ele mandar "LD-0597", vira apenas "0597")
             const idLimpo = numeroContrato.replace(/\D/g, '');
-            
-            // Procura quem é o cliente dono desse contrato
             const { data: leadReferencia } = await supabaseAdmin
                 .from('leads')
                 .select('client_id')
@@ -44,23 +50,20 @@ export async function GET(request: Request) {
                 .single();
 
             if (leadReferencia && leadReferencia.client_id) {
-                // Filtra os Jobs desse cliente específico
                 query = query.eq('client_id', leadReferencia.client_id);
             } else {
-                return NextResponse.json([], { status: 200 }); // Retorna vazio se não achar
+                return NextResponse.json([], { status: 200 }); 
             }
         } 
         else if (idJob) {
             query = query.eq('id', idJob);
         } 
         else {
-            // Se não buscou por ID específico, usa as datas e status
             query = query.eq('stage', status);
             if (dataInicial) query = query.gte('created_at', dataInicial);
             if (dataFinal) query = query.lte('created_at', `${dataFinal}T23:59:59`);
         }
 
-        // Executa a busca
         const { data: jobsProntos } = await query
             .order('created_at', { ascending: false })
             .limit(100);
@@ -91,6 +94,12 @@ export async function GET(request: Request) {
             
             const pacoteFinal = {
                 ...opecData[0], 
+                // 👇 NOVIDADE: Identificação de quem é o dono do dado 👇
+                origem: {
+                    codigo_emissora: job.empresa_id || null,
+                    sistema_gerador: "WeGrow CRM",
+                    ambiente: "producao"
+                },
                 producao: {
                     id_job: job.id,
                     titulo_referencia: job.titulo,

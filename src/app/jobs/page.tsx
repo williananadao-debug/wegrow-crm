@@ -155,10 +155,10 @@ JobCard.displayName = 'JobCard';
 
 export default function JobsPage() {
   const auth = useAuth() || {};
-  const user = auth.user; // 👈 Puxando o user
+  const user = auth.user; 
   const perfil = auth.perfil;
   
-  // 👇 IDENTIFICA SE O USUÁRIO LOGADO É A OPEC (CORRIGIDO) 👇
+  // 👇 IDENTIFICA SE O USUÁRIO LOGADO É A OPEC 👇
   const isOpec = user?.email === 'opec@wegrow.com.br';
 
   const [rawJobs, setRawJobs] = useState<Job[]>([]);
@@ -492,7 +492,7 @@ export default function JobsPage() {
                                                     <tr>
                                                         <th className="p-3 w-12">Qtd</th>
                                                         <th className="p-3">Serviço</th>
-                                                        <th className="p-3 w-20">Duração</th>
+                                                        {/* 👇 COLUNA DURAÇÃO REMOVIDA 👇 */}
                                                         <th className="p-3">Programa</th>
                                                         <th className="p-3 w-36">Horários</th>
                                                     </tr>
@@ -502,7 +502,7 @@ export default function JobsPage() {
                                                         <tr key={i} className="hover:bg-white/5 transition-colors">
                                                             <td className="p-3 font-black text-white">{item.quantidade}x</td>
                                                             <td className="p-3 font-bold text-blue-400 uppercase">{item.servico}</td>
-                                                            <td className="p-3 font-mono text-slate-400">{item.tempo || '30"'}</td>
+                                                            {/* 👇 CELULA DURAÇÃO REMOVIDA 👇 */}
                                                             <td className="p-3 uppercase font-medium">{item.programa || 'ROTATIVO'}</td>
                                                             <td className="p-2">
                                                                 <div className="flex items-center gap-1">

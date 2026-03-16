@@ -16,10 +16,10 @@ export async function GET(request: Request) {
     }
 
     try {
-        // Robô VIP ativado
+        // 👇 Robô VIP ativado com a variável EXATA que está no seu Vercel
         const supabaseAdmin = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, 
             { auth: { persistSession: false } }
         );
 
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
                 if(cData) clienteData = cData;
             }
 
-            let opecData = [{}];
+            let opecData: any[] = [{}];
             try {
                  if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome });
             } catch(e) {}

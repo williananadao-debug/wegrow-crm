@@ -3,15 +3,16 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   Phone, FileText, X, History, CheckCircle2, XCircle, 
-  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap
+  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 type Cliente = {
   id: number; nome_empresa: string; telefone: string; email?: string; cnpj?: string;
-  inscricao_estadual?: string; cep?: string; endereco?: string; numero?: string;            
+  inscricao_estadual?: string; cep?: string; endereco?: string; numero?: string;
   estado?: string; cidade?: string; bairro?: string; status: 'ativo' | 'inativo';
+  status_risco?: string; limite_credito?: number; score_interno?: number; observacao_risco?: string;
   user_id?: string; empresa_id?: string; created_at: string;
 };
 
@@ -21,6 +22,14 @@ type VendaHistorico = { id: number; created_at: string; valor_total: number; sta
 
 const ITEMS_PER_PAGE = 20;
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
+
+// SEMÁFORO DE RISCO
+function SemaforoRisco({ status }: { status?: string }) {
+    if (status === 'aprovado') return <span className="bg-green-500/20 text-green-400 border border-green-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-[0_0_15px_rgba(34,197,94,0.2)]">🟢 Crédito Aprovado</span>;
+    if (status === 'risco_moderado') return <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">🟡 Risco Moderado</span>;
+    if (status === 'reprovado') return <span className="bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">🔴 Risco Alto (Apenas à vista)</span>;
+    return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">⚪ Em Análise</span>;
+}
 
 export default function CustomersPage() {
   const auth = useAuth() || {};
@@ -51,7 +60,8 @@ export default function CustomersPage() {
   const [formData, setFormData] = useState({
     nome_empresa: '', telefone: '', email: '', cnpj: '',
     inscricao_estadual: '', cep: '', endereco: '', numero: '',
-    cidade: '', bairro: '', estado: '', status: 'ativo', user_id: '' 
+    cidade: '', bairro: '', estado: '', status: 'ativo', user_id: '',
+    status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
   });
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -117,14 +127,45 @@ export default function CustomersPage() {
     setFormData({ ...formData, cnpj: masked });
   };
 
-  // 👇 MOTOR HÍBRIDO DEFINITIVO (Plano A + Plano B) 👇
+  // MOTOR DE ANÁLISE DE RISCO
+  const avaliarRisco = (capitalStr: any, dataInicioStr: any) => {
+      try {
+          const capital = parseFloat(capitalStr) || 0;
+          const anoAbertura = parseInt(String(dataInicioStr).substring(0, 4)) || new Date().getFullYear();
+          const idadeAnos = new Date().getFullYear() - anoAbertura;
+          
+          let status = 'em_analise';
+          let limite = 0;
+
+          if (idadeAnos >= 2 && capital >= 50000) {
+              status = 'aprovado';
+              limite = capital * 0.10;
+          } else if (idadeAnos < 1 || capital < 10000) {
+              status = 'reprovado';
+              limite = 0;
+          } else {
+              status = 'risco_moderado';
+              limite = capital * 0.05;
+          }
+
+          return {
+              status_risco: status,
+              limite_credito: limite,
+              score_interno: idadeAnos * 10,
+              observacao_risco: `Capital: R$ ${capital.toLocaleString('pt-BR')} | Idade: ${idadeAnos} anos.`
+          };
+      } catch (e) {
+          return { status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: 'Falha ao analisar dados públicos.' };
+      }
+  };
+
+  // MOTOR HÍBRIDO (Plano A + Plano B)
   const buscarDadosCNPJ = async () => {
     const cnpj = formData.cnpj.replace(/\D/g, '');
     if (cnpj.length !== 14) return alert("⚠️ Digite os 14 números do CNPJ.");
 
     setIsSearchingCnpj(true);
     try {
-        // 🚀 PLANO A: Tenta a API CNPJ.ws (Com Inscrição Estadual)
         const res1 = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`);
         
         if (res1.ok) {
@@ -132,6 +173,8 @@ export default function CustomersPage() {
             const est = data.estabelecimento;
             const inscricao = est.inscricoes_estaduais && est.inscricoes_estaduais.length > 0 ? est.inscricoes_estaduais[0].inscricao_estadual : "ISENTO";
             const ruaFormatada = `${est.tipo_logradouro || ''} ${est.logradouro || ''}`.trim();
+
+            const analise = avaliarRisco(data.capital_social, est.data_inicio_atividade);
 
             setFormData(prev => ({
                 ...prev,
@@ -142,21 +185,23 @@ export default function CustomersPage() {
                 bairro: est.bairro || prev.bairro || "",
                 cidade: est.cidade?.nome || prev.cidade || "",
                 estado: est.estado?.sigla || prev.estado || "",
-                inscricao_estadual: inscricao
+                inscricao_estadual: inscricao,
+                ...analise 
             }));
 
             if (!est.logradouro && !est.cep) {
                 alert("ℹ️ A Receita ocultou o endereço desta empresa (comum em MEI devido à LGPD). Preencha manualmente.");
             }
             setIsSearchingCnpj(false);
-            return; // Sucesso no Plano A! Encerra aqui.
+            return;
         }
 
-        // 🛡️ PLANO B: Se a primeira falhou (limite de uso), usa a BrasilAPI (infinita, mas sem IE)
         const res2 = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
         
         if (res2.ok) {
             const data2 = await res2.json();
+            const analise = avaliarRisco(data2.capital_social, data2.data_inicio_atividade);
+
             setFormData(prev => ({
                 ...prev,
                 nome_empresa: data2.nome_fantasia || data2.razao_social || prev.nome_empresa,
@@ -166,7 +211,7 @@ export default function CustomersPage() {
                 bairro: data2.bairro || prev.bairro || "",
                 cidade: data2.municipio || prev.cidade || "",
                 estado: data2.uf || prev.estado || "",
-                // Mantém o campo Inscrição Estadual intocado (vazio ou o que já estava)
+                ...analise 
             }));
 
             console.warn("Plano B ativado (BrasilAPI). Inscrição Estadual precisará ser manual.");
@@ -175,10 +220,9 @@ export default function CustomersPage() {
                 alert("ℹ️ A Receita ocultou o endereço desta empresa (comum em MEI devido à LGPD). Preencha manualmente.");
             }
             setIsSearchingCnpj(false);
-            return; // Sucesso no Plano B! Encerra aqui.
+            return; 
         }
 
-        // ❌ Se as duas APIs falharem:
         throw new Error("CNPJ não encontrado nas bases da Receita Federal. Verifique o número digitado.");
 
     } catch (err: any) {
@@ -196,14 +240,17 @@ export default function CustomersPage() {
         cnpj: cliente.cnpj || '', inscricao_estadual: cliente.inscricao_estadual || '', cep: cliente.cep || '',
         endereco: cliente.endereco || '', numero: cliente.numero || '', cidade: cliente.cidade || '', 
         bairro: cliente.bairro || '', estado: cliente.estado || '', status: cliente.status || 'ativo' as any,
-        user_id: cliente.user_id || ''
+        user_id: cliente.user_id || '',
+        status_risco: cliente.status_risco || 'em_analise', limite_credito: cliente.limite_credito || 0, 
+        score_interno: cliente.score_interno || 0, observacao_risco: cliente.observacao_risco || ''
       });
       fetchHistorico(cliente.id); fetchUnidades(cliente.id); setActiveTab('dados');
     } else {
       setEditingId(null);
       setFormData({ 
         nome_empresa: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '', 
-        cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || '') 
+        cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || ''),
+        status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
       });
       setHistoricoVendas([]); setUnidades([]); setActiveTab('dados');
     }
@@ -214,14 +261,12 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
     
-    // Formata o payload sem travar o vendedor
     const payload = { ...formData, empresa_id: perfil?.empresa_id };
     
-    // Se for um novo cliente e o vendedor não for selecionado, assume o usuário logado
     if (!editingId && !payload.user_id) {
         payload.user_id = user?.id;
     } else if (payload.user_id === "") {
-        payload.user_id = null as any; // Permite ficar sem dono
+        payload.user_id = null as any; 
     }
 
     try {
@@ -319,6 +364,11 @@ export default function CustomersPage() {
                                 <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded tracking-widest flex items-center gap-0.5">
                                     <Hash size={10}/> {formatId(cliente.id, 'CL')}
                                 </span>
+                                {cliente.status_risco && cliente.status_risco !== 'em_analise' && (
+                                     <span title="Status de Crédito" className="text-[10px]">
+                                        {cliente.status_risco === 'aprovado' ? '🟢' : cliente.status_risco === 'reprovado' ? '🔴' : '🟡'}
+                                     </span>
+                                )}
                             </h3>
                             <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 font-bold uppercase mt-1.5">
                                 {(cliente.cidade || cliente.bairro) && (
@@ -364,15 +414,27 @@ export default function CustomersPage() {
       {/* MODAL PRINCIPAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
-          <div className="bg-[#0B1120] border border-white/10 p-8 rounded-[40px] w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-hidden flex flex-col">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20}/></button>
+          
+          {/* AQUI ESTÁ A MÁGICA DO SCROLL GLOBAL */}
+          <div className="bg-[#0B1120] border border-white/10 p-8 rounded-[40px] w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
             
-            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white mb-6 flex items-center gap-2">
-                {editingId ? 'Gerenciar Cliente' : 'Novo Cadastro'}
-                {editingId && <span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded text-xl">#{formatId(editingId, 'CL')}</span>}
-            </h2>
+            {/* CABEÇALHO FLUIDO (ROLA JUNTO COM A TELA) */}
+            <div className="flex justify-between items-start gap-4 mb-6">
+                <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex flex-wrap items-center gap-2">
+                    {editingId ? 'Gerenciar Cliente' : 'Novo Cadastro'}
+                    {editingId && <span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded-lg text-sm not-italic tracking-widest">#{formatId(editingId, 'CL')}</span>}
+                </h2>
+                
+                {/* O Semáforo e o 'X' agora moram lado a lado e nunca sobrepõem nada */}
+                <div className="flex items-center gap-3 flex-shrink-0">
+                    <SemaforoRisco status={formData.status_risco} />
+                    <button onClick={() => setIsModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all flex-shrink-0">
+                        <X size={18}/>
+                    </button>
+                </div>
+            </div>
 
-            <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto">
+            <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto flex-shrink-0">
                <button onClick={() => setActiveTab('dados')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'dados' ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>Dados Cadastrais</button>
                {editingId && (
                    <>
@@ -382,12 +444,13 @@ export default function CustomersPage() {
                )}
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+            {/* O corpo agora flui com o scroll do modal */}
+            <div className="flex-1 pb-2">
                 
                 {activeTab === 'dados' && (
-                <form onSubmit={handleSaveCliente} className="space-y-6 pb-2">
+                <form onSubmit={handleSaveCliente} className="space-y-6">
                     
-                    {/* BUSCA CNPJ CLEAN */}
+                    {/* BUSCA CNPJ CLEAN COM CAIXA DE RISCO */}
                     <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-4">
                         <h3 className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-2"><Zap size={14} /> Busca Inteligente</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
@@ -411,11 +474,35 @@ export default function CustomersPage() {
                                     </button>
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Inscrição Estadual</label>
-                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
-                            </div>
+                            
+                            {/* CAIXA DE ALERTA DE RISCO */}
+                            {formData.status_risco !== 'em_analise' ? (
+                                <div className="bg-[#0B1120] border border-white/5 p-3 rounded-xl flex items-center gap-3">
+                                    <ShieldAlert size={20} className={formData.status_risco === 'aprovado' ? 'text-green-500' : formData.status_risco === 'reprovado' ? 'text-red-500' : 'text-yellow-500'}/>
+                                    <div>
+                                        <p className="text-[9px] uppercase font-black text-slate-500 tracking-widest">Limite Sugerido</p>
+                                        <p className="text-white text-sm font-black">R$ {formData.limite_credito.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Inscrição Estadual</label>
+                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
+                                </div>
+                            )}
                         </div>
+                        
+                        {formData.status_risco !== 'em_analise' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Inscrição Estadual</label>
+                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
+                                </div>
+                                {formData.observacao_risco && (
+                                    <p className="text-[10px] text-slate-500 font-mono mt-4">🔍 {formData.observacao_risco}</p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* DADOS */}

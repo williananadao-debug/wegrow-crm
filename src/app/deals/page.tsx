@@ -6,7 +6,7 @@ import {
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
-  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -15,7 +15,7 @@ import { localDb } from '@/lib/localDb';
 import { syncOfflineDataToCloud } from '@/lib/syncService'; 
 
 // --- TIPOS ---
-type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; };
+type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
 type Historico = { id: number; texto: string; created_at: string; }; 
 type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; };
 
@@ -72,7 +72,6 @@ const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
 
-// 👇 COMPONENTE CARD MEMOIZADO (Alta Performance) 👇
 const LeadCard = React.memo(({ 
     lead, 
     index, 
@@ -156,7 +155,6 @@ const LeadCard = React.memo(({
                         </div>
                     </div>
                     
-                    {/* 👇 ETIQUETAS DE ORIGEM DISTINTAS 👇 */}
                     {(lead.origem === 'Portal Web' || lead.descricao) && (
                         <div className={`border p-2 rounded-lg mt-2 mb-2 ${lead.origem === 'Estratégia' ? 'bg-[#22C55E]/10 border-[#22C55E]/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
                             <div className="flex items-center gap-1 mb-1">
@@ -269,7 +267,6 @@ const LeadCard = React.memo(({
     );
 });
 LeadCard.displayName = 'LeadCard';
-// 👆 FIM DO COMPONENTE MEMOIZADO 👆
 
 export default function DealsPage() {
   const auth = useAuth() || {};
@@ -339,7 +336,6 @@ export default function DealsPage() {
     let query = supabase.from('leads').select('*');
     
     if (isDirector) {
-        // Diretor vê todas as unidades sem restrição
     } else if (isGerente && perfil?.unidade) {
         query = query.eq('unidade', perfil.unidade);
     } else {
@@ -384,7 +380,6 @@ export default function DealsPage() {
         setUsersMap(mapa);
     }
 
-    // 👇 CORREÇÃO 1: BUSCAR METAS ISOLANDO A EMPRESA 👇
     try {
         const anoAtual = new Date().getFullYear();
         let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
@@ -462,19 +457,30 @@ export default function DealsPage() {
 
   const criarJobDeProducao = useCallback(async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
-    const briefingAutomatico = `VENDA APROVADA ✅ (Ref: ${formatId(lead.id, 'LD')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\n(Gerado automaticamente)`;
+    const briefingAutomatico = `VENDA APROVADA ✅ (Ref: LD-${String(lead.id).padStart(4, '0')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\nResumo da OPEC: ${lead.descricao || 'Sem briefing adicional.'}\n\n(Gerado automaticamente via CRM)`;
     
+    let itensOpec = [];
+    try { itensOpec = typeof lead.itens === 'string' ? JSON.parse(lead.itens as any) : lead.itens; } catch(e) { itensOpec = []; }
+    const nomeDoVendedor = lead.user_id && usersMap[lead.user_id] ? usersMap[lead.user_id] : (perfil?.nome || 'Vendedor Não Identificado');
+
     await supabase.from('jobs').insert([{
         titulo: `Gravação: ${lead.empresa}`,
         briefing: briefingAutomatico,
         client_id: lead.client_id,
-        user_id: user?.id,
+        user_id: lead.user_id || user?.id,
         empresa_id: perfil?.empresa_id,
         stage: 'roteiro',
         prioridade: 'media',
-        deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+        deadline: lead.contrato_inicio ? new Date(new Date(lead.contrato_inicio).getTime() - 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        cliente: lead.empresa,
+        agencia: lead.tipo === 'Agência' ? lead.empresa : null,
+        data_inicio: lead.contrato_inicio || null,
+        data_fim: lead.contrato_fim || null,
+        itens_opec: itensOpec,
+        vendedor_nome: nomeDoVendedor,
+        unidade: lead.unidade
     }]);
-  }, [user?.id, perfil?.empresa_id]);
+  }, [user?.id, perfil?.empresa_id, perfil?.nome, usersMap]);
 
   const gerarCobrancaFinanceira = useCallback(async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
@@ -977,7 +983,6 @@ export default function DealsPage() {
   const totalAberto = useMemo(() => leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
   const totalGanhos = useMemo(() => leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
 
-  // 👇 CORREÇÃO 2: CÁLCULO ALINHADO DA META E PROGRESSO 👇
   let valorMetaAlvo = 0;
   if (filtroData) {
       const [anoStr, mesStr] = filtroData.split('-');
@@ -1003,7 +1008,6 @@ export default function DealsPage() {
   const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
   const percentMeta = Math.min((ganhosParaMeta / metaValidaParaCalculo) * 100, 100);
   const labelMeta = filtroData ? (isDirector ? 'Meta Mês (Global)' : 'Meta Mês') : (isDirector ? 'Meta Anual (Global)' : 'Meta Anual');
-  // 👆 FIM DA CORREÇÃO 2 👆
 
   const rankingServicos = leadsAtivos.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 
@@ -1312,7 +1316,6 @@ export default function DealsPage() {
                         </div>
                     </div>
 
-                    {/* 👇 CAMPO DE DISTRIBUIÇÃO EXCLUSIVO PARA LIDERANÇA 👇 */}
                     {isLideranca && (
                         <div className="bg-yellow-500/5 border border-yellow-500/20 p-4 rounded-2xl">
                             <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1 mb-2"><User size={12}/> Vendedor Responsável (Distribuição)</label>
@@ -1416,7 +1419,7 @@ export default function DealsPage() {
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                                     {produtosDaCategoria.map((s) => (
-                                        <button key={s.id} type="button" onClick={() => setItensTemporarios([...itensTemporarios, { servico: s.nome, quantidade: 1, precoUnitario: s.preco }])} className="flex flex-col items-start bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/50 border border-white/10 p-3 rounded-xl transition-colors text-left group">
+                                        <button key={s.id} type="button" onClick={() => setItensTemporarios([...itensTemporarios, { servico: s.nome, quantidade: 1, precoUnitario: s.preco, tempo: '30"', programa: 'ROTATIVO' }])} className="flex flex-col items-start bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/50 border border-white/10 p-3 rounded-xl transition-colors text-left group">
                                             <span className="text-[10px] text-slate-300 font-bold uppercase mb-1 line-clamp-2 leading-tight group-hover:text-blue-200">{s.nome}</span>
                                             <span className="text-xs font-black text-[#22C55E]">R$ {s.preco.toLocaleString('pt-BR')}</span>
                                         </button>
@@ -1425,21 +1428,29 @@ export default function DealsPage() {
                             </div>
                         )}
 
+                        {/* 👇 CAMPOS REMOVIDOS DE HORA AQUI NO CARRINHO 👇 */}
                         {itensTemporarios.length > 0 && (
                             <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
                                 {itensTemporarios.map((item, i) => (
-                                    <div key={i} className="flex justify-between items-center bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
-                                        <div className="flex items-center gap-2">
-                                            <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => {
-                                                const novosItens = [...itensTemporarios];
-                                                novosItens[i].quantidade = Number(e.target.value);
-                                                setItensTemporarios(novosItens);
-                                            }}/>
-                                            <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
+                                    <div key={i} className="flex flex-col bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => {
+                                                    const novosItens = [...itensTemporarios];
+                                                    novosItens[i].quantidade = Number(e.target.value);
+                                                    setItensTemporarios(novosItens);
+                                                }}/>
+                                                <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                                <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
-                                            <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
+
+                                        <div className="pt-2 border-t border-white/5 mt-1">
+                                            <label className="text-[8px] text-slate-500 font-bold uppercase mb-0.5 flex items-center gap-1"><Radio size={8}/> Programa</label>
+                                            <input type="text" value={item.programa || ''} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].programa = e.target.value; setItensTemporarios(novos); }} className="w-full bg-black/50 border border-white/10 rounded p-1.5 outline-none text-white text-[10px] uppercase" placeholder="Ex: ROTATIVO" />
                                         </div>
                                     </div>
                                 ))}

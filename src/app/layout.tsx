@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css"; 
 import { AuthProvider } from '@/lib/contexts/AuthContext';
 import LayoutWrapper from '../components/layout-wrapper'; 
+import { Analytics } from '@vercel/analytics/react';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -43,6 +44,10 @@ export default function RootLayout({
             {children}
           </LayoutWrapper>
         </AuthProvider>
+        
+        {/* 👇 A ANTENA DO VERCEL INJETADA AQUI 👇 */}
+        <Analytics />
+        
       </body>
     </html>
   );

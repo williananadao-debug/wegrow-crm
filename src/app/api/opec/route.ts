@@ -5,7 +5,7 @@ import { gerarJsonOpec } from '@/lib/opecIntegration';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 🔒 A NOSSA CHAVE MESTRA (A que a equipa da OPEC vai usar)
+// 🔒 A NOSSA CHAVE MESTRA (A que a equipa da OPEC vai usar no Postman/Sistema deles)
 const NOSSO_TOKEN_SECRETO = "WEGROW_OPEC_2026_MASTER_KEY";
 
 export async function GET(request: Request) {
@@ -16,10 +16,10 @@ export async function GET(request: Request) {
     }
 
     try {
-        // 👇 Robô VIP ativado com a variável EXATA que está no seu Vercel
+        // 👇 Robô VIP ativado com o CRACHÁ DE DONO (Bypassa o bloqueio de segurança RLS do Supabase)
         const supabaseAdmin = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, 
+            process.env.SUPABASE_SERVICE_ROLE_KEY!, // 🔥 CHAVE SECRETA DE PRODUÇÃO
             { auth: { persistSession: false } }
         );
 
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         const { data: jobsProntos } = await supabaseAdmin
             .from('jobs')
             .select('*')
-            .eq('stage', 'entregue')
+            .eq('stage', 'entregue') // 🔥 FILTRO DE SEGURANÇA ATIVADO
             .order('created_at', { ascending: false })
             .limit(100);
 

@@ -30,8 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setPerfil(profile);
       } else {
-        // 👇 A LISTA VIP DO LEÃO DE CHÁCARA
-        const isPublicPage = window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
+        // 👇 A LISTA VIP DO LEÃO DE CHÁCARA (Agora com o Site Público liberado!) 👇
+        const isPublicPage = window.location.pathname === '/' || window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
         
         if (!isPublicPage) {
           router.replace('/login');

@@ -12,8 +12,8 @@ interface LayoutWrapperProps {
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
   
-  // Liberamos o login e o portal para não terem menu lateral
-  const isPublicPage = pathname === '/login' || pathname === '/portal' || pathname === '/solicitar';
+  // 👇 AQUI ESTÁ A MÁGICA! Adicionamos o '/' (Site) na Lista VIP 👇
+  const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/portal' || pathname === '/solicitar';
 
   if (isPublicPage) {
     return <>{children}</>;

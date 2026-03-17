@@ -13,6 +13,13 @@ import NotificationBell from '@/components/NotificationBell';
 export default function Navbar() {
   const pathname = usePathname();
   
+  // 👇 A TRAVA DE INVISIBILIDADE DO SITE 👇
+  // Se estiver na página inicial (site) ou no login, o menu não renderiza!
+  const rotasSemMenu = ['/', '/login'];
+  if (rotasSemMenu.includes(pathname)) {
+    return null; 
+  }
+  
   // BLINDAGEM CONTRA A VERCEL
   const auth = useAuth() || {};
   const user = auth.user; // 👈 O COFRE DE USUÁRIO (Onde o email realmente mora)

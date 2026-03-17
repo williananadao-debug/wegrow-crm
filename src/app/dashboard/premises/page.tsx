@@ -15,14 +15,12 @@ export default function PremisesPage() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
 
-  // Estados da IA
   const [selectedVendedor, setSelectedVendedor] = useState('');
   const [tipoIA, setTipoIA] = useState<'resgate' | 'churn' | 'mix'>('resgate');
   const [diasInativo, setDiasInativo] = useState(60);
   const [produtoFoco, setProdutoFoco] = useState('SPOT 30"');
   const [quantidadeIA, setQuantidadeIA] = useState(5); 
   
-  // Estados Manual
   const [quantidadeManual, setQuantidadeManual] = useState(5);
   const [regiao, setRegiao] = useState('');
   
@@ -31,27 +29,41 @@ export default function PremisesPage() {
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
+  // 👇 FILTRO DE SEGURANÇA: Só busca se tiver empresa_id definido 👇
   useEffect(() => {
-    if (user && isDirector) {
+    if (user && isDirector && perfil?.empresa_id) {
       fetchVendedores();
       fetchHistorico();
     }
-  }, [user, isDirector]);
+  }, [user, isDirector, perfil?.empresa_id]);
 
   const fetchVendedores = async () => {
-    const { data } = await supabase.from('profiles').select('*').neq('cargo', 'diretor');
+    // 🛡️ TRAVA: Só vendedores da MINHA empresa
+    const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('empresa_id', perfil?.empresa_id)
+        .neq('cargo', 'diretor');
     setVendedores(data || []);
   };
 
   const fetchHistorico = async () => {
-    // 👇 CORREÇÃO AQUI: Removida a requisição complexa que causava o erro no Supabase
-    const { data, error } = await supabase.from('premissas').select('*').order('created_at', { ascending: false }).limit(10);
+    // 🛡️ TRAVA: Só histórico da MINHA empresa
+    const { data, error } = await supabase
+        .from('premissas')
+        .select('*')
+        .eq('empresa_id', perfil?.empresa_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+    
     if (error) console.error("Erro ao puxar histórico:", error.message);
     setPremissas(data || []);
   };
 
   const gerarInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!perfil?.empresa_id) return alert("Erro: Empresa não identificada.");
+    
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('gerar_estrategia_ia_v2', {
@@ -60,7 +72,7 @@ export default function PremisesPage() {
         p_vendedor_id: selectedVendedor || null,
         p_produto_foco: produtoFoco,
         p_criado_por: user.id,
-        p_empresa_id: perfil?.empresa_id,
+        p_empresa_id: perfil?.empresa_id, // 🛡️ Garante que a IA só mexa nos meus dados
         p_limite: quantidadeIA 
       });
       if (error) throw error;
@@ -73,17 +85,14 @@ export default function PremisesPage() {
 
   const gerarManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regiao) {
-        alert("⚠️ ATENÇÃO: Preencha o campo Região (Ex: Centro) antes de disparar!");
-        return;
-    }
-    if (!selectedVendedor) {
-        alert("⚠️ ATENÇÃO: Selecione um vendedor na lista!");
+    if (!regiao || !selectedVendedor) {
+        alert("⚠️ ATENÇÃO: Preencha todos os campos antes de disparar!");
         return;
     }
 
     setLoading(true);
     try {
+      // 🛡️ TRAVA: Salvando com empresa_id
       const { error: err1 } = await supabase.from('premissas').insert([{
         titulo: `Prospecção Manual: ${regiao}`, 
         quantidade: quantidadeManual, 
@@ -104,7 +113,7 @@ export default function PremisesPage() {
         user_id: selectedVendedor, 
         origem: 'Estratégia Manual',
         descricao: `Meta de prospecção gerada para a região ${regiao}`,
-        empresa_id: perfil?.empresa_id
+        empresa_id: perfil?.empresa_id // 🛡️ Crucial para o isolamento
       }));
 
       const { error: err2 } = await supabase.from('leads').insert(leads);
@@ -114,9 +123,7 @@ export default function PremisesPage() {
       setShowToast(true);
       setRegiao('');
       fetchHistorico();
-    } catch (err: any) { 
-        alert(err.message);
-    }
+    } catch (err: any) { alert(err.message); }
     setLoading(false);
   };
 
@@ -133,6 +140,7 @@ export default function PremisesPage() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Inteligência aplicada a dados reais</p>
         </div>
         
+        {/* STATS */}
         <div className="grid grid-cols-2 md:flex gap-4 w-full md:w-auto">
             <div className="bg-white/5 border border-white/10 p-4 rounded-3xl flex-1 md:min-w-[150px]">
                 <p className="text-purple-400 text-[9px] font-black uppercase tracking-widest mb-1">Leads da IA</p>
@@ -164,7 +172,6 @@ export default function PremisesPage() {
             </div>
 
             <div className="p-8 pt-2">
-              
               {activeTab === 'ai' && (
                 <form onSubmit={gerarInteligente} className="space-y-6">
                     <div>
@@ -174,6 +181,7 @@ export default function PremisesPage() {
                                 <div className="flex items-center gap-2 font-black text-[11px] uppercase"><RefreshCcw size={14}/> Resgate de Inativos</div>
                                 <p className="text-[9px] mt-1 opacity-70 italic">Copia os itens do último contrato para clientes ausentes.</p>
                             </button>
+                            {/* ... outros botões (churn, mix) permanecem iguais ... */}
                             <button type="button" onClick={() => setTipoIA('churn')} className={`p-4 rounded-xl border text-left transition-all ${tipoIA === 'churn' ? 'bg-orange-600/20 border-orange-500 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                                 <div className="flex items-center gap-2 font-black text-[11px] uppercase"><AlertCircle size={14}/> Prevenção de Perda</div>
                                 <p className="text-[9px] mt-1 opacity-70 italic">Prepara a renovação idêntica para contratos vencendo.</p>
@@ -266,7 +274,6 @@ export default function PremisesPage() {
                         <div>
                           <h4 className="text-white font-black text-sm uppercase italic tracking-tight">{p.titulo}</h4>
                           <div className="flex items-center gap-4 mt-1">
-                            {/* 👇 CORREÇÃO AQUI: Usa a lista de vendedores local em vez de buscar da DB que quebrou 👇 */}
                             <span className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1.5">
                                 <User size={12}/> {vendedores.find(v => v.id === p.user_id)?.nome || 'Equipe'}
                             </span>

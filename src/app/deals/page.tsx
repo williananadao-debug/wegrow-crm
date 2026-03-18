@@ -155,18 +155,50 @@ const LeadCard = React.memo(({
                         </div>
                     </div>
                     
-                    {(lead.origem === 'Portal Web' || lead.descricao) && (
-                        <div className={`border p-2 rounded-lg mt-2 mb-2 ${lead.origem === 'Estratégia' ? 'bg-[#22C55E]/10 border-[#22C55E]/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                            <div className="flex items-center gap-1 mb-1">
-                                {lead.origem === 'Estratégia' ? <Megaphone size={10} className="text-[#22C55E]"/> : <Info size={10} className="text-blue-400"/>}
-                                <span className={`text-[8px] font-black uppercase tracking-widest ${lead.origem === 'Estratégia' ? 'text-[#22C55E]' : 'text-blue-400'}`}>
-                                    {lead.origem === 'Estratégia' ? 'Veio da Estratégia' : 'Veio do Portal'}
-                                </span>
+                    {/* 👇 O SISTEMA DE ETIQUETAS DE ORIGEM INTELIGENTE 👇 */}
+                    {(() => {
+                        const isIA = lead.origem?.includes('IA') || lead.origem?.includes('Inteligência') || lead.descricao?.includes('IA Sugere');
+                        const isManual = lead.origem?.includes('Manual') || lead.origem === 'Estratégia';
+                        const isPortal = !isIA && !isManual && (lead.origem === 'Portal Web' || lead.descricao);
+
+                        if (!isIA && !isManual && !isPortal) return null;
+
+                        let badgeConfig = {
+                            color: 'text-blue-400',
+                            bg: 'bg-blue-500/10 border-blue-500/20',
+                            icon: <Info size={10} className="text-blue-400"/>,
+                            label: 'Veio do Portal'
+                        };
+
+                        if (isIA) {
+                            badgeConfig = {
+                                color: 'text-purple-400',
+                                bg: 'bg-purple-600/10 border-purple-500/20',
+                                icon: <Sparkles size={10} className="text-purple-400"/>,
+                                label: 'Veio pela IA'
+                            };
+                        } else if (isManual) {
+                            badgeConfig = {
+                                color: 'text-[#22C55E]',
+                                bg: 'bg-[#22C55E]/10 border-[#22C55E]/20',
+                                icon: <Target size={10} className="text-[#22C55E]"/>,
+                                label: 'Estratégia Manual'
+                            };
+                        }
+
+                        return (
+                            <div className={`border p-2 rounded-lg mt-2 mb-2 ${badgeConfig.bg}`}>
+                                <div className="flex items-center gap-1 mb-1">
+                                    {badgeConfig.icon}
+                                    <span className={`text-[8px] font-black uppercase tracking-widest ${badgeConfig.color}`}>
+                                        {badgeConfig.label}
+                                    </span>
+                                </div>
+                                {lead.descricao && <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>}
+                                {lead.cidade && <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>}
                             </div>
-                            {lead.descricao && <p className="text-[10px] text-slate-300 italic line-clamp-3">"{lead.descricao}"</p>}
-                            {lead.cidade && <span className="mt-1 inline-block text-[8px] font-bold text-slate-400 uppercase">📍 Cidade: {lead.cidade}</span>}
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     <div className="mb-2 mt-2">
                         {lead.checkin && lead.checkin.includes('Meta') ? (

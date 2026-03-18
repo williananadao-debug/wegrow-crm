@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Target, Users, MapPin, Calendar, CheckCircle2, Play, AlertCircle, 
-  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck 
+  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck, Map, Search, X
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
@@ -13,32 +13,57 @@ export default function PremisesPage() {
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [premissas, setPremissas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
+  
+  const [activeTab, setActiveTab] = useState<'ai' | 'manual' | 'unidade'>('ai');
 
+  // Estados da IA
   const [selectedVendedor, setSelectedVendedor] = useState('');
   const [tipoIA, setTipoIA] = useState<'resgate' | 'churn' | 'mix'>('resgate');
   const [diasInativo, setDiasInativo] = useState(60);
   const [produtoFoco, setProdutoFoco] = useState('SPOT 30"');
   const [quantidadeIA, setQuantidadeIA] = useState(5); 
+  const [unidadeEstrategiaIA, setUnidadeEstrategiaIA] = useState(''); 
   
+  // Estados do Manual
   const [quantidadeManual, setQuantidadeManual] = useState(5);
-  const [regiao, setRegiao] = useState('');
+  const [unidadeEstrategiaManual, setUnidadeEstrategiaManual] = useState(''); 
   
+  // Estados de Unidades / Cidades
+  const [listaUnidades] = useState(["DEMAIS FM 101,1", "DEMAIS FM 104,7", "DEMAIS FM 107,9"]);
+  const [unidadeSelecionada, setUnidadeSelecionada] = useState('');
+  const [cidadesIBGE, setCidadesIBGE] = useState<string[]>([]);
+  const [buscaCidade, setBuscaCidade] = useState('');
+  const [cidadesSelecionadas, setCidadesSelecionadas] = useState<string[]>([]);
+  
+  // 👇 AQUI FICAM OS MAPEAMENTOS QUE VÊM DO BANCO DE DADOS 👇
+  const [mapeamentosSalvos, setMapeamentosSalvos] = useState<any[]>([]);
+
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
-  // 👇 FILTRO DE SEGURANÇA: Só busca se tiver empresa_id definido 👇
   useEffect(() => {
     if (user && isDirector && perfil?.empresa_id) {
       fetchVendedores();
       fetchHistorico();
+      fetchCidadesIBGE();
+      fetchMapeamentos(); // Puxa os clusters ao abrir a tela!
     }
   }, [user, isDirector, perfil?.empresa_id]);
 
+  const fetchCidadesIBGE = async () => {
+    try {
+      const response = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/SC/municipios');
+      const data = await response.json();
+      const nomes = data.map((c: any) => c.nome);
+      setCidadesIBGE(nomes);
+    } catch (error) {
+      console.error("Erro ao puxar IBGE:", error);
+    }
+  };
+
   const fetchVendedores = async () => {
-    // 🛡️ TRAVA: Só vendedores da MINHA empresa
     const { data } = await supabase
         .from('profiles')
         .select('*')
@@ -48,7 +73,6 @@ export default function PremisesPage() {
   };
 
   const fetchHistorico = async () => {
-    // 🛡️ TRAVA: Só histórico da MINHA empresa
     const { data, error } = await supabase
         .from('premissas')
         .select('*')
@@ -58,6 +82,19 @@ export default function PremisesPage() {
     
     if (error) console.error("Erro ao puxar histórico:", error.message);
     setPremissas(data || []);
+  };
+
+  // 👇 FUNÇÃO NOVA: BUSCA OS CLUSTERS REAIS NO SUPABASE 👇
+  const fetchMapeamentos = async () => {
+    const { data, error } = await supabase
+        .from('unidades_cidades')
+        .select('*')
+        .eq('empresa_id', perfil?.empresa_id)
+        .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+        setMapeamentosSalvos(data);
+    }
   };
 
   const gerarInteligente = async (e: React.FormEvent) => {
@@ -72,7 +109,7 @@ export default function PremisesPage() {
         p_vendedor_id: selectedVendedor || null,
         p_produto_foco: produtoFoco,
         p_criado_por: user.id,
-        p_empresa_id: perfil?.empresa_id, // 🛡️ Garante que a IA só mexa nos meus dados
+        p_empresa_id: perfil?.empresa_id, 
         p_limite: quantidadeIA 
       });
       if (error) throw error;
@@ -85,35 +122,34 @@ export default function PremisesPage() {
 
   const gerarManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regiao || !selectedVendedor) {
-        alert("⚠️ ATENÇÃO: Preencha todos os campos antes de disparar!");
+    if (!unidadeEstrategiaManual || !selectedVendedor) {
+        alert("⚠️ ATENÇÃO: Preencha o vendedor e a unidade antes de disparar!");
         return;
     }
 
     setLoading(true);
     try {
-      // 🛡️ TRAVA: Salvando com empresa_id
       const { error: err1 } = await supabase.from('premissas').insert([{
-        titulo: `Prospecção Manual: ${regiao}`, 
+        titulo: `Prospecção Manual: ${unidadeEstrategiaManual}`, 
         quantidade: quantidadeManual, 
-        regiao: regiao, 
+        regiao: unidadeEstrategiaManual, 
         tipo_cliente: 'Anunciante',
         user_id: selectedVendedor, 
         criado_por: user.id, 
         empresa_id: perfil?.empresa_id
       }]);
       
-      if (err1) throw new Error("Erro ao salvar histórico: " + err1.message);
+      if (err1) throw new Error("Erro ao guardar histórico: " + err1.message);
 
       const leads = Array.from({ length: Number(quantidadeManual) }).map((_, i) => ({
-        empresa: `🎯 Alvo: ${regiao} #${i + 1}`,
+        empresa: `🎯 Alvo: ${unidadeEstrategiaManual} #${i + 1}`,
         tipo: 'Anunciante',
         status: 'aberto', 
         etapa: 0,
         user_id: selectedVendedor, 
         origem: 'Estratégia Manual',
-        descricao: `Meta de prospecção gerada para a região ${regiao}`,
-        empresa_id: perfil?.empresa_id // 🛡️ Crucial para o isolamento
+        descricao: `Meta de prospecção gerada para a unidade ${unidadeEstrategiaManual}`,
+        empresa_id: perfil?.empresa_id
       }));
 
       const { error: err2 } = await supabase.from('leads').insert(leads);
@@ -121,11 +157,70 @@ export default function PremisesPage() {
 
       setToastMessage(`✅ ${quantidadeManual} alvos enviados para o funil!`);
       setShowToast(true);
-      setRegiao('');
+      setUnidadeEstrategiaManual('');
       fetchHistorico();
     } catch (err: any) { alert(err.message); }
     setLoading(false);
   };
+
+  const toggleCidade = (cidade: string) => {
+    if (cidadesSelecionadas.includes(cidade)) {
+        setCidadesSelecionadas(prev => prev.filter(c => c !== cidade));
+    } else {
+        setCidadesSelecionadas(prev => [...prev, cidade]);
+    }
+  };
+
+  // 👇 FUNÇÃO ATUALIZADA: AGORA SALVA DE VERDADE NO BANCO DE DADOS 👇
+  const salvarMapeamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unidadeSelecionada || cidadesSelecionadas.length === 0) {
+        alert("⚠️ Escolha uma Unidade e selecione pelo menos uma cidade!");
+        return;
+    }
+
+    setLoading(true);
+    try {
+        // Prepara os dados para o Supabase
+        const inserts = cidadesSelecionadas.map((cidade) => ({
+            empresa_id: perfil?.empresa_id,
+            unidade: unidadeSelecionada,
+            cidade: cidade
+        }));
+        
+        // Dispara para o banco de dados
+        const { error } = await supabase.from('unidades_cidades').insert(inserts);
+        
+        if (error) throw error;
+        
+        // Limpa a tela e atualiza a lista visual
+        setCidadesSelecionadas([]);
+        setBuscaCidade('');
+        fetchMapeamentos(); 
+        
+        setToastMessage(`✅ ${cidadesSelecionadas.length} cidades salvas na ${unidadeSelecionada}!`);
+        setShowToast(true);
+    } catch (err: any) { 
+        alert("Erro ao salvar: " + err.message); 
+    }
+    setLoading(false);
+  };
+
+  // Função para remover um mapeamento salvo
+  const deletarMapeamento = async (id: string) => {
+      const confirmacao = window.confirm("Remover esta cidade do cluster?");
+      if (!confirmacao) return;
+
+      try {
+          const { error } = await supabase.from('unidades_cidades').delete().eq('id', id);
+          if (error) throw error;
+          fetchMapeamentos();
+      } catch (err: any) {
+          alert("Erro ao remover: " + err.message);
+      }
+  };
+
+  const cidadesFiltradas = cidadesIBGE.filter(c => c.toLowerCase().includes(buscaCidade.toLowerCase()));
 
   if (!isDirector) return <div className="p-10 text-white text-center font-black uppercase">Acesso Restrito</div>;
 
@@ -140,7 +235,6 @@ export default function PremisesPage() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Inteligência aplicada a dados reais</p>
         </div>
         
-        {/* STATS */}
         <div className="grid grid-cols-2 md:flex gap-4 w-full md:w-auto">
             <div className="bg-white/5 border border-white/10 p-4 rounded-3xl flex-1 md:min-w-[150px]">
                 <p className="text-purple-400 text-[9px] font-black uppercase tracking-widest mb-1">Leads da IA</p>
@@ -159,36 +253,41 @@ export default function PremisesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <div className="lg:col-span-4">
-          <div className="bg-[#0F172A] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl">
+        <div className="lg:col-span-5">
+          <div className="bg-[#0F172A] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl flex flex-col h-[calc(100vh-140px)]">
             
-            <div className="flex p-2 bg-[#0B1120]/50 m-4 rounded-2xl gap-2">
-                <button onClick={() => setActiveTab('ai')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'ai' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
-                    <Sparkles size={14}/> Inteligência IA
+            {/* 👇 MENU CORRIGIDO: Textos não vazam mais e se adaptam ao tamanho 👇 */}
+            <div className="flex p-1.5 bg-[#0B1120]/50 m-4 rounded-2xl gap-1.5 shrink-0">
+                <button onClick={() => setActiveTab('ai')} className={`flex-1 py-3 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all overflow-hidden ${activeTab === 'ai' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                    <Sparkles size={14}/> 
+                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Inteligência</span>
                 </button>
-                <button onClick={() => setActiveTab('manual')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeTab === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
-                    <Target size={14}/> Manual
+                <button onClick={() => setActiveTab('manual')} className={`flex-1 py-3 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all overflow-hidden ${activeTab === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                    <Target size={14}/> 
+                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Manual</span>
+                </button>
+                <button onClick={() => setActiveTab('unidade')} className={`flex-1 py-3 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all overflow-hidden ${activeTab === 'unidade' ? 'bg-[#22C55E] text-[#0F172A] shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                    <Map size={14}/> 
+                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Unidades</span>
                 </button>
             </div>
 
-            <div className="p-8 pt-2">
+            <div className="p-8 pt-2 flex-1 overflow-y-auto custom-scrollbar pb-12">
+              
+              {/* ABA IA */}
               {activeTab === 'ai' && (
-                <form onSubmit={gerarInteligente} className="space-y-6">
+                <form onSubmit={gerarInteligente} className="space-y-6 animate-in fade-in duration-300">
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-3 block">Tipo de Algoritmo</label>
                         <div className="grid grid-cols-1 gap-2">
                             <button type="button" onClick={() => setTipoIA('resgate')} className={`p-4 rounded-xl border text-left transition-all ${tipoIA === 'resgate' ? 'bg-purple-600/20 border-purple-500 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                                 <div className="flex items-center gap-2 font-black text-[11px] uppercase"><RefreshCcw size={14}/> Resgate de Inativos</div>
-                                <p className="text-[9px] mt-1 opacity-70 italic">Copia os itens do último contrato para clientes ausentes.</p>
                             </button>
-                            {/* ... outros botões (churn, mix) permanecem iguais ... */}
                             <button type="button" onClick={() => setTipoIA('churn')} className={`p-4 rounded-xl border text-left transition-all ${tipoIA === 'churn' ? 'bg-orange-600/20 border-orange-500 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                                 <div className="flex items-center gap-2 font-black text-[11px] uppercase"><AlertCircle size={14}/> Prevenção de Perda</div>
-                                <p className="text-[9px] mt-1 opacity-70 italic">Prepara a renovação idêntica para contratos vencendo.</p>
                             </button>
                             <button type="button" onClick={() => setTipoIA('mix')} className={`p-4 rounded-xl border text-left transition-all ${tipoIA === 'mix' ? 'bg-green-600/20 border-green-500 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                                 <div className="flex items-center gap-2 font-black text-[11px] uppercase"><TrendingUp size={14}/> Primeira Compra</div>
-                                <p className="text-[9px] mt-1 opacity-70 italic">Busca clientes sem histórico e sugere o Best-Seller.</p>
                             </button>
                         </div>
                     </div>
@@ -196,13 +295,17 @@ export default function PremisesPage() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Vendedor Destino</label>
-                            <select 
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-purple-500 appearance-none cursor-pointer" 
-                                value={selectedVendedor} 
-                                onChange={e => setSelectedVendedor(e.target.value)}
-                            >
+                            <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-purple-500 appearance-none" value={selectedVendedor} onChange={e => setSelectedVendedor(e.target.value)}>
                                 <option value="" className="bg-[#0B1120]">Toda a Equipe (Geral)</option>
                                 {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="col-span-2">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center gap-1"><MapPin size={12}/> Unidade Alvo (Opcional)</label>
+                            <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-purple-500 appearance-none" value={unidadeEstrategiaIA} onChange={e => setUnidadeEstrategiaIA(e.target.value)}>
+                                <option value="" className="bg-[#0B1120]">Sem restrição (Qualquer Unidade)</option>
+                                {listaUnidades.map(nome => <option key={nome} value={nome} className="bg-[#0B1120]">{nome}</option>)}
                             </select>
                         </div>
 
@@ -223,36 +326,149 @@ export default function PremisesPage() {
                 </form>
               )}
 
+              {/* ABA MANUAL */}
               {activeTab === 'manual' && (
-                <form onSubmit={gerarManual} className="space-y-6">
+                <form onSubmit={gerarManual} className="space-y-6 animate-in fade-in duration-300">
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Vendedor Alvo</label>
-                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none" value={selectedVendedor} onChange={e => setSelectedVendedor(e.target.value)} required>
-                            <option value="">Selecione o Soldado...</option>
-                            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-blue-500" value={selectedVendedor} onChange={e => setSelectedVendedor(e.target.value)} required>
+                            <option value="" className="bg-[#0B1120]">Selecione o Soldado...</option>
+                            {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
                         </select>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Qtd. Visitas</label>
-                            <input type="number" min="1" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none" value={quantidadeManual} onChange={e => setQuantidadeManual(Number(e.target.value))} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Região</label>
-                            <input type="text" placeholder="Ex: Centro" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none" value={regiao} onChange={e => setRegiao(e.target.value)} />
-                        </div>
+
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center gap-1"><MapPin size={12}/> Unidade / Emissora Alvo</label>
+                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-blue-500" value={unidadeEstrategiaManual} onChange={e => setUnidadeEstrategiaManual(e.target.value)} required>
+                            <option value="" className="bg-[#0B1120]">Selecione a Unidade...</option>
+                            {listaUnidades.map(nome => <option key={nome} value={nome} className="bg-[#0B1120]">{nome}</option>)}
+                        </select>
                     </div>
+
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Quantidade de Visitas</label>
+                        <input type="number" min="1" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-blue-500" value={quantidadeManual} onChange={e => setQuantidadeManual(Number(e.target.value))} />
+                    </div>
+
                     <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-blue-900/40 flex items-center justify-center gap-3 hover:scale-[1.02] transition-all">
                         {loading ? 'Processando...' : <><Play size={18}/> Disparar Campanha</>}
                     </button>
                 </form>
               )}
+
+              {/* ABA DE UNIDADES COM SELEÇÃO MÚLTIPLA */}
+              {activeTab === 'unidade' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <form onSubmit={salvarMapeamento} className="space-y-6">
+                        
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">1. Selecione a Unidade / Emissora</label>
+                            <select 
+                                className="w-full bg-blue-600 border border-blue-500 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none appearance-none shadow-[0_0_15px_rgba(37,99,235,0.3)] cursor-pointer" 
+                                value={unidadeSelecionada} 
+                                onChange={e => setUnidadeSelecionada(e.target.value)} 
+                                required
+                            >
+                                <option value="" className="bg-[#0B1120] text-slate-400">TODAS UNIDADES (Escolha uma...)</option>
+                                {listaUnidades.map(unidade => (
+                                    <option key={unidade} value={unidade} className="bg-[#0B1120] text-white py-2">{unidade}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center justify-between">
+                                <span>2. Selecione as Cidades</span>
+                                <span className="bg-[#22C55E]/20 text-[#22C55E] px-2 py-0.5 rounded-full text-[10px]">IBGE</span>
+                            </label>
+                            
+                            <div className="relative mb-2">
+                                <Search className="absolute left-4 top-4 text-slate-500" size={16}/>
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar cidade em SC..." 
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white text-sm outline-none focus:border-[#22C55E]" 
+                                    value={buscaCidade} 
+                                    onChange={e => setBuscaCidade(e.target.value)} 
+                                />
+                            </div>
+
+                            <div className="bg-[#0B1120] border border-white/10 rounded-xl p-2 h-32 overflow-y-auto custom-scrollbar">
+                                {cidadesFiltradas.length === 0 ? (
+                                    <div className="text-center text-slate-500 text-xs py-4">Nenhuma cidade encontrada</div>
+                                ) : (
+                                    cidadesFiltradas.map(cidade => {
+                                        const isSelected = cidadesSelecionadas.includes(cidade);
+                                        return (
+                                            <button
+                                                key={cidade}
+                                                type="button"
+                                                onClick={() => toggleCidade(cidade)}
+                                                className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-all flex items-center justify-between text-sm ${
+                                                    isSelected ? 'bg-[#22C55E]/20 text-[#22C55E] font-bold' : 'text-slate-300 hover:bg-white/5'
+                                                }`}
+                                            >
+                                                {cidade}
+                                                {isSelected && <CheckCircle2 size={16} />}
+                                            </button>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {cidadesSelecionadas.length > 0 && (
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-wrap gap-2">
+                                {cidadesSelecionadas.map(cidade => (
+                                    <div key={cidade} className="bg-[#0F172A] border border-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold text-white animate-in zoom-in duration-200">
+                                        <MapPin size={12} className="text-[#22C55E]" />
+                                        {cidade}
+                                        <button type="button" onClick={() => toggleCidade(cidade)} className="text-slate-500 hover:text-red-400 ml-1">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <button type="submit" disabled={loading || cidadesSelecionadas.length === 0 || !unidadeSelecionada} className="w-full bg-[#22C55E] disabled:opacity-50 disabled:cursor-not-allowed text-[#0F172A] py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-[0_0_15px_rgba(34,197,94,0.3)] flex items-center justify-center gap-3 hover:scale-[1.02] transition-all mb-4">
+                            {loading ? 'A Guardar...' : <><MapPin size={18}/> Salvar {cidadesSelecionadas.length} cidade(s) na Unidade</>}
+                        </button>
+                    </form>
+
+                    {/* 👇 AGORA MOSTRA OS DADOS PUXADOS DO SUPABASE 👇 */}
+                    {mapeamentosSalvos.length > 0 && (
+                      <div className="pt-4 border-t border-white/5">
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-3 block flex justify-between">
+                            <span>Mapeamentos Salvos</span>
+                            <span>{mapeamentosSalvos.length} Cidades</span>
+                        </label>
+                        <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                          {mapeamentosSalvos.map(m => (
+                            <div key={m.id} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center justify-between animate-in fade-in duration-300 group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-[#22C55E]/20 rounded-lg flex items-center justify-center text-[#22C55E]"><MapPin size={14}/></div>
+                                <div>
+                                  <p className="text-white text-sm font-bold">{m.cidade}</p>
+                                  <p className="text-slate-500 text-[10px] font-bold uppercase">{m.unidade}</p>
+                                </div>
+                              </div>
+                              <button onClick={() => deletarMapeamento(m.id)} className="text-slate-600 hover:text-red-500 transition-colors p-2 opacity-0 group-hover:opacity-100">
+                                  <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* HISTÓRICO */}
-        <div className="lg:col-span-8">
+        {/* HISTÓRICO (Lado Direito) */}
+        <div className="lg:col-span-7">
            <div className="bg-[#0F172A] border border-white/5 rounded-[40px] p-8 h-full">
             <h3 className="text-white font-black uppercase italic mb-8 flex items-center gap-3">
               <Clock className="text-slate-500" size={20} /> Ordens Estratégicas Recentes
@@ -262,7 +478,7 @@ export default function PremisesPage() {
               {premissas.length === 0 ? (
                   <div className="text-center py-20 bg-white/5 rounded-[32px] border border-dashed border-white/10">
                       <Zap className="mx-auto text-slate-700 mb-4" size={40}/>
-                      <p className="text-slate-500 text-xs font-black uppercase tracking-widest">Aguardando comando</p>
+                      <p className="text-slate-500 text-xs font-black uppercase tracking-widest">A aguardar comando</p>
                   </div>
               ) : (
                 premissas.map((p) => (
@@ -282,7 +498,7 @@ export default function PremisesPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                         <p className="text-[11px] text-white font-mono font-bold tracking-tighter">{new Date(p.created_at).toLocaleDateString('pt-BR')}</p>
+                         <p className="text-[11px] text-white font-mono font-bold tracking-tighter">{new Date(p.created_at).toLocaleDateString('pt-PT')}</p>
                          <p className="text-[9px] text-slate-500 uppercase font-black">ID: #{p.id.toString().slice(-4)}</p>
                       </div>
                     </div>

@@ -2,11 +2,11 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Search, Calendar } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell'; 
+import Link from 'next/link';
 
 export default function Topbar() {
-  // BLINDAGEM: Se o sistema gerar página fantasma e não tiver usuário, não quebra!
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
@@ -22,6 +22,7 @@ export default function Topbar() {
     if (path.includes('/customers')) return 'Carteira de Clientes';
     if (path.includes('/goals')) return 'Metas & Performance';
     if (path.includes('/settings')) return 'Configurações';
+    if (path.includes('/profile')) return 'Meu Perfil';
     return 'Visão Geral';
   };
 
@@ -41,21 +42,15 @@ export default function Topbar() {
         </div>
       </div>
 
-      <div className="hidden xl:flex items-center bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-2.5 w-96 focus-within:border-[#22C55E]/50 focus-within:bg-white/[0.05] transition-all">
-        <Search size={18} className="text-slate-500 mr-3" />
-        <input 
-          type="text" 
-          placeholder="Buscar..." 
-          className="bg-transparent border-none outline-none text-xs text-white font-bold placeholder-slate-600 w-full uppercase tracking-wide"
-        />
-      </div>
+      {/* A BARRA DE BUSCA FOI REMOVIDA DAQUI PARA NÃO CAUSAR CONFUSÃO */}
 
       <div className="flex items-center gap-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors cursor-pointer">
             <NotificationBell />
         </div>
         <div className="h-8 w-[1px] bg-white/10"></div>
-        <div className="flex items-center gap-3 pl-2 cursor-pointer group">
+        
+        <Link href="/dashboard/profile" className="flex items-center gap-3 pl-2 cursor-pointer group">
           <div className="text-right hidden lg:block">
             <p className="text-sm font-bold text-white leading-none group-hover:text-[#22C55E] transition-colors">
               {perfil?.nome || user?.email?.split('@')[0] || 'Usuário'}
@@ -64,10 +59,15 @@ export default function Topbar() {
               {perfil?.cargo || 'Membro'}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22C55E] to-emerald-800 border border-white/10 flex items-center justify-center text-sm font-black text-[#0F172A] shadow-lg group-hover:scale-105 transition-transform">
-            {user?.email?.[0]?.toUpperCase() || 'U'}
+          
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22C55E] to-emerald-800 border border-white/10 flex items-center justify-center text-sm font-black text-[#0F172A] shadow-lg group-hover:scale-105 transition-transform overflow-hidden relative">
+            {perfil?.avatar_url ? (
+                <img src={perfil.avatar_url} alt="Foto de Perfil" className="w-full h-full object-cover" />
+            ) : (
+                <span className="uppercase">{perfil?.nome?.[0] || user?.email?.[0] || 'U'}</span>
+            )}
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

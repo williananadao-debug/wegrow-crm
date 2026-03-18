@@ -2,36 +2,85 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
-import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2 } from 'lucide-react';
+import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2, Search, Loader2 } from 'lucide-react';
 
 export default function PortalCliente() {
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
 
   // Estados do formulário
+  const [cnpj, setCnpj] = useState('');
+  const [loadingCnpj, setLoadingCnpj] = useState(false);
+  
   const [empresa, setEmpresa] = useState('');
   const [contato, setContato] = useState('');
   const [unidade, setUnidade] = useState('');
   const [titulo, setTitulo] = useState('');
   const [briefing, setBriefing] = useState('');
 
+  // 👇 MÁSCARA E BUSCA INTELIGENTE DO CNPJ 👇
+  const handleCnpjChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+    
+    // Aplica a máscara: 00.000.000/0001-00
+    let formatted = value;
+    if (value.length > 2) formatted = value.replace(/^(\d{2})(\d)/, '$1.$2');
+    if (value.length > 5) formatted = formatted.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+    if (value.length > 8) formatted = formatted.replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4');
+    if (value.length > 12) formatted = formatted.replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
+    
+    setCnpj(formatted.slice(0, 18));
+
+    // Se bater 14 números, faz a mágica acontecer!
+    if (value.length === 14) {
+        setLoadingCnpj(true);
+        try {
+            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${value}`);
+            if (response.ok) {
+                const data = await response.json();
+                setEmpresa(data.nome_fantasia || data.razao_social || '');
+                setUnidade(data.municipio ? `${data.municipio} - ${data.uf}` : '');
+                
+                // Puxa e formata o telefone automaticamente
+                if (data.ddd_telefone_1) {
+                    const telLimpo = data.ddd_telefone_1.replace(/\D/g, '');
+                    if (telLimpo.length >= 10) {
+                        const telFormatado = `(${telLimpo.slice(0,2)}) ${telLimpo.slice(2,7)}-${telLimpo.slice(7,11)}`;
+                        setContato(telFormatado);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao buscar CNPJ", error);
+        }
+        setLoadingCnpj(false);
+    }
+  };
+
+  // MÁSCARA PARA O WHATSAPP
+  const handleContatoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 2) value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+    if (value.length > 9) value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    setContato(value.slice(0, 15));
+  };
+
   const enviarPedido = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // ✅ TUBAGEM CORRIGIDA: Sem a duplicata 'empresa' que causava o erro ts(1117)
       const { error } = await supabase.from('leads').insert([{
         empresa: empresa,
         telefone: contato, 
+        cnpj: cnpj,           // 👈 Adicionamos o CNPJ aqui para ir para o CRM
         unidade: unidade,     
         cidade: unidade,      
-        descricao: briefing,  
+        descricao: `Precisa de: ${titulo}\n\nMensagem: ${briefing}`, // 👈 Juntamos os dois campos para o Kanban
         status: 'aberto', 
         origem: 'Portal Web', 
         valor_total: 0,
-        etapa: 0, // Garante que cai na primeira coluna do Kanban
-        // 👇 SUA MATRIZ (Demais FM)
+        etapa: 0, 
         empresa_id: '11111111-1111-1111-1111-111111111111' 
       }]);
 
@@ -60,6 +109,7 @@ export default function PortalCliente() {
           <button 
             onClick={() => { 
               setSucesso(false); 
+              setCnpj('');
               setEmpresa(''); 
               setContato(''); 
               setUnidade(''); 
@@ -83,6 +133,7 @@ export default function PortalCliente() {
       <div className="w-full max-w-3xl mx-auto pt-16 px-6 relative z-10 flex flex-col items-center justify-center gap-4 mb-8">
         
         <div className="relative h-24 md:h-28 w-64 md:w-80 flex items-center justify-center drop-shadow-[0_0_20px_rgba(249,115,22,0.4)]">
+            {/* Mantive o seu logo da Demais FM! */}
             <Image 
               src="/logo-demais.png" 
               alt="Demais FM" 
@@ -106,20 +157,43 @@ export default function PortalCliente() {
           </div>
 
           <form onSubmit={enviarPedido} className="space-y-5">
+            
+            {/* 👇 O GATILHO MÁGICO DO CNPJ COM A IDENTIDADE VISUAL LARANJA 👇 */}
+            <div className="bg-orange-500/10 border border-orange-500/20 p-5 rounded-3xl relative mb-2">
+                <label className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-2 block flex items-center gap-2">
+                    <Search size={14}/> Digite seu CNPJ (Busca Automática)
+                </label>
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-white font-mono text-lg outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600"
+                        placeholder="00.000.000/0001-00"
+                        value={cnpj}
+                        onChange={handleCnpjChange}
+                        required
+                    />
+                    {loadingCnpj && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 text-orange-500 text-xs font-bold uppercase">
+                            <Loader2 size={16} className="animate-spin"/> Consultando...
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1 mb-1"><Briefcase size={12}/> Sua Empresa</label>
-                  <input required placeholder="Nome da marca..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+                  <input required placeholder="Nome da marca..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600 uppercase" value={empresa} onChange={e => setEmpresa(e.target.value)} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1 mb-1"><Building2 size={12}/> Cidade / Região</label>
-                  <input placeholder="Ex: Itajaí, Balneário..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600 uppercase" value={unidade} onChange={e => setUnidade(e.target.value)} />
+                  <input required placeholder="Ex: Itajaí, Balneário..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600 uppercase" value={unidade} onChange={e => setUnidade(e.target.value)} />
                 </div>
             </div>
 
             <div>
               <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">WhatsApp para Retorno</label>
-              <input required type="tel" placeholder="(00) 00000-0000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={contato} onChange={e => setContato(e.target.value)} />
+              <input required type="tel" placeholder="(00) 00000-0000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={contato} onChange={handleContatoChange} />
             </div>
 
             <div className="border-t border-white/5 pt-6 mt-6">

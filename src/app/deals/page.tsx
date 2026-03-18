@@ -50,6 +50,7 @@ type Lead = {
   vencimento?: string;
 };
 
+// 👇 ADICIONADO O CAMPO RISCO NO TIPO CLIENTE 👇
 type ClienteOpcao = {
   id: number;
   nome_empresa: string;
@@ -57,6 +58,7 @@ type ClienteOpcao = {
   cnpj?: string;
   email?: string;
   cidade?: string;
+  risco?: string; 
 };
 
 const STAGES = {
@@ -77,7 +79,8 @@ const LeadCard = React.memo(({
     index, 
     isDirector, 
     isLideranca, 
-    usersMap, 
+    usersMap,
+    clientesMap, // 👈 RECEBE O MAPA DE CLIENTES PARA LER O RISCO
     abrirModal, 
     enviarWhatsapp, 
     fazerCheckin, 
@@ -99,6 +102,13 @@ const LeadCard = React.memo(({
         const end = new Date(lead.contrato_fim + 'T00:00:00');
         return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }, [lead.contrato_fim]);
+
+    // 👇 CÁLCULO DA BOLINHA DE RISCO 👇
+    const clienteVinculado = lead.client_id ? clientesMap[lead.client_id] : null;
+    const risco = clienteVinculado?.risco?.toLowerCase() || 'verde'; // Verde por padrão
+    const corRisco = risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 
+                     risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]' : 
+                     'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.8)]';
 
     return (
         <Draggable draggableId={lead.id.toString()} index={index}>
@@ -155,7 +165,6 @@ const LeadCard = React.memo(({
                         </div>
                     </div>
                     
-                    {/* 👇 O SISTEMA DE ETIQUETAS DE ORIGEM INTELIGENTE 👇 */}
                     {(() => {
                         const isIA = lead.origem?.includes('IA') || lead.origem?.includes('Inteligência') || lead.descricao?.includes('IA Sugere');
                         const isManual = lead.origem?.includes('Manual') || lead.origem === 'Estratégia';
@@ -217,9 +226,20 @@ const LeadCard = React.memo(({
                     </div>
 
                     <div className="mb-1 flex items-center gap-2 flex-wrap">
-                        <h4 className="font-black text-sm uppercase leading-tight transition-colors truncate max-w-full text-white group-hover:text-slate-200">
-                            {lead.empresa}
+                        {/* 👇 A BOLINHA DE RISCO FICA AQUI AO LADO DO NOME 👇 */}
+                        <h4 className="font-black text-sm uppercase leading-tight transition-colors max-w-full text-white group-hover:text-slate-200 flex items-center gap-2">
+                            {lead.client_id && (
+                                <div title={`Análise de Risco: ${risco.toUpperCase()}`} className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${corRisco}`}></div>
+                            )}
+                            <span className="truncate">{lead.empresa}</span>
                         </h4>
+                        
+                        {!lead.client_id && (
+                            <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse">
+                                <Sparkles size={8}/> NOVO
+                            </span>
+                        )}
+
                         {lead.unidade && (
                             <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                 <Building2 size={8}/> {lead.unidade}
@@ -362,6 +382,13 @@ export default function DealsPage() {
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
   const [filtroData, setFiltroData] = useState<string>(''); 
 
+  // 👇 MAPA RÁPIDO PARA O CARD LER OS RISCOS 👇
+  const clientesMap = useMemo(() => {
+      const map: Record<number, ClienteOpcao> = {};
+      clientesOpcoes.forEach(c => map[c.id] = c);
+      return map;
+  }, [clientesOpcoes]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     
@@ -427,11 +454,12 @@ export default function DealsPage() {
         if (metaData) setMetasBase(metaData);
     } catch (err) {}
 
+    // 👇 BUSCANDO O RISCO DOS CLIENTES 👇
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
     while(fetchMore) {
-        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
+        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade, risco').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
         if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
         else { fetchMore = false; }
     }
@@ -864,7 +892,48 @@ export default function DealsPage() {
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
-    if (!selectedClientId) return alert("⚠️ ALERTA: Selecione um cliente da lista suspensa!");
+    
+    // 👇 FIM DO BLOQUEIO DE AUTO-CADASTRO! 👇
+    // if (!selectedClientId) return alert("⚠️ ALERTA: Selecione um cliente...");
+
+    setLoading(true);
+
+    let finalClientId = selectedClientId;
+
+    // 👇 AUTO-CADASTRO MÁGICO DE CLIENTE 👇
+    if (!finalClientId && novaEmpresa) {
+        try {
+            const { data: novoCliente, error: errCli } = await supabase.from('clientes').insert([{
+                nome_empresa: novaEmpresa,
+                cnpj: novoCnpj || null,
+                telefone: novoTelefone || null,
+                cidade: novaCidade || null,
+                status: 'ativo',
+                risco: 'verde', // Clientes novos nascem com Risco Verde (Bom Pagador)
+                empresa_id: perfil?.empresa_id
+            }]).select('id, risco').single();
+            
+            if (errCli) throw errCli;
+            if (novoCliente) {
+                finalClientId = novoCliente.id;
+                // Atualiza a lista visualmente para ele já ter o risco
+                setClientesOpcoes(prev => [...prev, {
+                    id: novoCliente.id,
+                    nome_empresa: novaEmpresa,
+                    telefone: novoTelefone,
+                    cnpj: novoCnpj,
+                    cidade: novaCidade,
+                    risco: novoCliente.risco
+                }]);
+                setToastMessage("✨ Novo cliente cadastrado automaticamente!");
+                setShowToast(true);
+            }
+        } catch (e) {
+            console.error("Erro ao auto-cadastrar cliente", e);
+            setLoading(false);
+            return alert("Erro ao criar o cliente novo na base. Tente novamente.");
+        }
+    }
 
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
@@ -900,7 +969,7 @@ export default function DealsPage() {
         status_aprovacao: novoStatusAprovacao, 
         user_id: isLideranca ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
-        client_id: selectedClientId,
+        client_id: finalClientId, // 👈 Agora ele usa o ID que acabou de ser gerado
         empresa_id: perfil?.empresa_id 
     };
 
@@ -1225,6 +1294,7 @@ export default function DealsPage() {
                                     isDirector={isDirector} 
                                     isLideranca={isLideranca} 
                                     usersMap={usersMap} 
+                                    clientesMap={clientesMap} // 👈 PASSA O MAPA DE RISCO PARA O CARTÃO
                                     abrirModal={abrirModal} 
                                     enviarWhatsapp={enviarWhatsapp} 
                                     fazerCheckin={fazerCheckin} 
@@ -1275,8 +1345,8 @@ export default function DealsPage() {
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa *</label>
                         <div className="relative">
                             <input 
-                                className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[#22C55E] text-[#22C55E]' : 'border-white/10'} rounded-xl pl-4 pr-24 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
-                                placeholder="Buscar cliente..."
+                                className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[#22C55E] text-[#22C55E]' : (novaEmpresa.length > 2 ? 'border-blue-500' : 'border-white/10')} rounded-xl pl-4 pr-28 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
+                                placeholder="Buscar ou Cadastrar novo..."
                                 value={novaEmpresa}
                                 onChange={(e) => {
                                     setNovaEmpresa(e.target.value);
@@ -1287,11 +1357,17 @@ export default function DealsPage() {
                                 onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
                                 required
                             />
-                            {selectedClientId && (
+                            
+                            {/* 👇 O AVISO INTELIGENTE DE NOVO CLIENTE 👇 */}
+                            {selectedClientId ? (
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
                                     <CheckCircle2 size={12}/> Vinculado
                                 </div>
-                            )}
+                            ) : novaEmpresa.length > 2 ? (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest animate-pulse">
+                                    <Sparkles size={12}/> Será Cadastrado
+                                </div>
+                            ) : null}
                         </div>
                         
                         {showClientDropdown && !selectedClientId && (
@@ -1312,15 +1388,18 @@ export default function DealsPage() {
                                                 setShowClientDropdown(false);
                                             }}
                                         >
-                                            <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
+                                              <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
+                                            </div>
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
                                     ))}
                                 {clientesOpcoes.filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase())).length === 0 && (
-                                    <div className="px-4 py-4 text-center text-slate-500 text-xs font-bold uppercase">
-                                        Nenhum cliente encontrado.
+                                    <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
+                                        Novo Cliente Detectado!
                                         <br/>
-                                        <span className="text-[9px] font-normal normal-case mt-1 block">Cadastre o cliente na aba de Clientes primeiro.</span>
+                                        <span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span>
                                     </div>
                                 )}
                             </div>
@@ -1460,7 +1539,6 @@ export default function DealsPage() {
                             </div>
                         )}
 
-                        {/* 👇 CAMPOS REMOVIDOS DE HORA AQUI NO CARRINHO 👇 */}
                         {itensTemporarios.length > 0 && (
                             <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
                                 {itensTemporarios.map((item, i) => (
@@ -1546,7 +1624,8 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${selectedClientId && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                  {/* 👇 O BOTÃO AGORA LIBERA O AUTO-CADASTRO 👇 */}
+                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>

@@ -5,7 +5,7 @@ import { gerarJsonOpec } from '@/lib/opecIntegration';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const NOSSO_TOKEN_SECRETO = "WEGROW_OPEC_2026_MASTER_KEY";
+const NOSSO_TOKEN_SECRETO = process.env.TOKEN_INTEGRACAO_OPEC;
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);

@@ -53,6 +53,6 @@ export const syncOfflineDataToCloud = async () => {
   } catch (error) {
     console.error('❌ Erro ao subir dados:', error);
   } finally {
-    isSyncing = false; // Destranca a porta ao terminar
+    isSyncing = false; // Destranca a porta ao terminary
   }
 };

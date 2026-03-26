@@ -8,6 +8,9 @@ import LayoutWrapper from '../components/layout-wrapper';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
+// 🟢 1. IMPORTANDO A FERRAMENTA DE SCRIPT DO NEXT.JS
+import Script from 'next/script';
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const viewport: Viewport = {
@@ -53,6 +56,26 @@ export default function RootLayout({
         
         {/* 👇 RASTREADOR DE VELOCIDADE E PERFORMANCE */}
         <SpeedInsights />
+        
+        {/* 🟢 2. O CHAT DO BREVO - BOLINHA MÁGICA */}
+        <Script 
+          id="brevo-chat-widget" 
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(d, w, c) {
+                  w.BrevoConversationsID = '69c29c5c62301a763e028155';
+                  w[c] = w[c] || function() {
+                      (w[c].q = w[c].q || []).push(arguments);
+                  };
+                  var s = d.createElement('script');
+                  s.async = true;
+                  s.src = 'https://conversations-widget.brevo.com/brevo-conversations.js';
+                  if (d.head) d.head.appendChild(s);
+              })(document, window, 'BrevoConversations');
+            `,
+          }}
+        />
         
       </body>
     </html>

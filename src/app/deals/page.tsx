@@ -454,12 +454,12 @@ export default function DealsPage() {
         if (metaData) setMetasBase(metaData);
     } catch (err) {}
 
-    // 👇 BUSCANDO O RISCO DOS CLIENTES 👇
+    // 👇 CIRURGIA 1: REMOVI A PALAVRA RISCO DAQUI QUE ESTAVA A BLOQUEAR TUDO 👇
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
     while(fetchMore) {
-        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade, risco').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
+        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
         if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
         else { fetchMore = false; }
     }
@@ -1370,42 +1370,43 @@ export default function DealsPage() {
                             ) : null}
                         </div>
                         
-{showClientDropdown && !selectedClientId && (
-    <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
-        {clientesOpcoes
-            // 👇 BLINDAGEM APLICADA AQUI 👇
-            .filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase()))
-            .slice(0, 50) 
-            .map(c => (
-                <div 
-                    key={c.id} 
-                    className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                    onClick={() => {
-                        setNovaEmpresa(c.nome_empresa);
-                        setSelectedClientId(c.id);
-                        setNovoTelefone(c.telefone || '');
-                        if (c.cidade) setNovaCidade(c.cidade as string);
-                        if (c.cnpj) setNovoCnpj(c.cnpj as string); 
-                        setShowClientDropdown(false);
-                    }}
-                >
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
-                      <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
-                    </div>
-                    {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
-                </div>
-            ))}
-        {/* 👇 BLINDAGEM APLICADA AQUI TAMBÉM 👇 */}
-        {clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).length === 0 && (
-            <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
-                Novo Cliente Detectado!
-                <br/>
-                <span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span>
-            </div>
-        )}
-    </div>
-)}
+                        {showClientDropdown && !selectedClientId && (
+                            <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
+                                {/* 👇 CIRURGIA 2: BLINDAGEM DO TOLOWERCASE APLICADA AQUI 👇 */}
+                                {clientesOpcoes
+                                    .filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase()))
+                                    .slice(0, 50) 
+                                    .map(c => (
+                                        <div 
+                                            key={c.id} 
+                                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
+                                            onClick={() => {
+                                                setNovaEmpresa(c.nome_empresa);
+                                                setSelectedClientId(c.id);
+                                                setNovoTelefone(c.telefone || '');
+                                                if (c.cidade) setNovaCidade(c.cidade as string);
+                                                if (c.cnpj) setNovoCnpj(c.cnpj as string); 
+                                                setShowClientDropdown(false);
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
+                                              <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
+                                            </div>
+                                            {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
+                                        </div>
+                                    ))}
+                                
+                                {/* 👇 CIRURGIA 3: ESCONDENDO O AVISO QUANDO TUDO ESTIVER VAZIO 👇 */}
+                                {novaEmpresa.length > 0 && clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).length === 0 && (
+                                    <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
+                                        Novo Cliente Detectado!
+                                        <br/>
+                                        <span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1431,7 +1432,7 @@ export default function DealsPage() {
 
                     {isLideranca && (
                         <div className="bg-yellow-500/5 border border-yellow-500/20 p-4 rounded-2xl">
-                            <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1 mb-2"><User size={12}/> Vendedor Responsável (Distribuição)</label>
+                            <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1"><User size={12}/> Vendedor Responsável (Distribuição)</label>
                             <select 
                                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-yellow-500 cursor-pointer appearance-none" 
                                 value={leadUserId} 

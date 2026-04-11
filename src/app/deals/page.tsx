@@ -1370,40 +1370,42 @@ export default function DealsPage() {
                             ) : null}
                         </div>
                         
-                        {showClientDropdown && !selectedClientId && (
-                            <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
-                                {clientesOpcoes
-                                    .filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase()))
-                                    .slice(0, 50) 
-                                    .map(c => (
-                                        <div 
-                                            key={c.id} 
-                                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                                            onClick={() => {
-                                                setNovaEmpresa(c.nome_empresa);
-                                                setSelectedClientId(c.id);
-                                                setNovoTelefone(c.telefone || '');
-                                                if (c.cidade) setNovaCidade(c.cidade as string);
-                                                if (c.cnpj) setNovoCnpj(c.cnpj as string); 
-                                                setShowClientDropdown(false);
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
-                                              <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
-                                            </div>
-                                            {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
-                                        </div>
-                                    ))}
-                                {clientesOpcoes.filter(c => c.nome_empresa.toLowerCase().includes(novaEmpresa.toLowerCase())).length === 0 && (
-                                    <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
-                                        Novo Cliente Detectado!
-                                        <br/>
-                                        <span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+{showClientDropdown && !selectedClientId && (
+    <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
+        {clientesOpcoes
+            // 👇 BLINDAGEM APLICADA AQUI 👇
+            .filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase()))
+            .slice(0, 50) 
+            .map(c => (
+                <div 
+                    key={c.id} 
+                    className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
+                    onClick={() => {
+                        setNovaEmpresa(c.nome_empresa);
+                        setSelectedClientId(c.id);
+                        setNovoTelefone(c.telefone || '');
+                        if (c.cidade) setNovaCidade(c.cidade as string);
+                        if (c.cnpj) setNovoCnpj(c.cnpj as string); 
+                        setShowClientDropdown(false);
+                    }}
+                >
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
+                      <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
+                    </div>
+                    {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
+                </div>
+            ))}
+        {/* 👇 BLINDAGEM APLICADA AQUI TAMBÉM 👇 */}
+        {clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).length === 0 && (
+            <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
+                Novo Cliente Detectado!
+                <br/>
+                <span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span>
+            </div>
+        )}
+    </div>
+)}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

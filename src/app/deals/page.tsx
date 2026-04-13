@@ -50,7 +50,6 @@ type Lead = {
   vencimento?: string;
 };
 
-// 👇 ADICIONADO O CAMPO RISCO NO TIPO CLIENTE 👇
 type ClienteOpcao = {
   id: number;
   nome_empresa: string;
@@ -80,7 +79,7 @@ const LeadCard = React.memo(({
     isDirector, 
     isLideranca, 
     usersMap,
-    clientesMap, // 👈 RECEBE O MAPA DE CLIENTES PARA LER O RISCO
+    clientesMap, 
     abrirModal, 
     enviarWhatsapp, 
     fazerCheckin, 
@@ -103,9 +102,8 @@ const LeadCard = React.memo(({
         return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     }, [lead.contrato_fim]);
 
-    // 👇 CÁLCULO DA BOLINHA DE RISCO 👇
     const clienteVinculado = lead.client_id ? clientesMap[lead.client_id] : null;
-    const risco = clienteVinculado?.risco?.toLowerCase() || 'verde'; // Verde por padrão
+    const risco = clienteVinculado?.risco?.toLowerCase() || 'verde'; 
     const corRisco = risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 
                      risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]' : 
                      'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.8)]';
@@ -226,7 +224,6 @@ const LeadCard = React.memo(({
                     </div>
 
                     <div className="mb-1 flex items-center gap-2 flex-wrap">
-                        {/* 👇 A BOLINHA DE RISCO FICA AQUI AO LADO DO NOME 👇 */}
                         <h4 className="font-black text-sm uppercase leading-tight transition-colors max-w-full text-white group-hover:text-slate-200 flex items-center gap-2">
                             {lead.client_id && (
                                 <div title={`Análise de Risco: ${risco.toUpperCase()}`} className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${corRisco}`}></div>
@@ -382,7 +379,6 @@ export default function DealsPage() {
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
   const [filtroData, setFiltroData] = useState<string>(''); 
 
-  // 👇 MAPA RÁPIDO PARA O CARD LER OS RISCOS 👇
   const clientesMap = useMemo(() => {
       const map: Record<number, ClienteOpcao> = {};
       clientesOpcoes.forEach(c => map[c.id] = c);
@@ -454,7 +450,6 @@ export default function DealsPage() {
         if (metaData) setMetasBase(metaData);
     } catch (err) {}
 
-    // 👇 CIRURGIA 1: REMOVI A PALAVRA RISCO DAQUI QUE ESTAVA A BLOQUEAR TUDO 👇
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
@@ -892,15 +887,11 @@ export default function DealsPage() {
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado!");
-    
-    // 👇 FIM DO BLOQUEIO DE AUTO-CADASTRO! 👇
-    // if (!selectedClientId) return alert("⚠️ ALERTA: Selecione um cliente...");
 
     setLoading(true);
 
     let finalClientId = selectedClientId;
 
-    // 👇 AUTO-CADASTRO MÁGICO DE CLIENTE 👇
     if (!finalClientId && novaEmpresa) {
         try {
             const { data: novoCliente, error: errCli } = await supabase.from('clientes').insert([{
@@ -909,14 +900,13 @@ export default function DealsPage() {
                 telefone: novoTelefone || null,
                 cidade: novaCidade || null,
                 status: 'ativo',
-                risco: 'verde', // Clientes novos nascem com Risco Verde (Bom Pagador)
+                risco: 'verde', 
                 empresa_id: perfil?.empresa_id
             }]).select('id, risco').single();
             
             if (errCli) throw errCli;
             if (novoCliente) {
                 finalClientId = novoCliente.id;
-                // Atualiza a lista visualmente para ele já ter o risco
                 setClientesOpcoes(prev => [...prev, {
                     id: novoCliente.id,
                     nome_empresa: novaEmpresa,
@@ -969,7 +959,7 @@ export default function DealsPage() {
         status_aprovacao: novoStatusAprovacao, 
         user_id: isLideranca ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
-        client_id: finalClientId, // 👈 Agora ele usa o ID que acabou de ser gerado
+        client_id: finalClientId, 
         empresa_id: perfil?.empresa_id 
     };
 
@@ -990,7 +980,7 @@ export default function DealsPage() {
                 });
                 setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
                 setIsModalOpen(false);
-                setToastMessage("📶 Sem rede. Alteração salva no celular!");
+                setToastMessage("📶 Sem rede. Alteração salva no telemóvel/computador!");
                 setShowToast(true);
             }
         }
@@ -1294,7 +1284,7 @@ export default function DealsPage() {
                                     isDirector={isDirector} 
                                     isLideranca={isLideranca} 
                                     usersMap={usersMap} 
-                                    clientesMap={clientesMap} // 👈 PASSA O MAPA DE RISCO PARA O CARTÃO
+                                    clientesMap={clientesMap} 
                                     abrirModal={abrirModal} 
                                     enviarWhatsapp={enviarWhatsapp} 
                                     fazerCheckin={fazerCheckin} 
@@ -1358,7 +1348,6 @@ export default function DealsPage() {
                                 required
                             />
                             
-                            {/* 👇 O AVISO INTELIGENTE DE NOVO CLIENTE 👇 */}
                             {selectedClientId ? (
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
                                     <CheckCircle2 size={12}/> Vinculado
@@ -1372,7 +1361,6 @@ export default function DealsPage() {
                         
                         {showClientDropdown && !selectedClientId && (
                             <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
-                                {/* 👇 CIRURGIA 2: BLINDAGEM DO TOLOWERCASE APLICADA AQUI 👇 */}
                                 {clientesOpcoes
                                     .filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase()))
                                     .slice(0, 50) 
@@ -1380,7 +1368,9 @@ export default function DealsPage() {
                                         <div 
                                             key={c.id} 
                                             className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                                            onClick={() => {
+                                            // 👇 AQUI ESTÁ A CIRURGIA MÁGICA 👇
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
                                                 setNovaEmpresa(c.nome_empresa);
                                                 setSelectedClientId(c.id);
                                                 setNovoTelefone(c.telefone || '');
@@ -1397,7 +1387,6 @@ export default function DealsPage() {
                                         </div>
                                     ))}
                                 
-                                {/* 👇 CIRURGIA 3: ESCONDENDO O AVISO QUANDO TUDO ESTIVER VAZIO 👇 */}
                                 {novaEmpresa.length > 0 && clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).length === 0 && (
                                     <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">
                                         Novo Cliente Detectado!
@@ -1627,7 +1616,6 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  {/* 👇 O BOTÃO AGORA LIBERA O AUTO-CADASTRO 👇 */}
                   <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>

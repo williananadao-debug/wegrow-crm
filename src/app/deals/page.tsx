@@ -46,6 +46,7 @@ type Lead = {
   notas?: Historico[];  
   status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
   cnpj?: string;
+  inscricao_estadual?: string; // 👈 NOVO CAMPO
   parcelas?: string;
   vencimento?: string;
 };
@@ -55,6 +56,7 @@ type ClienteOpcao = {
   nome_empresa: string;
   telefone: string; 
   cnpj?: string;
+  inscricao_estadual?: string; // 👈 NOVO CAMPO
   email?: string;
   cidade?: string;
   risco?: string; 
@@ -352,6 +354,7 @@ export default function DealsPage() {
   const [contratoFim, setContratoFim] = useState('');
   
   const [novoCnpj, setNovoCnpj] = useState('');
+  const [novoIE, setNovoIE] = useState(''); // 👈 ESTADO DA INSCRIÇÃO ESTADUAL
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
   
@@ -454,7 +457,8 @@ export default function DealsPage() {
     let page = 0;
     let fetchMore = true;
     while(fetchMore) {
-        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
+        // 👇 AQUI BUSCAMOS A INSCRIÇÃO ESTADUAL DO SUPABASE 👇
+        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
         if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
         else { fetchMore = false; }
     }
@@ -773,7 +777,8 @@ export default function DealsPage() {
             <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
             <div style="display: flex; gap: 40px;">
               <div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
-              <div><strong>Inscrição Estadual:</strong> </div>
+              {/* 👇 AQUI ESTÁ A INSCRIÇÃO ESTADUAL NO CONTRATO 👇 */}
+              <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
             </div>
             <div style="display: flex; gap: 40px;">
               <div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div>
@@ -897,6 +902,7 @@ export default function DealsPage() {
             const { data: novoCliente, error: errCli } = await supabase.from('clientes').insert([{
                 nome_empresa: novaEmpresa,
                 cnpj: novoCnpj || null,
+                inscricao_estadual: novoIE || null, // 👈 SALVANDO IE NO AUTO CADASTRO
                 telefone: novoTelefone || null,
                 cidade: novaCidade || null,
                 status: 'ativo',
@@ -912,6 +918,7 @@ export default function DealsPage() {
                     nome_empresa: novaEmpresa,
                     telefone: novoTelefone,
                     cnpj: novoCnpj,
+                    inscricao_estadual: novoIE,
                     cidade: novaCidade,
                     risco: novoCliente.risco
                 }]);
@@ -954,6 +961,7 @@ export default function DealsPage() {
         contrato_inicio: contratoInicio || null,
         contrato_fim: contratoFim || null,
         cnpj: novoCnpj,
+        inscricao_estadual: novoIE || null, // 👈 ENVIANDO PARA O BANCO DE DADOS
         parcelas: parcelas,
         vencimento: vencimento || null,
         status_aprovacao: novoStatusAprovacao, 
@@ -1035,6 +1043,7 @@ export default function DealsPage() {
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
         setNovoCnpj(lead.cnpj || '');
+        setNovoIE(lead.inscricao_estadual || ''); // 👈 PUXANDO A IE PARA A EDIÇÃO
         setParcelas(lead.parcelas || '1');
         setVencimento(lead.vencimento || '');
         setDesconto(lead.desconto || 0); 
@@ -1053,6 +1062,7 @@ export default function DealsPage() {
         setContratoInicio('');
         setContratoFim('');
         setNovoCnpj('');
+        setNovoIE(''); // 👈 LIMPANDO A IE
         setParcelas('1');
         setVencimento('');
         setDesconto(0); 
@@ -1368,7 +1378,6 @@ export default function DealsPage() {
                                         <div 
                                             key={c.id} 
                                             className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                                            // 👇 AQUI ESTÁ A CIRURGIA MÁGICA 👇
                                             onMouseDown={(e) => {
                                                 e.preventDefault();
                                                 setNovaEmpresa(c.nome_empresa);
@@ -1376,6 +1385,8 @@ export default function DealsPage() {
                                                 setNovoTelefone(c.telefone || '');
                                                 if (c.cidade) setNovaCidade(c.cidade as string);
                                                 if (c.cnpj) setNovoCnpj(c.cnpj as string); 
+                                                // 👇 PUXANDO A INSCRIÇÃO ESTADUAL QUANDO SELECIONA O CLIENTE 👇
+                                                if (c.inscricao_estadual) setNovoIE(c.inscricao_estadual as string);
                                                 setShowClientDropdown(false);
                                             }}
                                         >
@@ -1398,7 +1409,8 @@ export default function DealsPage() {
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 👇 TELA DE CADASTRO EXPANDIDA PARA 3 COLUNAS 👇 */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
                             <select 
@@ -1416,6 +1428,11 @@ export default function DealsPage() {
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                        </div>
+                        {/* 👇 O NOVO CAMPO DA INSCRIÇÃO ESTADUAL 👇 */}
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
                         </div>
                     </div>
 

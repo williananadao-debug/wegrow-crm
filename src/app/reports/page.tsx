@@ -480,10 +480,6 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">
             Sala de Comando (BI)
           </h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
-            <ShieldCheck size={12} className="text-blue-500"/> 
-            {isGerente ? `Análise Estratégica: ${perfil?.unidade || 'Sua Unidade'}` : 'Análise Estratégica e Inteligência de Dados'}
-          </p>
         </div>
         
         <div className="flex flex-col items-end gap-2 w-full md:w-auto">

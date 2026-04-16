@@ -26,7 +26,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
-  // 👇 1. OS NOVOS ESTADOS PARA O RANGE DE DATAS (MÊS ATUAL POR PADRÃO) 👇
   const [dataInicio, setDataInicio] = useState(() => {
       const hoje = new Date();
       const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -92,14 +91,13 @@ export default function DashboardPage() {
       
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
-      // 👇 2. FILTRANDO PELO NOVO RANGE DE DATAS 👇
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
           }
           
-          const dataLead = lead.created_at.substring(0, 10); // Pega apenas YYYY-MM-DD
+          const dataLead = lead.created_at.substring(0, 10); 
           if (dataInicio && dataLead < dataInicio) return false;
           if (dataFim && dataLead > dataFim) return false;
           
@@ -154,14 +152,12 @@ export default function DashboardPage() {
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
       const semVisita = leadsFiltrados.length - comVisita;
 
-      // 👇 3. LÓGICA DO GRÁFICO DINÂMICO BASEADO NO RANGE DE DATA 👇
       const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
       if (dataInicio && dataFim) {
-          // Usa T12:00:00 para evitar que o fuso horário mude o dia
           const start = new Date(dataInicio + 'T12:00:00');
           const end = new Date(dataFim + 'T12:00:00');
           const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
-          const maxDays = Math.min(diffDays, 60); // Limita a 60 dias para o gráfico não quebrar a tela
+          const maxDays = Math.min(diffDays, 60); 
           
           for (let i = 0; i <= maxDays; i++) {
               const curr = new Date(start);
@@ -222,10 +218,8 @@ export default function DashboardPage() {
      return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`;
   };
 
-  // 👇 4. CORREÇÃO DA FORMATAÇÃO MATEMÁTICA (ADEUS NÚMEROS QUEBRADOS!) 👇
   const formatCompact = (num: number) => {
       if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k';
-      // Se não tem decimais exibe puro, se tem, formata com apenas 2 casas e tira os zeros finais soltos
       return num % 1 === 0 ? num.toString() : num.toFixed(2);
   };
 
@@ -237,12 +231,10 @@ export default function DashboardPage() {
       {/* HEADER COMPACTO E FILTROS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2 px-2">
         <div>
-          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">
+          {/* 👇 TÍTULO LIMPO, SEM O SUBTÍTULO REDUNDANTE 👇 */}
+          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">
             Dashboard
           </h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">
-            Visão Geral • {perfil?.nome || 'Equipe'}
-          </p>
         </div>
         
         <div className="flex flex-col items-end gap-2 w-full md:w-auto">
@@ -262,7 +254,6 @@ export default function DashboardPage() {
             <div className="flex flex-wrap md:flex-nowrap items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto">
                 <Filter size={14} className="text-slate-400 ml-3 mr-1" />
                 
-                {/* 👇 O NOVO FILTRO DE DATA (RANGE) 👇 */}
                 <div className="flex items-center gap-1 px-3 py-2 border-r border-white/10">
                     <input 
                         type="date" 

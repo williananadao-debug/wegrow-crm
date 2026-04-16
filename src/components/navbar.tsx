@@ -22,14 +22,16 @@ export default function Navbar() {
   
   // BLINDAGEM CONTRA A VERCEL
   const auth = useAuth() || {};
-  const user = auth.user; // 👈 O COFRE DE USUÁRIO (Onde o email realmente mora)
+  const user = auth.user; 
   const perfil = auth.perfil;
   const signOut = auth.signOut || (() => {});
   
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // 👇 AQUI ESTÁ A MÁGICA DO "ABRIR FECHADO" 👇
+  // Mudamos o false para TRUE. O menu já nasce colapsado!
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // 👇 1. O CADEADO DA OPEC CORRIGIDO 👇
+  // O CADEADO DA OPEC CORRIGIDO
   const isOpec = user?.email === 'opec@wegrow.com.br';
 
   // Apenas o Diretor (ou Admin) vai ver as Configurações
@@ -40,7 +42,7 @@ export default function Navbar() {
   const ID_DA_RADIO = '11111111-1111-1111-1111-111111111111';
   const mostrarFinanceiro = Boolean(perfil?.empresa_id && perfil.empresa_id !== ID_DA_RADIO);
 
-  // 👇 2. A QUARENTENA DE MENU 👇
+  // A QUARENTENA DE MENU
   let menuItems: any[] = [];
 
   if (isOpec) {
@@ -87,7 +89,6 @@ export default function Navbar() {
             <span className="text-lg font-black italic text-white tracking-tighter">WEGROW</span>
           </div>
         </div>
-        {/* Esconde as notificações para a OPEC não ver fofoca interna */}
         {!isOpec && <NotificationBell />}
       </div>
 
@@ -146,6 +147,7 @@ export default function Navbar() {
                 <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <div className="min-w-[20px]">{item.icon}</div>
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>{item.name}</span>
+                  {/* 👇 ETIQUETA FLUTUANTE AO PASSAR O RATO 👇 */}
                   {isCollapsed && (
                       <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
                           {item.name}
@@ -159,11 +161,23 @@ export default function Navbar() {
                   <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                     <Settings size={20} />
                     <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
+                    {/* 👇 ETIQUETA FLUTUANTE ADICIONADA AQUI TAMBÉM 👇 */}
+                    {isCollapsed && (
+                        <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                            CONFIGURAÇÕES
+                        </div>
+                    )}
                   </Link>
                 )}
                 <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
                   <LogOut size={20} />
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>
+                  {/* 👇 ETIQUETA FLUTUANTE ADICIONADA AQUI TAMBÉM 👇 */}
+                  {isCollapsed && (
+                      <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                          SAIR
+                      </div>
+                  )}
                 </button>
               </div>
             </nav>

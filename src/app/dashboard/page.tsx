@@ -10,7 +10,6 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 
 type RankingItem = { id: string; nome: string; total: number; count: number; };
 
-// Função auxiliar para evitar bugs de fuso horário ao pegar a data atual
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -228,60 +227,65 @@ export default function DashboardPage() {
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
       
-      {/* HEADER COMPACTO E FILTROS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2 px-2">
-        <div>
-          {/* 👇 TÍTULO LIMPO, SEM O SUBTÍTULO REDUNDANTE 👇 */}
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">
+      {/* 👇 HEADER COMPACTO: TÍTULO, ABAS E FILTROS NA MESMA LINHA (NO DESKTOP) 👇 */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-2 px-2">
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic leading-none">
             Dashboard
           </h1>
         </div>
         
-        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full xl:w-auto">
             {/* ABAS COMERCIAL / GESTÃO */}
-            <div className="bg-[#0B1120] border border-white/10 p-1 rounded-2xl flex gap-1 self-end">
-                <button onClick={() => setVisao('comercial')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-500 hover:text-white'}`}>
+            <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg">
+                <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
                     <TrendingUp size={12}/> Comercial
                 </button>
                 {isDirector && (
-                  <button onClick={() => setVisao('diretoria')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${visao === 'diretoria' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>
+                  <button onClick={() => setVisao('diretoria')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'diretoria' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
                       <Radio size={12}/> Gestão
                   </button>
                 )}
             </div>
             
             {/* BARRA DE FILTROS DO DASHBOARD */}
-            <div className="flex flex-wrap md:flex-nowrap items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto">
-                <Filter size={14} className="text-slate-400 ml-3 mr-1" />
+            <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 overflow-hidden flex-1 xl:flex-none">
+                <Filter size={14} className="text-slate-400 ml-3 mr-2" />
                 
-                <div className="flex items-center gap-1 px-3 py-2 border-r border-white/10">
+                <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
                     <input 
                         type="date" 
                         value={dataInicio} 
                         onChange={e => setDataInicio(e.target.value)} 
-                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
                     />
-                    <span className="text-slate-500 text-[10px] font-bold">ATÉ</span>
+                    <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
                     <input 
                         type="date" 
                         value={dataFim} 
                         onChange={e => setDataFim(e.target.value)} 
-                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
                     />
                 </div>
 
-                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-3 border-r border-white/10">
-                    <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
+                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                    <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
                     {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
                 </select>
 
                 {isDirector && (
-                    <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent text-orange-500 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-3">
-                        <option value="Todos" className="bg-[#0B1120]">Toda Equipe</option>
+                    <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent border-none text-orange-500 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                        <option value="Todos" className="bg-[#0F172A]">Toda Equipe</option>
                         {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
                     </select>
                 )}
             </div>
+
+            {(vendedorSelecionado !== null || filtroUnidade !== 'Todas' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+              <button onClick={() => { setVendedorSelecionado(null); setFiltroUnidade('Todas'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
+                  <X size={12}/> Limpar
+              </button>
+            )}
         </div>
       </div>
 
@@ -292,7 +296,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">Faturamento {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
-                    <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact" })}</h3>
+                    <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
@@ -365,7 +369,7 @@ export default function DashboardPage() {
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${index === 0 ? 'bg-orange-500 text-[#0B1120]' : 'bg-blue-600 text-white'}`}>{index + 1}º</div>
                                     <div><p className="font-black uppercase text-xs text-white">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} Vendas</p></div>
                                 </div>
-                                <p className={`text-sm font-black ${vendedorSelecionado === r.id ? 'text-orange-500' : 'text-slate-300'}`}>R$ {r.total.toLocaleString()}</p>
+                                <p className={`text-sm font-black ${vendedorSelecionado === r.id ? 'text-orange-500' : 'text-slate-300'}`}>R$ {r.total.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</p>
                             </div>
                         ))}
                     </div>

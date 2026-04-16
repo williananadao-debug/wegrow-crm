@@ -14,44 +14,34 @@ export default function Navbar() {
   const pathname = usePathname();
   
   // 👇 A TRAVA DE INVISIBILIDADE DO SITE 👇
-  // Se estiver na página inicial (site) ou no login, o menu não renderiza!
   const rotasSemMenu = ['/', '/login'];
   if (rotasSemMenu.includes(pathname)) {
     return null; 
   }
   
-  // BLINDAGEM CONTRA A VERCEL
   const auth = useAuth() || {};
   const user = auth.user; 
   const perfil = auth.perfil;
   const signOut = auth.signOut || (() => {});
   
-  // 👇 AQUI ESTÁ A MÁGICA DO "ABRIR FECHADO" 👇
-  // Mudamos o false para TRUE. O menu já nasce colapsado!
+  // MENU NASCE FECHADO POR PADRÃO
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // O CADEADO DA OPEC CORRIGIDO
   const isOpec = user?.email === 'opec@wegrow.com.br';
-
-  // Apenas o Diretor (ou Admin) vai ver as Configurações
   const isDirector = perfil?.cargo === 'diretor' || user?.email === 'admin@wegrow.com';
   const isManager = perfil?.cargo === 'gerente';
 
-  // O INTERRUPTOR DE EMPRESA CORRIGIDO
   const ID_DA_RADIO = '11111111-1111-1111-1111-111111111111';
   const mostrarFinanceiro = Boolean(perfil?.empresa_id && perfil.empresa_id !== ID_DA_RADIO);
 
-  // A QUARENTENA DE MENU
   let menuItems: any[] = [];
 
   if (isOpec) {
-    // Se for a OPEC, o menu tem apenas UM item.
     menuItems = [
       { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' }
     ];
   } else {
-    // Se NÃO for a OPEC, carrega o menu normal da sua empresa
     menuItems = [
       { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
       { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
@@ -128,12 +118,14 @@ export default function Navbar() {
         </nav>
       </aside>
 
-      <aside className={`hidden md:flex flex-col h-screen sticky top-0 bg-[#0B1120] border-r border-white/5 transition-all duration-300 z-50 ${isCollapsed ? 'w-[80px]' : 'w-[260px]'}`}>
-        <button onClick={toggleSidebar} className="absolute -right-3 top-9 bg-[#22C55E] text-[#0F172A] p-1 rounded-full hover:scale-110 transition-transform shadow-[0_0_15px_rgba(34,197,94,0.4)] z-50 flex items-center justify-center">
+      {/* 👇 MENU DESKTOP Z-INDEX ALTO 👇 */}
+      <aside className={`hidden md:flex flex-col h-screen sticky top-0 bg-[#0B1120] border-r border-white/5 transition-all duration-300 z-[90] ${isCollapsed ? 'w-[80px]' : 'w-[260px]'}`}>
+        <button onClick={toggleSidebar} className="absolute -right-3 top-9 bg-[#22C55E] text-[#0F172A] p-1 rounded-full hover:scale-110 transition-transform shadow-[0_0_15px_rgba(34,197,94,0.4)] z-[100] flex items-center justify-center">
           {isCollapsed ? <ChevronRight size={14} strokeWidth={3} /> : <ChevronLeft size={14} strokeWidth={3} />}
         </button>
 
-        <div className={`flex flex-col h-full overflow-hidden ${isCollapsed ? 'px-4' : 'px-6'} py-6`}>
+        {/* 👇 AQUI FOI REMOVIDA A "JAULA" (overflow-hidden) 👇 */}
+        <div className={`flex flex-col h-full ${isCollapsed ? 'px-4' : 'px-6'} py-6 relative`}>
             <div className={`flex items-center gap-3 mb-10 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
               <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
@@ -142,14 +134,16 @@ export default function Navbar() {
               </div>
             </div>
 
-            <nav className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar">
+            {/* 👇 REMOVIDO O overflow-y-auto DAQUI TAMBÉM 👇 */}
+            <nav className="flex flex-col gap-2 flex-1">
               {menuItems.map((item) => (
                 <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <div className="min-w-[20px]">{item.icon}</div>
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>{item.name}</span>
-                  {/* 👇 ETIQUETA FLUTUANTE AO PASSAR O RATO 👇 */}
+                  
+                  {/* 👇 ETIQUETA FLUTUANTE LIVRE 👇 */}
                   {isCollapsed && (
-                      <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                      <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
                           {item.name}
                       </div>
                   )}
@@ -161,9 +155,9 @@ export default function Navbar() {
                   <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                     <Settings size={20} />
                     <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
-                    {/* 👇 ETIQUETA FLUTUANTE ADICIONADA AQUI TAMBÉM 👇 */}
+                    {/* ETIQUETA FLUTUANTE */}
                     {isCollapsed && (
-                        <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                        <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
                             CONFIGURAÇÕES
                         </div>
                     )}
@@ -172,9 +166,9 @@ export default function Navbar() {
                 <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
                   <LogOut size={20} />
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>
-                  {/* 👇 ETIQUETA FLUTUANTE ADICIONADA AQUI TAMBÉM 👇 */}
+                  {/* ETIQUETA FLUTUANTE */}
                   {isCollapsed && (
-                      <div className="absolute left-14 ml-2 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[60] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                      <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
                           SAIR
                       </div>
                   )}

@@ -19,7 +19,6 @@ const ProgressBar = ({ value, max, color }: { value: number, max: number, color:
   </div>
 );
 
-// LIMPADOR DE NOMES PARA A INTELIGÊNCIA GEOGRÁFICA
 const normalizeString = (str: string) => {
     if (!str) return '';
     return String(str)
@@ -31,7 +30,6 @@ const normalizeString = (str: string) => {
         .replace(/\s+/g, ' '); 
 };
 
-// FUNÇÃO AUXILIAR PARA DATAS SEM BUG DE FUSO HORÁRIO
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -39,44 +37,31 @@ const getLocalYYYYMMDD = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-// --- MOTOR DE EXPORTAÇÃO CSV ---
 const convertToCSV = (objArray: any[]) => {
     const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
     let str = '';
-    
     if (array.length > 0) {
         let row = '';
-        for (let index in array[0]) {
-            row += '"' + index + '";';
-        }
-        row = row.slice(0, -1);
-        str += row + '\r\n';
+        for (let index in array[0]) { row += '"' + index + '";'; }
+        row = row.slice(0, -1); str += row + '\r\n';
     }
-    
     for (let i = 0; i < array.length; i++) {
         let line = '';
         for (let index in array[i]) {
             let val = array[i][index] !== null && array[i][index] !== undefined ? array[i][index] : '';
             if (typeof val === 'object') val = JSON.stringify(val);
-            val = String(val).replace(/"/g, '""'); 
-            line += '"' + val + '";';
+            val = String(val).replace(/"/g, '""'); line += '"' + val + '";';
         }
-        line = line.slice(0, -1);
-        str += line + '\r\n';
+        line = line.slice(0, -1); str += line + '\r\n';
     }
     return str;
 };
 
 const downloadFile = (content: string, fileName: string) => {
     const blob = new Blob(["\ufeff", content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", fileName);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const link = document.createElement("a"); const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url); link.setAttribute("download", fileName);
+    link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 };
 
 export default function ReportsPage() {
@@ -85,17 +70,12 @@ export default function ReportsPage() {
   const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   
-  // 👇 1. OS NOVOS ESTADOS PARA O RANGE DE DATAS (MÊS ATUAL POR PADRÃO) 👇
   const [dataInicio, setDataInicio] = useState(() => {
-      const hoje = new Date();
-      const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      return getLocalYYYYMMDD(primeiroDia);
+      const hoje = new Date(); const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1); return getLocalYYYYMMDD(primeiroDia);
   });
   
   const [dataFim, setDataFim] = useState(() => {
-      const hoje = new Date();
-      const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-      return getLocalYYYYMMDD(ultimoDia);
+      const hoje = new Date(); const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); return getLocalYYYYMMDD(ultimoDia);
   });
 
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
@@ -115,64 +95,30 @@ export default function ReportsPage() {
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
   const isGerente = perfil?.cargo === 'gerente';
 
-  useEffect(() => { 
-      if (user) fetchReportData(); 
-  }, [user, perfil]);
+  useEffect(() => { if (user) fetchReportData(); }, [user, perfil]);
 
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads')
-        .select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens')
-        .order('created_at', { ascending: false })
-        .limit(10000);
-      
-      if (isGerente && perfil?.unidade) {
-          leadsQuery = leadsQuery.eq('unidade', perfil.unidade);
-      } else if (!isDirector) {
-          leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
-      }
+      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens').order('created_at', { ascending: false }).limit(10000);
+      if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); } 
+      else if (!isDirector) { leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`); }
 
       const [leadsRes, premissasRes, profilesRes, cli1, cli2] = await Promise.all([
-        leadsQuery,
-        supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
-        supabase.from('profiles').select('id, nome'),
+        leadsQuery, supabase.from('premissas').select('titulo, tipo_cliente').limit(1000), supabase.from('profiles').select('id, nome'),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).limit(1000),
         supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).range(1000, 1999)
       ]);
 
       const allClientes = [...(cli1.data || []), ...(cli2.data || [])];
-
-      setRawLeads(leadsRes.data || []);
-      setRawPremissas(premissasRes.data || []);
-      setRawProfiles(profilesRes.data || []);
-      setRawClientes(allClientes); 
-      
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error);
-    } finally { 
-      setLoading(false); 
-    }
+      setRawLeads(leadsRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(allClientes); 
+    } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
-  const { 
-      currentMonth, 
-      lastMonth, 
-      rankingVendedores, 
-      servicosCurva, 
-      estrategiasImpacto,
-      performanceUnidades,
-      mapaCidades,
-      vendasPorDia,
-      currentLeadsBase // 👈 Exportamos a base filtrada para o Modal de Extração usar
-  } = useMemo(() => {
-      
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
-      
-      const clientesNormalizados = rawClientes.map(c => ({
-          ...c, normName: normalizeString(c.nome_empresa)
-      })).filter(c => c.normName);
+      const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
 
       const baseFiltrada = rawLeads.filter(lead => {
           if (isGerente && lead.unidade !== perfil?.unidade) return false;
@@ -181,365 +127,177 @@ export default function ReportsPage() {
           return true;
       });
 
-      // 👇 2. CÁLCULO INTELIGENTE DO PERÍODO ATUAL E PERÍODO ANTERIOR 👇
-      const start = new Date(dataInicio + 'T12:00:00');
-      const end = new Date(dataFim + 'T12:00:00');
+      const start = new Date(dataInicio + 'T12:00:00'); const end = new Date(dataFim + 'T12:00:00');
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const pastEnd = new Date(start); pastEnd.setDate(start.getDate() - 1);
+      const pastStart = new Date(pastEnd); pastStart.setDate(pastEnd.getDate() - diffDays);
+      const strPastStart = getLocalYYYYMMDD(pastStart); const strPastEnd = getLocalYYYYMMDD(pastEnd);
 
-      // Volta a mesma quantidade de dias para trás para comparar maçãs com maçãs
-      const pastEnd = new Date(start);
-      pastEnd.setDate(start.getDate() - 1);
-      const pastStart = new Date(pastEnd);
-      pastStart.setDate(pastEnd.getDate() - diffDays);
+      const currentLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= dataInicio && d <= dataFim; });
+      const pastLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= strPastStart && d <= strPastEnd; });
 
-      const strPastStart = getLocalYYYYMMDD(pastStart);
-      const strPastEnd = getLocalYYYYMMDD(pastEnd);
+      const currentGanhos = currentLeads.filter(l => l.status === 'ganho'); const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
+      const calcCurrent = { faturamento: fatAtual, ticket: currentGanhos.length > 0 ? fatAtual / currentGanhos.length : 0, leads: currentLeads.length, conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0 };
 
-      const currentLeads = baseFiltrada.filter(l => {
-          const d = l.created_at?.substring(0, 10);
-          return d >= dataInicio && d <= dataFim;
-      });
+      const lastGanhos = pastLeads.filter(l => l.status === 'ganho'); const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
+      const calcLast = { faturamento: fatPassado, ticket: lastGanhos.length > 0 ? fatPassado / lastGanhos.length : 0, leads: pastLeads.length, conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0 };
 
-      const pastLeads = baseFiltrada.filter(l => {
-          const d = l.created_at?.substring(0, 10);
-          return d >= strPastStart && d <= strPastEnd;
-      });
-
-      const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
-      const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
-      
-      const calcCurrent = {
-        faturamento: fatAtual,
-        ticket: currentGanhos.length > 0 ? fatAtual / currentGanhos.length : 0,
-        leads: currentLeads.length,
-        conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0
-      };
-
-      const lastGanhos = pastLeads.filter(l => l.status === 'ganho');
-      const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
-
-      const calcLast = {
-        faturamento: fatPassado,
-        ticket: lastGanhos.length > 0 ? fatPassado / lastGanhos.length : 0,
-        leads: pastLeads.length,
-        conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0
-      };
-
-      const undObj = currentGanhos.reduce((acc: any, lead) => {
-          const und = lead.unidade || 'Sem Unidade Vinculada';
-          if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 };
-          acc[und].total += Number(lead.valor_total || 0);
-          acc[und].count += 1;
-          return acc;
-      }, {});
-      
-      const calcUnidades = Object.values(undObj).map((u: any) => ({
-          nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0
-      })).sort((a: any, b: any) => b.total - a.total);
+      const undObj = currentGanhos.reduce((acc: any, lead) => { const und = lead.unidade || 'Sem Unidade Vinculada'; if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 }; acc[und].total += Number(lead.valor_total || 0); acc[und].count += 1; return acc; }, {});
+      const calcUnidades = Object.values(undObj).map((u: any) => ({ nome: u.nome, total: Number(u.total) || 0, count: Number(u.count) || 0 })).sort((a: any, b: any) => b.total - a.total);
 
       const cityObj = currentGanhos.reduce((acc: any, lead) => {
-          let rawCity = lead.cidade; 
-          if (!rawCity && lead.client_id) rawCity = cidadesById[lead.client_id];
-          
+          let rawCity = lead.cidade; if (!rawCity && lead.client_id) rawCity = cidadesById[lead.client_id];
           if (!rawCity) { 
-              const rawLeadName = lead.empresa || '';
-              const cleanLeadName = normalizeString(rawLeadName as string);
-              if (cleanLeadName && cleanLeadName.length >= 3) {
-                  const clienteEncontrado = clientesNormalizados.find(c => 
-                      c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)
-                  );
-                  if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro;
-              }
+              const rawLeadName = lead.empresa || ''; const cleanLeadName = normalizeString(rawLeadName as string);
+              if (cleanLeadName && cleanLeadName.length >= 3) { const clienteEncontrado = clientesNormalizados.find(c => c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)); if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro; }
           }
-          rawCity = rawCity || 'NÃO INFORMADA';
-          let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); 
-          cleanCity = cleanCity.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          
+          rawCity = rawCity || 'NÃO INFORMADA'; let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); cleanCity = cleanCity.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
-          acc[cleanCity].total += Number(lead.valor_total || 0);
-          acc[cleanCity].count += 1;
-          return acc;
+          acc[cleanCity].total += Number(lead.valor_total || 0); acc[cleanCity].count += 1; return acc;
       }, {});
       const calcCidades = Object.values(cityObj).map((c: any) => ({ nome: c.nome, total: Number(c.total) || 0, count: Number(c.count) || 0 })).sort((a: any, b: any) => b.total - a.total);
 
       const diasSemanaNomes = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
-      const diaObj = diasSemanaNomes.reduce((acc: any, nome, idx) => {
-          acc[nome] = { nome, total: 0, count: 0, idx }; 
-          return acc;
-      }, {});
-
-      currentGanhos.forEach((lead: any) => {
-          if (!lead.created_at) return;
-          const diaIdx = new Date(lead.created_at).getDay();
-          const nomeDia = diasSemanaNomes[diaIdx];
-          if (diaObj[nomeDia]) {
-              diaObj[nomeDia].total += Number(lead.valor_total || 0);
-              diaObj[nomeDia].count += 1;
-          }
-      });
+      const diaObj = diasSemanaNomes.reduce((acc: any, nome, idx) => { acc[nome] = { nome, total: 0, count: 0, idx }; return acc; }, {});
+      currentGanhos.forEach((lead: any) => { if (!lead.created_at) return; const diaIdx = new Date(lead.created_at).getDay(); const nomeDia = diasSemanaNomes[diaIdx]; if (diaObj[nomeDia]) { diaObj[nomeDia].total += Number(lead.valor_total || 0); diaObj[nomeDia].count += 1; } });
       const calcDiasSemana = Object.values(diaObj).sort((a: any, b: any) => a.idx - b.idx);
 
       const curve = currentGanhos.reduce((acc: any, curr) => {
-        let itensArray = [];
-        if (Array.isArray(curr.itens)) itensArray = curr.itens;
-        else if (typeof curr.itens === 'string') { try { itensArray = JSON.parse(curr.itens) || []; } catch(e) { itensArray = []; } }
-
-        itensArray.forEach((item: any) => {
-            if (item && item.servico) {
-                acc[item.servico] = (acc[item.servico] || 0) + ((Number(item.precoUnitario) || 0) * (Number(item.quantidade) || 1));
-            }
-        });
-        return acc;
+        let itensArray = []; if (Array.isArray(curr.itens)) itensArray = curr.itens; else if (typeof curr.itens === 'string') { try { itensArray = JSON.parse(curr.itens) || []; } catch(e) { itensArray = []; } }
+        itensArray.forEach((item: any) => { if (item && item.servico) { acc[item.servico] = (acc[item.servico] || 0) + ((Number(item.precoUnitario) || 0) * (Number(item.quantidade) || 1)); } }); return acc;
       }, {});
       const calcCurva = Object.entries(curve).sort((a: any, b: any) => Number(b[1]) - Number(a[1]));
 
       const rankObj = currentLeads.reduce((acc: any, lead) => {
-         const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Sem Dono';
-         const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
-
+         const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Sem Dono'; const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, leadsCount: 0, ganhosCount: 0 };
-         
-         acc[chave].leadsCount += 1;
-         if (lead.status === 'ganho') {
-             acc[chave].total += (Number(lead.valor_total) || 0);
-             acc[chave].ganhosCount += 1;
-         }
-         return acc;
+         acc[chave].leadsCount += 1; if (lead.status === 'ganho') { acc[chave].total += (Number(lead.valor_total) || 0); acc[chave].ganhosCount += 1; } return acc;
       }, {});
-
-      const calcRanking = Object.values(rankObj).map((v: any) => ({
-          nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
-      })).sort((a: any, b: any) => b.total - a.total);
+      const calcRanking = Object.values(rankObj).map((v: any) => ({ nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0 })).sort((a: any, b: any) => b.total - a.total);
 
       const leadsJaContabilizados = new Set();
       let estrategiasProcessadas = rawPremissas.map(p => {
-          if (!p.titulo) return null;
-          const tituloLower = p.titulo.toLowerCase().trim();
-
+          if (!p.titulo) return null; const tituloLower = p.titulo.toLowerCase().trim();
           const leadsVinculados = currentLeads.filter(l => {
-              if (leadsJaContabilizados.has(l.id)) return false;
-              const origem = (l.origem || '').toLowerCase();
-              const desc = (l.descricao || '').toLowerCase();
-              const check = (l.checkin || '').toLowerCase();
+              if (leadsJaContabilizados.has(l.id)) return false; const origem = (l.origem || '').toLowerCase(); const desc = (l.descricao || '').toLowerCase(); const check = (l.checkin || '').toLowerCase();
               const matched = origem.includes(tituloLower) || desc.includes(tituloLower) || check.includes(tituloLower);
-              if (matched) leadsJaContabilizados.add(l.id);
-              return matched;
+              if (matched) leadsJaContabilizados.add(l.id); return matched;
           });
-
           const ganhos = leadsVinculados.filter(l => l.status === 'ganho');
-          return {
-              titulo: p.titulo,
-              tipo: p.tipo_cliente || 'Geral',
-              gerados: leadsVinculados.length,
-              conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0,
-              faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
-          };
+          return { titulo: p.titulo, tipo: p.tipo_cliente || 'Geral', gerados: leadsVinculados.length, conversao: leadsVinculados.length > 0 ? (ganhos.length / leadsVinculados.length) * 100 : 0, faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0) };
       }).filter(Boolean);
 
-      const leadsEstrategiaGenerica = currentLeads.filter(l => {
-          return !leadsJaContabilizados.has(l.id) && l.origem === 'Estratégia';
-      });
-
+      const leadsEstrategiaGenerica = currentLeads.filter(l => { return !leadsJaContabilizados.has(l.id) && l.origem === 'Estratégia'; });
       if (leadsEstrategiaGenerica.length > 0) {
           const ganhos = leadsEstrategiaGenerica.filter(l => l.status === 'ganho');
-          estrategiasProcessadas.push({
-              titulo: 'Outras Campanhas / Diversos',
-              tipo: 'Estratégia Avulsa',
-              gerados: leadsEstrategiaGenerica.length,
-              conversao: leadsEstrategiaGenerica.length > 0 ? (ganhos.length / leadsEstrategiaGenerica.length) * 100 : 0,
-              faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0)
-          });
+          estrategiasProcessadas.push({ titulo: 'Outras Campanhas / Diversos', tipo: 'Estratégia Avulsa', gerados: leadsEstrategiaGenerica.length, conversao: leadsEstrategiaGenerica.length > 0 ? (ganhos.length / leadsEstrategiaGenerica.length) * 100 : 0, faturamento: ganhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0) });
       }
-
       const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
 
-      return {
-          currentMonth: calcCurrent,
-          lastMonth: calcLast,
-          servicosCurva: calcCurva,
-          rankingVendedores: calcRanking,
-          estrategiasImpacto: calcImpacto,
-          performanceUnidades: calcUnidades,
-          mapaCidades: calcCidades,
-          vendasPorDia: calcDiasSemana,
-          currentLeadsBase: currentLeads // Base filtrada final para extração
-      };
-
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads };
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
 
   const handleGeneratePreview = async () => {
       setIsExporting(true);
       try {
           let dataToExport: any[] = []; 
-
           if (exportType === 'leads') {
-              // 👇 EXTRAÇÃO INTELIGENTE: Pega apenas os leads que estão no período selecionado na tela 👇
-              dataToExport = currentLeadsBase.map(l => ({
-                  ID_Venda: l.id,
-                  Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
-                  Cliente: l.empresa || 'Sem nome',
-                  Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','),
-                  Status: l.status || '',
-                  Fase_Funil: l.etapa || 0,
-                  Origem: l.origem || 'Manual',
-                  Unidade: l.unidade || 'Não informada',
-                  Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono',
-                  Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '',
-                  Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '',
-              }));
-
+              dataToExport = currentLeadsBase.map(l => ({ ID_Venda: l.id, Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '', Cliente: l.empresa || 'Sem nome', Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','), Status: l.status || '', Fase_Funil: l.etapa || 0, Origem: l.origem || 'Manual', Unidade: l.unidade || 'Não informada', Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono', Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '', Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '' }));
           } else if (exportType === 'clientes') {
-              dataToExport = rawClientes.map(c => ({
-                  ID_Cliente: c.id,
-                  Nome_Fantasia: c.nome_empresa || '',
-                  CNPJ: c.cnpj || '',
-                  Telefone: c.telefone || '',
-                  Email: c.email || '',
-                  Cidade: c.cidade || '',
-                  Bairro: c.bairro || '',
-                  Status: c.status || 'Ativo'
-              }));
-
+              dataToExport = rawClientes.map(c => ({ ID_Cliente: c.id, Nome_Fantasia: c.nome_empresa || '', CNPJ: c.cnpj || '', Telefone: c.telefone || '', Email: c.email || '', Cidade: c.cidade || '', Bairro: c.bairro || '', Status: c.status || 'Ativo' }));
           } else if (exportType === 'jobs') {
-              let allJobs: any[] = [];
-              let page = 0;
-              let fetchMore = true;
-              while(fetchMore) {
-                  const { data } = await supabase.from('jobs').select('id, created_at, titulo, stage, prioridade, deadline, aprovado_cliente').range(page * 1000, (page + 1) * 1000 - 1);
-                  if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } 
-                  else { fetchMore = false; }
-              }
-              dataToExport = allJobs.map(j => ({
-                  ID_Job: j.id,
-                  Data_Criacao: j.created_at ? new Date(j.created_at).toLocaleDateString('pt-BR') : '',
-                  Titulo: j.titulo || '',
-                  Fase_Producao: j.stage || '',
-                  Prioridade: j.prioridade || '',
-                  Prazo_Entrega: j.deadline ? new Date(j.deadline).toLocaleDateString('pt-BR') : '',
-                  Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO'
-              }));
+              let allJobs: any[] = []; let page = 0; let fetchMore = true;
+              while(fetchMore) { const { data } = await supabase.from('jobs').select('id, created_at, titulo, stage, prioridade, deadline, aprovado_cliente').range(page * 1000, (page + 1) * 1000 - 1); if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } else { fetchMore = false; } }
+              dataToExport = allJobs.map(j => ({ ID_Job: j.id, Data_Criacao: j.created_at ? new Date(j.created_at).toLocaleDateString('pt-BR') : '', Titulo: j.titulo || '', Fase_Producao: j.stage || '', Prioridade: j.prioridade || '', Prazo_Entrega: j.deadline ? new Date(j.deadline).toLocaleDateString('pt-BR') : '', Aprovado: j.aprovado_cliente ? 'SIM' : 'NÃO' }));
           } else if (exportType === 'cidades') {
-              dataToExport = mapaCidades.map((c: any) => ({
-                  Regiao_Cidade: c.nome,
-                  Total_Vendas: c.count,
-                  Faturamento_Bruto: c.total.toFixed(2).replace('.', ','),
-                  Ticket_Medio: c.count > 0 ? (c.total / c.count).toFixed(2).replace('.', ',') : '0,00'
-              }));
+              dataToExport = mapaCidades.map((c: any) => ({ Regiao_Cidade: c.nome, Total_Vendas: c.count, Faturamento_Bruto: c.total.toFixed(2).replace('.', ','), Ticket_Medio: c.count > 0 ? (c.total / c.count).toFixed(2).replace('.', ',') : '0,00' }));
           }
 
-          if (dataToExport.length === 0) {
-              alert("Não há dados para exibir neste módulo e período selecionado.");
-              setIsExporting(false);
-              return;
-          }
-
-          setPreviewColumns(Object.keys(dataToExport[0]));
-          setPreviewData(dataToExport);
-
-      } catch (error) {
-          console.error("Erro ao gerar visualização:", error);
-          alert("Ocorreu um erro ao processar os dados.");
-      } finally {
-          setIsExporting(false);
-      }
+          if (dataToExport.length === 0) { alert("Não há dados para exibir neste módulo e período selecionado."); setIsExporting(false); return; }
+          setPreviewColumns(Object.keys(dataToExport[0])); setPreviewData(dataToExport);
+      } catch (error) { console.error("Erro ao gerar visualização:", error); alert("Ocorreu um erro ao processar os dados."); } finally { setIsExporting(false); }
   };
 
   const handleDownloadCSV = () => {
-      if (!previewData) return;
-      const timestamp = new Date().toISOString().split('T')[0];
-      const filename = `extracao_${exportType}_${timestamp}.csv`;
-      const csvContent = convertToCSV(previewData);
-      downloadFile(csvContent, filename);
+      if (!previewData) return; const timestamp = new Date().toISOString().split('T')[0]; const filename = `extracao_${exportType}_${timestamp}.csv`; const csvContent = convertToCSV(previewData); downloadFile(csvContent, filename);
   };
 
-  const closeModal = () => {
-      setShowExportModal(false);
-      setPreviewData(null);
-  };
+  const closeModal = () => { setShowExportModal(false); setPreviewData(null); };
 
   let leadsParaFiltroVendedor = rawLeads;
-  if (isGerente && perfil?.unidade) {
-      leadsParaFiltroVendedor = rawLeads.filter(l => l.unidade === perfil.unidade);
-  }
+  if (isGerente && perfil?.unidade) { leadsParaFiltroVendedor = rawLeads.filter(l => l.unidade === perfil.unidade); }
   const vendedoresDisponiveis = Array.from(new Set(leadsParaFiltroVendedor.map(l => l.vendedor_nome).filter(Boolean))) as string[];
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
 
-  const getGrowth = (current: number, last: number) => {
-    if (last === 0) return current > 0 ? 100 : 0;
-    return ((current - last) / last) * 100;
-  };
+  const getGrowth = (current: number, last: number) => { if (last === 0) return current > 0 ? 100 : 0; return ((current - last) / last) * 100; };
 
   if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-blue-500 font-black animate-pulse">COMPILANDO DADOS DA SALA DE COMANDO...</div>;
 
   return (
-    <div className="p-6 space-y-6 pb-20 animate-in fade-in duration-700">
+    <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
       
-      {/* 👇 HEADER INTEGRADO E PADRONIZADO COM O DASHBOARD 👇 */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2 px-2">
-        <div>
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">
-            Sala de Comando (BI)
+      {/* 👇 HEADER COMPACTO E PADRONIZADO 👇 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">
+            Relatórios
           </h1>
+          <div className="flex items-center gap-2">
+              <span className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">Sala de Comando (BI)</span>
+          </div>
         </div>
         
-        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
-            <div className="flex gap-2 self-end">
-              <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-2.5 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
-                <Zap size={16}/>
-              </button>
-              
-              <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
-                <Database size={14}/> Extrair Dados
-              </button>
-            </div>
-            
-            {/* BARRA DE FILTROS PADRÃO WEGROW */}
-            <div className="flex flex-wrap md:flex-nowrap items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto mt-2">
-                <Filter size={14} className="text-slate-400 ml-3 mr-1" />
-                
-                {/* O NOVO RANGE DE DATA NA SALA DE COMANDO */}
-                <div className="flex items-center gap-1 px-3 py-2 border-r border-white/10">
-                    <input 
-                        type="date" 
-                        value={dataInicio} 
-                        onChange={e => setDataInicio(e.target.value)} 
-                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
-                    />
-                    <span className="text-slate-500 text-[10px] font-bold">ATÉ</span>
-                    <input 
-                        type="date" 
-                        value={dataFim} 
-                        onChange={e => setDataFim(e.target.value)} 
-                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
-                    />
-                </div>
-
-                {isDirector && (
-                    <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
-                        <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
-                        {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-                    </select>
-                )}
-
-                {(isDirector || isGerente) && (
-                    <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-3 hover:bg-white/5 transition-colors">
-                        <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
-                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
-                    </select>
-                )}
-            </div>
+        <div className="flex items-center gap-2">
+            <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-2.5 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
+              <Zap size={16}/>
+            </button>
+            <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_5px_20px_rgba(168,85,247,0.2)] transition-all whitespace-nowrap">
+              <Database size={14}/> Extrair Dados
+            </button>
         </div>
       </div>
 
+      {/* 👇 BARRA DE FILTROS SUPER COMPACTA 👇 */}
+      <div className="flex flex-col xl:flex-row gap-2 px-2">
+          <div className="flex flex-wrap md:flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 w-full xl:w-auto overflow-hidden">
+              <Filter size={14} className="text-slate-400 ml-3 mr-2" />
+              
+              <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
+                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
+                  <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
+                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
+              </div>
+
+              {isDirector && (
+                  <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                      <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
+                      {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+                  </select>
+              )}
+
+              {(isDirector || isGerente) && (
+                  <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                      <option value="Todos" className="bg-[#0F172A]">Equipe Inteira</option>
+                      {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                  </select>
+              )}
+          </div>
+
+          {(filtroVendedor !== 'Todos' || filtroUnidade !== 'Todas' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+              <button onClick={() => { setFiltroVendedor('Todos'); setFiltroUnidade('Todas'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
+                  <X size={12}/> Limpar
+              </button>
+          )}
+      </div>
+
       {/* COMPARATIVOS KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
         {[
           { label: `Faturamento Selecionado`, current: currentMonth.faturamento, last: lastMonth.faturamento, prefix: 'R$ ', icon: TrendingUp, color: 'text-[#22C55E]' },
           { label: `Oportunidades (Vol)`, current: currentMonth.leads, last: lastMonth.leads, prefix: '', icon: Target, color: 'text-blue-500' },
           { label: `Ticket Médio`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
           { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500' },
         ].map((item, i) => {
-          // O comparativo agora funciona sempre, pois comparamos o range atual com os N dias anteriores!
           const growth = item.last !== undefined ? getGrowth(item.current, item.last) : null;
           
           return (
@@ -548,7 +306,6 @@ export default function ReportsPage() {
               <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{item.label}</p>
               <div className="flex items-end gap-2">
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
-                  {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
                   {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {minimumFractionDigits: item.prefix === 'R$ ' ? 2 : 0, maximumFractionDigits: item.prefix === 'R$ ' ? 2 : 0})}{item.suffix}
                 </h3>
                 {growth !== null && (
@@ -587,7 +344,6 @@ export default function ReportsPage() {
                       <h4 className="text-white font-black uppercase italic text-sm">{nome || 'Serviços Diversos'}</h4>
                     </div>
                     <div className="text-right">
-                      {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
                       <p className="text-white font-black text-sm">R$ {valorNum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                       <p className="text-[9px] text-slate-500 font-bold uppercase">Share: {share}%</p>
                     </div>
@@ -671,7 +427,6 @@ export default function ReportsPage() {
                           </div>
                       </div>
                     </td>
-                    {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
                     <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                   </tr>
                 )) : (

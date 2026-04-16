@@ -3,12 +3,20 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   TrendingUp, Users, Radio, DollarSign, 
   BarChart3, Calendar, Loader2, 
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 type RankingItem = { id: string; nome: string; total: number; count: number; };
+
+// Função auxiliar para evitar bugs de fuso horário ao pegar a data atual
+const getLocalYYYYMMDD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
 
 export default function DashboardPage() {
   const auth = useAuth() || {};
@@ -18,14 +26,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
-  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Ano Atual');
+  // 👇 1. OS NOVOS ESTADOS PARA O RANGE DE DATAS (MÊS ATUAL POR PADRÃO) 👇
+  const [dataInicio, setDataInicio] = useState(() => {
+      const hoje = new Date();
+      const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      return getLocalYYYYMMDD(primeiroDia);
+  });
+  
+  const [dataFim, setDataFim] = useState(() => {
+      const hoje = new Date();
+      const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      return getLocalYYYYMMDD(ultimoDia);
+  });
+
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
-
-  const [mesSelecionado, setMesSelecionado] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
@@ -37,7 +52,6 @@ export default function DashboardPage() {
   const carregarDadosOtimizado = useCallback(async () => {
     setLoading(true);
     try {
-        // 🔥 OTIMIZAÇÃO 1: Redução drástica de Payload da Rede. Busca só o que o Dashboard usa!
         let leadsQuery = supabase
           .from('leads')
           .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa');
@@ -78,32 +92,17 @@ export default function DashboardPage() {
       
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
 
-      // 🔥 OTIMIZAÇÃO 2: Pré-cálculo de datas fora do Loop (Salva a CPU)
-      const hoje = new Date();
-      const anoAtual = hoje.getFullYear();
-      const mesAtual = hoje.getMonth() + 1; // 1-12
-      const mesPassadoObj = new Date(anoAtual, hoje.getMonth() - 1, 1);
-      const anoMesPassado = mesPassadoObj.getFullYear();
-      const mesMesPassado = mesPassadoObj.getMonth() + 1;
-
+      // 👇 2. FILTRANDO PELO NOVO RANGE DE DATAS 👇
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
           }
-          if (filtroPeriodo !== 'Todo o Período') {
-              // Extração ultra rápida por String (sem instanciar Objetos Date)
-              const anoLead = parseInt(lead.created_at.substring(0, 4), 10);
-              const mesLead = parseInt(lead.created_at.substring(5, 7), 10);
-              
-              if (filtroPeriodo === 'Mês Atual') {
-                  if (anoLead !== anoAtual || mesLead !== mesAtual) return false;
-              } else if (filtroPeriodo === 'Mês Passado') {
-                  if (anoLead !== anoMesPassado || mesLead !== mesMesPassado) return false;
-              } else if (filtroPeriodo === 'Ano Atual') {
-                  if (anoLead !== anoAtual) return false;
-              }
-          }
+          
+          const dataLead = lead.created_at.substring(0, 10); // Pega apenas YYYY-MM-DD
+          if (dataInicio && dataLead < dataInicio) return false;
+          if (dataFim && dataLead > dataFim) return false;
+          
           return true;
       });
 
@@ -126,7 +125,6 @@ export default function DashboardPage() {
       let comVisita = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
       
-      // Único Loop para todos os status (Mais rápido que fazer vários .filter)
       leadsFiltrados.forEach(l => {
           const st = l.status;
           const et = Number(l.etapa);
@@ -156,23 +154,33 @@ export default function DashboardPage() {
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
       const semVisita = leadsFiltrados.length - comVisita;
 
-      const diasNoMes = new Date(anoAtual, mesAtual, 0).getDate();
-      const vendasPorDiaArray = Array.from({ length: diasNoMes }, (_, i) => ({
-          dia: (i + 1).toString(),
-          valor: 0
-      }));
-
-      if (filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') {
-          leadsFiltrados.forEach(l => {
-              if (l.status === 'ganho') {
-                  // Pega apenas os 2 caracteres do dia na string ISO: "2023-10-15T..."
-                  const diaIndex = parseInt(l.created_at.substring(8, 10), 10) - 1; 
-                  if (vendasPorDiaArray[diaIndex]) {
-                      vendasPorDiaArray[diaIndex].valor += (Number(l.valor_total) || 0);
-                  }
-              }
-          });
+      // 👇 3. LÓGICA DO GRÁFICO DINÂMICO BASEADO NO RANGE DE DATA 👇
+      const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
+      if (dataInicio && dataFim) {
+          // Usa T12:00:00 para evitar que o fuso horário mude o dia
+          const start = new Date(dataInicio + 'T12:00:00');
+          const end = new Date(dataFim + 'T12:00:00');
+          const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
+          const maxDays = Math.min(diffDays, 60); // Limita a 60 dias para o gráfico não quebrar a tela
+          
+          for (let i = 0; i <= maxDays; i++) {
+              const curr = new Date(start);
+              curr.setDate(start.getDate() + i);
+              const iso = getLocalYYYYMMDD(curr);
+              const label = `${String(curr.getDate()).padStart(2,'0')}/${String(curr.getMonth()+1).padStart(2,'0')}`;
+              vendasPorDiaArray.push({ dia: label, valor: 0, dataIso: iso });
+          }
       }
+
+      leadsFiltrados.forEach(l => {
+          if (l.status === 'ganho') {
+              const leadData = l.created_at.substring(0, 10);
+              const slot = vendasPorDiaArray.find(v => v.dataIso === leadData);
+              if (slot) {
+                  slot.valor += (Number(l.valor_total) || 0);
+              }
+          }
+      });
 
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
       rawJobs.forEach((j: any) => {
@@ -203,7 +211,7 @@ export default function DashboardPage() {
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai }
       };
 
-  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, filtroPeriodo, filtroUnidade]);
+  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   const handleSellerClick = (id: string) => setVendedorSelecionado(prev => prev === id ? null : id);
 
@@ -214,9 +222,11 @@ export default function DashboardPage() {
      return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`;
   };
 
+  // 👇 4. CORREÇÃO DA FORMATAÇÃO MATEMÁTICA (ADEUS NÚMEROS QUEBRADOS!) 👇
   const formatCompact = (num: number) => {
-      if(num >= 1000) return (num / 1000).toFixed(1) + 'k';
-      return num.toString();
+      if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+      // Se não tem decimais exibe puro, se tem, formata com apenas 2 casas e tira os zeros finais soltos
+      return num % 1 === 0 ? num.toString() : num.toFixed(2);
   };
 
   if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white"><Loader2 className="animate-spin mr-2"/> Otimizando Dashboard...</div>;
@@ -248,24 +258,34 @@ export default function DashboardPage() {
                 )}
             </div>
             
-            {/* NOVO: BARRA DE FILTROS DO DASHBOARD */}
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto">
+            {/* BARRA DE FILTROS DO DASHBOARD */}
+            <div className="flex flex-wrap md:flex-nowrap items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto">
                 <Filter size={14} className="text-slate-400 ml-3 mr-1" />
                 
-                <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-2 border-r border-white/10">
-                    <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
-                    <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
-                    <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
-                    <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
-                </select>
+                {/* 👇 O NOVO FILTRO DE DATA (RANGE) 👇 */}
+                <div className="flex items-center gap-1 px-3 py-2 border-r border-white/10">
+                    <input 
+                        type="date" 
+                        value={dataInicio} 
+                        onChange={e => setDataInicio(e.target.value)} 
+                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                    <span className="text-slate-500 text-[10px] font-bold">ATÉ</span>
+                    <input 
+                        type="date" 
+                        value={dataFim} 
+                        onChange={e => setDataFim(e.target.value)} 
+                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                </div>
 
-                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-2 border-r border-white/10">
+                <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-3 border-r border-white/10">
                     <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
                     {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
                 </select>
 
                 {isDirector && (
-                    <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent text-orange-500 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-2">
+                    <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent text-orange-500 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-3">
                         <option value="Todos" className="bg-[#0B1120]">Toda Equipe</option>
                         {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
                     </select>
@@ -309,38 +329,36 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* GRÁFICO DIÁRIO SÓ APARECE SE O FILTRO FOR MENSAL */}
-            {(filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado') && (
-                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
-                    <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-                        <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia ({filtroPeriodo})
-                    </h3>
-                    <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
-                        {statsComercial.vendasPorDia.map((d, i) => {
-                            const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
-                            const height = (d.valor / maxVal) * 100;
-                            
-                            return (
-                                <div key={i} className="flex-1 min-w-[24px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
-                                    {d.valor > 0 && (
-                                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[9px] font-black tracking-tighter whitespace-nowrap z-10">
-                                            {formatCompact(d.valor)}
-                                        </div>
-                                    )}
-                                    
-                                    <div 
-                                        className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} 
-                                        style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
-                                    >
-                                        {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
+            {/* GRÁFICO DIÁRIO DINÂMICO */}
+            <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                    <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia
+                </h3>
+                <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
+                    {statsComercial.vendasPorDia.map((d, i) => {
+                        const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
+                        const height = (d.valor / maxVal) * 100;
+                        
+                        return (
+                            <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                                {d.valor > 0 && (
+                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[10px] font-black tracking-tighter whitespace-nowrap z-10">
+                                        {formatCompact(d.valor)}
                                     </div>
-                                    <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                                )}
+                                
+                                <div 
+                                    className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} 
+                                    style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
+                                >
+                                    {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
                                 </div>
-                            )
-                        })}
-                    </div>
+                                <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                            </div>
+                        )
+                    })}
                 </div>
-            )}
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 {/* RANKING - DINÂMICO */}

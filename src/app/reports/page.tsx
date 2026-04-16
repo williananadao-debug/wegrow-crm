@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   TrendingUp, BarChart3, PieChart, Users, 
@@ -29,6 +29,14 @@ const normalizeString = (str: string) => {
         .trim()
         .toUpperCase()
         .replace(/\s+/g, ' '); 
+};
+
+// FUNÇÃO AUXILIAR PARA DATAS SEM BUG DE FUSO HORÁRIO
+const getLocalYYYYMMDD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 };
 
 // --- MOTOR DE EXPORTAÇÃO CSV ---
@@ -77,7 +85,19 @@ export default function ReportsPage() {
   const perfil = auth.perfil;
   const [loading, setLoading] = useState(true);
   
-  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('Mês Atual'); 
+  // 👇 1. OS NOVOS ESTADOS PARA O RANGE DE DATAS (MÊS ATUAL POR PADRÃO) 👇
+  const [dataInicio, setDataInicio] = useState(() => {
+      const hoje = new Date();
+      const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      return getLocalYYYYMMDD(primeiroDia);
+  });
+  
+  const [dataFim, setDataFim] = useState(() => {
+      const hoje = new Date();
+      const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      return getLocalYYYYMMDD(ultimoDia);
+  });
+
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
@@ -102,7 +122,6 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      // 🔥 OTIMIZAÇÃO 1: Redução Extrema de Payload. Não usamos "select('*')"
       let leadsQuery = supabase.from('leads')
         .select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens')
         .order('created_at', { ascending: false })
@@ -144,7 +163,8 @@ export default function ReportsPage() {
       estrategiasImpacto,
       performanceUnidades,
       mapaCidades,
-      vendasPorDia
+      vendasPorDia,
+      currentLeadsBase // 👈 Exportamos a base filtrada para o Modal de Extração usar
   } = useMemo(() => {
       
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
@@ -161,30 +181,29 @@ export default function ReportsPage() {
           return true;
       });
 
-      // 🔥 OTIMIZAÇÃO 2: Strings em vez de "new Date()" no Loop
-      const hoje = new Date();
-      const anoAtualStr = hoje.getFullYear().toString();
-      const mesAtualStr = (hoje.getMonth() + 1).toString().padStart(2, '0');
-      const mesAtualCompleto = `${anoAtualStr}-${mesAtualStr}`;
+      // 👇 2. CÁLCULO INTELIGENTE DO PERÍODO ATUAL E PERÍODO ANTERIOR 👇
+      const start = new Date(dataInicio + 'T12:00:00');
+      const end = new Date(dataFim + 'T12:00:00');
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
-      const mesPassadoObj = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-      const anoPassadoStr = mesPassadoObj.getFullYear().toString();
-      const mesPassadoStr = (mesPassadoObj.getMonth() + 1).toString().padStart(2, '0');
-      const mesPassadoCompleto = `${anoPassadoStr}-${mesPassadoStr}`;
+      // Volta a mesma quantidade de dias para trás para comparar maçãs com maçãs
+      const pastEnd = new Date(start);
+      pastEnd.setDate(start.getDate() - 1);
+      const pastStart = new Date(pastEnd);
+      pastStart.setDate(pastEnd.getDate() - diffDays);
 
-      let currentLeads: any[] = [];
-      let pastLeads: any[] = []; 
+      const strPastStart = getLocalYYYYMMDD(pastStart);
+      const strPastEnd = getLocalYYYYMMDD(pastEnd);
 
-      if (filtroPeriodo === 'Ano Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(anoAtualStr));
-      } else if (filtroPeriodo === 'Mês Atual') {
-          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesAtualCompleto));
-          pastLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesPassadoCompleto));
-      } else if (filtroPeriodo === 'Mês Passado') {
-          currentLeads = baseFiltrada.filter(l => l.created_at?.startsWith(mesPassadoCompleto));
-      } else {
-          currentLeads = baseFiltrada;
-      }
+      const currentLeads = baseFiltrada.filter(l => {
+          const d = l.created_at?.substring(0, 10);
+          return d >= dataInicio && d <= dataFim;
+      });
+
+      const pastLeads = baseFiltrada.filter(l => {
+          const d = l.created_at?.substring(0, 10);
+          return d >= strPastStart && d <= strPastEnd;
+      });
 
       const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
       const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
@@ -292,29 +311,22 @@ export default function ReportsPage() {
           nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0
       })).sort((a: any, b: any) => b.total - a.total);
 
-
-      // 👇 OTIMIZAÇÃO: MOTOR INTELIGENTE DE ROI DE ESTRATÉGIAS 👇
       const leadsJaContabilizados = new Set();
-
       let estrategiasProcessadas = rawPremissas.map(p => {
           if (!p.titulo) return null;
           const tituloLower = p.titulo.toLowerCase().trim();
 
           const leadsVinculados = currentLeads.filter(l => {
               if (leadsJaContabilizados.has(l.id)) return false;
-              
-              // Procura o nome da premissa na origem, na descrição ou no checkin
               const origem = (l.origem || '').toLowerCase();
               const desc = (l.descricao || '').toLowerCase();
               const check = (l.checkin || '').toLowerCase();
-
               const matched = origem.includes(tituloLower) || desc.includes(tituloLower) || check.includes(tituloLower);
               if (matched) leadsJaContabilizados.add(l.id);
               return matched;
           });
 
           const ganhos = leadsVinculados.filter(l => l.status === 'ganho');
-          
           return {
               titulo: p.titulo,
               tipo: p.tipo_cliente || 'Geral',
@@ -324,7 +336,6 @@ export default function ReportsPage() {
           };
       }).filter(Boolean);
 
-      // CATCH-ALL: Salva qualquer lead que veio da "Estratégia" mas não deu match com o nome exato
       const leadsEstrategiaGenerica = currentLeads.filter(l => {
           return !leadsJaContabilizados.has(l.id) && l.origem === 'Estratégia';
       });
@@ -341,7 +352,6 @@ export default function ReportsPage() {
       }
 
       const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
-      // 👆 FIM DO MOTOR DE ROI 👆
 
       return {
           currentMonth: calcCurrent,
@@ -351,10 +361,11 @@ export default function ReportsPage() {
           estrategiasImpacto: calcImpacto,
           performanceUnidades: calcUnidades,
           mapaCidades: calcCidades,
-          vendasPorDia: calcDiasSemana 
+          vendasPorDia: calcDiasSemana,
+          currentLeadsBase: currentLeads // Base filtrada final para extração
       };
 
-  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, filtroPeriodo, filtroUnidade, filtroVendedor]);
+  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
 
   const handleGeneratePreview = async () => {
       setIsExporting(true);
@@ -362,13 +373,8 @@ export default function ReportsPage() {
           let dataToExport: any[] = []; 
 
           if (exportType === 'leads') {
-              let leadsToExport = rawLeads;
-              
-              if (isGerente && perfil?.unidade) {
-                  leadsToExport = leadsToExport.filter(l => l.unidade === perfil.unidade);
-              }
-
-              dataToExport = leadsToExport.map(l => ({
+              // 👇 EXTRAÇÃO INTELIGENTE: Pega apenas os leads que estão no período selecionado na tela 👇
+              dataToExport = currentLeadsBase.map(l => ({
                   ID_Venda: l.id,
                   Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '',
                   Cliente: l.empresa || 'Sem nome',
@@ -422,7 +428,7 @@ export default function ReportsPage() {
           }
 
           if (dataToExport.length === 0) {
-              alert("Não há dados para exibir neste módulo.");
+              alert("Não há dados para exibir neste módulo e período selecionado.");
               setIsExporting(false);
               return;
           }
@@ -468,63 +474,77 @@ export default function ReportsPage() {
   return (
     <div className="p-6 space-y-6 pb-20 animate-in fade-in duration-700">
       
-      {/* HEADER INTEGRADO */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* 👇 HEADER INTEGRADO E PADRONIZADO COM O DASHBOARD 👇 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2 px-2">
         <div>
-          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Sala de Comando (BI)</h1>
+          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">
+            Sala de Comando (BI)
+          </h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 mt-1">
             <ShieldCheck size={12} className="text-blue-500"/> 
             {isGerente ? `Análise Estratégica: ${perfil?.unidade || 'Sua Unidade'}` : 'Análise Estratégica e Inteligência de Dados'}
           </p>
         </div>
         
-        <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-3 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
-            <Zap size={18}/>
-          </button>
-          
-          <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
-            <Database size={16}/> Extrair Dados
-          </button>
+        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+            <div className="flex gap-2 self-end">
+              <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-2.5 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
+                <Zap size={16}/>
+              </button>
+              
+              <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg transition-all whitespace-nowrap">
+                <Database size={14}/> Extrair Dados
+              </button>
+            </div>
+            
+            {/* BARRA DE FILTROS PADRÃO WEGROW */}
+            <div className="flex flex-wrap md:flex-nowrap items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-auto mt-2">
+                <Filter size={14} className="text-slate-400 ml-3 mr-1" />
+                
+                {/* O NOVO RANGE DE DATA NA SALA DE COMANDO */}
+                <div className="flex items-center gap-1 px-3 py-2 border-r border-white/10">
+                    <input 
+                        type="date" 
+                        value={dataInicio} 
+                        onChange={e => setDataInicio(e.target.value)} 
+                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                    <span className="text-slate-500 text-[10px] font-bold">ATÉ</span>
+                    <input 
+                        type="date" 
+                        value={dataFim} 
+                        onChange={e => setDataFim(e.target.value)} 
+                        className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                </div>
+
+                {isDirector && (
+                    <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer py-2 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
+                        <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
+                        {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+                    </select>
+                )}
+
+                {(isDirector || isGerente) && (
+                    <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer py-2 px-3 hover:bg-white/5 transition-colors">
+                        <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
+                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                    </select>
+                )}
+            </div>
         </div>
       </div>
 
-      {/* --- BARRA DE FILTROS TRIPLOS (BI) --- */}
-      <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-max shadow-lg mb-4">
-          <Filter size={14} className="text-slate-400 ml-4 mr-2" />
-          
-          <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
-              <option value="Mês Atual" className="bg-[#0B1120]">Mês Atual</option>
-              <option value="Mês Passado" className="bg-[#0B1120]">Mês Passado</option>
-              <option value="Ano Atual" className="bg-[#0B1120]">Ano Atual</option>
-              <option value="Todo o Período" className="bg-[#0B1120]">Todo o Período</option>
-          </select>
-
-          {isDirector && (
-              <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent text-white text-xs font-bold uppercase tracking-wider outline-none cursor-pointer py-3 px-3 border-r border-white/10 hover:bg-white/5 transition-colors">
-                  <option value="Todas" className="bg-[#0B1120]">Todas Unidades</option>
-                  {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-              </select>
-          )}
-
-          {(isDirector || isGerente) && (
-              <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent text-blue-400 text-xs font-black uppercase tracking-wider outline-none cursor-pointer py-3 px-3 hover:bg-white/5 transition-colors">
-                  <option value="Todos" className="bg-[#0B1120]">Equipe Inteira</option>
-                  {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
-              </select>
-          )}
-      </div>
-
       {/* COMPARATIVOS KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
         {[
-          { label: `Faturamento (${filtroPeriodo})`, current: currentMonth.faturamento, last: lastMonth.faturamento, prefix: 'R$ ', icon: TrendingUp, color: 'text-[#22C55E]' },
-          { label: `Oportunidades (${filtroPeriodo})`, current: currentMonth.leads, last: lastMonth.leads, prefix: '', icon: Target, color: 'text-blue-500' },
-          { label: `Ticket Médio (${filtroPeriodo})`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
+          { label: `Faturamento Selecionado`, current: currentMonth.faturamento, last: lastMonth.faturamento, prefix: 'R$ ', icon: TrendingUp, color: 'text-[#22C55E]' },
+          { label: `Oportunidades (Vol)`, current: currentMonth.leads, last: lastMonth.leads, prefix: '', icon: Target, color: 'text-blue-500' },
+          { label: `Ticket Médio`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
           { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500' },
         ].map((item, i) => {
-          const isComparing = filtroPeriodo === 'Mês Atual' || filtroPeriodo === 'Mês Passado';
-          const growth = isComparing && item.last !== undefined ? getGrowth(item.current, item.last) : null;
+          // O comparativo agora funciona sempre, pois comparamos o range atual com os N dias anteriores!
+          const growth = item.last !== undefined ? getGrowth(item.current, item.last) : null;
           
           return (
             <div key={i} className="bg-[#0B1120] border border-white/5 p-6 rounded-[32px] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-all">
@@ -532,10 +552,11 @@ export default function ReportsPage() {
               <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{item.label}</p>
               <div className="flex items-end gap-2">
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
-                  {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {maximumFractionDigits: 0})}{item.suffix}
+                  {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
+                  {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {minimumFractionDigits: item.prefix === 'R$ ' ? 2 : 0, maximumFractionDigits: item.prefix === 'R$ ' ? 2 : 0})}{item.suffix}
                 </h3>
                 {growth !== null && (
-                   <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
+                   <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
                       {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}
                       {Math.abs(Math.round(growth))}%
                    </div>
@@ -570,7 +591,8 @@ export default function ReportsPage() {
                       <h4 className="text-white font-black uppercase italic text-sm">{nome || 'Serviços Diversos'}</h4>
                     </div>
                     <div className="text-right">
-                      <p className="text-white font-black text-sm">R$ {valorNum.toLocaleString('pt-BR')}</p>
+                      {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
+                      <p className="text-white font-black text-sm">R$ {valorNum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
                       <p className="text-[9px] text-slate-500 font-bold uppercase">Share: {share}%</p>
                     </div>
                   </div>
@@ -599,7 +621,7 @@ export default function ReportsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-end mb-1">
                       <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors truncate pr-2">{vend.nome || 'Sem Nome'}</span>
-                      <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                      <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
                     </div>
                     <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
                     <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Conversão: {Math.round(vend.conversao || 0)}%</p>
@@ -620,7 +642,6 @@ export default function ReportsPage() {
             <h3 className="text-white font-black uppercase italic flex items-center gap-2">
               <BarChart3 size={20} className="text-[#22C55E]" /> ROI de Estratégias (Premissas)
             </h3>
-            <span className="text-[10px] text-blue-500 font-black uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full">{filtroPeriodo}</span>
           </div>
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left">
@@ -654,7 +675,8 @@ export default function ReportsPage() {
                           </div>
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR')}</td>
+                    {/* 👇 BLINDAGEM DE VALORES QUEBRADOS 👇 */}
+                    <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                   </tr>
                 )) : (
                   <tr>
@@ -684,7 +706,7 @@ export default function ReportsPage() {
                 <div key={und.nome || idx}>
                   <div className="flex justify-between items-end mb-1">
                     <span className="text-white font-black text-xs uppercase truncate pr-2 max-w-[60%]">{und.nome}</span>
-                    <span className="text-cyan-400 font-black text-[11px] whitespace-nowrap">R$ {undTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                    <span className="text-cyan-400 font-black text-[11px] whitespace-nowrap">R$ {undTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
                   </div>
                   <ProgressBar value={undTotal} max={maxUndTotal} color="bg-cyan-500" />
                   <div className="flex justify-between mt-1">
@@ -741,7 +763,7 @@ export default function ReportsPage() {
                                         {cid.nome}
                                     </span>
                                     <span className={`${textColor} font-black text-[11px] whitespace-nowrap`}>
-                                        R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact' })}
+                                        R$ {cidTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
                                     </span>
                                 </div>
                                 <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
@@ -777,7 +799,7 @@ export default function ReportsPage() {
                     <div key={dia.nome || idx}>
                       <div className="flex justify-between items-end mb-1">
                         <span className="text-white font-black text-xs uppercase truncate pr-2">{dia.nome}</span>
-                        <span className="text-amber-500 font-black text-[11px] whitespace-nowrap">R$ {diaTotal.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                        <span className="text-amber-500 font-black text-[11px] whitespace-nowrap">R$ {diaTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
                       </div>
                       <ProgressBar value={diaTotal} max={maxDiaTotal} color="bg-amber-500" />
                       <div className="flex justify-between mt-1">
@@ -807,7 +829,7 @@ export default function ReportsPage() {
                             <Database size={20} className="text-purple-500"/> {previewData ? 'Visualização da Tabela' : 'Central de Extração'}
                         </h3>
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-                            {previewData ? `${previewData.length} registros encontrados` : 'Extração bruta para relatórios dinâmicos'}
+                            {previewData ? `${previewData.length} registros encontrados (Período Filtrado)` : 'Extração com base nas datas e filtros selecionados na tela'}
                         </p>
                     </div>
                     <button onClick={closeModal} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
@@ -818,7 +840,7 @@ export default function ReportsPage() {
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {!previewData ? (
                         <div className="p-8 space-y-6 overflow-y-auto">
-                            <p className="text-xs text-slate-400 font-medium">Selecione o módulo que deseja visualizar. O sistema compilará toda a base de dados para você conferir os números antes de baixar o CSV.</p>
+                            <p className="text-xs text-slate-400 font-medium">Selecione o módulo que deseja visualizar. O sistema compilará a base de dados de acordo com os filtros de data e unidade que você aplicou na tela.</p>
 
                             <div className="grid grid-cols-1 gap-3">
                                 <label className={`cursor-pointer flex items-center p-4 rounded-2xl border-2 transition-all ${exportType === 'leads' ? 'bg-blue-600/10 border-blue-500' : 'bg-white/5 border-transparent hover:border-white/10'}`}>

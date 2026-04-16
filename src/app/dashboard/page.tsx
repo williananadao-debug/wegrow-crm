@@ -227,15 +227,9 @@ export default function DashboardPage() {
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
       
-      {/* 👇 HEADER COMPACTO: TÍTULO, ABAS E FILTROS NA MESMA LINHA (NO DESKTOP) 👇 */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-2 px-2">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic leading-none">
-            Dashboard
-          </h1>
-        </div>
-        
-        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full xl:w-auto">
+      {/* 👇 HEADER SUPER COMPACTO: APENAS ABAS E FILTROS (ALINHADOS À DIREITA/ESQUERDA) 👇 */}
+      <div className="flex flex-col xl:flex-row justify-end items-start xl:items-center gap-4 mb-2 px-2">
+        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
             {/* ABAS COMERCIAL / GESTÃO */}
             <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg">
                 <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>

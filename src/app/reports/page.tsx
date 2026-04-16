@@ -236,58 +236,61 @@ export default function ReportsPage() {
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
       
-      {/* 👇 HEADER COMPACTO E PADRONIZADO 👇 */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
-          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">
-            Relatórios
-          </h1>
-          <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">Sala de Comando (BI)</span>
-          </div>
+      {/* 👇 HEADER SUPER COMPACTO: APENAS BOTÕES E FILTROS 👇 */}
+      <div className="flex flex-col xl:flex-row justify-start items-start xl:items-center gap-2 mb-2 px-2">
+        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
+            
+            {/* BOTÕES DE AÇÃO */}
+            <div className="flex items-center gap-2 h-10">
+                <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 w-10 h-10 rounded-xl hover:text-white transition-all shadow-lg flex items-center justify-center flex-shrink-0" title="Atualizar Dados">
+                  <Zap size={16}/>
+                </button>
+                <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_5px_20px_rgba(168,85,247,0.2)] transition-all whitespace-nowrap">
+                  <Database size={14}/> Extrair Dados
+                </button>
+            </div>
+
+            {/* BARRA DE FILTROS */}
+            <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 overflow-hidden flex-1 xl:flex-none">
+                <Filter size={14} className="text-slate-400 ml-3 mr-2" />
+                
+                <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
+                    <input 
+                        type="date" 
+                        value={dataInicio} 
+                        onChange={e => setDataInicio(e.target.value)} 
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                    <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
+                    <input 
+                        type="date" 
+                        value={dataFim} 
+                        onChange={e => setDataFim(e.target.value)} 
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    />
+                </div>
+
+                {isDirector && (
+                    <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                        <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
+                        {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
+                    </select>
+                )}
+
+                {(isDirector || isGerente) && (
+                    <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                        <option value="Todos" className="bg-[#0F172A]">Equipe Inteira</option>
+                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                    </select>
+                )}
+            </div>
+
+            {(filtroVendedor !== 'Todos' || filtroUnidade !== 'Todas' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+                <button onClick={() => { setFiltroVendedor('Todos'); setFiltroUnidade('Todas'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
+                    <X size={12}/> Limpar
+                </button>
+            )}
         </div>
-        
-        <div className="flex items-center gap-2">
-            <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 p-2.5 rounded-xl hover:text-white transition-all shadow-lg flex-shrink-0" title="Atualizar Dados">
-              <Zap size={16}/>
-            </button>
-            <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_5px_20px_rgba(168,85,247,0.2)] transition-all whitespace-nowrap">
-              <Database size={14}/> Extrair Dados
-            </button>
-        </div>
-      </div>
-
-      {/* 👇 BARRA DE FILTROS SUPER COMPACTA 👇 */}
-      <div className="flex flex-col xl:flex-row gap-2 px-2">
-          <div className="flex flex-wrap md:flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 w-full xl:w-auto overflow-hidden">
-              <Filter size={14} className="text-slate-400 ml-3 mr-2" />
-              
-              <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
-                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
-                  <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
-                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
-              </div>
-
-              {isDirector && (
-                  <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
-                      <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
-                      {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
-                  </select>
-              )}
-
-              {(isDirector || isGerente) && (
-                  <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
-                      <option value="Todos" className="bg-[#0F172A]">Equipe Inteira</option>
-                      {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
-                  </select>
-              )}
-          </div>
-
-          {(filtroVendedor !== 'Todos' || filtroUnidade !== 'Todas' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
-              <button onClick={() => { setFiltroVendedor('Todos'); setFiltroUnidade('Todas'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
-                  <X size={12}/> Limpar
-              </button>
-          )}
       </div>
 
       {/* COMPARATIVOS KPI */}

@@ -26,8 +26,8 @@ type Lead = {
   desconto?: number; 
   itens: ItemVenda[]; 
   etapa: number; 
-  status: 'aberto' | 'ganho' | 'perdido'; 
-  tipo: 'Agência' | 'Anunciante';
+  status: string; // 👈 BLINDAGEM DO TYPESCRIPT (agora aceita qualquer palavra)
+  tipo: string;
   created_at: string; 
   telefone?: string;
   checkin?: string;         
@@ -44,7 +44,7 @@ type Lead = {
   cidade?: string;    
   descricao?: string;   
   notas?: Historico[];  
-  status_aprovacao?: 'pendente' | 'aprovado' | 'recusado' | null; 
+  status_aprovacao?: string | null; 
   cnpj?: string;
   inscricao_estadual?: string;
   parcelas?: string;
@@ -75,7 +75,6 @@ const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
 
-// 👇 HELPER PARA DATA PADRÃO (RANGE) 👇
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -83,27 +82,18 @@ const getLocalYYYYMMDD = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
+const formatarData = (dataIso: string) => {
+    if (!dataIso) return '';
+    const parts = dataIso.split('T')[0].split('-');
+    if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return new Date(dataIso).toLocaleDateString('pt-BR');
+};
+
 const LeadCard = React.memo(({ 
-    lead, 
-    index, 
-    isDirector, 
-    isLideranca, 
-    usersMap,
-    clientesMap, 
-    abrirModal, 
-    enviarWhatsapp, 
-    fazerCheckin, 
-    mudarEtapa, 
-    imprimirContrato 
+    lead, index, isDirector, isLideranca, usersMap, clientesMap, 
+    abrirModal, enviarWhatsapp, fazerCheckin, mudarEtapa, imprimirContrato 
 }: any) => {
     const isPhantom = lead.id > 1000000;
-    
-    const formatarData = (dataIso: string) => {
-        if (!dataIso) return '';
-        const parts = dataIso.split('T')[0].split('-');
-        if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-        return new Date(dataIso).toLocaleDateString('pt-BR');
-    };
 
     const daysLeft = useMemo(() => {
         if (!lead.contrato_fim) return null;
@@ -346,32 +336,30 @@ export default function DealsPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
+
+  // 👇 ESTADOS DO NOVO POP-UP DE PERDA (IA ANALYTICS) 👇
+  const [isLostModalOpen, setIsLostModalOpen] = useState(false);
+  const [lostLeadId, setLostLeadId] = useState<number | null>(null);
+  const [motivoPerda, setMotivoPerda] = useState('');
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false); 
-  
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
   const [novaCidade, setNovaCidade] = useState('');     
   const [novaDescricao, setNovaDescricao] = useState(''); 
-  
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
-  
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
-  
   const [novoCnpj, setNovoCnpj] = useState('');
   const [novoIE, setNovoIE] = useState('');
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
-  
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
   const [desconto, setDesconto] = useState(0); 
-
   const [leadUserId, setLeadUserId] = useState<string>('');
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
-  
   const [fotoUrl, setFotoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [historico, setHistorico] = useState<Historico[]>([]);
@@ -381,11 +369,9 @@ export default function DealsPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const [metasBase, setMetasBase] = useState<any[]>([]); 
-  
   const [isOffline, setIsOffline] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 👇 RANGE DE DATA PADRÃO WEGROW 👇
   const [dataInicio, setDataInicio] = useState(() => {
       const hoje = new Date();
       const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -410,22 +396,45 @@ export default function DealsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     let query = supabase.from('leads').select('*');
-    if (isDirector) { } else if (isGerente && perfil?.unidade) { query = query.eq('unidade', perfil.unidade); } else { query = query.eq('user_id', user?.id); }
+    
+    if (isDirector) {
+    } else if (isGerente && perfil?.unidade) {
+        query = query.eq('unidade', perfil.unidade);
+    } else {
+        query = query.eq('user_id', user?.id);
+    }
+
     let { data: leadsData } = await query.order('created_at', { ascending: false });
     let leadsBase: any[] = leadsData || [];
 
-    if (!navigator.onLine && (!leadsData || leadsData.length === 0)) leadsBase = await localDb.leads.toArray();
+    if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
+        leadsBase = await localDb.leads.toArray();
+    }
 
     try {
         const filaPendente = await localDb.syncQueue.where('tabela').equals('leads').toArray();
         filaPendente.forEach(item => {
-            if (item.operacao === 'INSERT') { if (!leadsBase.find(l => l.id === item.dados.id)) leadsBase.unshift(item.dados); }
-            else if (item.operacao === 'UPDATE') leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
+            if (item.operacao === 'INSERT') {
+                if (!leadsBase.find(l => l.id === item.dados.id)) {
+                    leadsBase.unshift(item.dados);
+                }
+            } else if (item.operacao === 'UPDATE') {
+                leadsBase = leadsBase.map(l => l.id === item.dados.id ? { ...l, ...item.dados } : l);
+            }
         });
     } catch (e) {}
 
-    const leadsFiltrados = leadsBase.filter(l => l && l.id).filter(l => { if (isDirector) return true; if (!l.user_id) return false; return true; });
-    if (navigator.onLine && leadsData) setLeads(leadsFiltrados.filter(l => l.id < 1000000) as Lead[]); else setLeads(leadsFiltrados as Lead[]);
+    const leadsFiltrados = leadsBase.filter(l => l && l.id).filter(l => {
+        if (isDirector) return true;
+        if (!l.user_id) return false;
+        return true;
+    });
+
+    if (navigator.onLine && leadsData) {
+        setLeads(leadsFiltrados.filter(l => l.id < 1000000) as Lead[]); 
+    } else {
+        setLeads(leadsFiltrados as Lead[]);
+    }
 
     const { data: perfisData } = await supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
     if (perfisData) {
@@ -437,24 +446,48 @@ export default function DealsPage() {
         const anoAtual = new Date().getFullYear();
         let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
         if (perfil?.empresa_id) metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
-        if (isDirector) metaQuery = metaQuery.is('user_id', null); else metaQuery = metaQuery.eq('user_id', user?.id);
+        
+        if (isDirector) {
+            metaQuery = metaQuery.is('user_id', null);
+        } else {
+            metaQuery = metaQuery.eq('user_id', user?.id);
+        }
+
         const { data: metaData } = await metaQuery;
-        if (metaData) setMetasBase(metaData);
+        if (metaData) {
+            setMetasBase(metaData);
+        }
     } catch (err) {}
 
     let allClientes: ClienteOpcao[] = [];
     let page = 0;
     let fetchMore = true;
+    
     while(fetchMore) {
-        const { data } = await supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade').eq('status', 'ativo').order('nome_empresa', { ascending: true }).range(page * 1000, (page + 1) * 1000 - 1);
-        if (data && data.length > 0) { allClientes = [...allClientes, ...(data as any)]; page++; } 
-        else fetchMore = false; 
+        const { data } = await supabase
+            .from('clientes')
+            .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade')
+            .eq('status', 'ativo')
+            .order('nome_empresa', { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1);
+            
+        if (data && data.length > 0) {
+            allClientes = [...allClientes, ...(data as any)];
+            page++;
+        } else {
+            fetchMore = false;
+        }
     }
     setClientesOpcoes(allClientes);
 
     const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
-    if (servicosData && servicosData.length > 0) setListaServicos(servicosData);
-    else setListaServicos([{ id: 1, nome: 'Blitz', preco: 1200, tipo: 'Blitz', unidade: '' }]);
+    if (servicosData && servicosData.length > 0) {
+        setListaServicos(servicosData);
+    } else {
+        setListaServicos([
+            { id: 1, nome: 'Blitz', preco: 1200, tipo: 'Blitz', unidade: '' }
+        ]);
+    }
     
     setLoading(false);
   }, [isDirector, isGerente, perfil?.unidade, perfil?.empresa_id, user?.id]);
@@ -465,13 +498,29 @@ export default function DealsPage() {
     fetchData();
 
     const handleOnline = async () => {
-        setIsOffline(false); setIsSyncing(true);
-        setToastMessage("📶 Internet conectada! Subindo dados..."); setShowToast(true);
-        await syncOfflineDataToCloud(); await fetchData(); setIsSyncing(false);
+        setIsOffline(false);
+        setIsSyncing(true);
+        setToastMessage("📶 Internet conectada! Subindo dados...");
+        setShowToast(true);
+        
+        await syncOfflineDataToCloud();
+        await fetchData();
+        setIsSyncing(false);
     };
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline); window.addEventListener('offline', handleOffline); window.addEventListener('sync-completed', fetchData);
-    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); window.removeEventListener('sync-completed', fetchData); };
+
+    const handleOffline = () => {
+        setIsOffline(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('sync-completed', fetchData);
+
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('sync-completed', fetchData);
+    };
   }, [user, fetchData]);
 
   const handleContratoInicio = useCallback((val: string) => {
@@ -483,6 +532,7 @@ export default function DealsPage() {
           const newY = start.getFullYear();
           const newM = String(start.getMonth() + 1).padStart(2, '0');
           const newD = String(start.getDate()).padStart(2, '0');
+          
           setVencimento(`${newY}-${newM}-${newD}`);
       }
   }, [vencimento]);
@@ -490,214 +540,636 @@ export default function DealsPage() {
   const criarJobDeProducao = useCallback(async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
     const briefingAutomatico = `VENDA APROVADA ✅ (Ref: LD-${String(lead.id).padStart(4, '0')})\n\nUnidade: ${lead.unidade || 'Não informada'}\nItens: ${resumoItens}\nValor Final: R$ ${lead.valor_total} (Desconto aplicado: R$ ${lead.desconto || 0})\n\nResumo da OPEC: ${lead.descricao || 'Sem briefing adicional.'}\n\n(Gerado automaticamente via CRM)`;
-    let itensOpec = []; try { itensOpec = typeof lead.itens === 'string' ? JSON.parse(lead.itens as any) : lead.itens; } catch(e) { itensOpec = []; }
+
+    let itensOpec = [];
+    try {
+        itensOpec = typeof lead.itens === 'string' ? JSON.parse(lead.itens as any) : lead.itens;
+    } catch(e) {
+        itensOpec = [];
+    }
+
     const nomeDoVendedor = lead.user_id && usersMap[lead.user_id] ? usersMap[lead.user_id] : (perfil?.nome || 'Vendedor Não Identificado');
 
     await supabase.from('jobs').insert([{
-        titulo: `Gravação: ${lead.empresa}`, briefing: briefingAutomatico, client_id: lead.client_id, user_id: lead.user_id || user?.id,
-        empresa_id: perfil?.empresa_id, stage: 'roteiro', prioridade: 'media', 
+        titulo: `Gravação: ${lead.empresa}`,
+        briefing: briefingAutomatico,
+        client_id: lead.client_id,
+        user_id: lead.user_id || user?.id,
+        empresa_id: perfil?.empresa_id,
+        stage: 'roteiro',
+        prioridade: 'media',
         deadline: lead.contrato_inicio ? new Date(new Date(lead.contrato_inicio).getTime() - 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-        cliente: lead.empresa, agencia: lead.tipo === 'Agência' ? lead.empresa : null, data_inicio: lead.contrato_inicio || null, data_fim: lead.contrato_fim || null, itens_opec: itensOpec, vendedor_nome: nomeDoVendedor, unidade: lead.unidade
+        cliente: lead.empresa,
+        agencia: lead.tipo === 'Agência' ? lead.empresa : null,
+        data_inicio: lead.contrato_inicio || null,
+        data_fim: lead.contrato_fim || null,
+        itens_opec: itensOpec,
+        vendedor_nome: nomeDoVendedor,
+        unidade: lead.unidade
     }]);
   }, [user?.id, perfil?.empresa_id, perfil?.nome, usersMap]);
 
   const gerarCobrancaFinanceira = useCallback(async (lead: Lead) => {
       await supabase.from('lancamentos').insert([{
-          titulo: `VENDA: ${lead.empresa} (${lead.unidade || 'Geral'}) - OS: ${formatId(lead.id, 'LD')}`, valor: lead.valor_total, tipo: 'entrada',
-          categoria: 'vendas', status: 'pendente', data_vencimento: lead.vencimento ? lead.vencimento : new Date().toISOString().split('T')[0], user_id: user?.id, empresa_id: perfil?.empresa_id 
+          titulo: `VENDA: ${lead.empresa} (${lead.unidade || 'Geral'}) - OS: ${formatId(lead.id, 'LD')}`,
+          valor: lead.valor_total,
+          tipo: 'entrada',
+          categoria: 'vendas',
+          status: 'pendente',
+          data_vencimento: lead.vencimento ? lead.vencimento : new Date().toISOString().split('T')[0],
+          user_id: user?.id,
+          empresa_id: perfil?.empresa_id 
       }]);
   }, [user?.id, perfil?.empresa_id]);
 
   const fazerCheckin = useCallback((id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!navigator.geolocation) { setToastMessage("⚠️ Seu navegador não suporta GPS."); setShowToast(true); return; }
-    setToastMessage("🛰️ Puxando GPS do satélite..."); setShowToast(true);
+    
+    if (!navigator.geolocation) {
+      setToastMessage("⚠️ Seu navegador não suporta GPS.");
+      setShowToast(true);
+      return;
+    }
+
+    setToastMessage("🛰️ Puxando GPS do satélite...");
+    setShowToast(true);
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const mapsUrl = `https://maps.google.com/?q=$${pos.coords.latitude},${pos.coords.longitude}`;
-        const now = new Date(); const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        const now = new Date();
+        const msg = `${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')} às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        
         try {
             const { error } = await supabase.from('leads').update({ checkin: msg, localizacao_url: mapsUrl }).eq('id', id);
             if (error) throw error;
+            
             setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-            setToastMessage("📍 Check-in cravado com sucesso!"); setShowToast(true);
+            setToastMessage("📍 Check-in cravado com sucesso!");
+            setShowToast(true);
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString() });
+                await localDb.syncQueue.add({
+                    operacao: 'UPDATE', tabela: 'leads', dados: { id, checkin: msg, localizacao_url: mapsUrl }, data_criacao: new Date().toISOString()
+                });
                 setLeads(prev => prev.map(l => l.id === id ? { ...l, checkin: msg, localizacao_url: mapsUrl } : l));
-                setToastMessage("📍 Check-in Salvo Offline!"); setShowToast(true);
+                setToastMessage("📍 Check-in Salvo Offline!");
+                setShowToast(true);
             }
         }
       },
-      (err) => { setToastMessage("Falha no GPS ❌"); setShowToast(true); },
+      (err) => {
+        setToastMessage("Falha no GPS ❌");
+        setShowToast(true);
+      },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   }, []);
 
-  const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: 'ganho' | 'perdido' | 'aberto') => {
+  const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: string) => {
     const lead = leads.find(l => l.id === id);
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') return alert("⚠️ NEGÓCIO BLOQUEADO: Aguardando aprovação.");
         if (lead?.status_aprovacao === 'recusado') return alert("❌ O desconto foi RECUSADO. Ajuste antes de dar o Ganho.");
     }
-    if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) fazerCheckin(id);
+    
+    if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) {
+      fazerCheckin(id);
+    }
+
+    if (novoStatus === 'perdido' || novaEtapa === 5) {
+        setLostLeadId(id);
+        setIsLostModalOpen(true);
+        return; 
+    }
 
     let etapaFinal = novaEtapa;
-    if (novoStatus === 'ganho') etapaFinal = 4; if (novoStatus === 'perdido') etapaFinal = 5;
+    if (novoStatus === 'ganho') etapaFinal = 4;
+    if (novoStatus === 'perdido') etapaFinal = 5;
 
     setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l));
 
     try {
         const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
         if (error) throw error;
+        
         if (novoStatus === 'ganho' && lead) {
             await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
-            setToastMessage("🎉 Venda Confirmada!"); setShowToast(true);
+            setToastMessage("🎉 Venda Confirmada!"); 
+            setShowToast(true);
         }
     } catch (error: any) {
         if (error.message === 'Failed to fetch' || !navigator.onLine) {
             await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, etapa: etapaFinal, status: novoStatus }, data_criacao: new Date().toISOString() });
-            setToastMessage("📶 Movido offline!"); setShowToast(true);
+            setToastMessage("📶 Movido offline!"); 
+            setShowToast(true);
         }
     }
   }, [leads, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
 
+  const confirmarPerda = useCallback(async () => {
+    if (!motivoPerda.trim() || motivoPerda.length < 5) return alert("Por favor, detalhe o motivo da perda. Precisamos dessa informação para melhorar as vendas.");
+    if (!lostLeadId) return;
+
+    const lead = leads.find(l => l.id === lostLeadId);
+    if (!lead) return;
+
+    const novaNotaObj: Historico = { id: Date.now(), texto: `🔴 MOTIVO DA PERDA: ${motivoPerda}`, created_at: new Date().toISOString() };
+    const novasNotas = [novaNotaObj, ...(Array.isArray(lead.notas) ? lead.notas : [])];
+
+    setLeads(prev => prev.map(l => l.id === lostLeadId ? { ...l, etapa: 5, status: 'perdido', notas: novasNotas } : l));
+
+    try {
+        const { error } = await supabase.from('leads').update({ etapa: 5, status: 'perdido', notas: novasNotas }).eq('id', lostLeadId);
+        if (error) throw error;
+        setToastMessage("Lead arquivado na zona de perdidos."); 
+        setShowToast(true);
+    } catch (error: any) {
+        if (error.message === 'Failed to fetch' || !navigator.onLine) {
+            await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id: lostLeadId, etapa: 5, status: 'perdido', notas: novasNotas }, data_criacao: new Date().toISOString() });
+            setToastMessage("📶 Arquivado offline!"); 
+            setShowToast(true);
+        }
+    }
+
+    setIsLostModalOpen(false);
+    setLostLeadId(null);
+    setMotivoPerda('');
+  }, [motivoPerda, lostLeadId, leads]);
+
   const onDragEnd = useCallback(async (result: any) => {
     const { destination, draggableId } = result;
+    
     if (!destination) return;
-    if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) return;
-    const novaEtapa = parseInt(destination.droppableId); const leadId = parseInt(draggableId);
-    let novoStatus: 'aberto' | 'ganho' | 'perdido' = 'aberto';
-    if (novaEtapa === 4) novoStatus = 'ganho'; else if (novaEtapa === 5) novoStatus = 'perdido';
-    else { const leadAtual = leads.find(l => l.id === leadId); if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) novoStatus = 'aberto'; }
+    
+    if (destination.droppableId === result.source.droppableId && destination.index === result.source.index) {
+        return;
+    }
+    
+    const novaEtapa = parseInt(destination.droppableId); 
+    const leadId = parseInt(draggableId);
+    
+    let novoStatus: string = 'aberto';
+    
+    if (novaEtapa === 4) {
+        novoStatus = 'ganho'; 
+    } else if (novaEtapa === 5) {
+        novoStatus = 'perdido';
+    } else { 
+        const leadAtual = leads.find(l => l.id === leadId); 
+        if (leadAtual && (leadAtual.status === 'ganho' || leadAtual.status === 'perdido')) {
+            novoStatus = 'aberto'; 
+        }
+    }
+    
     await mudarEtapa(leadId, novaEtapa, novoStatus);
   }, [leads, mudarEtapa]);
 
   const enviarWhatsapp = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
     if (!lead.telefone) return alert("Cadastre o WhatsApp na edição!"); 
-    let listaItens: ItemVenda[] = []; try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { listaItens = []; }
-    let itensTexto = listaItens.length > 0 ? listaItens.map(i => `▪️ ${i.quantidade}x *${i.servico}* (R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join('%0A') : "▪️ Detalhes a combinar";
+    
+    let listaItens: ItemVenda[] = [];
+    try {
+        listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any);
+    } catch {
+        listaItens = [];
+    }
+    
+    let itensTexto = listaItens.length > 0 
+        ? listaItens.map(i => `▪️ ${i.quantidade}x *${i.servico}* (R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join('%0A')
+        : "▪️ Detalhes a combinar";
+        
     const totalFormatado = lead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const descontoFormatado = (lead.desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-    const msgDesconto = lead.desconto && lead.desconto > 0 ? `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A` : "";
+    
+    const msgDesconto = lead.desconto && lead.desconto > 0 
+        ? `🎁 *Desconto Especial:* - R$ ${descontoFormatado}%0A` 
+        : "";
+
     const msg = `Olá *${lead.empresa}*! 🚀%0A%0AAqui é o ${perfil?.nome || 'Consultor'} da Demais FM.%0ASegue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A--------------------------------%0A${itensTexto}%0A--------------------------------%0A${msgDesconto}%0A💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0APodemos avançar com a aprovação?`;
+    
     window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
   }, [perfil?.nome]);
 
   const imprimirProposta = useCallback(() => {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
-    const total = Math.max(0, subtotal - desconto); const dataHoje = new Date().toLocaleDateString('pt-BR');
-    const janela = window.open('', '', 'width=800,height=600'); if(!janela) return alert("Habilite popups");
-    janela.document.write(`<html><head><title>Proposta - ${novaEmpresa}</title><style>body{font-family:sans-serif;padding:40px;color:#333}.header{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:30px}.logo{font-size:24px;font-weight:bold;font-style:italic}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{text-align:left;border-bottom:1px solid #ccc;padding:10px;font-size:12px;text-transform:uppercase}td{padding:10px;border-bottom:1px solid #eee}.total-box{text-align:right;font-size:16px;margin-top:5px;}.total-final{text-align:right;font-size:20px;font-weight:bold;margin-top:10px;color:#22C55E;}</style></head><body><div class="header"><div class="logo">WEGROW</div><div>Proposta Comercial<br>${dataHoje}</div></div><h3>Cliente: ${novaEmpresa}</h3><table><thead><tr><th>Item</th><th>Qtd</th><th>Valor</th><th>Total</th></tr></thead><tbody>${itensTemporarios.map(i => `<tr><td>${i.servico}</td><td>${i.quantidade}</td><td>R$ ${i.precoUnitario.toLocaleString('pt-BR')}</td><td>R$ ${(i.quantidade*i.precoUnitario).toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table><div class="total-box">Subtotal: R$ ${subtotal.toLocaleString('pt-BR')}</div>${desconto > 0 ? `<div class="total-box" style="color:red">Desconto: - R$ ${desconto.toLocaleString('pt-BR')}</div>` : ''}<div class="total-final">Total Final: R$ ${total.toLocaleString('pt-BR')}</div><script>window.onload=function(){window.print()}</script></body></html>`);
+    const total = Math.max(0, subtotal - desconto);
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    
+    const janela = window.open('', '', 'width=800,height=600');
+    if(!janela) return alert("Habilite popups no seu navegador!");
+    
+    janela.document.write(`
+        <html>
+            <head>
+                <title>Proposta - ${novaEmpresa}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 40px; color: #333; }
+                    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+                    .logo { font-size: 24px; font-weight: bold; font-style: italic; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    th { text-align: left; border-bottom: 1px solid #ccc; padding: 10px; font-size: 12px; text-transform: uppercase; }
+                    td { padding: 10px; border-bottom: 1px solid #eee; }
+                    .total-box { text-align: right; font-size: 16px; margin-top: 5px; }
+                    .total-final { text-align: right; font-size: 20px; font-weight: bold; margin-top: 10px; color: #22C55E; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="logo">WEGROW</div>
+                    <div>
+                        Proposta Comercial<br>
+                        ${dataHoje}
+                    </div>
+                </div>
+                
+                <h3>Cliente: ${novaEmpresa}</h3>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Qtd</th>
+                            <th>Valor Unitário</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itensTemporarios.map(i => `
+                            <tr>
+                                <td>${i.servico}</td>
+                                <td>${i.quantidade}</td>
+                                <td>R$ ${i.precoUnitario.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                <td>R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                <div class="total-box">Subtotal: R$ ${subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                ${desconto > 0 ? `<div class="total-box" style="color: red;">Desconto: - R$ ${desconto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>` : ''}
+                <div class="total-final">INVESTIMENTO FINAL: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+        </html>
+    `);
     janela.document.close();
   }, [itensTemporarios, desconto, novaEmpresa]);
 
-  const formatarData = (dataIso: string) => {
-    if (!dataIso) return ''; const parts = dataIso.split('T')[0].split('-'); if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`; return new Date(dataIso).toLocaleDateString('pt-BR');
-  };
-
   const imprimirContrato = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
+    
     const CONFIG_EMISSORAS: Record<string, { razao: string, endereco: string, cnpj: string }> = {
-      "DEMAIS FM 104,7": { razao: "SERRANA DE RADIODIFUSÃO LTDA", endereco: "Av. Nereu Ramos, 226 - Centro, na cidade de Taió - Estado de Santa Catarina", cnpj: "75.835.629/0001-50" },
-      "DEMAIS FM 107,9": { razao: "REDE SERRANA DE RADIODIFUSÃO LTDA", endereco: "R. Curt Hering, 665 - Sala 103 - Centro, na cidade de Presidente Getúlio - Estado de Santa Catarina", cnpj: "75.835.629/0003-12" },
-      "DEMAIS FM 101,1": { razao: "RÁDIO CIDADE DE ITAIÓPOLIS LTDA", endereco: "R. Alexandre Ricardo Worell, 465 - Sala 4 - Bairro Vila Nova IOS, na cidade de Itaiópolis - Estado de Santa Catarina", cnpj: "75.789.966/0001-59" }
+      "DEMAIS FM 104,7": {
+        razao: "SERRANA DE RADIODIFUSÃO LTDA",
+        endereco: "Av. Nereu Ramos, 226 - Centro, na cidade de Taió - Estado de Santa Catarina",
+        cnpj: "75.835.629/0001-50"
+      },
+      "DEMAIS FM 107,9": {
+        razao: "REDE SERRANA DE RADIODIFUSÃO LTDA",
+        endereco: "R. Curt Hering, 665 - Sala 103 - Centro, na cidade de Presidente Getúlio - Estado de Santa Catarina",
+        cnpj: "75.835.629/0003-12"
+      },
+      "DEMAIS FM 101,1": {
+        razao: "RÁDIO CIDADE DE ITAIÓPOLIS LTDA",
+        endereco: "R. Alexandre Ricardo Worell, 465 - Sala 4 - Bairro Vila Nova IOS, na cidade de Itaiópolis - Estado de Santa Catarina",
+        cnpj: "75.789.966/0001-59"
+      }
     };
+
     const dadosEmissora = CONFIG_EMISSORAS[lead.unidade || ""] || CONFIG_EMISSORAS["DEMAIS FM 104,7"];
-    const janela = window.open('', '', 'width=900,height=800'); if(!janela) return alert("Habilite popups no seu navegador!");
-    let listaItens: ItemVenda[] = []; try { listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any); } catch { }
-    const itensHtml = listaItens.map(i => `<tr><td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}</td><td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${i.quantidade}</td><td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits:2})}</td></tr>`).join('');
-    janela.document.write(`<html><head><title>Contrato - ${lead.empresa}</title><style>body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; } .header { text-align: center; margin-bottom: 20px; } .header img { max-height: 80px; margin-bottom: 10px; } .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; } .texto-base { text-align: justify; margin-bottom: 20px; line-height: 1.6; } .cliente-box { margin-bottom: 20px; line-height: 1.8; } .secao-titulo { font-weight: bold; margin-top: 25px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; } table { width: 100%; border-collapse: collapse; margin-bottom: 10px; } th { background-color: #f0f0f0; font-size: 11px; text-align: center; border: 1px solid #000; padding: 8px; } .condicoes { font-size: 11px; margin-bottom: 20px; } .condicoes p { margin: 4px 0; } .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; } .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }</style></head><body><div class="header"><img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" /><h2>Contrato para Veiculação de Publicidade</h2></div><div class="texto-base">Que entre si fazem de um lado a empresa <strong>${dadosEmissora.razao}</strong>, emissora de radiodifusão com sede à ${dadosEmissora.endereco}, CNPJ: ${dadosEmissora.cnpj}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:</div><div class="cliente-box"><strong>CLIENTE:</strong> ${lead.empresa.toUpperCase()}<br/><strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/><strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/><div style="display: flex; gap: 40px;"><div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div><div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div></div><div style="display: flex; gap: 40px;"><div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div><div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div></div></div><div class="texto-base">Visando a veiculação e divulgação da publicidade do CLIENTE acima, por meio da emissora de FM da EXECUTANTE, tudo conforme as condições a seguir indicadas.</div><div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE:</div><div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;"><div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div><div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div></div><table><thead><tr><th>PROGRAMAÇÃO</th><th>QUANT.</th><th>VALOR R$</th></tr></thead><tbody>${itensHtml}<tr><td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td><td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td></tr></tbody></table><div class="secao-titulo">2. OUTRAS CONDIÇÕES:</div><div class="condicoes"><p>1) O presente contrato tem caráter irrevogável;</p><p>2) As inserções objeto do presente contrato são intransferíveis;</p><p>3) As parcelas pagas fora do prazo de seus vencimentos incidirão em juros e mora estabelecidos na fatura;</p><p>4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;</p><p>5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.</p><p>6) Fica eleito o Fórum da Cidade de Taió para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p></div><div class="secao-titulo">3. FORMA DE PAGAMENTO:</div><div class="cliente-box"><strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/><strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/><strong>Contato para envio da Fatura: WhatsApp:</strong> ${lead.telefone || '___________________'}<br/><strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}</div><div class="assinaturas"><div>Assinatura do Cliente</div><div>Representante da Demais FM</div></div><script>window.onload = function() { window.print(); }</script></body></html>`);
+    
+    const janela = window.open('', '', 'width=900,height=800');
+    if(!janela) return alert("Habilite popups no seu navegador!");
+
+    let listaItens: ItemVenda[] = [];
+    try {
+        listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any);
+    } catch { }
+
+    const itensHtml = listaItens.map(i => `
+        <tr>
+            <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}</td>
+            <td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${i.quantidade}</td>
+            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+        </tr>
+    `).join('');
+
+    janela.document.write(`
+        <html>
+            <head>
+                <title>Contrato - ${lead.empresa}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .header img { max-height: 80px; margin-bottom: 10px; }
+                    .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+                    .texto-base { text-align: justify; margin-bottom: 20px; line-height: 1.6; }
+                    .cliente-box { margin-bottom: 20px; line-height: 1.8; }
+                    .secao-titulo { font-weight: bold; margin-top: 25px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                    th { background-color: #f0f0f0; font-size: 11px; text-align: center; border: 1px solid #000; padding: 8px; }
+                    .condicoes { font-size: 11px; margin-bottom: 20px; }
+                    .condicoes p { margin: 4px 0; }
+                    .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
+                    .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />
+                    <h2>Contrato para Veiculação de Publicidade</h2>
+                </div>
+
+                <div class="texto-base">
+                    Que entre si fazem de um lado a empresa <strong>${dadosEmissora.razao}</strong>, emissora de radiodifusão com sede à ${dadosEmissora.endereco}, CNPJ: ${dadosEmissora.cnpj}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:
+                </div>
+
+                <div class="cliente-box">
+                    <strong>CLIENTE:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <div style="display: flex; gap: 40px;">
+                        <div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
+                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
+                    </div>
+                    <div style="display: flex; gap: 40px;">
+                        <div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div>
+                        <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
+                    </div>
+                </div>
+
+                <div class="texto-base">
+                    Visando a veiculação e divulgação da publicidade do CLIENTE acima, por meio da emissora de FM da EXECUTANTE, tudo conforme as condições a seguir indicadas.
+                </div>
+
+                <div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE:</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;">
+                    <div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div>
+                    <div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PROGRAMAÇÃO</th>
+                            <th>QUANT.</th>
+                            <th>VALOR R$</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itensHtml}
+                        <tr>
+                            <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td>
+                            <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="secao-titulo">2. OUTRAS CONDIÇÕES:</div>
+                <div class="condicoes">
+                    <p>1) O presente contrato tem caráter irrevogável;</p>
+                    <p>2) As inserções objeto do presente contrato são intransferíveis;</p>
+                    <p>3) As parcelas pagas fora do prazo de seus vencimentos incidirão em juros e mora estabelecidos na fatura;</p>
+                    <p>4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;</p>
+                    <p>5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.</p>
+                    <p>6) Fica eleito o Fórum da Cidade de Taió para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
+                </div>
+
+                <div class="secao-titulo">3. FORMA DE PAGAMENTO:</div>
+                <div class="cliente-box">
+                    <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
+                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/>
+                    <strong>Contato para envio da Fatura: WhatsApp:</strong> ${lead.telefone || '___________________'}<br/>
+                    <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
+                </div>
+
+                <div class="assinaturas">
+                    <div>Assinatura do Cliente</div>
+                    <div>Representante da Demais FM</div>
+                </div>
+
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+        </html>
+    `);
     janela.document.close();
   }, []);
 
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
-      e.stopPropagation(); if(!confirm("Excluir oportunidade?")) return;
-      if (id > 1000000) { setLeads(prev => prev.filter(l => l.id !== id)); if (isModalOpen) setIsModalOpen(false); return; }
+      e.stopPropagation();
+      if(!confirm("Tem certeza que deseja excluir esta oportunidade?")) return;
+      
+      if (id > 1000000) {
+          setLeads(prev => prev.filter(l => l.id !== id));
+          if (isModalOpen) setIsModalOpen(false);
+          return;
+      }
+
       try {
           const { error } = await supabase.from('leads').delete().eq('id', id);
           if (error) throw error;
-          setLeads(prev => prev.filter(l => l.id !== id)); if (isModalOpen) setIsModalOpen(false);
-      } catch(error: any) { if (error.message === 'Failed to fetch' || !navigator.onLine) { alert("⚠️ Sem internet: Não é possível deletar offline."); } }
+          
+          setLeads(prev => prev.filter(l => l.id !== id));
+          if (isModalOpen) setIsModalOpen(false);
+      } catch(error: any) {
+          if (error.message === 'Failed to fetch' || !navigator.onLine) {
+              alert("⚠️ Você está sem internet. Não é possível deletar leads no modo offline.");
+          }
+      }
   }, [isModalOpen]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files?.[0]) return;
-      if (!navigator.onLine) return alert("⚠️ Conecte à internet para enviar arquivos.");
-      setUploading(true); const file = e.target.files[0]; const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
-      const { data } = await supabase.storage.from('contratos').upload(fileName, file);
+      if (!navigator.onLine) {
+          alert("⚠️ Você precisa de internet para enviar arquivos.");
+          return;
+      }
+
+      setUploading(true);
+      const file = e.target.files[0];
+      const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
+
+      const { data, error } = await supabase.storage.from('contratos').upload(fileName, file);
+
       if(data) {
-         const { data: url } = supabase.storage.from('contratos').getPublicUrl(fileName); setFotoUrl(url.publicUrl);
-         if(editingLeadId && editingLeadId < 1000000) { await supabase.from('leads').update({ foto_url: url.publicUrl }).eq('id', editingLeadId); setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, foto_url: url.publicUrl } : l)); }
+         const { data: urlData } = supabase.storage.from('contratos').getPublicUrl(fileName);
+         setFotoUrl(urlData.publicUrl);
+         
+         if(editingLeadId && editingLeadId < 1000000) {
+             await supabase.from('leads').update({ foto_url: urlData.publicUrl }).eq('id', editingLeadId);
+             setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, foto_url: urlData.publicUrl } : l));
+         }
       }
       setUploading(false);
   };
 
   const adicionarNota = async () => {
-      if(!novaNota || !editingLeadId) return; if (editingLeadId > 1000000) return alert("⚠️ Este Lead ainda não sincronizou. Aguarde a internet.");
-      const novaNotaObj: Historico = { id: Date.now(), texto: novaNota, created_at: new Date().toISOString() };
-      const novasNotas = [novaNotaObj, ...historico]; setHistorico(novasNotas); setNovaNota('');
+      if(!novaNota || !editingLeadId) return;
+
+      if (editingLeadId > 1000000) {
+          alert("⚠️ Este Lead foi criado offline e ainda não sincronizou. Aguarde a internet voltar para adicionar notas.");
+          return;
+      }
+
+      const novaNotaObj: Historico = {
+          id: Date.now(),
+          texto: novaNota,
+          created_at: new Date().toISOString()
+      };
+
+      const novasNotas = [novaNotaObj, ...historico];
+      setHistorico(novasNotas);
+      setNovaNota('');
+      
       setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
-      if (navigator.onLine) { await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId); } 
-      else { await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas }, data_criacao: new Date().toISOString() }); }
+
+      if (navigator.onLine) {
+          await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
+      } else {
+          await localDb.syncQueue.add({
+              operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas }, data_criacao: new Date().toISOString()
+          });
+      }
   };
 
   const salvarLead = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!user) return alert("Você precisa estar logado!");
-    setLoading(true); let finalClientId = selectedClientId;
+    e.preventDefault();
+    if (!user) return alert("Você precisa estar logado para salvar um lead!");
+    
+    setLoading(true);
+    let finalClientId = selectedClientId;
 
     if (!finalClientId && novaEmpresa) {
         try {
-            const { data: novoCliente, error: errCli } = await supabase.from('clientes').insert([{
-                nome_empresa: novaEmpresa, cnpj: novoCnpj || null, inscricao_estadual: novoIE || null, telefone: novoTelefone || null, cidade: novaCidade || null, status: 'ativo', risco: 'verde', empresa_id: perfil?.empresa_id
-            }]).select('id, risco').single();
+            const { data: novoCliente, error: errCli } = await supabase
+                .from('clientes')
+                .insert([{
+                    nome_empresa: novaEmpresa,
+                    cnpj: novoCnpj || null,
+                    inscricao_estadual: novoIE || null,
+                    telefone: novoTelefone || null,
+                    cidade: novaCidade || null,
+                    status: 'ativo',
+                    risco: 'verde',
+                    empresa_id: perfil?.empresa_id
+                }])
+                .select('id, risco')
+                .single();
+                
             if (errCli) throw errCli;
+            
             if (novoCliente) {
                 finalClientId = novoCliente.id;
-                setClientesOpcoes(prev => [...prev, { id: novoCliente.id, nome_empresa: novaEmpresa, telefone: novoTelefone, cnpj: novoCnpj, inscricao_estadual: novoIE, cidade: novaCidade, risco: novoCliente.risco }]);
-                setToastMessage("✨ Novo cliente cadastrado automaticamente!"); setShowToast(true);
+                setClientesOpcoes(prev => [...prev, {
+                    id: novoCliente.id,
+                    nome_empresa: novaEmpresa,
+                    telefone: novoTelefone,
+                    cnpj: novoCnpj,
+                    inscricao_estadual: novoIE,
+                    cidade: novaCidade,
+                    risco: novoCliente.risco
+                }]);
+                setToastMessage("✨ Novo cliente cadastrado automaticamente!");
+                setShowToast(true);
             }
-        } catch (e) { console.error("Erro ao auto-cadastrar cliente", e); setLoading(false); return alert("Erro ao criar o cliente novo na base."); }
+        } catch (e) {
+            console.error("Erro ao auto-cadastrar cliente", e);
+            setLoading(false);
+            return alert("Erro ao criar o cliente novo na base.");
+        }
     }
 
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
     const valorTotalFinal = Math.max(0, subtotal - desconto); 
     const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
+
     let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
 
-    if (!isLideranca) { if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'pendente'; else novoStatusAprovacao = null; } 
-    else { if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado'; else novoStatusAprovacao = null; }
+    if (!isLideranca) {
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'pendente';
+        else novoStatusAprovacao = null;
+    } else {
+        if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'aprovado';
+        else novoStatusAprovacao = null;
+    }
 
     const payload = {
-        empresa: novaEmpresa, telefone: novoTelefone, unidade: novaUnidade, cidade: novaCidade, descricao: novaDescricao, notas: historico, tipo: tipoCliente, valor_total: valorTotalFinal, desconto: desconto, itens: itensTemporarios, foto_url: fotoUrl, contrato_inicio: contratoInicio || null, contrato_fim: contratoFim || null, cnpj: novoCnpj, inscricao_estadual: novoIE || null, parcelas: parcelas, vencimento: vencimento || null, status_aprovacao: novoStatusAprovacao, user_id: isLideranca ? (leadUserId || null) : user.id, ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }), client_id: finalClientId, empresa_id: perfil?.empresa_id 
+        empresa: novaEmpresa,
+        telefone: novoTelefone,
+        unidade: novaUnidade,
+        cidade: novaCidade,
+        descricao: novaDescricao,
+        notas: historico,
+        tipo: tipoCliente,
+        valor_total: valorTotalFinal,
+        desconto: desconto,
+        itens: itensTemporarios,
+        foto_url: fotoUrl,
+        contrato_inicio: contratoInicio || null,
+        contrato_fim: contratoFim || null,
+        cnpj: novoCnpj,
+        inscricao_estadual: novoIE || null,
+        parcelas: parcelas,
+        vencimento: vencimento || null,
+        status_aprovacao: novoStatusAprovacao,
+        user_id: isLideranca ? (leadUserId || null) : user.id,
+        ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
+        client_id: finalClientId,
+        empresa_id: perfil?.empresa_id 
     };
 
     if (editingLeadId) {
         try {
             if (editingLeadId > 1000000) throw new Error('Failed to fetch');
+
             const { error } = await supabase.from('leads').update(payload).eq('id', editingLeadId);
             if (error) throw error; 
+            
             setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
-            setIsModalOpen(false); setToastMessage("Lead atualizado e distribuído!"); setShowToast(true); fetchData();
+            setIsModalOpen(false);
+            setToastMessage("Lead atualizado e distribuído!");
+            setShowToast(true);
+            fetchData();
         } catch (error: any) {
             if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, ...payload }, data_criacao: new Date().toISOString() });
+                await localDb.syncQueue.add({
+                    operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, ...payload }, data_criacao: new Date().toISOString()
+                });
                 setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, ...payload } as Lead : l));
-                setIsModalOpen(false); setToastMessage("📶 Sem rede. Alteração salva no telemóvel/computador!"); setShowToast(true);
+                setIsModalOpen(false);
+                setToastMessage("📶 Sem rede. Alteração salva no telemóvel/computador!");
+                setShowToast(true);
             }
         }
     } else {
         try {
             const { data, error } = await supabase.from('leads').insert([payload]).select();
             if (error) throw error; 
-            if (data) { setLeads(prev => [data[0] as Lead, ...prev]); setIsModalOpen(false); setToastMessage("Lead criado com sucesso! 🚀"); setShowToast(true); fetchData(); }
+            
+            if (data) {
+                setLeads(prev => [data[0] as Lead, ...prev]);
+                setIsModalOpen(false);
+                setToastMessage("Lead criado com sucesso! 🚀");
+                setShowToast(true);
+                fetchData();
+            }
         } catch (error: any) {
              if (error.message === 'Failed to fetch' || !navigator.onLine) {
-                const tempId = Date.now(); const leadOffline = { ...payload, id: tempId, created_at: new Date().toISOString() };
-                await localDb.syncQueue.add({ operacao: 'INSERT', tabela: 'leads', dados: leadOffline, data_criacao: new Date().toISOString() });
-                setLeads(prev => [leadOffline as Lead, ...prev]); setIsModalOpen(false); setToastMessage("📶 Sem rede. Lead guardado no cofre!"); setShowToast(true);
+                const tempId = Date.now(); 
+                const leadOffline = { ...payload, id: tempId, created_at: new Date().toISOString() };
+                
+                await localDb.syncQueue.add({
+                    operacao: 'INSERT', tabela: 'leads', dados: leadOffline, data_criacao: new Date().toISOString()
+                });
+                setLeads(prev => [leadOffline as Lead, ...prev]);
+                setIsModalOpen(false);
+                setToastMessage("📶 Sem rede. Lead guardado no cofre!");
+                setShowToast(true);
             }
         }
     }
@@ -706,20 +1178,57 @@ export default function DealsPage() {
   const handleAprovacao = async (id: number, decisao: 'aprovado' | 'recusado') => {
       await supabase.from('leads').update({ status_aprovacao: decisao }).eq('id', id);
       setLeads(prev => prev.map(l => l.id === id ? { ...l, status_aprovacao: decisao } : l));
-      setIsModalOpen(false); setToastMessage(decisao === 'aprovado' ? "✅ Desconto Aprovado!" : "❌ Desconto Recusado!"); setShowToast(true);
+      setIsModalOpen(false);
+      setToastMessage(decisao === 'aprovado' ? "✅ Desconto Aprovado!" : "❌ Desconto Recusado!");
+      setShowToast(true);
   };
 
   const abrirModal = useCallback((lead?: Lead) => {
-    setShowClientDropdown(false); setCategoriaSelecionada(null); 
+    setShowClientDropdown(false);
+    setCategoriaSelecionada(null); 
+    
     if (lead) {
-        setEditingLeadId(lead.id); setNovaEmpresa(lead.empresa); setNovoTelefone(lead.telefone || ''); setNovaUnidade(lead.unidade || ''); setNovaCidade(lead.cidade || ''); setNovaDescricao(lead.descricao || ''); setSelectedClientId(lead.client_id || null); setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []); setFotoUrl(lead.foto_url || ''); setContratoInicio(lead.contrato_inicio || ''); setContratoFim(lead.contrato_fim || ''); setNovoCnpj(lead.cnpj || ''); setNovoIE(lead.inscricao_estadual || ''); setParcelas(lead.parcelas || '1'); setVencimento(lead.vencimento || ''); setDesconto(lead.desconto || 0); setHistorico(Array.isArray(lead.notas) ? lead.notas : []); setLeadUserId(lead.user_id || ''); 
+        setEditingLeadId(lead.id);
+        setNovaEmpresa(lead.empresa);
+        setNovoTelefone(lead.telefone || '');
+        setNovaUnidade(lead.unidade || '');
+        setNovaCidade(lead.cidade || '');
+        setNovaDescricao(lead.descricao || '');
+        setSelectedClientId(lead.client_id || null);
+        setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
+        setFotoUrl(lead.foto_url || '');
+        setContratoInicio(lead.contrato_inicio || '');
+        setContratoFim(lead.contrato_fim || '');
+        setNovoCnpj(lead.cnpj || '');
+        setNovoIE(lead.inscricao_estadual || '');
+        setParcelas(lead.parcelas || '1');
+        setVencimento(lead.vencimento || '');
+        setDesconto(lead.desconto || 0);
+        setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
+        setLeadUserId(lead.user_id || ''); 
     } else {
-        setEditingLeadId(null); setNovaEmpresa(''); setNovoTelefone(''); setNovaUnidade(perfil?.unidade || ''); setNovaCidade(''); setNovaDescricao(''); setSelectedClientId(null); setItensTemporarios([]); setFotoUrl(''); setContratoInicio(''); setContratoFim(''); setNovoCnpj(''); setNovoIE(''); setParcelas('1'); setVencimento(''); setDesconto(0); setHistorico([]); setLeadUserId(user?.id || ''); 
+        setEditingLeadId(null);
+        setNovaEmpresa('');
+        setNovoTelefone('');
+        setNovaUnidade(perfil?.unidade || '');
+        setNovaCidade('');
+        setNovaDescricao('');
+        setSelectedClientId(null);
+        setItensTemporarios([]);
+        setFotoUrl('');
+        setContratoInicio('');
+        setContratoFim('');
+        setNovoCnpj('');
+        setNovoIE('');
+        setParcelas('1');
+        setVencimento('');
+        setDesconto(0);
+        setHistorico([]);
+        setLeadUserId(user?.id || ''); 
     }
     setIsModalOpen(true);
   }, [perfil?.unidade, user?.id]);
 
-  // 👇 FILTRO DE LEADS OTIMIZADO PARA O RANGE DE DATAS 👇
   const leadsAtivos = useMemo(() => {
       return leads.filter(l => {
           if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
@@ -753,7 +1262,6 @@ export default function DealsPage() {
       }
   }
 
-  // O ganhos para meta já está sendo filtrado pela data!
   const ganhosParaMeta = leadsAtivos.filter(l => l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
   const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
   const percentMeta = Math.min((ganhosParaMeta / metaValidaParaCalculo) * 100, 100);
@@ -792,7 +1300,9 @@ export default function DealsPage() {
                 <span className="text-slate-400 flex items-center gap-1"><Target size={10}/> {labelMeta} <span className="text-white ml-1 font-mono">R$ {valorMetaAlvo.toLocaleString('pt-BR')}</span></span>
                 <span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
              </div>
-             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div></div>
+             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div>
+             </div>
           </div>
 
           <div>
@@ -1141,6 +1651,45 @@ export default function DealsPage() {
               </div>
 
            </div>
+        </div>
+      )}
+
+      {/* 👇 MODAL DE PERDA (IA ANALYTICS) 👇 */}
+      {isLostModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className="bg-[#0B1120] border border-red-500/30 w-full max-w-md rounded-[32px] shadow-2xl relative flex flex-col animate-in zoom-in-95">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-red-500/5 rounded-t-[32px]">
+                    <h2 className="text-xl font-black uppercase italic tracking-tighter text-red-500 flex items-center gap-2">
+                        <AlertTriangle size={24}/> Registrar Perda
+                    </h2>
+                    <button onClick={() => { setIsLostModalOpen(false); setMotivoPerda(''); setLostLeadId(null); }} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
+                        <X size={20}/>
+                    </button>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-slate-300 font-medium">
+                        Por que não fechamos este negócio? Detalhe o motivo abaixo. Nossa <strong>Inteligência Artificial</strong> usa estes dados para mapear padrões e encontrar oportunidades de recuperação no futuro.
+                    </p>
+                    <div>
+                        <textarea 
+                            className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white text-sm font-medium outline-none focus:border-red-500 min-h-[120px] resize-none custom-scrollbar" 
+                            placeholder="Ex: Achou o valor muito alto, fechou com a concorrência XYZ, o budget anual da empresa já tinha acabado..." 
+                            value={motivoPerda} 
+                            onChange={(e) => setMotivoPerda(e.target.value)} 
+                        />
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-white/10 bg-[#0F172A] rounded-b-[32px] flex gap-3">
+                    <button onClick={() => { setIsLostModalOpen(false); setMotivoPerda(''); setLostLeadId(null); }} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+                        Cancelar
+                    </button>
+                    <button onClick={confirmarPerda} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-red-600 text-white hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all">
+                        Confirmar Perda
+                    </button>
+                </div>
+            </div>
         </div>
       )}
 

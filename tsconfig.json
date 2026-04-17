@@ -17,11 +17,12 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "ignoreDeprecations": "5.0", 
     "types": [
       "node",
       "react",
       "react-dom"
-    ], // <--- ADICIONE ESTA LINHA EXATA
+    ],
     "plugins": [
       {
         "name": "next"

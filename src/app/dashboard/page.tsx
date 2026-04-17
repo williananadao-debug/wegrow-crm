@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   TrendingUp, Users, Radio, DollarSign, 
   BarChart3, Calendar, Loader2, 
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const perfil = auth.perfil;
   
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // Status para o refresh automático
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
   
   const [dataInicio, setDataInicio] = useState(() => {
@@ -47,8 +48,11 @@ export default function DashboardPage() {
 
   const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
 
-  const carregarDadosOtimizado = useCallback(async () => {
-    setLoading(true);
+  // 👇 FUNÇÃO DE CARREGAMENTO BLINDADA 👇
+  const carregarDadosOtimizado = useCallback(async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) setLoading(true);
+    else setRefreshing(true);
+
     try {
         let leadsQuery = supabase
           .from('leads')
@@ -65,48 +69,52 @@ export default function DashboardPage() {
             supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago')
         ]);
 
-        if (leadsRes.error) console.error("Erro Leads:", leadsRes.error);
-
         setRawLeads(leadsRes.data || []);
         setRawPerfis(perfisRes.data || []);
         setRawJobs(jobsRes.data || []);
         setRawLancamentos(finRes.data || []);
 
     } catch (error) {
-        console.error("Erro crítico no dashboard:", error);
+        console.error("Erro no refresh do dashboard:", error);
     } finally {
         setLoading(false);
+        setRefreshing(false);
     }
   }, [isDirector, user?.id, perfil?.nome]);
 
+  // 👇 O CORAÇÃO DO MODO TV (AUTO-REFRESH 5 MINUTOS) 👇
   useEffect(() => {
-    if (user) carregarDadosOtimizado();
-  }, [user, perfil, carregarDadosOtimizado]);
+    if (user) {
+      carregarDadosOtimizado();
+      
+      const interval = setInterval(() => {
+        console.log("🔄 WeGrow TV: Atualizando dados em tempo real...");
+        carregarDadosOtimizado(true);
+      }, 300000); // 300.000ms = 5 Minutos
+
+      return () => clearInterval(interval);
+    }
+  }, [user, carregarDadosOtimizado]);
 
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
   const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[], [rawLeads]);
 
   const { ranking, statsComercial, statsProducao, statsFinanceiro } = useMemo(() => {
-      
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
-
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
           }
-          
           const dataLead = lead.created_at.substring(0, 10); 
           if (dataInicio && dataLead < dataInicio) return false;
           if (dataFim && dataLead > dataFim) return false;
-          
           return true;
       });
 
       const rankObj = leadsFiltrados.reduce((acc: any, lead) => {
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
          const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
-
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0 };
          if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
          acc[chave].count += 1;
@@ -115,36 +123,16 @@ export default function DashboardPage() {
       
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
-      let fat = 0;
-      let ganhos = 0;
-      let perdidos = 0;
-      let visitas = 0;
-      let comVisita = 0;
+      let fat = 0; let ganhos = 0; let perdidos = 0; let visitas = 0; let comVisita = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
       
       leadsFiltrados.forEach(l => {
-          const st = l.status;
-          const et = Number(l.etapa);
+          const st = l.status; const et = Number(l.etapa);
           const hasCheckin = l.checkin && l.checkin.length > 5;
-
-          if (hasCheckin) {
-              visitas++;
-              comVisita++;
-          }
-
-          if (st === 'ganho') {
-              fat += (Number(l.valor_total) || 0);
-              ganhos++;
-              funil.ganho++;
-          } else if (st === 'perdido') {
-              perdidos++;
-              funil.perdido++;
-          } else {
-              if (et === 0) funil.novos++;
-              if (et === 1) funil.contato++;
-              if (et === 2) funil.proposta++;
-              if (et >= 3) funil.negociacao++;
-          }
+          if (hasCheckin) { visitas++; comVisita++; }
+          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; } 
+          else if (st === 'perdido') { perdidos++; funil.perdido++; } 
+          else { if (et === 0) funil.novos++; if (et === 1) funil.contato++; if (et === 2) funil.proposta++; if (et >= 3) funil.negociacao++; }
       });
 
       const totalFinal = ganhos + perdidos;
@@ -153,85 +141,45 @@ export default function DashboardPage() {
 
       const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
       if (dataInicio && dataFim) {
-          const start = new Date(dataInicio + 'T12:00:00');
-          const end = new Date(dataFim + 'T12:00:00');
+          const start = new Date(dataInicio + 'T12:00:00'); const end = new Date(dataFim + 'T12:00:00');
           const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
           const maxDays = Math.min(diffDays, 60); 
-          
           for (let i = 0; i <= maxDays; i++) {
-              const curr = new Date(start);
-              curr.setDate(start.getDate() + i);
-              const iso = getLocalYYYYMMDD(curr);
-              const label = `${String(curr.getDate()).padStart(2,'0')}/${String(curr.getMonth()+1).padStart(2,'0')}`;
+              const curr = new Date(start); curr.setDate(start.getDate() + i);
+              const iso = getLocalYYYYMMDD(curr); const label = `${String(curr.getDate()).padStart(2,'0')}/${String(curr.getMonth()+1).padStart(2,'0')}`;
               vendasPorDiaArray.push({ dia: label, valor: 0, dataIso: iso });
           }
       }
 
-      leadsFiltrados.forEach(l => {
-          if (l.status === 'ganho') {
-              const leadData = l.created_at.substring(0, 10);
-              const slot = vendasPorDiaArray.find(v => v.dataIso === leadData);
-              if (slot) {
-                  slot.valor += (Number(l.valor_total) || 0);
-              }
-          }
-      });
-
+      leadsFiltrados.forEach(l => { if (l.status === 'ganho') { const leadData = l.created_at.substring(0, 10); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
-      rawJobs.forEach((j: any) => {
-        if (j.stage === 'roteiro') prod.roteiro++;
-        if (j.stage === 'gravacao') prod.gravacao++;
-        if (j.stage === 'edicao') prod.edicao++;
-        if (j.stage === 'opec') prod.opec++;
-      });
-
+      rawJobs.forEach((j: any) => { if (j.stage === 'roteiro') prod.roteiro++; if (j.stage === 'gravacao') prod.gravacao++; if (j.stage === 'edicao') prod.edicao++; if (j.stage === 'opec') prod.opec++; });
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);
       const sai = rawLancamentos.filter(l => l.tipo === 'saida').reduce((acc, l) => acc + l.valor, 0);
 
       return {
           ranking: rankingFinal,
-          statsComercial: {
-            faturamentoMês: fat,
-            metaMes: 100000,
-            leadsAbertos: leadsFiltrados.length - ganhos - perdidos,
-            totalVisitas: visitas,
-            taxaConversao: Math.round(conversao),
-            propostasEnviadas: leadsFiltrados.length,
-            leadsSemVisita: semVisita,
-            leadsComVisita: comVisita,
-            funil,
-            vendasPorDia: vendasPorDiaArray
-          },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray },
           statsProducao: prod,
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai }
       };
-
   }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   const handleSellerClick = (id: string) => setVendedorSelecionado(prev => prev === id ? null : id);
-
-  const getDonutGradient = (visitados: number, pendentes: number) => {
-     const total = visitados + pendentes;
-     if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`;
-     const pct = (visitados / total) * 100;
-     return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`;
-  };
-
-  const formatCompact = (num: number) => {
-      if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k';
-      return num % 1 === 0 ? num.toString() : num.toFixed(2);
-  };
+  const getDonutGradient = (visitados: number, pendentes: number) => { const total = visitados + pendentes; if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`; const pct = (visitados / total) * 100; return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`; };
+  const formatCompact = (num: number) => { if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k'; return num % 1 === 0 ? num.toString() : num.toFixed(2); };
 
   if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white"><Loader2 className="animate-spin mr-2"/> Otimizando Dashboard...</div>;
 
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
-      
-      {/* 👇 HEADER SUPER COMPACTO: APENAS ABAS E FILTROS (ALINHADOS À DIREITA/ESQUERDA) 👇 */}
       <div className="flex flex-col xl:flex-row justify-end items-start xl:items-center gap-4 mb-2 px-2">
         <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
-            {/* ABAS COMERCIAL / GESTÃO */}
-            <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg">
+            <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg items-center">
+                {/* 👇 INDICADOR DE ATUALIZAÇÃO MODO TV 👇 */}
+                <div className={`px-2 transition-all ${refreshing ? 'opacity-100 scale-110' : 'opacity-30 scale-100'}`}>
+                    <RefreshCw size={12} className={`text-[#22C55E] ${refreshing ? 'animate-spin' : ''}`} />
+                </div>
                 <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
                     <TrendingUp size={12}/> Comercial
                 </button>
@@ -242,31 +190,17 @@ export default function DashboardPage() {
                 )}
             </div>
             
-            {/* BARRA DE FILTROS DO DASHBOARD */}
             <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 overflow-hidden flex-1 xl:flex-none">
                 <Filter size={14} className="text-slate-400 ml-3 mr-2" />
-                
                 <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
-                    <input 
-                        type="date" 
-                        value={dataInicio} 
-                        onChange={e => setDataInicio(e.target.value)} 
-                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
-                    />
+                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
                     <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
-                    <input 
-                        type="date" 
-                        value={dataFim} 
-                        onChange={e => setDataFim(e.target.value)} 
-                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
-                    />
+                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
                 </div>
-
                 <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                     <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
                     {unidadesDisponiveis.map(u => <option key={u} value={u} className="bg-[#0B1120]">{u}</option>)}
                 </select>
-
                 {isDirector && (
                     <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent border-none text-orange-500 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                         <option value="Todos" className="bg-[#0F172A]">Toda Equipe</option>
@@ -285,8 +219,6 @@ export default function DashboardPage() {
 
       {visao === 'comercial' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            
-            {/* KPIS COMPACTOS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">Faturamento {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
@@ -310,7 +242,6 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* AVISO SE NÃO TIVER DADOS */}
             {statsComercial.propostasEnviadas === 0 && (
                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-center gap-3 text-slate-400">
                     <AlertCircle size={16} />
@@ -318,7 +249,6 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* GRÁFICO DIÁRIO DINÂMICO */}
             <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                 <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
                     <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia
@@ -327,19 +257,10 @@ export default function DashboardPage() {
                     {statsComercial.vendasPorDia.map((d, i) => {
                         const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
                         const height = (d.valor / maxVal) * 100;
-                        
                         return (
                             <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
-                                {d.valor > 0 && (
-                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[10px] font-black tracking-tighter whitespace-nowrap z-10">
-                                        {formatCompact(d.valor)}
-                                    </div>
-                                )}
-                                
-                                <div 
-                                    className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} 
-                                    style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
-                                >
+                                {d.valor > 0 && ( <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[10px] font-black tracking-tighter whitespace-nowrap z-10">{formatCompact(d.valor)}</div> )}
+                                <div className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}>
                                     {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
                                 </div>
                                 <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
@@ -350,7 +271,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                {/* RANKING - DINÂMICO */}
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-white mb-3">
                         <Users size={14} className="text-orange-500" /> Ranking ({filtroUnidade})
@@ -368,8 +288,6 @@ export default function DashboardPage() {
                         ))}
                     </div>
                 </div>
-
-                {/* FUNIL RESUMO */}
                 <div className="lg:col-span-1 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic mb-3 flex items-center gap-2"><Target size={14} className="text-blue-500"/> Funil</h3>
                     <div className="space-y-2">
@@ -381,7 +299,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                {/* DONUT VISITAS */}
                 <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center">
                     <h3 className="text-sm font-black text-white uppercase italic mb-2 flex items-center gap-2 self-start"><MapPin size={14} className="text-yellow-500"/> Visitas</h3>
                     <div className="w-32 h-32 rounded-full flex items-center justify-center relative" style={{ background: getDonutGradient(statsComercial.leadsComVisita, statsComercial.leadsSemVisita) }}>
@@ -395,28 +312,16 @@ export default function DashboardPage() {
                         <div className="text-center"><p className="text-sm font-black text-red-500">{statsComercial.leadsSemVisita}</p><span className="text-[8px] font-bold text-slate-500 uppercase">Pendentes</span></div>
                     </div>
                 </div>
-
-                {/* VOLUME POR ETAPA */}
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-3"><BarChart3 size={14} className="text-blue-500"/> Volume por Etapa</h3>
                     <div className="flex items-end h-40 gap-3 px-2 w-full pt-4">
-                        {[
-                            { label: 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600' },
-                            { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500' },
-                            { label: 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500' },
-                            { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500' },
-                            { label: 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500' },
-                        ].map((etapa, i, arr) => {
+                        {[ { label: 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600' }, { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500' }, { label: 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500' }, { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500' }, { label: 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500' }, ].map((etapa, i, arr) => {
                             const maxEtapa = Math.max(...arr.map(e => e.val), 1);
                             const h = (etapa.val / maxEtapa) * 100;
-                            
                             return (
                                 <div key={i} className="flex-1 flex flex-col items-center justify-end group h-full relative">
                                     <div className="mb-1 text-[10px] font-black text-white">{etapa.val}</div>
-                                    <div 
-                                        className={`w-full rounded-t-lg transition-all duration-1000 ${etapa.color} opacity-90 hover:opacity-100 relative`} 
-                                        style={{ height: `${Math.max(h, 2)}%` }}
-                                    >
+                                    <div className={`w-full rounded-t-lg transition-all duration-1000 ${etapa.color} opacity-90 hover:opacity-100 relative`} style={{ height: `${Math.max(h, 2)}%` }}>
                                         {etapa.val > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
                                     </div>
                                     <div className="mt-2 text-[8px] font-black uppercase text-slate-500 tracking-wider text-center">{etapa.label}</div>
@@ -429,7 +334,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* VISÃO DIRETORIA COMPACTA */}
       {visao === 'diretoria' && isDirector && (
         <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

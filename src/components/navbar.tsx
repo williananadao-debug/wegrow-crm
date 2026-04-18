@@ -32,7 +32,7 @@ export default function Navbar() {
   const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
 
-  const mostrarFinanceiro = Boolean(perfil?.empresa_id);
+  const mostrarFinanceiro = Boolean(perfil?.empresa_id) && perfil?.empresa_id !== '11111111-1111-1111-1111-111111111111';
 
   let menuItems: any[] = [];
 

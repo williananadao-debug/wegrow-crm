@@ -133,7 +133,7 @@ export default function Navbar() {
               </div>
             </div>
 
-            <nav className="flex flex-col gap-2 flex-1 overflow-y-auto">
+            <nav className="flex flex-col gap-2 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
               {menuItems.map((item) => (
                 <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <div className="min-w-[20px]">{item.icon}</div>

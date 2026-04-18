@@ -133,14 +133,11 @@ export default function Navbar() {
               </div>
             </div>
 
-            {/* 👇 REMOVIDO O overflow-y-auto DAQUI TAMBÉM 👇 */}
-            <nav className="flex flex-col gap-2 flex-1">
+            <nav className="flex flex-col gap-2 flex-1 overflow-y-auto">
               {menuItems.map((item) => (
                 <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <div className="min-w-[20px]">{item.icon}</div>
                   <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>{item.name}</span>
-                  
-                  {/* 👇 ETIQUETA FLUTUANTE LIVRE 👇 */}
                   {isCollapsed && (
                       <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
                           {item.name}
@@ -148,32 +145,30 @@ export default function Navbar() {
                   )}
                 </Link>
               ))}
+            </nav>
 
-              <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-                {isDirector && (
-                  <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
-                    <Settings size={20} />
-                    <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
-                    {/* ETIQUETA FLUTUANTE */}
-                    {isCollapsed && (
-                        <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
-                            CONFIGURAÇÕES
-                        </div>
-                    )}
-                  </Link>
-                )}
-                <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
-                  <LogOut size={20} />
-                  <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>
-                  {/* ETIQUETA FLUTUANTE */}
+            <div className="pt-4 border-t border-white/5 space-y-2 mt-2">
+              {isDirector && (
+                <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
+                  <Settings size={20} />
+                  <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Configurações</span>
                   {isCollapsed && (
                       <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
-                          SAIR
+                          CONFIGURAÇÕES
                       </div>
                   )}
-                </button>
-              </div>
-            </nav>
+                </Link>
+              )}
+              <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
+                <LogOut size={20} />
+                <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>
+                {isCollapsed && (
+                    <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                        SAIR
+                    </div>
+                )}
+              </button>
+            </div>
         </div>
       </aside>
     </>

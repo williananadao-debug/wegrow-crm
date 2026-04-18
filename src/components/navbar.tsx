@@ -50,7 +50,7 @@ export default function Navbar() {
     ];
 
     if (mostrarFinanceiro) {
-      menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/financeiro' });
+      menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' });
     }
 
     if (isDirector || isManager) {

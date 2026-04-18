@@ -28,7 +28,7 @@ export default function GoalsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
     if (user) {
@@ -43,7 +43,9 @@ export default function GoalsPage() {
   }, [vendedorSelecionado, anoFiltro]);
 
   async function fetchVendedores() {
-    const { data } = await supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
+    let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
+    if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
+    const { data } = await query;
     setVendedores(data || []);
   }
 

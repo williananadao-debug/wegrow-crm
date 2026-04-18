@@ -65,15 +65,16 @@ export default function CustomersPage() {
   });
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
     async function fetchSellers() {
-      const { data } = await supabase.from('profiles').select('id, nome'); 
+      if (!perfil?.empresa_id) return;
+      const { data } = await supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id);
       if (data) setVendedores(data as any);
     }
-    fetchSellers();
-  }, []);
+    if (perfil) fetchSellers();
+  }, [perfil]);
 
   useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter]);
 
@@ -92,6 +93,7 @@ export default function CustomersPage() {
         const from = pageIndex * ITEMS_PER_PAGE;
         const to = from + ITEMS_PER_PAGE - 1;
         let query = supabase.from('clientes').select('*', { count: 'exact' }).order('nome_empresa', { ascending: true }).range(from, to);
+        if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
         if (busca.trim()) query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade.ilike.%${busca}%,bairro.ilike.%${busca}%,email.ilike.%${busca}%`);
 
@@ -236,7 +238,7 @@ export default function CustomersPage() {
         throw new Error("CNPJ não encontrado nas bases da Receita Federal. Verifique o número digitado.");
 
     } catch (err: any) {
-        alert("❌ Erro na busca: " + err.message);
+        alert("Não foi possível buscar os dados do CNPJ. Tente novamente ou preencha manualmente.");
     } finally {
         setIsSearchingCnpj(false);
     }
@@ -294,7 +296,7 @@ export default function CustomersPage() {
         }
       }
       if (editingId) setIsModalOpen(false);
-    } catch (error: any) { alert("Erro ao salvar: " + error.message); }
+    } catch (error: any) { alert("Erro ao salvar cliente. Verifique os dados e tente novamente."); }
   };
 
   const handleSaveUnit = async (e: React.FormEvent) => {
@@ -311,6 +313,7 @@ export default function CustomersPage() {
   };
 
   const handleDeleteCliente = async (id: number) => {
+    if (!isDirector) return;
     if (!confirm("Excluir cliente e todo seu histórico?")) return;
     const { error } = await supabase.from('clientes').delete().eq('id', id);
     if (!error) resetAndFetch();

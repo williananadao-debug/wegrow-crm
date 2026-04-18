@@ -57,24 +57,13 @@ export default function RootLayout({
         {/* 👇 RASTREADOR DE VELOCIDADE E PERFORMANCE */}
         <SpeedInsights />
         
-        {/* 🟢 2. O CHAT DO BREVO - BOLINHA MÁGICA */}
-        <Script 
-          id="brevo-chat-widget" 
+        {/* Chat Brevo */}
+        <Script id="brevo-chat-init" strategy="beforeInteractive">
+          {`window.BrevoConversationsID = '69c29c5c62301a763e028155';`}
+        </Script>
+        <Script
+          src="https://conversations-widget.brevo.com/brevo-conversations.js"
           strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function(d, w, c) {
-                  w.BrevoConversationsID = '69c29c5c62301a763e028155';
-                  w[c] = w[c] || function() {
-                      (w[c].q = w[c].q || []).push(arguments);
-                  };
-                  var s = d.createElement('script');
-                  s.async = true;
-                  s.src = 'https://conversations-widget.brevo.com/brevo-conversations.js';
-                  if (d.head) d.head.appendChild(s);
-              })(document, window, 'BrevoConversations');
-            `,
-          }}
         />
         
       </body>

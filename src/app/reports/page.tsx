@@ -92,7 +92,7 @@ export default function ReportsPage() {
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [previewColumns, setPreviewColumns] = useState<string[]>([]);
 
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
 
   useEffect(() => { if (user) fetchReportData(); }, [user, perfil]);
@@ -100,18 +100,24 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens').order('created_at', { ascending: false }).limit(10000);
-      if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); } 
-      else if (!isDirector) { leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`); }
+      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens').order('created_at', { ascending: false }).limit(5000);
+      if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
+      if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
+      else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
 
-      const [leadsRes, premissasRes, profilesRes, cli1, cli2] = await Promise.all([
-        leadsQuery, supabase.from('premissas').select('titulo, tipo_cliente').limit(1000), supabase.from('profiles').select('id, nome'),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).limit(1000),
-        supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', {ascending: false}).range(1000, 1999)
+      let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
+      if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);
+
+      const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
+        leadsQuery,
+        supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
+        perfil?.empresa_id
+          ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
+          : supabase.from('profiles').select('id, nome'),
+        clientesQuery,
       ]);
 
-      const allClientes = [...(cli1.data || []), ...(cli2.data || [])];
-      setRawLeads(leadsRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(allClientes); 
+      setRawLeads(leadsRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 

@@ -22,8 +22,13 @@ export async function GET(request: Request) {
     const idJob = searchParams.get('id');
     const numeroContrato = searchParams.get('numero_contrato'); 
     
-    // 👇 NOVIDADE: Filtro pela Rádio (Emissora) Cliente 👇
-    const codigoEmissora = searchParams.get('codigo_emissora'); 
+    const codigoEmissora = searchParams.get('codigo_emissora');
+
+    // codigo_emissora é obrigatório — sem ele não entregamos dados de nenhum tenant
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!codigoEmissora || !UUID_REGEX.test(codigoEmissora)) {
+        return NextResponse.json({ erro: "Parâmetro 'codigo_emissora' obrigatório e deve ser um UUID válido." }, { status: 400 });
+    }
 
     try {
         const supabaseAdmin = createClient(
@@ -32,13 +37,8 @@ export async function GET(request: Request) {
             { auth: { persistSession: false } }
         );
 
-        let query = supabaseAdmin.from('jobs').select('*');
-
-        // 👇 NOVIDADE: Trava de segurança para multi-clientes 👇
-        // Se a OPEC mandar o código da emissora, filtramos só para ela!
-        if (codigoEmissora) {
-            query = query.eq('empresa_id', codigoEmissora);
-        }
+        let query = supabaseAdmin.from('jobs').select('id, titulo, stage, prioridade, deadline, created_at, audio_url, briefing, client_id, empresa_id, vendedor_nome, unidade, num_pi, data_inicio, data_fim, hora_inicio, hora_fim, itens_opec, agencia, cliente');
+        query = query.eq('empresa_id', codigoEmissora);
 
         // 🚦 LÓGICA DE FILTROS INTELIGENTES
         if (numeroContrato) {
@@ -74,18 +74,27 @@ export async function GET(request: Request) {
 
         let contratosParaOpec = [];
 
-        // Monta o SUPER JSON
-        for (const job of jobsProntos) {
-            let leadData = null;
-            let clienteData = null;
+        // Batch: busca todos leads e clientes de uma vez (evita N+1)
+        const clientIds = [...new Set(jobsProntos.map(j => j.client_id).filter(Boolean))];
+        let leadsMap: Record<number, any> = {};
+        let clientesMap: Record<number, any> = {};
 
-            if (job.client_id) {
-                const { data: lData } = await supabaseAdmin.from('leads').select('*').eq('client_id', job.client_id).order('created_at', { ascending: false }).limit(1).single();
-                if(lData) leadData = lData;
-                
-                const { data: cData } = await supabaseAdmin.from('clientes').select('*').eq('id', job.client_id).single();
-                if(cData) clienteData = cData;
+        if (clientIds.length > 0) {
+            const [{ data: leadsData }, { data: clientesData }] = await Promise.all([
+                supabaseAdmin.from('leads').select('*').in('client_id', clientIds).order('created_at', { ascending: false }),
+                supabaseAdmin.from('clientes').select('*').in('id', clientIds),
+            ]);
+            if (leadsData) {
+                leadsData.forEach(l => { if (!leadsMap[l.client_id]) leadsMap[l.client_id] = l; });
             }
+            if (clientesData) {
+                clientesData.forEach(c => { clientesMap[c.id] = c; });
+            }
+        }
+
+        for (const job of jobsProntos) {
+            const leadData = job.client_id ? (leadsMap[job.client_id] || null) : null;
+            const clienteData = job.client_id ? (clientesMap[job.client_id] || null) : null;
 
             let opecData: any[] = [{}];
             try {

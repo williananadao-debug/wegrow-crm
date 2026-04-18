@@ -60,7 +60,7 @@ JobCard.displayName = 'JobCard';
 export default function JobsPage() {
   const auth = useAuth() || {}; const user = auth.user; const perfil = auth.perfil;
   const isOpec = user?.email === 'opec@wegrow.com.br';
-  const isDirector = perfil?.cargo === 'diretor' || user?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
 
   const [rawJobs, setRawJobs] = useState<Job[]>([]);

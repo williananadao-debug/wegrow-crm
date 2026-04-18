@@ -101,11 +101,9 @@ export default function FinancePage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
 
-  // 👇 COLOQUE O ID DA CDL AQUI 👇
-  const ID_DA_CDL = 'b1e53603-de85-473f-90dc-5efff638b571';
+  const ID_DA_CDL = process.env.NEXT_PUBLIC_FINANCE_PRO_EMPRESA_ID;
 
-  // Se o usuário logado pertencer à CDL (Plano PRO)
-  if (perfil?.empresa_id === ID_DA_CDL) {
+  if (ID_DA_CDL && perfil?.empresa_id === ID_DA_CDL) {
       return <FinanceiroPro />;
   }
 

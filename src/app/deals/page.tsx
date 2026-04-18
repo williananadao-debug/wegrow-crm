@@ -324,7 +324,7 @@ export default function DealsPage() {
   
   const LIMITE_DESCONTO_MAXIMO = 5; 
   
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
   const isLideranca = isDirector || isGerente;
 
@@ -395,8 +395,10 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('leads').select('*');
-    
+    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia');
+
+    if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
+
     if (isDirector) {
     } else if (isGerente && perfil?.unidade) {
         query = query.eq('unidade', perfil.unidade);
@@ -436,7 +438,9 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    const { data: perfisData } = await supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
+    let perfisQuery = supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
+    if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
+    const { data: perfisData } = await perfisQuery;
     if (perfisData) {
         const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
         setUsersMap(mapa);

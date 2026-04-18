@@ -2,13 +2,17 @@ import { supabase } from './supabase';
 import { localDb } from './localDb';
 
 // 1. DESCE DADOS (Nuvem -> Celular)
-export const syncDataToLocal = async () => {
+export const syncDataToLocal = async (empresaId?: string) => {
   if (typeof window !== 'undefined' && !navigator.onLine) return;
   try {
-    const { data: clientes } = await supabase.from('clientes').select('*');
-    if (clientes && clientes.length > 0) await localDb.clientes.bulkPut(clientes); 
+    let clientesQuery = supabase.from('clientes').select('id, nome_empresa, telefone, cnpj, cidade, status, user_id, empresa_id').limit(500);
+    if (empresaId) clientesQuery = clientesQuery.eq('empresa_id', empresaId);
+    const { data: clientes } = await clientesQuery;
+    if (clientes && clientes.length > 0) await localDb.clientes.bulkPut(clientes);
 
-    const { data: leads } = await supabase.from('leads').select('*');
+    let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, etapa, status, tipo, created_at, user_id, empresa_id, client_id, unidade, descricao, itens').limit(500);
+    if (empresaId) leadsQuery = leadsQuery.eq('empresa_id', empresaId);
+    const { data: leads } = await leadsQuery;
     if (leads && leads.length > 0) await localDb.leads.bulkPut(leads);
   } catch (error) {
     console.error('Erro no sync local:', error);

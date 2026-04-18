@@ -46,7 +46,7 @@ export default function DashboardPage() {
   const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [rawLancamentos, setRawLancamentos] = useState<any[]>([]);
 
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
 
   // 👇 FUNÇÃO DE CARREGAMENTO BLINDADA 👇
   const carregarDadosOtimizado = useCallback(async (isAutoRefresh = false) => {
@@ -59,13 +59,19 @@ export default function DashboardPage() {
           .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa');
 
         if (!isDirector) {
-            leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
+            leadsQuery = leadsQuery.eq('user_id', user?.id);
         }
 
+        let perfisQuery = supabase.from('profiles').select('id, nome');
+        if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id) as any;
+
+        let jobsQuery = supabase.from('jobs').select('stage, deadline');
+        if (perfil?.empresa_id) jobsQuery = jobsQuery.eq('empresa_id', perfil.empresa_id) as any;
+
         const [leadsRes, perfisRes, jobsRes, finRes] = await Promise.all([
-            leadsQuery, 
-            supabase.from('profiles').select('id, nome'), 
-            supabase.from('jobs').select('stage, deadline'),
+            leadsQuery,
+            perfisQuery,
+            jobsQuery,
             supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago')
         ]);
 
@@ -88,9 +94,8 @@ export default function DashboardPage() {
       carregarDadosOtimizado();
       
       const interval = setInterval(() => {
-        console.log("🔄 WeGrow TV: Atualizando dados em tempo real...");
         carregarDadosOtimizado(true);
-      }, 300000); // 300.000ms = 5 Minutos
+      }, 300000);
 
       return () => clearInterval(interval);
     }

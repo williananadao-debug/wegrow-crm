@@ -25,8 +25,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('id', session.user.id)
           .single();
 
-        // LOG DE SEGURANÇA (Opcional, bom para você ver a mágica SaaS acontecendo)
-        if (profile) console.log('🏢 Empresa Conectada:', profile.empresa_id);
 
         setPerfil(profile);
       } else {

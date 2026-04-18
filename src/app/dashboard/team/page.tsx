@@ -9,7 +9,7 @@ export default function TeamPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
 
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,9 @@ export default function TeamPage() {
   const carregarEquipe = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('profiles').select('*').order('nome');
+      let query = supabase.from('profiles').select('id, nome, email, cargo, unidade, empresa_id, cpf').order('nome');
+      if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
+      const { data } = await query;
       setMembers(data || []);
     } catch (error) {
       console.error("Erro ao carregar equipe:", error);

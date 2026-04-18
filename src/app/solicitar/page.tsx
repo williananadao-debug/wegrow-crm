@@ -1,7 +1,6 @@
 "use client";
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
 import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2, Search, Loader2 } from 'lucide-react';
 
 export default function PortalCliente() {
@@ -70,26 +69,24 @@ export default function PortalCliente() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('leads').insert([{
-        empresa: empresa,
-        telefone: contato, 
-        cnpj: cnpj,           // 👈 Adicionamos o CNPJ aqui para ir para o CRM
-        unidade: unidade,     
-        cidade: unidade,      
-        descricao: `Precisa de: ${titulo}\n\nMensagem: ${briefing}`, // 👈 Juntamos os dois campos para o Kanban
-        status: 'aberto', 
-        origem: 'Portal Web', 
-        valor_total: 0,
-        etapa: 0, 
-        empresa_id: '11111111-1111-1111-1111-111111111111' 
-      }]);
+      const res = await fetch('/api/portal/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa,
+          telefone: contato,
+          cnpj,
+          unidade,
+          cidade: unidade,
+          descricao: `Precisa de: ${titulo}\n\nMensagem: ${briefing}`,
+        }),
+      });
 
-      if (error) throw error;
-      
+      if (!res.ok) throw new Error('api_error');
+
       setSucesso(true);
-    } catch (error: any) {
-      alert(`ERRO DO BANCO: ${error.message || JSON.stringify(error)}`);
-      console.error(error);
+    } catch {
+      alert('Não foi possível enviar sua solicitação. Tente novamente em instantes.');
     } finally {
       setLoading(false);
     }

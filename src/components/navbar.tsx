@@ -29,11 +29,10 @@ export default function Navbar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const isOpec = user?.email === 'opec@wegrow.com.br';
-  const isDirector = perfil?.cargo === 'diretor' || user?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
 
-  const ID_DA_RADIO = '11111111-1111-1111-1111-111111111111';
-  const mostrarFinanceiro = Boolean(perfil?.empresa_id && perfil.empresa_id !== ID_DA_RADIO);
+  const mostrarFinanceiro = Boolean(perfil?.empresa_id);
 
   let menuItems: any[] = [];
 

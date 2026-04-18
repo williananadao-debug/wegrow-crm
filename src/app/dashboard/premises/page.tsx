@@ -41,7 +41,7 @@ export default function PremisesPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  const isDirector = perfil?.cargo === 'diretor' || perfil?.email === 'admin@wegrow.com';
+  const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
     if (user && isDirector && perfil?.empresa_id) {

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 });
   }
 
-  const { email, empresa, itens, valor_total, desconto, vendedor_nome, referencia } = body;
+  const { email, empresa, itens, valor_total, desconto, vendedor_nome, referencia, reply_to } = body;
 
   if (!email || !empresa) {
     return NextResponse.json({ erro: 'E-mail e empresa são obrigatórios.' }, { status: 422 });
@@ -108,6 +108,7 @@ export async function POST(request: Request) {
     const { error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
       to: [email],
+      replyTo: reply_to || undefined,
       subject: `Proposta Comercial — ${empresa}`,
       html,
     });

@@ -1035,6 +1035,7 @@ export default function DealsPage() {
           desconto: emailLead.desconto || 0,
           vendedor_nome: perfil?.nome || '',
           referencia: `LD-${String(emailLead.id).padStart(4, '0')}`,
+          reply_to: user?.email || undefined,
         }),
       });
       if (res.ok) {

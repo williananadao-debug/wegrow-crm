@@ -3,12 +3,12 @@ import { Resend } from 'resend';
 
 export const dynamic = 'force-dynamic';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: Request) {
   if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ erro: 'Serviço de e-mail não configurado.' }, { status: 503 });
   }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   let body: any;
   try {

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Zap, Target, Trash2 } from 'lucide-react';
+import { Bell, Zap, Target, Trash2, CalendarClock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -24,10 +24,7 @@ export default function NotificationBell() {
         .order('created_at', { ascending: false })
         .limit(20);
       
-      // 👇 A ARMADILHA: Se der erro, joga um pop-up na cara do ecrã! 👇
-      if (error) {
-          alert("🚨 ERRO NO BANCO: " + error.message + "\nDETALHES: " + error.details);
-      }
+      if (error) console.error('notifications fetch:', error.message);
 
       if (data) setNotifications(data);
     };
@@ -124,7 +121,7 @@ export default function NotificationBell() {
                   {!n.lida && <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_5px_rgba(59,130,246,0.8)]"></div>}
                   
                   <div className={`mt-0.5 shrink-0 ${!n.lida ? 'pl-2' : ''}`}>
-                      {n.titulo?.includes('Venda') ? <Zap size={16} className="text-[#22C55E]"/> : <Target size={16} className="text-blue-400"/>}
+                      {n.titulo?.includes('Venda') ? <Zap size={16} className="text-[#22C55E]"/> : n.titulo?.includes('Renovação') ? <CalendarClock size={16} className="text-orange-400"/> : <Target size={16} className="text-blue-400"/>}
                   </div>
                   <div>
                       <p className={`text-xs font-black uppercase tracking-wide mb-1 ${n.lida ? 'text-slate-400' : 'text-white'}`}>{n.titulo}</p>

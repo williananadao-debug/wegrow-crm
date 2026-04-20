@@ -272,23 +272,38 @@ export default function ReportsPage() {
                 </button>
             </div>
 
+            {/* ATALHOS DE PERÍODO */}
+            <div className="hidden lg:flex items-center gap-1 h-10">
+              {([
+                { label: 'Hoje', fn: () => { const h = getLocalYYYYMMDD(new Date()); setDataInicio(h); setDataFim(h); } },
+                { label: '7d', fn: () => { const fim = new Date(); const ini = new Date(); ini.setDate(fim.getDate()-6); setDataInicio(getLocalYYYYMMDD(ini)); setDataFim(getLocalYYYYMMDD(fim)); } },
+                { label: 'Mês', fn: () => { const h = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth()+1, 0))); } },
+                { label: 'Mês Ant.', fn: () => { const h = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth()-1, 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth(), 0))); } },
+                { label: 'Trim.', fn: () => { const h = new Date(); const t = Math.floor(h.getMonth()/3)*3; setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), t, 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), t+3, 0))); } },
+              ] as { label: string; fn: () => void }[]).map(p => (
+                <button key={p.label} onClick={p.fn} className="px-2.5 h-8 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 whitespace-nowrap">
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
             {/* BARRA DE FILTROS */}
             <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 overflow-hidden flex-1 xl:flex-none">
                 <Filter size={14} className="text-slate-400 ml-3 mr-2" />
-                
+
                 <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
-                    <input 
-                        type="date" 
-                        value={dataInicio} 
-                        onChange={e => setDataInicio(e.target.value)} 
-                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    <input
+                        type="date"
+                        value={dataInicio}
+                        onChange={e => setDataInicio(e.target.value)}
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
                     />
                     <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
-                    <input 
-                        type="date" 
-                        value={dataFim} 
-                        onChange={e => setDataFim(e.target.value)} 
-                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" 
+                    <input
+                        type="date"
+                        value={dataFim}
+                        onChange={e => setDataFim(e.target.value)}
+                        className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
                     />
                 </div>
 

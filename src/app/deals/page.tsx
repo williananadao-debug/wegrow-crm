@@ -343,6 +343,7 @@ export default function DealsPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
 
   const [isVisitaModalOpen, setIsVisitaModalOpen] = useState(false);
   const [visitaEmpresa, setVisitaEmpresa] = useState('');
@@ -1224,7 +1225,8 @@ export default function DealsPage() {
         setVencimento(lead.vencimento || '');
         setDesconto(lead.desconto || 0);
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
-        setLeadUserId(lead.user_id || ''); 
+        setLeadUserId(lead.user_id || '');
+        setMostrarDetalhes(!!(lead.cnpj || lead.contrato_inicio || lead.parcelas !== '1'));
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
@@ -1243,7 +1245,8 @@ export default function DealsPage() {
         setVencimento('');
         setDesconto(0);
         setHistorico([]);
-        setLeadUserId(user?.id || ''); 
+        setLeadUserId(user?.id || '');
+        setMostrarDetalhes(false);
     }
     setIsModalOpen(true);
   }, [perfil?.unidade, user?.id]);
@@ -1543,24 +1546,14 @@ export default function DealsPage() {
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
-                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }} required>
-                                <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
-                                <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
-                                <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
-                                <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
-                        </div>
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }} required>
+                            <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
+                            <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
+                            <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
+                            <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
+                        </select>
                     </div>
 
                     {isLideranca && (
@@ -1573,32 +1566,54 @@ export default function DealsPage() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
-                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => handleContratoInicio(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
-                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
-                        </div>
-                    </div>
+                    {/* TOGGLE DETALHES */}
+                    <button type="button" onClick={() => setMostrarDetalhes(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.02] border border-white/10 hover:border-white/20 rounded-xl transition-colors group">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-white flex items-center gap-2">
+                            <FileText size={12}/> {mostrarDetalhes ? 'Ocultar detalhes do contrato' : 'Adicionar detalhes do contrato'}
+                        </span>
+                        <span className={`text-slate-500 transition-transform duration-300 ${mostrarDetalhes ? 'rotate-180' : ''}`}>▼</span>
+                    </button>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Hash size={10}/> Qtd. Parcelas</label>
-                            <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => setParcelas(e.target.value)} placeholder="Ex: 3" />
+                    {mostrarDetalhes && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
+                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>
+                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => handleContratoInicio(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Hash size={10}/> Qtd. Parcelas</label>
+                                    <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => setParcelas(e.target.value)} placeholder="Ex: 3" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> 1º Vencimento</label>
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => setVencimento(e.target.value)} />
+                                </div>
+                            </div>
+                            {novaDescricao && (
+                                <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl">
+                                    <label className="text-[10px] font-black uppercase text-blue-400 mb-2 flex items-center gap-1"><Info size={12}/> Briefing / Descrição (Portal)</label>
+                                    <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-slate-400 text-sm font-medium outline-none min-h-[80px] custom-scrollbar cursor-not-allowed" value={novaDescricao} readOnly placeholder="O que o cliente precisa..." />
+                                </div>
+                            )}
                         </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> 1º Vencimento</label>
-                            <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => setVencimento(e.target.value)} title="Calculado automaticamente para 1 mês" />
-                        </div>
-                    </div>
-
-                    <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl">
-                        <label className="text-[10px] font-black uppercase text-blue-400 mb-2 flex items-center gap-1"><Info size={12}/> Briefing / Descrição (Portal)</label>
-                        <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-slate-400 text-sm font-medium outline-none min-h-[80px] custom-scrollbar cursor-not-allowed" value={novaDescricao} readOnly title="O briefing original do cliente não pode ser alterado. Use as Notas para adicionar informações." placeholder="O que o cliente precisa..." />
-                    </div>
+                    )}
 
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">

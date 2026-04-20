@@ -56,7 +56,7 @@ export default function DashboardPage() {
     try {
         let leadsQuery = supabase
           .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo');
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo, contrato_fim, empresa');
 
         if (!isDirector) {
             leadsQuery = leadsQuery.eq('user_id', user?.id);
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
   const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[], [rawLeads]);
 
-  const { ranking, statsComercial, statsProducao, statsFinanceiro } = useMemo(() => {
+  const { ranking, statsComercial, statsProducao, statsFinanceiro, previsaoFechamento, contratosVencendo } = useMemo(() => {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -168,11 +168,30 @@ export default function DashboardPage() {
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);
       const sai = rawLancamentos.filter(l => l.tipo === 'saida').reduce((acc, l) => acc + l.valor, 0);
 
+      // Previsão de fechamento (todos os leads abertos, independente do filtro de data)
+      const probEtapa: Record<number, number> = { 0: 0.10, 1: 0.25, 2: 0.45, 3: 0.70 };
+      const previsaoFechamento = rawLeads
+          .filter(l => l.status === 'aberto')
+          .reduce((acc, l) => acc + (Number(l.valor_total) || 0) * (probEtapa[Number(l.etapa)] || 0.10), 0);
+
+      // Contratos vencendo em 30 dias (leads ganhos com contrato_fim próximo)
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const em30 = new Date(hoje); em30.setDate(hoje.getDate() + 30);
+      const contratosVencendo = rawLeads
+          .filter(l => {
+              if (l.status !== 'ganho' || !l.contrato_fim) return false;
+              const fim = new Date((l.contrato_fim as string) + 'T00:00:00');
+              return fim >= hoje && fim <= em30;
+          })
+          .sort((a: any, b: any) => new Date(a.contrato_fim + 'T00:00:00').getTime() - new Date(b.contrato_fim + 'T00:00:00').getTime());
+
       return {
           ranking: rankingFinal,
           statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas },
           statsProducao: prod,
-          statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai }
+          statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
+          previsaoFechamento: Math.round(previsaoFechamento),
+          contratosVencendo,
       };
   }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
@@ -358,6 +377,66 @@ export default function DashboardPage() {
                             )
                         })}
                     </div>
+                </div>
+            </div>
+
+            {/* PREVISÃO + RENOVAÇÕES */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+                {/* PREVISÃO DE FECHAMENTO */}
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                    <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                        <TrendingUp size={14} className="text-purple-400"/> Previsão de Fechamento
+                    </h3>
+                    <p className="text-3xl font-black text-purple-400 tracking-tight">
+                        R$ {previsaoFechamento.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
+                    </p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 mb-4">Estimativa baseada na probabilidade por etapa</p>
+                    <div className="space-y-1.5">
+                        {[
+                            { label: 'Novo Lead', pct: '10%', color: 'bg-slate-500' },
+                            { label: 'Em Contato', pct: '25%', color: 'bg-blue-500' },
+                            { label: 'Proposta', pct: '45%', color: 'bg-yellow-500' },
+                            { label: 'Negociação', pct: '70%', color: 'bg-purple-500' },
+                        ].map((s, i) => (
+                            <div key={i} className="flex items-center gap-2 text-[9px]">
+                                <div className={`w-2 h-2 rounded-full ${s.color}`}/>
+                                <span className="text-slate-400 font-bold uppercase flex-1">{s.label}</span>
+                                <span className="text-white font-black">{s.pct}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* CONTRATOS VENCENDO */}
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                    <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                        <AlertCircle size={14} className="text-orange-400"/> Renovações nos Próx. 30 Dias
+                        {contratosVencendo.length > 0 && (
+                            <span className="ml-auto bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                                {contratosVencendo.length}
+                            </span>
+                        )}
+                    </h3>
+                    {contratosVencendo.length === 0 ? (
+                        <div className="flex items-center justify-center h-20 text-slate-600 text-xs font-bold uppercase">Nenhum contrato vencendo</div>
+                    ) : (
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                            {contratosVencendo.map((c: any, i: number) => {
+                                const fim = new Date(c.contrato_fim + 'T00:00:00');
+                                const hoje2 = new Date(); hoje2.setHours(0,0,0,0);
+                                const dias = Math.ceil((fim.getTime() - hoje2.getTime()) / (1000 * 60 * 60 * 24));
+                                return (
+                                    <div key={i} className="flex items-center justify-between bg-orange-500/5 border border-orange-500/20 rounded-xl px-3 py-2">
+                                        <span className="text-xs font-bold text-white truncate flex-1">{c.empresa}</span>
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg ml-2 shrink-0 ${dias <= 7 ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                            {dias}d
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

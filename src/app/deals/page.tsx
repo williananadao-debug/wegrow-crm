@@ -770,7 +770,18 @@ export default function DealsPage() {
     const msg = `Olá *${lead.empresa}*! 🚀%0A%0AAqui é o ${perfil?.nome || 'Consultor'} da Demais FM.%0ASegue o resumo da nossa proposta (Ref: ${formatId(lead.id, 'LD')}):%0A--------------------------------%0A${itensTexto}%0A--------------------------------%0A${msgDesconto}%0A💰 *INVESTIMENTO FINAL: R$ ${totalFormatado}*%0A%0APodemos avançar com a aprovação?`;
     
     window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
-  }, [perfil?.nome]);
+
+    if (lead.id < 1000000) {
+      const notaWpp: Historico = {
+        id: Date.now(),
+        texto: `📱 WhatsApp enviado por ${perfil?.nome || 'Consultor'}`,
+        created_at: new Date().toISOString(),
+      };
+      const novasNotas = [notaWpp, ...(Array.isArray(lead.notas) ? lead.notas : [])];
+      supabase.from('leads').update({ notas: novasNotas }).eq('id', lead.id);
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: novasNotas } : l));
+    }
+  }, [perfil?.nome, supabase]);
 
   const imprimirProposta = useCallback(() => {
     const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
@@ -978,7 +989,18 @@ export default function DealsPage() {
         </html>
     `);
     janela.document.close();
-  }, []);
+
+    if (lead.id < 1000000) {
+      const notaContrato: Historico = {
+        id: Date.now(),
+        texto: `📄 Contrato impresso por ${perfil?.nome || 'Consultor'}`,
+        created_at: new Date().toISOString(),
+      };
+      const novasNotas = [notaContrato, ...(Array.isArray(lead.notas) ? lead.notas : [])];
+      supabase.from('leads').update({ notas: novasNotas }).eq('id', lead.id);
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: novasNotas } : l));
+    }
+  }, [perfil?.nome, supabase]);
 
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();

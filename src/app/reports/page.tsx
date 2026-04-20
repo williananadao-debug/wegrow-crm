@@ -100,7 +100,7 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens').order('created_at', { ascending: false }).limit(5000);
+      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo').order('created_at', { ascending: false }).limit(5000);
       if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
       if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
       else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
@@ -121,7 +121,7 @@ export default function ReportsPage() {
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
@@ -200,7 +200,23 @@ export default function ReportsPage() {
       }
       const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads };
+      const visitasBase = currentLeads.filter(l => l.tipo === 'visita');
+      const visitasConvertidas = visitasBase.filter(l => Number(l.etapa) > 0);
+      const visitasGanhas = visitasBase.filter(l => l.status === 'ganho');
+
+      const visitasPorVendedor = Object.values(currentLeads.filter(l => l.tipo === 'visita').reduce((acc: any, l) => {
+          const chave = l.user_id || l.vendedor_nome || 'sem_dono';
+          const nome = l.vendedor_nome || nomesMap[l.user_id] || 'Desconhecido';
+          if (!acc[chave]) acc[chave] = { nome, total: 0, convertidas: 0, ganhas: 0 };
+          acc[chave].total++;
+          if (Number(l.etapa) > 0) acc[chave].convertidas++;
+          if (l.status === 'ganho') acc[chave].ganhas++;
+          return acc;
+      }, {})).sort((a: any, b: any) => b.total - a.total) as { nome: string; total: number; convertidas: number; ganhas: number }[];
+
+      const calcVisitas = { total: visitasBase.length, convertidas: visitasConvertidas.length, ganhas: visitasGanhas.length, porVendedor: visitasPorVendedor };
+
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas };
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
 
   const handleGeneratePreview = async () => {
@@ -328,6 +344,55 @@ export default function ReportsPage() {
           );
         })}
       </div>
+
+      {/* FUNIL DE VISITAS */}
+      {visitasFunil.total > 0 && (
+        <div className="bg-[#0B1120] border border-white/5 rounded-[32px] p-6 shadow-2xl">
+          <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-6">
+            <MapPin size={18} className="text-blue-400" /> Funil de Visitas — Conversão em Lead e Venda
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* BARRAS DO FUNIL */}
+            <div className="space-y-4">
+              {[
+                { label: 'Visitas Registradas', val: visitasFunil.total, color: 'bg-blue-500', pct: 100 },
+                { label: 'Convertidas em Lead', val: visitasFunil.convertidas, color: 'bg-yellow-500', pct: visitasFunil.total > 0 ? Math.round((visitasFunil.convertidas / visitasFunil.total) * 100) : 0 },
+                { label: 'Vendas Fechadas', val: visitasFunil.ganhas, color: 'bg-green-500', pct: visitasFunil.total > 0 ? Math.round((visitasFunil.ganhas / visitasFunil.total) * 100) : 0 },
+              ].map((s, i) => (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{s.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-black">{s.val}</span>
+                      {i > 0 && <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${s.pct >= 30 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>{s.pct}%</span>}
+                    </div>
+                  </div>
+                  <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden">
+                    <div className={`h-full ${s.color} rounded-full transition-all duration-700`} style={{ width: `${s.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* RANKING POR VENDEDOR */}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Por Vendedor</p>
+              <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+                {visitasFunil.porVendedor.map((v: any, i: number) => (
+                  <div key={i} className="flex items-center gap-3 bg-white/[0.03] rounded-xl px-3 py-2">
+                    <span className="text-[9px] font-black text-slate-600 w-4">#{i+1}</span>
+                    <span className="flex-1 text-xs font-bold text-white truncate">{v.nome}</span>
+                    <div className="flex gap-3 text-[9px] font-black uppercase shrink-0">
+                      <span className="text-blue-400">{v.total}v</span>
+                      <span className="text-yellow-400">{v.convertidas}l</span>
+                      <span className="text-green-400">{v.ganhas}$</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BLOCO 1: CURVA ABC + ELITE DE VENDAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

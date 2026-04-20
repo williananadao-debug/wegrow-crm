@@ -56,7 +56,7 @@ export default function DashboardPage() {
     try {
         let leadsQuery = supabase
           .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa');
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo');
 
         if (!isDirector) {
             leadsQuery = leadsQuery.eq('user_id', user?.id);
@@ -130,13 +130,19 @@ export default function DashboardPage() {
 
       let fat = 0; let ganhos = 0; let perdidos = 0; let visitas = 0; let comVisita = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
-      
+      let visitasRegistradas = 0; let visitasConvertidas = 0; let visitasGanhas = 0;
+
       leadsFiltrados.forEach(l => {
           const st = l.status; const et = Number(l.etapa);
           const hasCheckin = l.checkin && l.checkin.length > 5;
           if (hasCheckin) { visitas++; comVisita++; }
-          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; } 
-          else if (st === 'perdido') { perdidos++; funil.perdido++; } 
+          if (l.tipo === 'visita') {
+              visitasRegistradas++;
+              if (et > 0) visitasConvertidas++;
+              if (st === 'ganho') visitasGanhas++;
+          }
+          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; }
+          else if (st === 'perdido') { perdidos++; funil.perdido++; }
           else { if (et === 0) funil.novos++; if (et === 1) funil.contato++; if (et === 2) funil.proposta++; if (et >= 3) funil.negociacao++; }
       });
 
@@ -164,7 +170,7 @@ export default function DashboardPage() {
 
       return {
           ranking: rankingFinal,
-          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas },
           statsProducao: prod,
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai }
       };
@@ -304,18 +310,36 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center">
-                    <h3 className="text-sm font-black text-white uppercase italic mb-2 flex items-center gap-2 self-start"><MapPin size={14} className="text-yellow-500"/> Visitas</h3>
-                    <div className="w-32 h-32 rounded-full flex items-center justify-center relative" style={{ background: getDonutGradient(statsComercial.leadsComVisita, statsComercial.leadsSemVisita) }}>
-                        <div className="w-24 h-24 bg-[#0B1120] rounded-full flex flex-col items-center justify-center z-10">
-                            <span className="text-xl font-black text-white">{statsComercial.propostasEnviadas}</span>
-                            <span className="text-[8px] font-bold text-slate-500 uppercase">Total</span>
-                        </div>
-                    </div>
-                    <div className="flex gap-4 mt-3">
-                        <div className="text-center"><p className="text-sm font-black text-[#22C55E]">{statsComercial.leadsComVisita}</p><span className="text-[8px] font-bold text-slate-500 uppercase">Feitas</span></div>
-                        <div className="text-center"><p className="text-sm font-black text-red-500">{statsComercial.leadsSemVisita}</p><span className="text-[8px] font-bold text-slate-500 uppercase">Pendentes</span></div>
-                    </div>
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl flex flex-col">
+                    <h3 className="text-sm font-black text-white uppercase italic mb-4 flex items-center gap-2"><MapPin size={14} className="text-blue-400"/> Funil de Visitas</h3>
+                    {(() => {
+                        const vr = statsComercial.visitasRegistradas;
+                        const vc = statsComercial.visitasConvertidas;
+                        const vg = statsComercial.visitasGanhas;
+                        const steps = [
+                            { label: 'Registradas', val: vr, color: 'bg-blue-500', pct: 100 },
+                            { label: 'Lead', val: vc, color: 'bg-yellow-500', pct: vr > 0 ? Math.round((vc/vr)*100) : 0 },
+                            { label: 'Venda', val: vg, color: 'bg-green-500', pct: vr > 0 ? Math.round((vg/vr)*100) : 0 },
+                        ];
+                        return (
+                            <div className="space-y-3 flex-1 justify-center flex flex-col">
+                                {steps.map((s, i) => (
+                                    <div key={i}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{s.label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white font-black text-sm">{s.val}</span>
+                                                {i > 0 && <span className="text-[9px] text-slate-500 font-bold">{s.pct}%</span>}
+                                            </div>
+                                        </div>
+                                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                            <div className={`h-full ${s.color} rounded-full transition-all duration-700`} style={{ width: `${s.pct}%` }}/>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
                 </div>
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-3"><BarChart3 size={14} className="text-blue-500"/> Volume por Etapa</h3>

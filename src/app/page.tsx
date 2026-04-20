@@ -1,196 +1,356 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { 
-  ShieldCheck, Zap, Target, ArrowRight, 
-  Search, Sparkles, TrendingUp, PieChart, 
-  Cpu, LayoutDashboard 
+import {
+  ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
+  BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
+  TrendingUp, MapPin, Mail, ChevronRight, Star
 } from 'lucide-react';
 
+const STATS = [
+  { value: '3x', label: 'mais vendas fechadas' },
+  { value: '40%', label: 'redução de inadimplência' },
+  { value: '100%', label: 'integrado ao OPEC' },
+  { value: '2min', label: 'para criar uma proposta' },
+];
+
+const STEPS = [
+  {
+    n: '01',
+    title: 'Cadastre o cliente',
+    desc: 'CNPJ digitado? O WeGrow preenche empresa, endereço e já avalia o risco de crédito automaticamente.',
+    icon: <Users size={22} />,
+    color: 'blue',
+  },
+  {
+    n: '02',
+    title: 'Monte a proposta',
+    desc: 'Escolha os itens do catálogo, aplique desconto, envie por e-mail e acompanhe no Kanban de vendas.',
+    icon: <Mail size={22} />,
+    color: 'green',
+  },
+  {
+    n: '03',
+    title: 'Contrato → Produção → Ar',
+    desc: 'Ao fechar, o job vai direto para a fila de produção. Quando aprovado, exporta para o OPEC com um clique.',
+    icon: <Radio size={22} />,
+    color: 'purple',
+  },
+];
+
+const FEATURES = [
+  {
+    icon: <ShieldCheck size={24} />,
+    color: 'text-[#22C55E] bg-[#22C55E]/10',
+    title: 'Semáforo de Risco',
+    desc: 'Algoritmo avalia capital social e tempo de empresa via CNPJ e classifica cada cliente em Verde, Amarelo ou Vermelho antes de você fechar.',
+    span: 1,
+  },
+  {
+    icon: <Sparkles size={24} />,
+    color: 'text-purple-400 bg-purple-400/10',
+    title: 'Central de IA',
+    desc: 'Identificação automática de clientes inativos há mais de 60 dias, sugestões de resgate personalizadas e alertas de churn por unidade.',
+    span: 1,
+  },
+  {
+    icon: <Target size={24} />,
+    color: 'text-orange-400 bg-orange-400/10',
+    title: 'Gestão de Metas',
+    desc: 'Defina objetivos mensais e anuais por vendedor ou equipe. Acompanhe o progresso em tempo real no ranking e no dashboard.',
+    span: 1,
+  },
+  {
+    icon: <BarChart3 size={24} />,
+    color: 'text-cyan-400 bg-cyan-400/10',
+    title: 'Relatórios Estratégicos',
+    desc: 'Ticket médio, ciclo de vendas, taxa de conversão por etapa, forecast ponderado por probabilidade e exportação em CSV.',
+    span: 2,
+  },
+  {
+    icon: <MapPin size={24} />,
+    color: 'text-rose-400 bg-rose-400/10',
+    title: 'Check-in GPS + Offline',
+    desc: 'Equipe em campo? O app funciona sem internet. Quando reconectar, sincroniza tudo automaticamente.',
+    span: 1,
+  },
+  {
+    icon: <Cpu size={24} />,
+    color: 'text-sky-400 bg-sky-400/10',
+    title: 'Integração OPEC',
+    desc: 'Jobs aprovados em produção exportam automaticamente para o sistema de broadcast com toda a grade de veiculação.',
+    span: 2,
+  },
+  {
+    icon: <Briefcase size={24} />,
+    color: 'text-amber-400 bg-amber-400/10',
+    title: 'Kanban de Produção',
+    desc: 'Da criação do roteiro à entrega: Roteiro → Gravação → Edição → No Ar. PI, briefing e mídias contratadas em um lugar só.',
+    span: 1,
+  },
+];
+
 export default function LandingPage() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handler);
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-[#22C55E]/30">
-      
-      {/* --- NAVBAR --- */}
-      <nav className="fixed top-0 w-full z-[100] border-b border-white/5 bg-[#020617]/80 backdrop-blur-md">
+    <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-[#22C55E]/30 overflow-x-hidden">
+
+      {/* NAVBAR */}
+      <nav className={`fixed top-0 w-full z-[100] transition-all duration-300 ${scrolled ? 'border-b border-white/10 bg-[#020617]/90 backdrop-blur-xl' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-2xl shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-              W
-            </div>
+            <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-2xl shadow-[0_0_20px_rgba(34,197,94,0.5)]">W</div>
             <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
           </div>
-          
-          <Link href="/login" className="bg-white/5 hover:bg-white/10 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all border border-white/10 text-white">
-            Acessar o Sistema
-          </Link>
-        </div>
-      </nav>
-
-      {/* --- HERO SECTION --- */}
-      <section className="pt-40 pb-20 px-6">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 px-4 py-1.5 rounded-full text-[#22C55E] text-[10px] font-black uppercase tracking-[0.2em] mb-8 animate-pulse">
-            <Sparkles size={14} /> CRM Personalizável para o seu Negócio
-          </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-[0.9] mb-8">
-            Transforme dados em <span className="text-[#22C55E]">Contratos Fechados.</span>
-          </h1>
-          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed mb-12">
-            Um CRM inteligente, ágil e totalmente adaptável ao seu cenário. Automação de vendas, gestão de metas, IA e integração via API para empresas que querem escalar de verdade.
-          </p>
-          
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-            <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer" className="w-full md:w-auto bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all hover:scale-105 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
-              Agendar Demonstração <ArrowRight size={20} />
-            </a>
-            <Link href="/login" className="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest transition-all border border-white/10 text-center">
-              Acessar Sistema
+          <div className="flex items-center gap-3">
+            <span className="hidden md:block text-xs text-slate-500 font-semibold">Para veículos de comunicação</span>
+            <Link href="/login" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+              Acessar
             </Link>
           </div>
         </div>
-      </section>
+      </nav>
 
-      {/* --- BENTO GRID FEATURES (SUPER GRADE) --- */}
-      <section className="py-20 px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* LINHA 1: Lupa (Ocupa 2 espaços) e Semáforo (Ocupa 1 espaço) */}
-          <div className="md:col-span-2 bg-gradient-to-br from-white/5 to-transparent border border-white/10 p-10 rounded-[40px] relative overflow-hidden group">
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6 text-blue-500">
-                <Search size={24} />
+      {/* HERO */}
+      <section className="relative pt-44 pb-24 px-6 overflow-hidden">
+        {/* glow bg */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-[#22C55E]/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-20 right-0 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto text-center relative">
+          <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 px-4 py-1.5 rounded-full text-[#22C55E] text-[10px] font-black uppercase tracking-[0.2em] mb-8">
+            <Radio size={12} /> CRM feito para rádios e veículos de comunicação
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-[0.9] mb-6">
+            Do atendimento<br />ao{' '}
+            <span className="relative inline-block">
+              <span className="text-[#22C55E] relative z-10">ar.</span>
+              <span className="absolute inset-0 bg-[#22C55E]/10 blur-2xl rounded-full" />
+            </span>
+          </h1>
+
+          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed mb-12">
+            Funil de vendas, produção de mídias, OPEC e gestão financeira num sistema só. Sua equipe fecha mais, erra menos e entrega mais rápido.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+            <a
+              href="https://wa.me/5547997022381"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all hover:scale-105 shadow-[0_0_30px_rgba(34,197,94,0.3)]"
+            >
+              Ver demonstração <ArrowRight size={18} />
+            </a>
+            <Link
+              href="/login"
+              className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest transition-all border border-white/10 text-center"
+            >
+              Já tenho acesso
+            </Link>
+          </div>
+
+          {/* STATS BAR */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
+            {STATS.map((s) => (
+              <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                <div className="text-3xl font-black text-[#22C55E]">{s.value}</div>
+                <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mt-1">{s.label}</div>
               </div>
-              <h3 className="text-2xl font-black text-white uppercase italic mb-4">Lupa Inteligente</h3>
-              <p className="text-slate-400 font-medium max-w-md">
-                Encontre qualquer empresa pelo CNPJ. O WeGrow puxa automaticamente o capital social, tempo de abertura e saúde financeira em segundos.
-              </p>
-            </div>
-            <div className="absolute right-[-20px] bottom-[-20px] opacity-10 group-hover:opacity-20 transition-all duration-500">
-                <Search size={200} />
-            </div>
+            ))}
           </div>
-
-          <div className="bg-white/5 border border-white/10 p-10 rounded-[40px] flex flex-col justify-between hover:bg-white/[0.07] transition-all">
-            <div className="w-12 h-12 bg-[#22C55E]/20 rounded-2xl flex items-center justify-center text-[#22C55E] mb-6">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-black text-white uppercase italic mb-4">Semáforo de Risco</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                Venda com segurança. Nosso algoritmo classifica o risco do cliente para evitar a inadimplência antes da assinatura.
-              </p>
-            </div>
-          </div>
-
-          {/* LINHA 2: IA, Metas e API (3 Cartões iguais) */}
-          <div className="bg-white/5 border border-white/10 p-8 rounded-[40px] flex flex-col justify-between hover:bg-white/[0.07] transition-all">
-            <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-purple-500 mb-6">
-              <Sparkles size={24} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-white uppercase italic mb-3">Central de IA</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                Resgate de clientes inativos e prevenção de churn. Deixe a IA identificar quem está pronto para comprar de novo.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 p-8 rounded-[40px] flex flex-col justify-between hover:bg-white/[0.07] transition-all">
-            <div className="w-12 h-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-500 mb-6">
-              <Target size={24} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-white uppercase italic mb-3">Gestão de Metas</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                Crie objetivos para a equipe, acompanhe o progresso em tempo real e engaje seus vendedores a baterem recordes.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 p-8 rounded-[40px] flex flex-col justify-between hover:bg-white/[0.07] transition-all">
-            <div className="w-12 h-12 bg-cyan-500/20 rounded-2xl flex items-center justify-center text-cyan-500 mb-6">
-              <Cpu size={24} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-white uppercase italic mb-3">Integração API</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                Conecte o WeGrow ao seu ERP ou sistema financeiro. Sincronização de dados contínua e sem retrabalho manual.
-              </p>
-            </div>
-          </div>
-
-          {/* LINHA 3: Dashboard (1 espaço) e Relatórios (2 espaços) */}
-          <div className="bg-white/5 border border-white/10 p-10 rounded-[40px] flex flex-col justify-between hover:bg-white/[0.07] transition-all">
-            <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-500 mb-6">
-              <LayoutDashboard size={24} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-black text-white uppercase italic mb-4">Dashboard Kanban</h3>
-              <p className="text-slate-400 text-sm font-medium">
-                Controle o funil de vendas e o pipeline da sua equipe com um painel visual super intuitivo e atualizado ao segundo.
-              </p>
-            </div>
-          </div>
-
-          <div className="md:col-span-2 bg-gradient-to-tr from-[#22C55E]/10 to-transparent border border-white/10 p-10 rounded-[40px] hover:border-[#22C55E]/30 transition-all">
-             <div className="flex flex-col md:flex-row gap-10 items-center h-full">
-                <div className="flex-1">
-                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white mb-6">
-                        <PieChart size={24} />
-                    </div>
-                    <h3 className="text-2xl font-black text-white uppercase italic mb-4">Relatórios Estratégicos</h3>
-                    <p className="text-slate-400 font-medium">
-                        Tome decisões baseadas em dados. Tenha acesso a relatórios completos de conversão, ticket médio, ciclo de vendas e previsibilidade financeira da operação.
-                    </p>
-                </div>
-                <div className="w-full md:w-1/2 bg-[#0B1120] border border-white/10 p-4 rounded-2xl shadow-2xl">
-                    <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-red-500" />
-                          <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                          <div className="w-2 h-2 rounded-full bg-[#22C55E]" />
-                        </div>
-                        <TrendingUp className="text-[#22C55E]" size={16} />
-                    </div>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-end gap-2 h-20 mt-4 px-2">
-                            <div className="w-1/4 bg-[#22C55E]/20 rounded-t-md h-[40%] animate-pulse" />
-                            <div className="w-1/4 bg-[#22C55E]/40 rounded-t-md h-[60%] animate-pulse delay-75" />
-                            <div className="w-1/4 bg-[#22C55E]/60 rounded-t-md h-[80%] animate-pulse delay-150" />
-                            <div className="w-1/4 bg-[#22C55E] rounded-t-md h-[100%] shadow-[0_0_15px_rgba(34,197,94,0.4)]" />
-                        </div>
-                    </div>
-                </div>
-             </div>
-          </div>
-
         </div>
       </section>
 
-      {/* --- CTA FINAL --- */}
+      {/* NICHE CALLOUT */}
+      <section className="py-16 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-gradient-to-r from-white/5 via-white/[0.03] to-transparent border border-white/10 rounded-[40px] p-10 md:p-14 flex flex-col md:flex-row gap-10 items-center">
+            <div className="w-16 h-16 min-w-[64px] bg-[#22C55E] rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+              <Radio size={32} className="text-[#0F172A]" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-2">Verticalmente especializado</div>
+              <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight mb-3">
+                Não é um CRM genérico adaptado.
+              </h2>
+              <p className="text-slate-400 font-medium leading-relaxed">
+                O WeGrow foi construído do zero para rádios, portais e agências de mídia regional. Fluxo de PI, grade de veiculação, produção de spot e integração com OPEC são funcionalidades nativas — não são plugins ou gambiarra.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section className="py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Como funciona</div>
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
+              Três etapas. Um sistema.
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 relative">
+            <div className="hidden md:block absolute top-10 left-[calc(16.5%+32px)] right-[calc(16.5%+32px)] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            {STEPS.map((step, i) => (
+              <div key={i} className="bg-white/5 border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] transition-all group">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center
+                    ${step.color === 'blue' ? 'bg-blue-500/10 text-blue-400' : ''}
+                    ${step.color === 'green' ? 'bg-[#22C55E]/10 text-[#22C55E]' : ''}
+                    ${step.color === 'purple' ? 'bg-purple-500/10 text-purple-400' : ''}
+                  `}>
+                    {step.icon}
+                  </div>
+                  <span className="text-4xl font-black text-white/10 group-hover:text-white/20 transition-colors">{step.n}</span>
+                </div>
+                <h3 className="text-lg font-black text-white uppercase italic mb-3">{step.title}</h3>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES BENTO */}
+      <section className="py-16 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Funcionalidades</div>
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
+              Tudo que sua operação precisa
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {FEATURES.map((f, i) => (
+              <div
+                key={i}
+                className={`bg-white/[0.04] border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] hover:border-white/20 transition-all group ${f.span === 2 ? 'md:col-span-2' : ''}`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${f.color}`}>
+                  {f.icon}
+                </div>
+                <h3 className="text-xl font-black text-white uppercase italic mb-3">{f.title}</h3>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* WORKFLOW VISUAL */}
+      <section className="py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-10 md:p-14 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-[#22C55E]/5 rounded-full blur-[100px] pointer-events-none" />
+            <div className="relative">
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Pipeline completo</div>
+              <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-10">
+                Da proposta ao ar em minutos
+              </h2>
+
+              <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+                {['Novo Lead', 'Proposta', 'Contrato', 'Produção', 'OPEC / No Ar'].map((s, i, arr) => (
+                  <React.Fragment key={s}>
+                    <div className="flex md:flex-col items-center md:items-center gap-3 md:gap-2 flex-1">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black border-2
+                        ${i === 4 ? 'bg-[#22C55E] border-[#22C55E] text-[#0F172A] shadow-[0_0_20px_rgba(34,197,94,0.5)]' : 'border-white/20 text-white/60 bg-white/5'}`}>
+                        {i + 1}
+                      </div>
+                      <span className={`text-xs font-bold uppercase tracking-wide ${i === 4 ? 'text-[#22C55E]' : 'text-slate-400'}`}>{s}</span>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <ChevronRight size={16} className="text-white/20 hidden md:block flex-shrink-0" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { icon: <CheckCircle size={16} />, text: 'Kanban visual drag & drop' },
+                  { icon: <CheckCircle size={16} />, text: 'Aprovação de desconto' },
+                  { icon: <CheckCircle size={16} />, text: 'Envio de proposta por e-mail' },
+                  { icon: <CheckCircle size={16} />, text: 'Export automático OPEC' },
+                ].map((item) => (
+                  <div key={item.text} className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                    <span className="text-[#22C55E]">{item.icon}</span>
+                    {item.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIAL PLACEHOLDER */}
+      <section className="py-16 px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="flex justify-center gap-1 mb-6">
+            {[1,2,3,4,5].map((s) => <Star key={s} size={18} className="text-[#22C55E] fill-[#22C55E]" />)}
+          </div>
+          <blockquote className="text-xl md:text-2xl font-semibold text-white/80 italic leading-relaxed mb-6">
+            "Antes o vendedor fechava, a produção não sabia. Agora tudo está conectado — o job entra na fila automaticamente e o OPEC recebe os dados sem ninguém precisar digitar duas vezes."
+          </blockquote>
+          <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Diretor Comercial · Rádio Regional</div>
+        </div>
+      </section>
+
+      {/* CTA FINAL */}
       <section className="py-32 px-6">
-        <div className="max-w-4xl mx-auto bg-[#22C55E] rounded-[50px] p-12 md:p-20 text-center relative overflow-hidden shadow-[0_0_100px_rgba(34,197,94,0.2)]">
+        <div className="max-w-4xl mx-auto relative">
+          <div className="bg-[#22C55E] rounded-[50px] p-12 md:p-20 text-center overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.25)]">
             <div className="relative z-10">
-                <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] uppercase italic tracking-tighter mb-8 leading-tight">
-                    Pronto para escalar a sua operação comercial?
-                </h2>
-                <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer" className="inline-flex bg-[#0F172A] text-white px-12 py-5 rounded-2xl font-black uppercase text-sm tracking-[0.2em] hover:scale-105 transition-all shadow-xl">
-                    Falar com um Consultor
-                </a>
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0F172A]/60 mb-4">Pronto para começar?</div>
+              <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] uppercase italic tracking-tighter mb-6 leading-tight">
+                Escale sua operação<br />comercial agora.
+              </h2>
+              <p className="text-[#0F172A]/70 font-medium mb-10 max-w-xl mx-auto">
+                Agende uma demonstração e veja como o WeGrow se adapta à sua rádio ou veículo em menos de 30 minutos.
+              </p>
+              <a
+                href="https://wa.me/5547997022381"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 bg-[#0F172A] text-white px-12 py-5 rounded-2xl font-black uppercase text-sm tracking-[0.15em] hover:scale-105 transition-all shadow-xl"
+              >
+                Falar com consultor <ArrowRight size={18} />
+              </a>
             </div>
-            <Zap className="absolute top-[-50px] left-[-50px] text-[#0F172A]/10" size={300} />
-            <ShieldCheck className="absolute bottom-[-50px] right-[-50px] text-[#0F172A]/10" size={250} />
+            <Zap className="absolute top-[-60px] left-[-60px] text-[#0F172A]/10" size={320} />
+            <TrendingUp className="absolute bottom-[-40px] right-[-40px] text-[#0F172A]/10" size={280} />
+          </div>
         </div>
       </section>
 
-      {/* --- FOOTER --- */}
-      <footer className="py-10 border-t border-white/5 text-center">
-        <p className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">
-          &copy; {new Date().getFullYear()} WeGrow Tecnologia - Todos os direitos reservados
-        </p>
+      {/* FOOTER */}
+      <footer className="py-10 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-sm">W</div>
+            <span className="text-sm font-black uppercase italic tracking-tighter text-white/60">WeGrow</span>
+          </div>
+          <p className="text-[10px] font-bold uppercase text-slate-600 tracking-[0.25em]">
+            &copy; {new Date().getFullYear()} WeGrow Tecnologia · Todos os direitos reservados
+          </p>
+          <div className="flex gap-6">
+            <Link href="/login" className="text-xs text-slate-500 hover:text-white transition-colors font-semibold">Login</Link>
+            <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-[#22C55E] transition-colors font-semibold">Contato</a>
+          </div>
+        </div>
       </footer>
-
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import React, { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import Navbar from '@/components/navbar';           
-import Topbar from '@/components/topbar';           
+import Navbar from '@/components/navbar';
+import Topbar from '@/components/topbar';
+import OnboardingTour from '@/components/OnboardingTour';
 
 interface LayoutWrapperProps {
   children: ReactNode;
@@ -38,6 +39,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
             {children}
           </div>
         </main>
+        <OnboardingTour />
       </div>
     </div>
   );

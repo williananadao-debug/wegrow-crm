@@ -1,12 +1,13 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { 
-  Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin, 
+import {
+  Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin,
   Upload, Target, MapPinOff, User, Briefcase, Printer, Edit2,
-  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle, 
-  Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw, 
-  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock 
+  Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle,
+  Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw,
+  Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock,
+  Mail, Send, Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -89,9 +90,9 @@ const formatarData = (dataIso: string) => {
     return new Date(dataIso).toLocaleDateString('pt-BR');
 };
 
-const LeadCard = React.memo(({ 
-    lead, index, isDirector, isLideranca, usersMap, clientesMap, 
-    abrirModal, enviarWhatsapp, fazerCheckin, mudarEtapa, imprimirContrato 
+const LeadCard = React.memo(({
+    lead, index, isDirector, isLideranca, usersMap, clientesMap,
+    abrirModal, enviarWhatsapp, fazerCheckin, mudarEtapa, imprimirContrato, abrirEmailModal
 }: any) => {
     const isPhantom = lead.id > 1000000;
 
@@ -161,10 +162,13 @@ const LeadCard = React.memo(({
                         </div>
                         
                         <div className="flex flex-col md:flex-row gap-2 md:gap-2">
-                            <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all">
+                            <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all" title="Enviar WhatsApp">
                                 <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
                             </button>
-                            <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all">
+                            <button onClick={(e) => { e.stopPropagation(); abrirEmailModal(lead); }} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-sky-400 hover:text-white hover:bg-sky-600/20 transition-all" title="Enviar Proposta por E-mail">
+                                <Mail size={18} className="md:w-[14px] md:h-[14px]"/>
+                            </button>
+                            <button onClick={(e) => fazerCheckin(lead.id, e)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-blue-400 hover:text-white hover:bg-blue-600/20 transition-all" title="Registrar Visita">
                                 <MapPin size={18} className="md:w-[14px] md:h-[14px]"/>
                             </button>
                         </div>
@@ -352,6 +356,12 @@ export default function DealsPage() {
   const [savingVisita, setSavingVisita] = useState(false);
   const [visitaCoords, setVisitaCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [visitaGeoStatus, setVisitaGeoStatus] = useState<'loading' | 'ok' | 'denied' | 'idle'>('idle');
+
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailLead, setEmailLead] = useState<Lead | null>(null);
+  const [emailDestino, setEmailDestino] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState<'idle' | 'ok' | 'error'>('idle');
 
   // 👇 ESTADOS DO NOVO POP-UP DE PERDA (IA ANALYTICS) 👇
   const [isLostModalOpen, setIsLostModalOpen] = useState(false);
@@ -1002,6 +1012,54 @@ export default function DealsPage() {
     }
   }, [perfil?.nome, supabase]);
 
+  const abrirEmailModal = useCallback((lead: Lead) => {
+    setEmailLead(lead);
+    setEmailDestino('');
+    setEmailResult('idle');
+    setIsEmailModalOpen(true);
+  }, []);
+
+  const enviarEmailProposta = useCallback(async () => {
+    if (!emailLead || !emailDestino) return;
+    setEmailSending(true);
+    setEmailResult('idle');
+    try {
+      const res = await fetch('/api/email/proposta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailDestino,
+          empresa: emailLead.empresa,
+          itens: emailLead.itens,
+          valor_total: emailLead.valor_total,
+          desconto: emailLead.desconto || 0,
+          vendedor_nome: perfil?.nome || '',
+          referencia: `LD-${String(emailLead.id).padStart(4, '0')}`,
+        }),
+      });
+      if (res.ok) {
+        setEmailResult('ok');
+        if (emailLead.id < 1000000) {
+          const notaEmail: Historico = {
+            id: Date.now(),
+            texto: `📧 Proposta enviada por e-mail para ${emailDestino} por ${perfil?.nome || 'Consultor'}`,
+            created_at: new Date().toISOString(),
+          };
+          const novasNotas = [notaEmail, ...(Array.isArray(emailLead.notas) ? emailLead.notas : [])];
+          supabase.from('leads').update({ notas: novasNotas }).eq('id', emailLead.id);
+          setLeads(prev => prev.map(l => l.id === emailLead.id ? { ...l, notas: novasNotas } : l));
+        }
+        setTimeout(() => setIsEmailModalOpen(false), 1800);
+      } else {
+        setEmailResult('error');
+      }
+    } catch {
+      setEmailResult('error');
+    } finally {
+      setEmailSending(false);
+    }
+  }, [emailLead, emailDestino, perfil?.nome, supabase]);
+
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
       if(!confirm("Tem certeza que deseja excluir esta oportunidade?")) return;
@@ -1485,8 +1543,8 @@ export default function DealsPage() {
                         {leadsDaColuna.map((lead, index) => {
                             if (!lead || !lead.id) return null;
                             return (
-                                <LeadCard 
-                                    key={lead.id} lead={lead} index={index} isDirector={isDirector} isLideranca={isLideranca} usersMap={usersMap} clientesMap={clientesMap} abrirModal={abrirModal} enviarWhatsapp={enviarWhatsapp} fazerCheckin={fazerCheckin} mudarEtapa={mudarEtapa} imprimirContrato={imprimirContrato} 
+                                <LeadCard
+                                    key={lead.id} lead={lead} index={index} isDirector={isDirector} isLideranca={isLideranca} usersMap={usersMap} clientesMap={clientesMap} abrirModal={abrirModal} enviarWhatsapp={enviarWhatsapp} fazerCheckin={fazerCheckin} mudarEtapa={mudarEtapa} imprimirContrato={imprimirContrato} abrirEmailModal={abrirEmailModal}
                                 />
                             );
                         })}
@@ -1857,6 +1915,78 @@ export default function DealsPage() {
       )}
 
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
+
+      {/* MODAL DE E-MAIL */}
+      {isEmailModalOpen && emailLead && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setIsEmailModalOpen(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-[32px] w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-center">
+                  <Mail size={18} className="text-sky-400"/>
+                </div>
+                <div>
+                  <h2 className="text-white font-black text-sm uppercase tracking-widest">Enviar Proposta</h2>
+                  <p className="text-slate-500 text-[10px] font-bold">{emailLead.empresa}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEmailModalOpen(false)} className="text-slate-500 hover:text-white p-2 rounded-xl hover:bg-white/5 transition-colors"><X size={16}/></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">E-mail do destinatário</label>
+                <input
+                  type="email"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-sky-500 transition-colors"
+                  placeholder="cliente@empresa.com.br"
+                  value={emailDestino}
+                  onChange={e => { setEmailDestino(e.target.value); setEmailResult('idle'); }}
+                  autoFocus
+                />
+              </div>
+
+              <div className="bg-white/5 border border-white/5 rounded-xl p-4 space-y-1.5">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Resumo da Proposta</p>
+                {(Array.isArray(emailLead.itens) ? emailLead.itens : []).slice(0, 4).map((item: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-slate-400 truncate max-w-[200px]">{item.quantidade}x {item.servico}</span>
+                    <span className="text-slate-300 font-bold ml-2 shrink-0">R$ {(item.quantidade * item.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+                <div className="border-t border-white/5 pt-2 mt-2 flex justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
+                  <span className="text-sm font-black text-[#22C55E]">R$ {emailLead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {emailResult === 'ok' && (
+                <div className="flex items-center gap-2 text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 rounded-xl p-3">
+                  <CheckCircle2 size={14}/><span className="text-xs font-black uppercase tracking-widest">E-mail enviado com sucesso!</span>
+                </div>
+              )}
+              {emailResult === 'error' && (
+                <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                  <X size={14}/><span className="text-xs font-black uppercase tracking-widest">Falha ao enviar. Verifique o e-mail.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-white/10 flex gap-3">
+              <button onClick={() => setIsEmailModalOpen(false)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={enviarEmailProposta}
+                disabled={!emailDestino.includes('@') || emailSending || emailResult === 'ok'}
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-all flex items-center justify-center gap-2"
+              >
+                {emailSending ? <><Loader2 size={14} className="animate-spin"/> Enviando...</> : <><Send size={14}/> Enviar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

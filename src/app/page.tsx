@@ -10,7 +10,7 @@ import {
 const STATS = [
   { value: '3x', label: 'mais vendas fechadas' },
   { value: '40%', label: 'redução de inadimplência' },
-  { value: '100%', label: 'integrado ao OPEC' },
+  { value: '100%', label: 'adaptável ao seu negócio' },
   { value: '2min', label: 'para criar uma proposta' },
 ];
 
@@ -31,9 +31,9 @@ const STEPS = [
   },
   {
     n: '03',
-    title: 'Contrato → Produção → Ar',
-    desc: 'Ao fechar, o job vai direto para a fila de produção. Quando aprovado, exporta para o OPEC com um clique.',
-    icon: <Radio size={22} />,
+    title: 'Contrato → Entrega → Resultado',
+    desc: 'Ao fechar, o job entra automaticamente na fila de produção ou entrega. Tudo conectado, sem retrabalho manual.',
+    icon: <Briefcase size={22} />,
     color: 'purple',
   },
 ];
@@ -110,7 +110,7 @@ export default function LandingPage() {
             <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden md:block text-xs text-slate-500 font-semibold">Para veículos de comunicação</span>
+            <span className="hidden md:block text-xs text-slate-500 font-semibold">CRM adaptável ao seu negócio</span>
             <Link href="/login" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
               Acessar
             </Link>
@@ -126,19 +126,19 @@ export default function LandingPage() {
 
         <div className="max-w-5xl mx-auto text-center relative">
           <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 px-4 py-1.5 rounded-full text-[#22C55E] text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-            <Radio size={12} /> CRM feito para rádios e veículos de comunicação
+            <Sparkles size={12} /> CRM inteligente e adaptável ao seu negócio
           </div>
 
           <h1 className="text-5xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-[0.9] mb-6">
-            Do atendimento<br />ao{' '}
+            Venda mais.<br />Entregue{' '}
             <span className="relative inline-block">
-              <span className="text-[#22C55E] relative z-10">ar.</span>
+              <span className="text-[#22C55E] relative z-10">melhor.</span>
               <span className="absolute inset-0 bg-[#22C55E]/10 blur-2xl rounded-full" />
             </span>
           </h1>
 
           <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed mb-12">
-            Funil de vendas, produção de mídias, OPEC e gestão financeira num sistema só. Sua equipe fecha mais, erra menos e entrega mais rápido.
+            Funil de vendas, gestão de clientes, metas, produção e relatórios num sistema só — adaptável a qualquer segmento. Sua equipe fecha mais, erra menos e entrega mais rápido.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
@@ -170,21 +170,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* NICHE CALLOUT */}
+      {/* ADAPTABILITY CALLOUT */}
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="bg-gradient-to-r from-white/5 via-white/[0.03] to-transparent border border-white/10 rounded-[40px] p-10 md:p-14 flex flex-col md:flex-row gap-10 items-center">
-            <div className="w-16 h-16 min-w-[64px] bg-[#22C55E] rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.4)]">
-              <Radio size={32} className="text-[#0F172A]" />
-            </div>
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-2">Verticalmente especializado</div>
-              <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight mb-3">
-                Não é um CRM genérico adaptado.
-              </h2>
-              <p className="text-slate-400 font-medium leading-relaxed">
-                O WeGrow foi construído do zero para rádios, portais e agências de mídia regional. Fluxo de PI, grade de veiculação, produção de spot e integração com OPEC são funcionalidades nativas — não são plugins ou gambiarra.
-              </p>
+          <div className="bg-gradient-to-r from-white/5 via-white/[0.03] to-transparent border border-white/10 rounded-[40px] p-10 md:p-14">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-4">Flexível por natureza</div>
+            <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight mb-4">
+              Moldado para o seu segmento.
+            </h2>
+            <p className="text-slate-400 font-medium leading-relaxed max-w-2xl mb-8">
+              O WeGrow se adapta ao fluxo do seu negócio — não o contrário. Configure seu catálogo de serviços, etapas do funil e equipe do jeito que faz sentido pra você.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { icon: <Radio size={16} />, label: 'Veículos de mídia' },
+                { icon: <Briefcase size={16} />, label: 'Agências' },
+                { icon: <Users size={16} />, label: 'Equipes comerciais' },
+                { icon: <Zap size={16} />, label: 'Qualquer segmento' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                  <span className="text-[#22C55E]">{item.icon}</span>
+                  <span className="text-sm font-semibold text-slate-300">{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -257,11 +265,11 @@ export default function LandingPage() {
             <div className="relative">
               <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Pipeline completo</div>
               <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-10">
-                Da proposta ao ar em minutos
+                Da proposta à entrega em minutos
               </h2>
 
               <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-                {['Novo Lead', 'Proposta', 'Contrato', 'Produção', 'OPEC / No Ar'].map((s, i, arr) => (
+                {['Novo Lead', 'Proposta', 'Contrato', 'Produção', 'Entregue'].map((s, i, arr) => (
                   <React.Fragment key={s}>
                     <div className="flex md:flex-col items-center md:items-center gap-3 md:gap-2 flex-1">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black border-2

@@ -3,8 +3,40 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+// Rate limit: 10 submissões por IP por janela de 60s
+const ipRequests = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+    const now = Date.now();
+
+    // Limpeza lazy: evita crescimento ilimitado do Map em instâncias de longa duração
+    if (ipRequests.size > 500) {
+        for (const [k, v] of ipRequests.entries()) {
+            if (now > v.resetAt) ipRequests.delete(k);
+        }
+    }
+
+    const entry = ipRequests.get(ip);
+    if (!entry || now > entry.resetAt) {
+        ipRequests.set(ip, { count: 1, resetAt: now + 60_000 });
+        return true;
+    }
+    if (entry.count >= 10) return false;
+    entry.count++;
+    return true;
+}
+
 export async function POST(request: Request) {
-    const empresaId = process.env.PORTAL_EMPRESA_ID ?? '11111111-1111-1111-1111-111111111111';
+    const empresaId = process.env.PORTAL_EMPRESA_ID;
+    if (!empresaId) {
+        console.error('[portal/lead] PORTAL_EMPRESA_ID não configurado');
+        return NextResponse.json({ erro: 'Serviço indisponível.' }, { status: 503 });
+    }
+
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    if (!checkRateLimit(ip)) {
+        return NextResponse.json({ erro: 'Muitas requisições. Tente novamente em breve.' }, { status: 429 });
+    }
 
     let body: any;
     try {

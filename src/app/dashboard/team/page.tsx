@@ -84,29 +84,32 @@ export default function TeamPage() {
           nome: editNome,
           cargo: editCargo,
           unidade: editUnidade,
-          cpf: editCpf, // 👇 SALVANDO O CPF NO BANCO
+          cpf: editCpf,
       };
 
       if (editingUser) {
           const { error } = await supabase.from('profiles').update(payload).eq('id', editingUser.id);
           if (error) throw error;
           setToastMessage("Perfil atualizado! ✅");
+          setShowToast(true);
       } else {
-          const { data, error } = await supabase.auth.signUp({
-            email: editEmail,
-            password: 'WeGrow@123', 
-            options: { data: { full_name: editNome } }
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+
+          const res = await fetch('/api/team/invite', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ ...payload, email: editEmail }),
           });
 
-          if (error) throw error;
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.erro || 'Erro ao criar acesso.');
 
-          if (data.user) {
-              await supabase.from('profiles').update({
-                  ...payload,
-                  empresa_id: perfil?.empresa_id 
-              }).eq('id', data.user.id);
-          }
-          setToastMessage("Acesso Criado! 🎉");
+          setToastMessage(json.aviso ? `Acesso criado. ${json.aviso}` : "Acesso criado! Convite enviado por e-mail. 🎉");
+          setShowToast(true);
       }
       setIsModalOpen(false);
       carregarEquipe();

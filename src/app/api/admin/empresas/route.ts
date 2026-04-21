@@ -105,6 +105,9 @@ export async function PATCH(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) {
+    console.error('[admin/empresas] PATCH error:', error);
+    return NextResponse.json({ erro: error.message }, { status: 500 });
+  }
   return NextResponse.json(data);
 }

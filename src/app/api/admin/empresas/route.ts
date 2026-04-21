@@ -21,32 +21,49 @@ async function verificarAdmin(request: Request) {
   return user;
 }
 
-// GET — lista todas as empresas com contagem de usuários
+// GET — lista todos os tenants reais (de profiles) mesclados com metadados de empresas
 export async function GET(request: Request) {
   if (!await verificarAdmin(request))
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   const db = supabaseAdmin();
 
-  const [{ data: empresas }, { data: profiles }] = await Promise.all([
-    db.from('empresas').select('*').order('created_at', { ascending: false }),
-    db.from('profiles').select('empresa_id, cargo'),
+  const [{ data: profiles }, { data: empresasData }] = await Promise.all([
+    db.from('profiles').select('empresa_id, nome, cargo, email').not('empresa_id', 'is', null),
+    db.from('empresas').select('*'),
   ]);
 
-  const contagemPorEmpresa = (profiles || []).reduce<Record<string, number>>((acc, p) => {
-    if (p.empresa_id) acc[p.empresa_id] = (acc[p.empresa_id] || 0) + 1;
-    return acc;
-  }, {});
+  // Agrupa por empresa_id — fonte da verdade são os profiles
+  const tenantMap = new Map<string, { diretor: string; total: number }>();
+  for (const p of profiles || []) {
+    if (!p.empresa_id) continue;
+    const atual = tenantMap.get(p.empresa_id) || { diretor: '', total: 0 };
+    atual.total++;
+    if (p.cargo === 'diretor' && !atual.diretor) atual.diretor = p.nome || p.email || '';
+    tenantMap.set(p.empresa_id, atual);
+  }
 
-  const resultado = (empresas || []).map(e => ({
-    ...e,
-    total_usuarios: contagemPorEmpresa[e.id] || 0,
-  }));
+  const empMap = new Map((empresasData || []).map(e => [e.id, e]));
+
+  const resultado = Array.from(tenantMap.entries()).map(([id, t]) => {
+    const emp = empMap.get(id);
+    return {
+      id,
+      nome: emp?.nome || t.diretor || id,
+      cnpj: emp?.cnpj || null,
+      plano: emp?.plano || 'essencial',
+      status: emp?.status || 'trial',
+      modulos: emp?.modulos || {},
+      created_at: emp?.created_at || null,
+      total_usuarios: t.total,
+      configurado: !!emp,
+    };
+  });
 
   return NextResponse.json(resultado);
 }
 
-// POST — cria empresa
+// POST — cria empresa nova (novo tenant, UUID gerado pelo banco)
 export async function POST(request: Request) {
   if (!await verificarAdmin(request))
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
@@ -67,7 +84,7 @@ export async function POST(request: Request) {
   return NextResponse.json(data, { status: 201 });
 }
 
-// PATCH — atualiza empresa (plano, status, módulos)
+// PATCH — upsert por id (cria registro na tabela empresas se ainda não existir para esse tenant)
 export async function PATCH(request: Request) {
   if (!await verificarAdmin(request))
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
@@ -80,8 +97,7 @@ export async function PATCH(request: Request) {
 
   const { data, error } = await supabaseAdmin()
     .from('empresas')
-    .update(campos)
-    .eq('id', id)
+    .upsert({ id, ...campos }, { onConflict: 'id' })
     .select()
     .single();
 

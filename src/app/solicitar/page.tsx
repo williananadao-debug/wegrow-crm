@@ -1,11 +1,13 @@
 "use client";
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2, Search, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Send, CheckCircle2, Mic2, Briefcase, Sparkles, Building2, Search, Loader2, Mail, ExternalLink } from 'lucide-react';
 
 export default function PortalCliente() {
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [leadId, setLeadId] = useState<number | null>(null);
 
   // Estados do formulário
   const [cnpj, setCnpj] = useState('');
@@ -13,6 +15,7 @@ export default function PortalCliente() {
   
   const [empresa, setEmpresa] = useState('');
   const [contato, setContato] = useState('');
+  const [email, setEmail] = useState('');
   const [unidade, setUnidade] = useState('');
   const [titulo, setTitulo] = useState('');
   const [briefing, setBriefing] = useState('');
@@ -75,6 +78,7 @@ export default function PortalCliente() {
         body: JSON.stringify({
           empresa,
           telefone: contato,
+          email: email || undefined,
           cnpj,
           unidade,
           cidade: unidade,
@@ -84,6 +88,8 @@ export default function PortalCliente() {
 
       if (!res.ok) throw new Error('api_error');
 
+      const json = await res.json();
+      setLeadId(json.id ?? null);
       setSucesso(true);
     } catch {
       alert('Não foi possível enviar sua solicitação. Tente novamente em instantes.');
@@ -96,24 +102,49 @@ export default function PortalCliente() {
     return (
       <div className="min-h-screen bg-[#0B1120] flex items-center justify-center p-4">
         <div className="bg-[#0F172A] border border-white/10 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-500">
-          <div className="w-20 h-20 bg-orange-500/20 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-[#22C55E]/20 text-[#22C55E] rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 size={40} />
           </div>
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Solicitação Recebida!</h2>
-          <p className="text-slate-400 text-sm mb-8">
+          <p className="text-slate-400 text-sm mb-4">
             Nossa equipe comercial já recebeu os seus dados e entrará em contato em breve com uma proposta exclusiva.
           </p>
-          <button 
-            onClick={() => { 
-              setSucesso(false); 
+
+          {leadId && (
+            <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 mb-4">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Número do Protocolo</p>
+              <p className="text-[#22C55E] font-black text-2xl">#{String(leadId).padStart(6, '0')}</p>
+            </div>
+          )}
+
+          {email && (
+            <p className="text-[11px] text-slate-500 mb-4 flex items-center gap-1 justify-center">
+              <Mail size={11}/> Confirmação enviada para <span className="text-slate-300">{email}</span>
+            </p>
+          )}
+
+          {leadId && (
+            <Link
+              href={`/solicitar/status?id=${leadId}`}
+              className="w-full flex items-center justify-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-colors mb-3"
+            >
+              <ExternalLink size={14}/> Acompanhar Status
+            </Link>
+          )}
+
+          <button
+            onClick={() => {
+              setSucesso(false);
+              setLeadId(null);
               setCnpj('');
-              setEmpresa(''); 
-              setContato(''); 
-              setUnidade(''); 
-              setTitulo(''); 
-              setBriefing(''); 
+              setEmpresa('');
+              setContato('');
+              setEmail('');
+              setUnidade('');
+              setTitulo('');
+              setBriefing('');
             }}
-            className="w-full bg-white/5 hover:bg-white/10 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors text-xs"
+            className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold uppercase tracking-widest transition-colors text-xs"
           >
             Fazer nova solicitação
           </button>
@@ -188,9 +219,15 @@ export default function PortalCliente() {
                 </div>
             </div>
 
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">WhatsApp para Retorno</label>
-              <input required type="tel" placeholder="(00) 00000-0000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={contato} onChange={handleContatoChange} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">WhatsApp para Retorno</label>
+                <input required type="tel" placeholder="(00) 00000-0000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={contato} onChange={handleContatoChange} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block flex items-center gap-1"><Mail size={10}/> E-mail (receber confirmação)</label>
+                <input type="email" placeholder="seu@email.com" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm font-semibold outline-none focus:border-orange-500 transition-colors placeholder:text-slate-600" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
             </div>
 
             <div className="border-t border-white/5 pt-6 mt-6">

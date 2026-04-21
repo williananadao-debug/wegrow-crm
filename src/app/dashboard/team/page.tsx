@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, User as UserIcon, ShieldAlert, Building2, Trash2, Plus, Loader2, Fingerprint } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, TrendingUp } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 
@@ -14,6 +14,7 @@ export default function TeamPage() {
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   const [members, setMembers] = useState<any[]>([]);
+  const [perfStats, setPerfStats] = useState<Record<string, { leads: number; ganhos: number; faturamento: number }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -46,10 +47,33 @@ export default function TeamPage() {
   const carregarEquipe = async () => {
     setLoading(true);
     try {
+      const agora = new Date();
+      const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
+
       let query = supabase.from('profiles').select('id, nome, email, cargo, unidade, empresa_id, cpf').order('nome');
       if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
-      const { data } = await query;
-      setMembers(data || []);
+
+      let leadsQuery = supabase
+        .from('leads')
+        .select('user_id, status, valor_total')
+        .gte('created_at', inicioMes);
+      if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
+
+      const [{ data: membersData }, { data: leadsData }] = await Promise.all([query, leadsQuery]);
+
+      setMembers(membersData || []);
+
+      const stats: Record<string, { leads: number; ganhos: number; faturamento: number }> = {};
+      for (const lead of leadsData || []) {
+        if (!lead.user_id) continue;
+        if (!stats[lead.user_id]) stats[lead.user_id] = { leads: 0, ganhos: 0, faturamento: 0 };
+        stats[lead.user_id].leads++;
+        if (lead.status === 'ganho') {
+          stats[lead.user_id].ganhos++;
+          stats[lead.user_id].faturamento += lead.valor_total || 0;
+        }
+      }
+      setPerfStats(stats);
     } catch (error) {
       console.error("Erro ao carregar equipe:", error);
     } finally {
@@ -155,7 +179,10 @@ export default function TeamPage() {
         <div className="flex justify-center items-center h-40 animate-pulse text-slate-500 font-bold">Carregando...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {members.map((m) => (
+          {members.map((m) => {
+            const s = perfStats[m.id];
+            const taxa = s && s.leads > 0 ? Math.round((s.ganhos / s.leads) * 100) : 0;
+            return (
               <div key={m.id} className="bg-[#0F172A] border border-white/5 p-5 rounded-3xl relative shadow-xl flex flex-col h-full">
                 {isDirector && (
                     <button onClick={() => abrirModalEdit(m)} className="absolute top-4 right-4 p-2 bg-white/5 text-slate-400 rounded-full hover:bg-blue-600 hover:text-white transition-all z-10"><Edit2 size={14} /></button>
@@ -167,12 +194,38 @@ export default function TeamPage() {
                         <p className="text-[9px] text-slate-500 font-mono truncate">{m.cpf || 'CPF NÃO CADASTRADO'}</p>
                     </div>
                 </div>
+
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-3 mb-4">
+                  <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1 mb-2"><TrendingUp size={9}/> Performance — mês atual</p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-lg font-black text-white">{s?.leads ?? 0}</p>
+                      <p className="text-[8px] text-slate-500 uppercase font-bold">Leads</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-black text-[#22C55E]">{s?.ganhos ?? 0}</p>
+                      <p className="text-[8px] text-slate-500 uppercase font-bold">Ganhos</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-black text-orange-400">{taxa}%</p>
+                      <p className="text-[8px] text-slate-500 uppercase font-bold">Conv.</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-white/5">
+                    <p className="text-[10px] font-black text-white text-center">
+                      R$ {(s?.faturamento ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-[8px] text-slate-500 uppercase font-bold text-center">Faturamento</p>
+                  </div>
+                </div>
+
                 <div className="mt-auto pt-4 border-t border-white/5 flex gap-2 flex-wrap">
                     <span className="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[9px] font-black uppercase px-2 py-1 rounded">{m.cargo}</span>
                     <span className="bg-white/5 text-slate-300 border border-white/10 px-2 py-1 rounded text-[9px] font-black uppercase">{m.unidade}</span>
                 </div>
               </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

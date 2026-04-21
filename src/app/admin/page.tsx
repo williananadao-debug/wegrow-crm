@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Building2, Plus, Edit2, X, Save, Loader2, Users, Package,
-  ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight
+  ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
+  BarChart2, TrendingUp, Clock, Activity
 } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -41,6 +42,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Empresa | null>(null);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   // Form empresa selecionada
@@ -89,9 +91,17 @@ export default function AdminPage() {
     setEditPlano(e.plano);
     setEditStatus(e.status);
     setEditModulos({ ...e.modulos });
-    const res = await fetch(`/api/admin/unidades?empresa_id=${e.id}`, { headers: headers() });
-    if (res.ok) setUnidades(await res.json());
+    setMetrics(null);
+
+    const [resUnidades, resMetrics] = await Promise.all([
+      fetch(`/api/admin/unidades?empresa_id=${e.id}`, { headers: headers() }),
+      fetch(`/api/admin/metrics?empresa_id=${e.id}`, { headers: headers() }),
+    ]);
+
+    if (resUnidades.ok) setUnidades(await resUnidades.json());
     else setUnidades([]);
+
+    if (resMetrics.ok) setMetrics(await resMetrics.json());
   };
 
   const salvarEmpresa = async () => {
@@ -274,6 +284,57 @@ export default function AdminPage() {
                 <div className="mt-4 pt-4 border-t border-white/5">
                   <p className="text-[10px] text-slate-600 font-mono">ID: {empresaSelecionada.id}</p>
                 </div>
+              </div>
+
+              {/* Métricas */}
+              <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6">
+                <h3 className="font-black uppercase text-sm flex items-center gap-2 mb-5">
+                  <BarChart2 size={14} className="text-orange-400"/> Métricas do Tenant
+                </h3>
+
+                {!metrics ? (
+                  <div className="flex justify-center py-6"><Loader2 className="animate-spin text-slate-600" size={20}/></div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                      {[
+                        { label: 'Leads Total', value: metrics.total_leads, icon: TrendingUp, color: 'text-blue-400' },
+                        { label: 'Leads no Mês', value: metrics.leads_mes, icon: Activity, color: 'text-orange-400' },
+                        { label: 'Ganhos no Mês', value: metrics.leads_ganhos_mes, icon: TrendingUp, color: 'text-[#22C55E]' },
+                        { label: 'Usuários Ativos', value: `${metrics.usuarios_ativos}/${metrics.total_usuarios}`, icon: Users, color: 'text-purple-400' },
+                      ].map(({ label, value, icon: Icon, color }) => (
+                        <div key={label} className="bg-[#0B1120] border border-white/5 rounded-2xl p-3 text-center">
+                          <Icon size={14} className={`${color} mx-auto mb-1`}/>
+                          <p className={`text-xl font-black ${color}`}>{value}</p>
+                          <p className="text-[8px] text-slate-500 uppercase font-black mt-0.5">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Logs de acesso */}
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 mb-3"><Clock size={10}/> Último Acesso por Usuário</p>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                        {[...(metrics.profiles || [])].sort((a: any, b: any) =>
+                          (b.ultimo_acesso || '').localeCompare(a.ultimo_acesso || '')
+                        ).map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.ativo_recente ? 'bg-[#22C55E]' : 'bg-slate-600'}`}/>
+                              <p className="text-xs font-black truncate">{p.nome || p.email}</p>
+                              <span className="text-[8px] text-slate-600 uppercase font-bold shrink-0">{p.cargo}</span>
+                            </div>
+                            <p className="text-[9px] text-slate-500 font-mono shrink-0 ml-2">
+                              {p.ultimo_acesso
+                                ? new Date(p.ultimo_acesso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                : 'nunca'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Unidades/Filiais */}

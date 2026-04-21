@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  Target, Users, MapPin, Calendar, CheckCircle2, Play, AlertCircle, 
-  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck, Map, Search, X
+import {
+  Target, Users, MapPin, Calendar, CheckCircle2, Play, AlertCircle,
+  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck, Map, Search, X, BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
@@ -39,6 +39,8 @@ export default function PremisesPage() {
   // 👇 AQUI FICAM OS MAPEAMENTOS QUE VÊM DO BANCO DE DADOS 👇
   const [mapeamentosSalvos, setMapeamentosSalvos] = useState<any[]>([]);
 
+  const [rawLeadsIA, setRawLeadsIA] = useState<any[]>([]);
+
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -49,8 +51,9 @@ export default function PremisesPage() {
     if (user && isDirector && perfil?.empresa_id) {
       fetchVendedores();
       fetchHistorico();
+      fetchLeadsIA();
       fetchCidadesIBGE();
-      fetchMapeamentos(); // Puxa os clusters ao abrir a tela!
+      fetchMapeamentos();
     }
   }, [user, isDirector, perfil?.empresa_id]);
 
@@ -72,6 +75,16 @@ export default function PremisesPage() {
         .eq('empresa_id', perfil?.empresa_id)
         .neq('cargo', 'diretor');
     setVendedores(data || []);
+  };
+
+  const fetchLeadsIA = async () => {
+    const { data } = await supabase
+      .from('leads')
+      .select('id, status, valor_total, origem, descricao, user_id')
+      .eq('empresa_id', perfil?.empresa_id)
+      .or('origem.ilike.%IA%,origem.ilike.%Inteligência%,origem.ilike.%Estratégia%,descricao.ilike.%IA Sugere%')
+      .limit(500);
+    setRawLeadsIA(data || []);
   };
 
   const fetchHistorico = async () => {
@@ -118,6 +131,7 @@ export default function PremisesPage() {
       setToastMessage(`🤖 IA em ação! ${data || 0} novas oportunidades no funil.`);
       setShowToast(true);
       fetchHistorico();
+      fetchLeadsIA();
     } catch (err: any) { alert("Erro na Inteligência: " + err.message); }
     setLoading(false);
   };
@@ -161,6 +175,7 @@ export default function PremisesPage() {
       setShowToast(true);
       setUnidadeEstrategiaManual('');
       fetchHistorico();
+      fetchLeadsIA();
     } catch (err: any) { alert(err.message); }
     setLoading(false);
   };
@@ -469,45 +484,111 @@ export default function PremisesPage() {
           </div>
         </div>
 
-        {/* HISTÓRICO (Lado Direito) */}
-        <div className="lg:col-span-7">
-           <div className="bg-[#0F172A] border border-white/5 rounded-[40px] p-8 h-full">
-            <h3 className="text-white font-black uppercase italic mb-8 flex items-center gap-3">
-              <Clock className="text-slate-500" size={20} /> Ordens Estratégicas Recentes
-            </h3>
-            
-            <div className="space-y-4">
-              {premissas.length === 0 ? (
-                  <div className="text-center py-20 bg-white/5 rounded-[32px] border border-dashed border-white/10">
-                      <Zap className="mx-auto text-slate-700 mb-4" size={40}/>
-                      <p className="text-slate-500 text-xs font-black uppercase tracking-widest">A aguardar comando</p>
-                  </div>
-              ) : (
-                premissas.map((p) => (
-                    <div key={p.id} className="bg-white/[0.03] border border-white/5 p-5 rounded-[28px] flex items-center justify-between hover:bg-white/[0.05] transition-all">
-                      <div className="flex items-center gap-5">
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl ${p.tipo_cliente === 'Recuperação' ? 'bg-purple-600/20 text-purple-400' : 'bg-blue-600/20 text-blue-400'}`}>
-                          {p.quantidade}
-                        </div>
-                        <div>
-                          <h4 className="text-white font-black text-sm uppercase italic tracking-tight">{p.titulo}</h4>
-                          <div className="flex items-center gap-4 mt-1">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1.5">
-                                <User size={12}/> {vendedores.find(v => v.id === p.user_id)?.nome || 'Equipe'}
-                            </span>
-                            <span className="text-[10px] text-[#22C55E] font-black uppercase flex items-center gap-1.5"><ShieldCheck size={12}/> Executado</span>
+        {/* PAINEL DE EFICÁCIA (Lado Direito) */}
+        <div className="lg:col-span-7 space-y-6">
+
+          {/* KPIs de Eficácia */}
+          {(() => {
+            const totalGerados = rawLeadsIA.length;
+            const ganhos = rawLeadsIA.filter(l => l.status === 'ganho');
+            const conversao = totalGerados > 0 ? (ganhos.length / totalGerados) * 100 : 0;
+            const faturamento = ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+
+            const tipoConfig: Record<string, { label: string; color: string; bg: string; keywords: string[] }> = {
+              resgate: { label: 'Resgate de Inativos', color: 'text-purple-400', bg: 'bg-purple-600/20 border-purple-500/30', keywords: ['resgate', 'inativo', 'recupera'] },
+              churn: { label: 'Prevenção de Perda', color: 'text-orange-400', bg: 'bg-orange-600/20 border-orange-500/30', keywords: ['churn', 'perda', 'risco'] },
+              mix: { label: 'Primeira Compra', color: 'text-green-400', bg: 'bg-green-600/20 border-green-500/30', keywords: ['primeira', 'mix', 'novo'] },
+            };
+
+            const porTipo = Object.entries(tipoConfig).map(([key, cfg]) => {
+              const leads = rawLeadsIA.filter(l =>
+                cfg.keywords.some(kw => (l.origem || '').toLowerCase().includes(kw) || (l.descricao || '').toLowerCase().includes(kw))
+              );
+              const g = leads.filter(l => l.status === 'ganho');
+              return { key, ...cfg, total: leads.length, ganhos: g.length, conv: leads.length > 0 ? (g.length / leads.length) * 100 : 0, fat: g.reduce((s, l) => s + Number(l.valor_total || 0), 0) };
+            });
+
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Leads Gerados', value: totalGerados, color: 'text-purple-400', suffix: '' },
+                    { label: 'Convertidos', value: ganhos.length, color: 'text-[#22C55E]', suffix: '' },
+                    { label: 'Taxa de Conversão', value: conversao.toFixed(1), color: 'text-blue-400', suffix: '%' },
+                    { label: 'Faturamento Gerado', value: `R$ ${(faturamento/1000).toFixed(0)}k`, color: 'text-yellow-400', suffix: '' },
+                  ].map((kpi, i) => (
+                    <div key={i} className="bg-[#0F172A] border border-white/5 p-4 rounded-3xl">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{kpi.label}</p>
+                      <p className={`text-2xl font-black italic ${kpi.color}`}>{kpi.value}{kpi.suffix}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Por tipo de algoritmo */}
+                <div className="bg-[#0F172A] border border-white/5 rounded-[32px] p-6">
+                  <h3 className="text-white font-black uppercase italic mb-5 flex items-center gap-2">
+                    <BarChart3 size={16} className="text-purple-400"/> Conversão por Algoritmo
+                  </h3>
+                  <div className="space-y-4">
+                    {porTipo.map(t => (
+                      <div key={t.key}>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className={`text-[10px] font-black uppercase ${t.color}`}>{t.label}</span>
+                          <div className="flex items-center gap-3 text-[9px] font-bold text-slate-400">
+                            <span>{t.total} leads</span>
+                            <span className={t.color}>{t.ganhos} ganhos</span>
+                            <span className="font-black text-white">{t.conv.toFixed(0)}%</span>
                           </div>
                         </div>
+                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-700 ${t.key === 'resgate' ? 'bg-purple-500' : t.key === 'churn' ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${Math.min(t.conv, 100)}%` }} />
+                        </div>
+                        {t.fat > 0 && <p className="text-[9px] text-slate-600 mt-0.5">R$ {t.fat.toLocaleString('pt-BR', {maximumFractionDigits: 0})} faturados</p>}
                       </div>
-                      <div className="text-right">
-                         <p className="text-[11px] text-white font-mono font-bold tracking-tighter">{new Date(p.created_at).toLocaleDateString('pt-PT')}</p>
-                         <p className="text-[9px] text-slate-500 uppercase font-black">ID: #{p.id.toString().slice(-4)}</p>
-                      </div>
-                    </div>
-                ))
-              )}
-            </div>
-          </div>
+                    ))}
+                    {rawLeadsIA.length === 0 && (
+                      <p className="text-slate-600 text-xs font-bold text-center py-4 uppercase">Nenhum lead de IA registrado ainda.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Ordens recentes compactas */}
+                <div className="bg-[#0F172A] border border-white/5 rounded-[32px] p-6">
+                  <h3 className="text-white font-black uppercase italic mb-4 flex items-center gap-2">
+                    <Clock size={16} className="text-slate-500"/> Campanhas Recentes
+                  </h3>
+                  <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {premissas.length === 0 ? (
+                      <div className="text-center py-8 text-slate-600 text-xs font-black uppercase">A aguardar comando</div>
+                    ) : premissas.map((p) => {
+                      const leadsVinc = rawLeadsIA.filter(l =>
+                        (l.origem || '').toLowerCase().includes((p.titulo || '').toLowerCase().substring(0, 10))
+                      );
+                      const ganhosVinc = leadsVinc.filter(l => l.status === 'ganho');
+                      const convVinc = leadsVinc.length > 0 ? Math.round((ganhosVinc.length / leadsVinc.length) * 100) : 0;
+                      return (
+                        <div key={p.id} className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-base flex-shrink-0 ${p.tipo_cliente === 'Recuperação' ? 'bg-purple-600/20 text-purple-400' : 'bg-blue-600/20 text-blue-400'}`}>
+                              {p.quantidade}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-white font-black text-xs uppercase italic truncate">{p.titulo}</h4>
+                              <span className="text-[9px] text-slate-500 font-bold uppercase">{vendedores.find(v => v.id === p.user_id)?.nome || 'Equipe'} · {new Date(p.created_at).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-2">
+                            <p className={`text-sm font-black ${convVinc > 0 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{convVinc}%</p>
+                            <p className="text-[9px] text-slate-600 uppercase">{ganhosVinc.length}/{leadsVinc.length || p.quantidade}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
       </div>

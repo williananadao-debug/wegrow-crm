@@ -18,7 +18,7 @@ type Cliente = {
 
 type Unit = { id: string; nome: string; cidade: string; estado?: string; };
 type Vendedor = { id: string; nome: string; };
-type VendaHistorico = { id: number; created_at: string; valor_total: number; status: string; itens: any[]; };
+type VendaHistorico = { id: number; created_at: string; valor_total: number; status: string; etapa: number; itens: any[]; notas: any[]; unidade?: string; user_id?: string; };
 
 const ITEMS_PER_PAGE = 20;
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
@@ -47,6 +47,7 @@ export default function CustomersPage() {
 
   const [busca, setBusca] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | 'ativo' | 'inativo'>('ativo');
+  const [riscoFilter, setRiscoFilter] = useState<'todos' | 'aprovado' | 'risco_moderado' | 'reprovado' | 'em_analise'>('todos');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -76,7 +77,7 @@ export default function CustomersPage() {
     if (perfil) fetchSellers();
   }, [perfil]);
 
-  useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter]);
+  useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter, riscoFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -95,6 +96,7 @@ export default function CustomersPage() {
         let query = supabase.from('clientes').select('*', { count: 'exact' }).order('nome_empresa', { ascending: true }).range(from, to);
         if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
         if (statusFilter !== 'todos') query = query.eq('status', statusFilter);
+        if (riscoFilter !== 'todos') query = query.eq('status_risco', riscoFilter);
         if (busca.trim()) query = query.or(`nome_empresa.ilike.%${busca}%,cnpj.ilike.%${busca}%,cidade.ilike.%${busca}%,bairro.ilike.%${busca}%,email.ilike.%${busca}%`);
 
         const { data, count, error } = await query;
@@ -110,7 +112,7 @@ export default function CustomersPage() {
   const loadMore = () => { const nextPage = page + 1; setPage(nextPage); fetchClientes(nextPage, false); };
 
   const fetchHistorico = async (clientId: number) => {
-    const { data } = await supabase.from('leads').select('id, created_at, valor_total, status').eq('client_id', clientId).order('created_at', { ascending: false });
+    const { data } = await supabase.from('leads').select('id, created_at, valor_total, status, etapa, itens, notas, unidade, user_id').eq('client_id', clientId).order('created_at', { ascending: false });
     if (data) setHistoricoVendas(data as any);
   };
 
@@ -352,6 +354,12 @@ export default function CustomersPage() {
             <button onClick={() => setStatusFilter('ativo')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'ativo' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>Ativos</button>
             <button onClick={() => setStatusFilter('inativo')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'inativo' ? 'bg-red-500 text-white' : 'text-slate-500 hover:text-white'}`}>Inativos</button>
             <button onClick={() => setStatusFilter('todos')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'todos' ? 'bg-white text-black' : 'text-slate-500 hover:text-white'}`}>Todos</button>
+        </div>
+        <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
+            <button onClick={() => setRiscoFilter('todos')} className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${riscoFilter === 'todos' ? 'bg-white/20 text-white' : 'text-slate-500 hover:text-white'}`}>Risco</button>
+            <button onClick={() => setRiscoFilter('aprovado')} className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${riscoFilter === 'aprovado' ? 'bg-green-500 text-white' : 'text-slate-500 hover:text-green-400'}`}>🟢</button>
+            <button onClick={() => setRiscoFilter('risco_moderado')} className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${riscoFilter === 'risco_moderado' ? 'bg-yellow-500 text-white' : 'text-slate-500 hover:text-yellow-400'}`}>🟡</button>
+            <button onClick={() => setRiscoFilter('reprovado')} className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${riscoFilter === 'reprovado' ? 'bg-red-500 text-white' : 'text-slate-500 hover:text-red-400'}`}>🔴</button>
         </div>
       </div>
 
@@ -616,18 +624,62 @@ export default function CustomersPage() {
 
                 {activeTab === 'historico' && (
                 <div className="space-y-3 pb-2">
-                    {historicoVendas.map(venda => (
-                    <div key={venda.id} className="flex justify-between items-center bg-white/[0.03] p-4 rounded-xl border border-white/5">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-500 font-black uppercase mb-1">{new Date(venda.created_at).toLocaleDateString('pt-BR')}</span>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-blue-500/20 text-blue-500 w-fit">{venda.status}</span>
+                    {historicoVendas.length > 0 && (
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className="bg-[#22C55E]/10 border border-[#22C55E]/20 p-3 rounded-xl text-center">
+                                <p className="text-[10px] font-black text-[#22C55E] uppercase">Ganhos</p>
+                                <p className="text-lg font-black text-white">{historicoVendas.filter(v => v.status === 'ganho').length}</p>
+                            </div>
+                            <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-center">
+                                <p className="text-[10px] font-black text-red-400 uppercase">Perdidos</p>
+                                <p className="text-lg font-black text-white">{historicoVendas.filter(v => v.status === 'perdido').length}</p>
+                            </div>
+                            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl text-center">
+                                <p className="text-[10px] font-black text-blue-400 uppercase">Faturado</p>
+                                <p className="text-sm font-black text-white">R$ {historicoVendas.filter(v => v.status === 'ganho').reduce((s, v) => s + (v.valor_total || 0), 0).toLocaleString('pt-BR', {minimumFractionDigits: 0})}</p>
+                            </div>
                         </div>
-                        <div className="flex flex-col items-end">
-                            <span className="text-sm font-black text-white">R$ {venda.valor_total.toLocaleString('pt-BR')}</span>
-                            <span className="text-[8px] text-slate-500 font-mono mt-1">Ref: {formatId(venda.id, 'LD')}</span>
+                    )}
+                    {historicoVendas.map(venda => {
+                        const isGanho = venda.status === 'ganho';
+                        const isPerdido = venda.status === 'perdido';
+                        const borderColor = isGanho ? 'border-l-[#22C55E]' : isPerdido ? 'border-l-red-500' : 'border-l-blue-500';
+                        const statusBg = isGanho ? 'bg-[#22C55E]/20 text-[#22C55E]' : isPerdido ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400';
+                        const notas = Array.isArray(venda.notas) ? venda.notas : [];
+                        return (
+                        <div key={venda.id} className={`bg-white/[0.02] p-4 rounded-xl border border-white/5 border-l-2 ${borderColor}`}>
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${statusBg}`}>{venda.status}</span>
+                                    {venda.unidade && <span className="text-[9px] bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{venda.unidade}</span>}
+                                    <span className="text-[9px] text-slate-600 font-mono">{formatId(venda.id, 'LD')}</span>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm font-black text-white">R$ {(venda.valor_total || 0).toLocaleString('pt-BR')}</p>
+                                    <p className="text-[9px] text-slate-500">{new Date(venda.created_at).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                            </div>
+                            {Array.isArray(venda.itens) && venda.itens.length > 0 && (
+                                <div className="space-y-0.5 border-l border-white/10 pl-2 mb-2">
+                                    {venda.itens.slice(0, 3).map((item: any, i: number) => (
+                                        <p key={i} className="text-[9px] text-slate-400 font-bold uppercase truncate">{item.quantidade}x {item.servico}</p>
+                                    ))}
+                                    {venda.itens.length > 3 && <p className="text-[9px] text-slate-600 italic">+{venda.itens.length - 3} itens...</p>}
+                                </div>
+                            )}
+                            {notas.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-white/5 space-y-1">
+                                    {notas.slice(0, 2).map((n: any, i: number) => (
+                                        <p key={i} className="text-[9px] text-slate-500 flex items-start gap-1">
+                                            <span className="text-slate-700 flex-shrink-0">•</span> {n.texto}
+                                        </p>
+                                    ))}
+                                    {notas.length > 2 && <p className="text-[9px] text-slate-600 italic">+{notas.length - 2} notas...</p>}
+                                </div>
+                            )}
                         </div>
-                    </div>
-                    ))}
+                        );
+                    })}
                     {historicoVendas.length === 0 && (
                          <div className="text-center py-10 opacity-50"><History size={32} className="mx-auto mb-2 text-slate-600"/><p className="text-xs font-bold text-slate-500 uppercase">Sem histórico.</p></div>
                     )}

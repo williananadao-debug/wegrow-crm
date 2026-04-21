@@ -3,19 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-// Rate limit: 10 submissões por IP por janela de 60s
 const ipRequests = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {
     const now = Date.now();
-
-    // Limpeza lazy: evita crescimento ilimitado do Map em instâncias de longa duração
     if (ipRequests.size > 500) {
         for (const [k, v] of ipRequests.entries()) {
             if (now > v.resetAt) ipRequests.delete(k);
         }
     }
-
     const entry = ipRequests.get(ip);
     if (!entry || now > entry.resetAt) {
         ipRequests.set(ip, { count: 1, resetAt: now + 60_000 });
@@ -24,6 +20,36 @@ function checkRateLimit(ip: string): boolean {
     if (entry.count >= 10) return false;
     entry.count++;
     return true;
+}
+
+async function enviarEmailConfirmacao(email: string, empresa: string, leadId: number) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return;
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
+    const statusUrl = `${baseUrl}/solicitar/status?id=${leadId}`;
+
+    await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            from: 'Portal WeGrow <portal@wegrow.app.br>',
+            to: [email],
+            subject: `✅ Solicitação recebida — ${empresa}`,
+            html: `
+                <div style="font-family:sans-serif;background:#0B1120;color:#fff;padding:40px;border-radius:16px;max-width:500px;margin:0 auto">
+                    <h1 style="color:#22C55E;font-size:24px;margin-bottom:8px">Solicitação Recebida!</h1>
+                    <p style="color:#94a3b8;margin-bottom:24px">Olá <strong style="color:#fff">${empresa}</strong>, recebemos seu pedido de orçamento e nossa equipe comercial entrará em contato em breve.</p>
+                    <div style="background:#0F172A;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:24px">
+                        <p style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 4px">Número do Protocolo</p>
+                        <p style="color:#fff;font-size:20px;font-weight:900;margin:0">#${String(leadId).padStart(6, '0')}</p>
+                    </div>
+                    <a href="${statusUrl}" style="display:inline-block;background:#22C55E;color:#0F172A;padding:14px 28px;border-radius:12px;font-weight:900;text-decoration:none;font-size:14px;text-transform:uppercase;letter-spacing:0.05em">Acompanhar Status</a>
+                    <p style="color:#475569;font-size:11px;margin-top:32px">WeGrow CRM · Portal do Anunciante</p>
+                </div>
+            `,
+        }),
+    }).catch(err => console.error('[portal/lead] Resend error:', err));
 }
 
 export async function POST(request: Request) {
@@ -45,7 +71,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'Corpo da requisição inválido.' }, { status: 400 });
     }
 
-    const { empresa, telefone, cnpj, unidade, cidade, descricao } = body;
+    const { empresa, telefone, email, cnpj, unidade, cidade, descricao } = body;
 
     if (!empresa || !telefone) {
         return NextResponse.json({ erro: 'Campos obrigatórios ausentes.' }, { status: 422 });
@@ -57,7 +83,7 @@ export async function POST(request: Request) {
         { auth: { persistSession: false } }
     );
 
-    const { error } = await supabaseAdmin.from('leads').insert([{
+    const { data, error } = await supabaseAdmin.from('leads').insert([{
         empresa,
         telefone,
         cnpj: cnpj || null,
@@ -69,12 +95,16 @@ export async function POST(request: Request) {
         valor_total: 0,
         etapa: 0,
         empresa_id: empresaId,
-    }]);
+    }]).select('id').single();
 
     if (error) {
         console.error('[portal/lead] Supabase error:', error.code);
         return NextResponse.json({ erro: 'Não foi possível registrar sua solicitação.' }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true }, { status: 201 });
+    if (email && data?.id) {
+        await enviarEmailConfirmacao(email, empresa, data.id);
+    }
+
+    return NextResponse.json({ ok: true, id: data?.id }, { status: 201 });
 }

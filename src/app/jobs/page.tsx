@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { 
-  Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, 
-  Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User, Hash, Radio, FileText, CalendarDays, ShieldCheck, AlignLeft, Archive
+import {
+  Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, AlertTriangle, Loader2,
+  Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User, Hash, Radio, FileText, CalendarDays, ShieldCheck, AlignLeft, Archive, Upload, Music
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -13,6 +13,7 @@ type Job = {
   deadline: string; created_at: string; user_id: string; empresa_id?: string; unidade?: string;
   vendedor_nome?: string; client_id?: number; cliente?: string; agencia?: string; num_pi?: string;
   data_inicio?: string; hora_inicio?: string; data_fim?: string; hora_fim?: string; itens_opec?: any;
+  audio_url?: string;
 };
 
 const STAGES = {
@@ -39,11 +40,13 @@ const getLocalYYYYMMDD = (date: Date) => {
 
 const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirector, abrirModal, handleFinalizar, isOpec }: any) => {
     const leadRef = job.briefing?.match(/LD-\d+/)?.[0] || ''; const isFinalizado = job.stage === 'entregue';
+    const deadlineDiff = job.deadline && !isFinalizado ? Math.ceil((new Date(job.deadline + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000) : null;
+    const deadlineClass = deadlineDiff === null ? '' : deadlineDiff < 0 ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/30' : deadlineDiff <= 2 ? 'bg-orange-500/20 text-orange-400 animate-pulse border border-orange-500/30' : 'bg-white/5 text-slate-400';
     return (
         <Draggable draggableId={job.id.toString()} index={index} isDragDisabled={isOpec}>
           {(prov, snap) => (
             <div ref={prov.innerRef} {...prov.draggableProps} {...prov.dragHandleProps} className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all ${isOpec ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} relative flex flex-col ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''} ${isFinalizado ? 'opacity-70 hover:opacity-100 grayscale hover:grayscale-0' : ''}`} onClick={() => abrirModal(job)}>
-              <div className="flex justify-between items-start mb-2"><span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${getPriorityColor(job.prioridade)}`}>{job.prioridade}</span><div className="flex gap-2 items-center">{leadRef && (<span className="text-[9px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5 border border-blue-500/20 shadow-sm"><Hash size={8}/> {leadRef}</span>)}{job.deadline && (<div className={`flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${new Date(job.deadline) < new Date() && !isFinalizado ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-slate-400'}`}><Clock size={10}/> {formatarData(job.deadline).slice(0,5)}</div>)}</div></div>
+              <div className="flex justify-between items-start mb-2"><span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${getPriorityColor(job.prioridade)}`}>{job.prioridade}</span><div className="flex gap-2 items-center">{leadRef && (<span className="text-[9px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded tracking-widest flex items-center gap-0.5 border border-blue-500/20 shadow-sm"><Hash size={8}/> {leadRef}</span>)}{job.audio_url && (<span className="text-[8px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 flex items-center gap-0.5"><Music size={8}/> ÁUDIO</span>)}{job.deadline && (<div className={`flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${deadlineClass}`}><Clock size={10}/> {deadlineDiff !== null && deadlineDiff <= 2 && deadlineDiff >= 0 ? `${deadlineDiff}D` : deadlineDiff !== null && deadlineDiff < 0 ? 'ATRASADO' : formatarData(job.deadline).slice(0,5)}</div>)}</div></div>
               <h4 className="font-black text-sm text-white mb-2 leading-tight uppercase">{job.titulo}</h4>
               {job.itens_opec && job.itens_opec.length > 0 && ( <div className="flex flex-col gap-1 mb-2 bg-black/30 p-2 rounded-lg border border-white/5"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mb-0.5 border-b border-white/5 pb-1">Mídia Contratada</span>{job.itens_opec.map((item: any, idx: number) => (<span key={idx} className="text-[10px] text-slate-300 font-bold uppercase flex items-center gap-1 truncate"><span className="text-emerald-400 bg-emerald-500/10 px-1 rounded">{item.quantidade}x</span> {item.servico}</span>))}</div> )}
               {(job.data_inicio || job.data_fim) && ( <div className="flex flex-col gap-1.5 mb-3 bg-black/30 p-2 rounded-lg border border-white/5"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mb-0.5 border-b border-white/5 pb-1 flex items-center gap-1"><CalendarDays size={8}/> Período de Veiculação</span><div className="flex justify-between items-center text-[9px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded"><span className="text-[#22C55E] font-black">INÍCIO</span><span className="text-white">{formatarData(job.data_inicio)} {job.hora_inicio ? `às ${job.hora_inicio}` : ''}</span></div><div className="flex justify-between items-center text-[9px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded"><span className="text-red-400 font-black">FIM</span><span className="text-white">{formatarData(job.data_fim)} {job.hora_fim ? `às ${job.hora_fim}` : ''}</span></div></div> )}
@@ -75,7 +78,8 @@ export default function JobsPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<Partial<Job>>({ titulo: '', briefing: '', prioridade: 'media', deadline: new Date().toISOString().split('T')[0], unidade: '', vendedor_nome: '', cliente: '', agencia: '', num_pi: '', data_inicio: '', hora_inicio: '', data_fim: '', hora_fim: '', itens_opec: [] });
+  const [formData, setFormData] = useState<Partial<Job>>({ titulo: '', briefing: '', prioridade: 'media', deadline: new Date().toISOString().split('T')[0], unidade: '', vendedor_nome: '', cliente: '', agencia: '', num_pi: '', data_inicio: '', hora_inicio: '', data_fim: '', hora_fim: '', itens_opec: [], audio_url: '' });
+  const [uploadingAudio, setUploadingAudio] = useState(false);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -138,6 +142,27 @@ export default function JobsPage() {
       if(!error) { setRawJobs(prev => prev.filter(j => j.id !== id)); setIsModalOpen(false); }
   }, [isOpec]);
 
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingJobId) return;
+    setUploadingAudio(true);
+    const path = `jobs/${editingJobId}/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from('job-audio').upload(path, file, { upsert: true });
+    if (error) { alert('Erro no upload: ' + error.message); setUploadingAudio(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('job-audio').getPublicUrl(path);
+    await supabase.from('jobs').update({ audio_url: publicUrl }).eq('id', editingJobId);
+    setFormData(prev => ({ ...prev, audio_url: publicUrl }));
+    setRawJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, audio_url: publicUrl } : j));
+    setUploadingAudio(false);
+  };
+
+  // Jobs com deadline próximo (≤2 dias) ou vencido, não finalizados
+  const jobsUrgentes = rawJobs.filter(j => {
+    if (j.stage === 'entregue' || !j.deadline) return false;
+    const diff = Math.ceil((new Date(j.deadline + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+    return diff <= 2;
+  });
+
   if (loading) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white font-black animate-pulse">CARREGANDO PRODUÇÃO...</div>;
 
   const VISIBLE_STAGES = mostrarFinalizados ? { ...STAGES, entregue: { title: 'Finalizados (OPEC)', icon: <Archive size={14}/>, color: 'border-slate-500' } } : STAGES;
@@ -162,6 +187,24 @@ export default function JobsPage() {
               </div>
           )}
       </div>
+
+      {/* BANNER DE ALERTAS DE DEADLINE */}
+      {jobsUrgentes.length > 0 && (
+        <div className="mx-2 mb-2 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-2 flex items-center gap-3 flex-wrap">
+          <AlertTriangle size={16} className="text-orange-400 flex-shrink-0 animate-pulse" />
+          <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">{jobsUrgentes.length} job{jobsUrgentes.length > 1 ? 's' : ''} com deadline crítico:</span>
+          <div className="flex gap-2 flex-wrap">
+            {jobsUrgentes.map(j => {
+              const diff = Math.ceil((new Date(j.deadline + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+              return (
+                <button key={j.id} onClick={() => abrirModal(j)} className="bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 text-[9px] font-black px-2 py-0.5 rounded uppercase border border-orange-500/30 transition-colors">
+                  {j.titulo.slice(0, 20)}{j.titulo.length > 20 ? '…' : ''} {diff < 0 ? '(ATRASADO)' : diff === 0 ? '(HOJE)' : `(${diff}d)`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 👇 BARRA DE FILTROS SUPER COMPACTA 👇 */}
       <div className="flex flex-col xl:flex-row gap-2 px-2 mb-2">
@@ -309,6 +352,27 @@ export default function JobsPage() {
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Roteiro / Texto do Locutor / Briefing</label>
                                     <textarea disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[220px] resize-none custom-scrollbar leading-relaxed disabled:opacity-70" placeholder="Cole o roteiro ou orientações aqui..." value={formData.briefing || ''} onChange={e => setFormData({...formData, briefing: e.target.value})} />
                                 </div>
+
+                                {editingJobId && (
+                                <div className="bg-purple-500/5 border border-purple-500/20 p-5 rounded-2xl space-y-3">
+                                    <h3 className="text-xs font-black text-purple-400 uppercase flex items-center gap-2"><Music size={14}/> Arquivo de Áudio</h3>
+                                    {formData.audio_url ? (
+                                        <div className="space-y-2">
+                                            <audio controls className="w-full h-10 rounded-lg" src={formData.audio_url} />
+                                            <a href={formData.audio_url} target="_blank" className="text-[9px] text-purple-400 hover:underline block truncate">{formData.audio_url.split('/').pop()}</a>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[10px] text-slate-500">Nenhum áudio enviado.</p>
+                                    )}
+                                    {!isOpec && (
+                                        <label className="flex items-center gap-2 cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl px-4 py-2 transition-colors w-fit">
+                                            {uploadingAudio ? <Loader2 size={14} className="text-purple-400 animate-spin" /> : <Upload size={14} className="text-purple-400" />}
+                                            <span className="text-[10px] font-black text-purple-400 uppercase">{uploadingAudio ? 'Enviando...' : formData.audio_url ? 'Substituir Áudio' : 'Upload de Áudio'}</span>
+                                            <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} disabled={uploadingAudio} />
+                                        </label>
+                                    )}
+                                </div>
+                                )}
                             </div>
                         </div>
                     </form>

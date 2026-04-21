@@ -45,8 +45,9 @@ type Lead = {
   unidade?: string; 
   cidade?: string;    
   descricao?: string;   
-  notas?: Historico[];  
-  status_aprovacao?: string | null; 
+  notas?: Historico[];
+  followup_em?: string;
+  status_aprovacao?: string | null;
   cnpj?: string;
   inscricao_estadual?: string;
   parcelas?: string;
@@ -297,6 +298,20 @@ const LeadCard = React.memo(({
                         </div>
                     )}
 
+                    {lead.followup_em && (() => {
+                        const today = new Date(); today.setHours(0,0,0,0);
+                        const fu = new Date(lead.followup_em + 'T00:00:00');
+                        const diff = Math.ceil((fu.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        const isOverdue = diff < 0;
+                        const isToday = diff === 0;
+                        return (
+                            <div className={`mb-2 flex items-center gap-1 px-2 py-1 rounded-lg border text-[8px] font-black uppercase ${isOverdue ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse' : isToday ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 animate-pulse' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                                <CalendarDays size={9}/>
+                                {isOverdue ? `Follow-up atrasado ${Math.abs(diff)}d` : isToday ? 'Follow-up HOJE' : `Follow-up em ${diff}d`}
+                            </div>
+                        );
+                    })()}
+
                     {lead.status === 'aberto' ? (
                         <div className="space-y-2 pt-1">
                             <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
@@ -392,6 +407,7 @@ export default function DealsPage() {
   const [uploading, setUploading] = useState(false);
   const [historico, setHistorico] = useState<Historico[]>([]);
   const [novaNota, setNovaNota] = useState('');
+  const [followupEm, setFollowupEm] = useState('');
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -423,7 +439,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia');
+    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas');
 
     if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
 
@@ -1202,6 +1218,7 @@ export default function DealsPage() {
         foto_url: fotoUrl,
         contrato_inicio: contratoInicio || null,
         contrato_fim: contratoFim || null,
+        followup_em: followupEm || null,
         cnpj: novoCnpj,
         inscricao_estadual: novoIE || null,
         parcelas: parcelas,
@@ -1289,6 +1306,7 @@ export default function DealsPage() {
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
         setContratoFim(lead.contrato_fim || '');
+        setFollowupEm(lead.followup_em || '');
         setNovoCnpj(lead.cnpj || '');
         setNovoIE(lead.inscricao_estadual || '');
         setParcelas(lead.parcelas || '1');
@@ -1309,6 +1327,7 @@ export default function DealsPage() {
         setFotoUrl('');
         setContratoInicio('');
         setContratoFim('');
+        setFollowupEm('');
         setNovoCnpj('');
         setNovoIE('');
         setParcelas('1');
@@ -1764,6 +1783,20 @@ export default function DealsPage() {
                                     <input className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] text-white outline-none" placeholder="Nova nota..." value={novaNota} onChange={e => setNovaNota(e.target.value)} />
                                     <button type="button" onClick={adicionarNota} className="bg-blue-600 text-white px-3 rounded-lg text-[10px] font-bold">OK</button>
                                 </div>
+                            </div>
+                            <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                                <p className="text-[10px] font-black text-slate-500 uppercase mb-2 flex items-center gap-1"><CalendarDays size={10}/> Follow-up</p>
+                                <input
+                                    type="date"
+                                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                    value={followupEm}
+                                    onChange={e => setFollowupEm(e.target.value)}
+                                />
+                                {followupEm && (
+                                    <p className="text-[9px] text-orange-400 font-bold mt-1 flex items-center gap-1">
+                                        <AlertTriangle size={9}/> Lembrete em {formatarData(followupEm)}
+                                    </p>
+                                )}
                             </div>
                             <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
                                 <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Anexos</p>

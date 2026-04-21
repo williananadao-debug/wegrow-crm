@@ -1,16 +1,20 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
 
+type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
+
 type ServicoConfig = {
-  id: string; 
+  id: string;
   nome: string;
   preco: number;
+  precoOriginal?: number;
   tipo: string;
   unidade: string;
+  historico_precos?: HistoricoPreco[];
 };
 
 export default function SettingsPage() {
@@ -22,6 +26,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [histModalId, setHistModalId] = useState<string | null>(null);
+  const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if(user) carregarDados();
@@ -37,9 +44,11 @@ export default function SettingsPage() {
       const formatados = data.map((item: any) => ({
         id: item.id.toString(),
         nome: item.nome,
-        preco: item.preco, 
+        preco: item.preco,
+        precoOriginal: item.preco,
         tipo: item.tipo || 'Comercial Gravado',
-        unidade: item.unidade || '' 
+        unidade: item.unidade || '',
+        historico_precos: item.historico_precos || [],
       }));
       setServicos(formatados);
     } else {
@@ -69,12 +78,16 @@ export default function SettingsPage() {
         }
 
         existentes.forEach(s => {
+            const historicoAtualizado = s.precoOriginal !== undefined && s.preco !== s.precoOriginal
+                ? [...(s.historico_precos || []), { preco_anterior: s.precoOriginal, preco_novo: s.preco, data: new Date().toISOString() }]
+                : (s.historico_precos || []);
             promises.push(
                 supabase.from('servicos').update({
                     nome: s.nome,
                     preco: s.preco,
                     tipo: s.tipo,
-                    unidade: s.unidade
+                    unidade: s.unidade,
+                    historico_precos: historicoAtualizado,
                 }).eq('id', parseInt(s.id))
             );
         });
@@ -115,6 +128,39 @@ export default function SettingsPage() {
 
   const atualizarServico = (id: string, campo: keyof ServicoConfig, valor: any) => {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
+  };
+
+  const importarCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const linhas = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+      if (linhas.length < 2) return;
+      const headers = linhas[0].map(h => h.toLowerCase());
+      const iNome = headers.indexOf('nome');
+      const iPreco = headers.indexOf('preco');
+      const iTipo = headers.indexOf('tipo');
+      const iUnidade = headers.indexOf('unidade');
+      if (iNome < 0 || iPreco < 0) {
+        alert('CSV deve ter pelo menos as colunas: nome, preco');
+        return;
+      }
+      const novos: ServicoConfig[] = linhas.slice(1).filter(cols => cols[iNome]).map((cols, i) => ({
+        id: `temp-csv-${Date.now()}-${i}`,
+        nome: cols[iNome] || '',
+        preco: parseFloat(cols[iPreco]) || 0,
+        tipo: (iTipo >= 0 ? cols[iTipo] : '') || 'Comercial Gravado',
+        unidade: (iUnidade >= 0 ? cols[iUnidade] : '') || '',
+        historico_precos: [],
+      }));
+      setServicos(prev => [...prev, ...novos]);
+      setFeedback({ type: 'success', msg: `${novos.length} item(s) importado(s) do CSV.` });
+      setTimeout(() => setFeedback(null), 4000);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const getIconeCategoria = (tipo: string) => {
@@ -158,9 +204,15 @@ export default function SettingsPage() {
             <Info size={18} className="text-blue-500" />
             <h2 className="font-bold text-sm uppercase tracking-wide">Catálogo de Serviços</h2>
           </div>
-          <button onClick={adicionarServico} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
-            <Plus size={14} strokeWidth={3} /> Adicionar Item
-          </button>
+          <div className="flex items-center gap-2">
+            <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={importarCSV} />
+            <button onClick={() => csvInputRef.current?.click()} className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+              <Upload size={14} /> Importar CSV
+            </button>
+            <button onClick={adicionarServico} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+              <Plus size={14} strokeWidth={3} /> Adicionar Item
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -238,7 +290,12 @@ export default function SettingsPage() {
                         </datalist>
                     </div>
 
-                    <div className="col-span-2 md:col-span-1 flex justify-end">
+                    <div className="col-span-2 md:col-span-1 flex justify-end gap-1">
+                        {!servico.id.startsWith('temp-') && (servico.historico_precos?.length ?? 0) > 0 && (
+                            <button onClick={() => setHistModalId(servico.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-yellow-500/10 text-slate-600 hover:text-yellow-400 transition-all" title="Histórico de preços">
+                                <History size={15} />
+                            </button>
+                        )}
                         <button onClick={() => removerServico(servico.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-500 transition-all">
                             <Trash2 size={16} />
                         </button>
@@ -268,6 +325,37 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {histModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-5 border-b border-white/10">
+              <div>
+                <h2 className="font-black text-white uppercase italic flex items-center gap-2"><History size={16} className="text-yellow-400"/> Histórico de Preços</h2>
+                <p className="text-slate-500 text-[10px] uppercase font-bold mt-0.5">{histModal.nome}</p>
+              </div>
+              <button onClick={() => setHistModalId(null)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={16}/></button>
+            </div>
+            <div className="p-5 space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+              {[...(histModal.historico_precos || [])].reverse().map((h, i) => (
+                <div key={i} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-[9px] text-slate-500 uppercase font-black">{new Date(h.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-white text-sm font-black mt-0.5">
+                      R$ {h.preco_anterior.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <span className="text-slate-500 mx-2">→</span>
+                      <span className="text-[#22C55E]">R$ {h.preco_novo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </p>
+                  </div>
+                  <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${h.preco_novo > h.preco_anterior ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                    {h.preco_novo > h.preco_anterior ? '▲' : '▼'} {Math.abs(Math.round(((h.preco_novo - h.preco_anterior) / h.preco_anterior) * 100))}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

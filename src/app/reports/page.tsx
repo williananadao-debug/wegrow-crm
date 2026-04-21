@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  TrendingUp, BarChart3, PieChart, Users, 
+import {
+  TrendingUp, BarChart3, PieChart, Users,
   ArrowUpRight, ArrowDownRight, Target, Calendar,
-  Download, Zap, Clock, ChevronRight, Filter, 
+  Download, Zap, Clock, ChevronRight, Filter,
   ShieldCheck, Crosshair, Sparkles, Building2, AlertCircle, MapPin,
-  FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft, CalendarDays
+  FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft, CalendarDays, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -68,6 +68,8 @@ export default function ReportsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
+  const mostrarFinanceiro = Boolean(empresa?.modulos?.financeiro);
   const [loading, setLoading] = useState(true);
   
   const [dataInicio, setDataInicio] = useState(() => {
@@ -121,7 +123,7 @@ export default function ReportsPage() {
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, graficoMensal, inadimplentes } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
@@ -216,7 +218,35 @@ export default function ReportsPage() {
 
       const calcVisitas = { total: visitasBase.length, convertidas: visitasConvertidas.length, ganhas: visitasGanhas.length, porVendedor: visitasPorVendedor };
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas };
+      // Gráfico mensal - últimos 6 meses
+      const hoje = new Date();
+      const graficoMensal = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+          const ano = d.getFullYear(); const mes = d.getMonth() + 1;
+          const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+          const isCurrent = i === 5;
+          const mesStr = String(mes).padStart(2, '0');
+          const ganhos = baseFiltrada.filter(l => {
+              const dt = l.created_at?.substring(0, 7);
+              return l.status === 'ganho' && dt === `${ano}-${mesStr}`;
+          });
+          return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent };
+      });
+
+      // Inadimplência: contratos vencidos (ganho + contrato_fim < hoje)
+      const hoje2 = getLocalYYYYMMDD(new Date());
+      const inadimplentes = baseFiltrada.filter(l =>
+          l.status === 'ganho' && l.contrato_fim && l.contrato_fim.substring(0, 10) < hoje2
+      ).map(l => ({
+          empresa: l.empresa,
+          unidade: l.unidade || 'N/A',
+          valor: Number(l.valor_total || 0),
+          venceu: l.contrato_fim.substring(0, 10),
+          diasVencido: Math.floor((new Date().getTime() - new Date(l.contrato_fim + 'T00:00:00').getTime()) / 86400000),
+          vendedor: l.vendedor_nome || rawProfiles.find((p: any) => p.id === l.user_id)?.nome || 'N/A',
+      })).sort((a, b) => b.diasVencido - a.diasVencido);
+
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, graficoMensal, inadimplentes };
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
 
   const handleGeneratePreview = async () => {
@@ -280,6 +310,8 @@ export default function ReportsPage() {
                 { label: 'Mês', fn: () => { const h = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth()+1, 0))); } },
                 { label: 'Mês Ant.', fn: () => { const h = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth()-1, 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), h.getMonth(), 0))); } },
                 { label: 'Trim.', fn: () => { const h = new Date(); const t = Math.floor(h.getMonth()/3)*3; setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), t, 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), t+3, 0))); } },
+                { label: 'Sem.', fn: () => { const h = new Date(); const s = h.getMonth() < 6 ? 0 : 6; setDataInicio(getLocalYYYYMMDD(new Date(h.getFullYear(), s, 1))); setDataFim(getLocalYYYYMMDD(new Date(h.getFullYear(), s+6, 0))); } },
+                { label: 'Ano', fn: () => { const h = new Date(); setDataInicio(`${h.getFullYear()}-01-01`); setDataFim(`${h.getFullYear()}-12-31`); } },
               ] as { label: string; fn: () => void }[]).map(p => (
                 <button key={p.label} onClick={p.fn} className="px-2.5 h-8 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 whitespace-nowrap">
                   {p.label}
@@ -359,6 +391,34 @@ export default function ReportsPage() {
           );
         })}
       </div>
+
+      {/* GRÁFICO DE BARRAS MENSAL */}
+      {graficoMensal.some(m => m.valor > 0) && (
+        <div className="bg-[#0B1120] border border-white/5 rounded-[32px] p-6 shadow-2xl">
+          <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-6">
+            <BarChart3 size={18} className="text-orange-400" /> Evolução de Faturamento — Últimos 6 Meses
+          </h3>
+          <div className="flex items-end gap-3 h-40">
+            {(() => {
+              const maxVal = Math.max(...graficoMensal.map(m => m.valor), 1);
+              return graficoMensal.map((m, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[9px] font-black text-slate-500">
+                    {m.valor > 0 ? `R$ ${(m.valor / 1000).toFixed(0)}k` : ''}
+                  </span>
+                  <div className="w-full flex items-end" style={{ height: '100px' }}>
+                    <div
+                      className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.4)]' : 'bg-white/10 hover:bg-white/20'}`}
+                      style={{ height: `${Math.max((m.valor / maxVal) * 100, m.valor > 0 ? 4 : 0)}%` }}
+                    />
+                  </div>
+                  <span className={`text-[9px] font-black uppercase ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* FUNIL DE VISITAS */}
       {visitasFunil.total > 0 && (
@@ -657,6 +717,64 @@ export default function ReportsPage() {
               </div>
           </div>
       </div>
+
+      {/* RELATÓRIO DE INADIMPLÊNCIA — só para quem tem módulo financeiro */}
+      {mostrarFinanceiro && (
+        <div className="bg-[#0B1120] border border-red-500/20 rounded-[32px] p-6 shadow-2xl">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+              <AlertCircle size={18} className="text-red-400" /> Contratos Vencidos (Inadimplência)
+              <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-lg font-black ml-1">{inadimplentes.length}</span>
+            </h3>
+            {inadimplentes.length > 0 && (
+              <span className="text-[10px] text-slate-500 font-bold uppercase">
+                Potencial de renovação: <span className="text-red-400 font-black">R$ {inadimplentes.reduce((s, i) => s + i.valor, 0).toLocaleString('pt-BR', {maximumFractionDigits: 0})}</span>
+              </span>
+            )}
+          </div>
+
+          {inadimplentes.length === 0 ? (
+            <div className="text-center py-10 opacity-40">
+              <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
+              <p className="text-xs font-black text-slate-500 uppercase">Nenhum contrato vencido no período filtrado.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] font-black uppercase text-slate-500 tracking-widest bg-white/[0.02]">
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Unidade</th>
+                    <th className="px-4 py-3">Vendedor</th>
+                    <th className="px-4 py-3 text-center">Venceu em</th>
+                    <th className="px-4 py-3 text-center">Dias Vencido</th>
+                    <th className="px-4 py-3 text-right">Valor Contrato</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {inadimplentes.slice(0, 20).map((item, i) => (
+                    <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 text-white text-xs font-bold uppercase truncate max-w-[200px]">{item.empresa}</td>
+                      <td className="px-4 py-3 text-[10px] text-slate-400 font-bold uppercase">{item.unidade}</td>
+                      <td className="px-4 py-3 text-[10px] text-blue-400 font-bold uppercase">{item.vendedor}</td>
+                      <td className="px-4 py-3 text-center text-[10px] font-mono text-slate-400">{item.venceu.split('-').reverse().join('/')}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${item.diasVencido > 30 ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                          {item.diasVencido}d
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs font-black text-[#22C55E]">R$ {item.valor.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {inadimplentes.length > 20 && (
+                <p className="text-[10px] text-slate-600 font-bold text-center py-3">+{inadimplentes.length - 20} contratos adicionais não exibidos</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MODAL DE EXPORTAÇÃO DE DADOS & PREVIEW DA TABELA */}
       {showExportModal && (

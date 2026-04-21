@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { 
-  Target, Users, RefreshCcw, 
-  ChevronRight, User as UserIcon, Loader2, Calendar, TrendingUp 
+import {
+  Target, Users, RefreshCcw, AlertTriangle, CheckCircle2,
+  User as UserIcon, Loader2, Calendar, TrendingUp, Zap
 } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 
@@ -27,7 +27,8 @@ export default function GoalsPage() {
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  
+  const [comparativo, setComparativo] = useState<any[]>([]);
+
   const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
@@ -41,6 +42,10 @@ export default function GoalsPage() {
   useEffect(() => {
     if (user && vendedorSelecionado) fetchMetasERealizado();
   }, [vendedorSelecionado, anoFiltro]);
+
+  useEffect(() => {
+    if (vendedores.length > 0) fetchComparativo();
+  }, [vendedores]);
 
   async function fetchVendedores() {
     let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
@@ -88,6 +93,37 @@ export default function GoalsPage() {
     }
   }
 
+  async function fetchComparativo() {
+    if (!isDirector || !perfil?.empresa_id) return;
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = hoje.getMonth() + 1;
+
+    const [{ data: metasData }, { data: vendasData }] = await Promise.all([
+      supabase.from('metas').select('user_id, valor_objetivo').eq('ano', ano).eq('mes', mes).eq('empresa_id', perfil.empresa_id),
+      supabase.from('leads').select('user_id, valor_total').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+        .gte('created_at', `${ano}-${String(mes).padStart(2,'0')}-01`)
+        .lte('created_at', `${ano}-${String(mes).padStart(2,'0')}-31`)
+        .limit(2000),
+    ]);
+
+    const metaMap: Record<string, number> = {};
+    (metasData || []).forEach((m: any) => { if (m.user_id) metaMap[m.user_id] = m.valor_objetivo; });
+
+    const realizadoMap: Record<string, number> = {};
+    (vendasData || []).forEach((v: any) => { if (v.user_id) realizadoMap[v.user_id] = (realizadoMap[v.user_id] || 0) + Number(v.valor_total); });
+
+    const rows = vendedores.map(v => ({
+      id: v.id,
+      nome: v.nome,
+      meta: metaMap[v.id] || 0,
+      realizado: realizadoMap[v.id] || 0,
+      perc: metaMap[v.id] > 0 ? (realizadoMap[v.id] || 0) / metaMap[v.id] * 100 : 0,
+    })).sort((a, b) => b.perc - a.perc);
+
+    setComparativo(rows);
+  }
+
   const handleUpdateMeta = async (mes: number | null, valor: number) => {
     if (!isDirector) return;
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
@@ -133,6 +169,18 @@ export default function GoalsPage() {
   };
 
   const percentAno = metaAno > 0 ? (realizadoAno / metaAno) * 100 : 0;
+
+  // Ritmo do mês atual
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+  const metaMesAtual = metasMensais.find(m => m.mes === mesAtual)?.valor_objetivo || 0;
+  const realizadoMesAtual = realizadoMensalMap[mesAtual] || 0;
+  const diasNoMes = new Date(anoAtual, mesAtual, 0).getDate();
+  const diaAtual = hoje.getDate();
+  const esperadoAteHoje = metaMesAtual > 0 ? (metaMesAtual / diasNoMes) * diaAtual : 0;
+  const ritmoOk = realizadoMesAtual >= esperadoAteHoje;
+  const deltaRitmo = Math.abs(esperadoAteHoje - realizadoMesAtual);
 
   return (
     <div className="p-6 space-y-8 pb-20 animate-in fade-in duration-500">
@@ -205,6 +253,24 @@ export default function GoalsPage() {
              <div><span className="text-slate-500">Falta para Meta:</span> <span className="text-red-400 ml-1">R$ {Math.max(0, metaAno - realizadoAno).toLocaleString('pt-BR')}</span></div>
           </div>
         </div>
+
+        {/* ALERTA DE RITMO */}
+        {metaMesAtual > 0 && anoFiltro === anoAtual && (
+          <div className={`mt-6 flex items-center gap-4 p-4 rounded-2xl border ${ritmoOk ? 'bg-[#22C55E]/10 border-[#22C55E]/30' : 'bg-orange-500/10 border-orange-500/30 animate-pulse'}`}>
+            {ritmoOk
+              ? <CheckCircle2 size={24} className="text-[#22C55E] flex-shrink-0" />
+              : <AlertTriangle size={24} className="text-orange-400 flex-shrink-0" />}
+            <div>
+              <p className={`text-xs font-black uppercase tracking-widest ${ritmoOk ? 'text-[#22C55E]' : 'text-orange-400'}`}>
+                {ritmoOk ? 'Ritmo no Verde' : 'Abaixo do Ritmo Esperado'}
+              </p>
+              <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                Dia {diaAtual}/{diasNoMes} — Esperado: <span className="text-white">R$ {Math.round(esperadoAteHoje).toLocaleString('pt-BR')}</span>
+                {' · '}{ritmoOk ? 'Adiantado' : 'Faltam'} <span className={ritmoOk ? 'text-[#22C55E]' : 'text-orange-400'}>R$ {Math.round(deltaRitmo).toLocaleString('pt-BR')}</span> {ritmoOk ? 'acima do ritmo' : 'para atingir o ritmo'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* GRADE MENSAL */}
@@ -254,6 +320,38 @@ export default function GoalsPage() {
                 </div>
               )
             })}
+        </div>
+      )}
+
+      {/* COMPARATIVO DE VENDEDORES */}
+      {isDirector && comparativo.length > 0 && (
+        <div className="bg-[#0B1120] border border-white/10 rounded-[32px] p-6 shadow-xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 bg-purple-500/20 rounded-xl flex items-center justify-center"><Zap size={18} className="text-purple-400"/></div>
+            <div>
+              <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Ranking do Mês</h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">{new Date(0, mesAtual - 1).toLocaleString('pt-BR', { month: 'long' })} {anoAtual}</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {comparativo.map((v, i) => (
+              <div key={v.id} className="flex items-center gap-4">
+                <span className={`w-6 text-center text-[10px] font-black ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-600' : 'text-slate-600'}`}>#{i + 1}</span>
+                <div className="w-28 flex-shrink-0">
+                  <p className="text-[10px] font-black text-white uppercase truncate">{v.nome}</p>
+                  <p className="text-[9px] text-slate-500">R$ {Math.round(v.realizado).toLocaleString('pt-BR')} / {Math.round(v.meta).toLocaleString('pt-BR')}</p>
+                </div>
+                <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${v.perc >= 100 ? 'bg-[#22C55E]' : v.perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`}
+                    style={{ width: `${Math.min(v.perc, 100)}%` }}
+                  />
+                </div>
+                <span className={`w-14 text-right text-xs font-black ${v.perc >= 100 ? 'text-[#22C55E]' : v.perc >= 60 ? 'text-blue-400' : 'text-orange-400'}`}>{Math.round(v.perc)}%</span>
+                {!v.meta && <span className="text-[8px] text-slate-600 font-bold uppercase">Sem meta</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

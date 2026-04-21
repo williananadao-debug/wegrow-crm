@@ -99,11 +99,14 @@ export async function PATCH(request: Request) {
   const { id, ...campos } = body;
   if (!id) return NextResponse.json({ erro: 'ID obrigatório.' }, { status: 422 });
 
-  const { data, error } = await supabaseAdmin()
-    .from('empresas')
-    .upsert({ id, ...campos }, { onConflict: 'id' })
-    .select()
-    .single();
+  const { data, error } = await supabaseAdmin().rpc('admin_upsert_empresa', {
+    p_id: id,
+    p_nome: campos.nome ?? null,
+    p_cnpj: campos.cnpj ?? null,
+    p_plano: campos.plano ?? null,
+    p_status: campos.status ?? null,
+    p_modulos: campos.modulos ?? null,
+  });
 
   if (error) {
     console.error('[admin/empresas] PATCH error:', error);

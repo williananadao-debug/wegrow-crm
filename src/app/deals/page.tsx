@@ -13,7 +13,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
 import { localDb } from '@/lib/localDb'; 
-import { syncOfflineDataToCloud } from '@/lib/syncService'; 
+import { syncOfflineDataToCloud } from '@/lib/syncService';
+import { useUnidades } from '@/lib/useUnidades';
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
@@ -332,8 +333,9 @@ export default function DealsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
-  
-  const LIMITE_DESCONTO_MAXIMO = 5; 
+  const { unidades } = useUnidades(perfil?.empresa_id);
+
+  const LIMITE_DESCONTO_MAXIMO = 5;
   
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
@@ -864,25 +866,12 @@ export default function DealsPage() {
   const imprimirContrato = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
     
-    const CONFIG_EMISSORAS: Record<string, { razao: string, endereco: string, cnpj: string }> = {
-      "DEMAIS FM 104,7": {
-        razao: "SERRANA DE RADIODIFUSÃO LTDA",
-        endereco: "Av. Nereu Ramos, 226 - Centro, na cidade de Taió - Estado de Santa Catarina",
-        cnpj: "75.835.629/0001-50"
-      },
-      "DEMAIS FM 107,9": {
-        razao: "REDE SERRANA DE RADIODIFUSÃO LTDA",
-        endereco: "R. Curt Hering, 665 - Sala 103 - Centro, na cidade de Presidente Getúlio - Estado de Santa Catarina",
-        cnpj: "75.835.629/0003-12"
-      },
-      "DEMAIS FM 101,1": {
-        razao: "RÁDIO CIDADE DE ITAIÓPOLIS LTDA",
-        endereco: "R. Alexandre Ricardo Worell, 465 - Sala 4 - Bairro Vila Nova IOS, na cidade de Itaiópolis - Estado de Santa Catarina",
-        cnpj: "75.789.966/0001-59"
-      }
+    const unidadeData = unidades.find(u => u.nome === (lead.unidade || '')) || unidades[0];
+    const dadosEmissora = {
+      razao: unidadeData?.razao_social || '',
+      endereco: unidadeData?.endereco || '',
+      cnpj: unidadeData?.cnpj || '',
     };
-
-    const dadosEmissora = CONFIG_EMISSORAS[lead.unidade || ""] || CONFIG_EMISSORAS["DEMAIS FM 104,7"];
     
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
@@ -1480,9 +1469,9 @@ export default function DealsPage() {
               {isDirector && (
                   <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                     <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
-                    <option value="DEMAIS FM 104,7" className="bg-[#0F172A]">DEMAIS FM 104,7</option>
-                    <option value="DEMAIS FM 107,9" className="bg-[#0F172A]">DEMAIS FM 107,9</option>
-                    <option value="DEMAIS FM 101,1" className="bg-[#0F172A]">DEMAIS FM 101,1</option>
+                    {unidades.map(u => (
+                      <option key={u.id} value={u.nome} className="bg-[#0F172A]">{u.nome}</option>
+                    ))}
                   </select>
               )}
           </div>
@@ -1631,9 +1620,9 @@ export default function DealsPage() {
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
                         <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }} required>
                             <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
-                            <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
-                            <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
-                            <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
+                            {unidades.map(u => (
+                              <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>
+                            ))}
                         </select>
                     </div>
 

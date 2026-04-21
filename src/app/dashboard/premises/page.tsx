@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
+import { useUnidades } from '@/lib/useUnidades';
 
 export default function PremisesPage() {
   const { user, perfil } = useAuth();
@@ -29,7 +30,7 @@ export default function PremisesPage() {
   const [unidadeEstrategiaManual, setUnidadeEstrategiaManual] = useState(''); 
   
   // Estados de Unidades / Cidades
-  const [listaUnidades] = useState(["DEMAIS FM 101,1", "DEMAIS FM 104,7", "DEMAIS FM 107,9"]);
+  // listaUnidades vem do banco via useUnidades (substituí o useState hardcoded)
   const [unidadeSelecionada, setUnidadeSelecionada] = useState('');
   const [cidadesIBGE, setCidadesIBGE] = useState<string[]>([]);
   const [buscaCidade, setBuscaCidade] = useState('');
@@ -42,6 +43,7 @@ export default function PremisesPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const isDirector = perfil?.cargo === 'diretor';
+  const { unidades } = useUnidades(perfil?.empresa_id);
 
   useEffect(() => {
     if (user && isDirector && perfil?.empresa_id) {
@@ -305,7 +307,7 @@ export default function PremisesPage() {
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center gap-1"><MapPin size={12}/> Unidade Alvo (Opcional)</label>
                             <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-purple-500 appearance-none" value={unidadeEstrategiaIA} onChange={e => setUnidadeEstrategiaIA(e.target.value)}>
                                 <option value="" className="bg-[#0B1120]">Sem restrição (Qualquer Unidade)</option>
-                                {listaUnidades.map(nome => <option key={nome} value={nome} className="bg-[#0B1120]">{nome}</option>)}
+                                {unidades.map(u => <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>)}
                             </select>
                         </div>
 
@@ -341,7 +343,7 @@ export default function PremisesPage() {
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center gap-1"><MapPin size={12}/> Unidade / Emissora Alvo</label>
                         <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-blue-500" value={unidadeEstrategiaManual} onChange={e => setUnidadeEstrategiaManual(e.target.value)} required>
                             <option value="" className="bg-[#0B1120]">Selecione a Unidade...</option>
-                            {listaUnidades.map(nome => <option key={nome} value={nome} className="bg-[#0B1120]">{nome}</option>)}
+                            {unidades.map(u => <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>)}
                         </select>
                     </div>
 
@@ -370,8 +372,8 @@ export default function PremisesPage() {
                                 required
                             >
                                 <option value="" className="bg-[#0B1120] text-slate-400">TODAS UNIDADES (Escolha uma...)</option>
-                                {listaUnidades.map(unidade => (
-                                    <option key={unidade} value={unidade} className="bg-[#0B1120] text-white py-2">{unidade}</option>
+                                {unidades.map(u => (
+                                    <option key={u.id} value={u.nome} className="bg-[#0B1120] text-white py-2">{u.nome}</option>
                                 ))}
                             </select>
                         </div>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { useUnidades } from '@/lib/useUnidades';
 
 type ServicoConfig = {
   id: string; 
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
+  const { unidades } = useUnidades(perfil?.empresa_id);
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,7 +29,7 @@ export default function SettingsPage() {
 
   const carregarDados = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('servicos').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
 
@@ -200,9 +202,9 @@ export default function SettingsPage() {
                             className="w-full bg-transparent text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none truncate"
                         >
                             <option value="" className="bg-[#0B1120]">Geral (Todas as Unidades)</option>
-                            <option value="DEMAIS FM 104,7" className="bg-[#0B1120]">DEMAIS FM 104,7</option>
-                            <option value="DEMAIS FM 107,9" className="bg-[#0B1120]">DEMAIS FM 107,9</option>
-                            <option value="DEMAIS FM 101,1" className="bg-[#0B1120]">DEMAIS FM 101,1</option>
+                            {unidades.map(u => (
+                              <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>
+                            ))}
                         </select>
                     </div>
 

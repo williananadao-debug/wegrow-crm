@@ -4,12 +4,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Edit2, X, User as UserIcon, ShieldAlert, Building2, Trash2, Plus, Loader2, Fingerprint } from 'lucide-react';
 import { Toast } from '@/components/Toast';
+import { useUnidades } from '@/lib/useUnidades';
 
 export default function TeamPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   
   const isDirector = perfil?.cargo === 'diretor';
+  const { unidades } = useUnidades(perfil?.empresa_id);
 
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,9 +225,9 @@ export default function TeamPage() {
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Unidade/Filial</label>
                             <select className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold" value={editUnidade} onChange={e => setEditUnidade(e.target.value)}>
                                 <option value="">SELECIONE...</option>
-                                <option value="DEMAIS FM 104,7">DEMAIS FM 104,7</option>
-                                <option value="DEMAIS FM 107,9">DEMAIS FM 107,9</option>
-                                <option value="DEMAIS FM 101,1">DEMAIS FM 101,1</option>
+                                {unidades.map(u => (
+                                  <option key={u.id} value={u.nome}>{u.nome}</option>
+                                ))}
                             </select>
                         </div>
                     </div>

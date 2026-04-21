@@ -150,6 +150,40 @@ export default function DashboardPage() {
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
       const semVisita = leadsFiltrados.length - comVisita;
 
+      // Período anterior para comparativo (mesmo comprimento, imediatamente antes)
+      const periodoDias = dataInicio && dataFim
+        ? Math.ceil((new Date(dataFim + 'T12:00:00').getTime() - new Date(dataInicio + 'T12:00:00').getTime()) / 86400000) + 1
+        : 30;
+      const fimAnt = dataInicio ? new Date(new Date(dataInicio + 'T12:00:00').getTime() - 86400000) : new Date();
+      const iniAnt = new Date(fimAnt.getTime() - (periodoDias - 1) * 86400000);
+      const iniAntStr = getLocalYYYYMMDD(iniAnt);
+      const fimAntStr = getLocalYYYYMMDD(fimAnt);
+      const leadsAnt = rawLeads.filter(l => {
+        const d = l.created_at.substring(0, 10);
+        if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
+        if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== vendedorSelecionado) return false;
+        return d >= iniAntStr && d <= fimAntStr;
+      });
+      const fatAnt = leadsAnt.filter(l => l.status === 'ganho').reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
+      const gAnt = leadsAnt.filter(l => l.status === 'ganho').length;
+      const pAnt = leadsAnt.filter(l => l.status === 'perdido').length;
+      const convAnt = (gAnt + pAnt) > 0 ? (gAnt / (gAnt + pAnt)) * 100 : 0;
+      const deltaFat = fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : null;
+      const deltaConv = convAnt > 0 ? Math.round(conversao - convAnt) : null;
+
+      // Evolução dos últimos 6 meses (independente de filtros)
+      const refMes = new Date();
+      const evolucaoMensal = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(refMes.getFullYear(), refMes.getMonth() - (5 - i), 1);
+        const ini = getLocalYYYYMMDD(d);
+        const fim2 = getLocalYYYYMMDD(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+        const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+        const valor = rawLeads
+          .filter(l => l.status === 'ganho' && l.created_at.substring(0, 10) >= ini && l.created_at.substring(0, 10) <= fim2)
+          .reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
+        return { label, valor, isCurrent: i === 5 };
+      });
+
       const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
       if (dataInicio && dataFim) {
           const start = new Date(dataInicio + 'T12:00:00'); const end = new Date(dataFim + 'T12:00:00');
@@ -187,7 +221,7 @@ export default function DashboardPage() {
 
       return {
           ranking: rankingFinal,
-          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal },
           statsProducao: prod,
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
           previsaoFechamento: Math.round(previsaoFechamento),
@@ -290,11 +324,21 @@ export default function DashboardPage() {
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">Faturamento {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>
+                    {statsComercial.deltaFat !== null && (
+                      <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaFat >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {statsComercial.deltaFat >= 0 ? '▲' : '▼'} {Math.abs(statsComercial.deltaFat).toFixed(1)}% vs período anterior
+                      </p>
+                    )}
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
                     <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Conversão</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.taxaConversao}%</h3>
+                    {statsComercial.deltaConv !== null && (
+                      <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaConv >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {statsComercial.deltaConv >= 0 ? '▲' : '▼'} {Math.abs(statsComercial.deltaConv)}pp vs período anterior
+                      </p>
+                    )}
                     <CheckCircle2 className="absolute top-4 right-4 text-blue-400 opacity-20" size={24} />
                 </div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
@@ -333,6 +377,27 @@ export default function DashboardPage() {
                                 <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                             </div>
                         )
+                    })}
+                </div>
+            </div>
+
+            <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                    <CalendarDays size={14} className="text-blue-400"/> Evolução Mensal — Últimos 6 Meses
+                </h3>
+                <div className="flex items-end h-32 gap-2 w-full pt-4">
+                    {statsComercial.evolucaoMensal.map((m, i) => {
+                        const maxVal = Math.max(...statsComercial.evolucaoMensal.map(v => v.valor), 1);
+                        const height = (m.valor / maxVal) * 100;
+                        return (
+                            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full relative group">
+                                {m.valor > 0 && <div className="absolute -top-5 text-[9px] font-black text-white whitespace-nowrap">{formatCompact(m.valor)}</div>}
+                                <div className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`} style={{ height: m.valor > 0 ? `${Math.max(height, 5)}%` : '3px' }}>
+                                    {m.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/40"/>}
+                                </div>
+                                <span className={`text-[9px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
+                            </div>
+                        );
                     })}
                 </div>
             </div>

@@ -8,6 +8,7 @@ const AuthContext = createContext<any>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [perfil, setPerfil] = useState<any>(null);
+  const [empresa, setEmpresa] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -25,8 +26,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('id', session.user.id)
           .single();
 
+        let empresa = null;
+        if (profile?.empresa_id) {
+          const { data: emp } = await supabase
+            .from('empresas')
+            .select('modulos, plano, status')
+            .eq('id', profile.empresa_id)
+            .single();
+          empresa = emp;
+        }
 
         setPerfil(profile);
+        setEmpresa(empresa);
       } else {
         // 👇 A LISTA VIP DO LEÃO DE CHÁCARA (Agora com o Site Público liberado!) 👇
         const isPublicPage = window.location.pathname === '/' || window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
@@ -49,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, perfil, loading, signOut: () => supabase.auth.signOut() }}>
+    <AuthContext.Provider value={{ user, perfil, empresa, loading, signOut: () => supabase.auth.signOut() }}>
       {!loading && children}
     </AuthContext.Provider>
   );

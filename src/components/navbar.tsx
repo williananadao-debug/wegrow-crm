@@ -20,10 +20,11 @@ export default function Navbar() {
   }
   
   const auth = useAuth() || {};
-  const user = auth.user; 
+  const user = auth.user;
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
   const signOut = auth.signOut || (() => {});
-  
+
   // MENU NASCE FECHADO POR PADRÃO
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -31,8 +32,11 @@ export default function Navbar() {
   const isOpec = user?.email === 'opec@wegrow.com.br';
   const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
+  const modulos = empresa?.modulos || {};
 
-  const mostrarFinanceiro = Boolean(perfil?.empresa_id) && perfil?.empresa_id !== '11111111-1111-1111-1111-111111111111';
+  const mostrarFinanceiro = Boolean(modulos.financeiro);
+  const mostrarIA = Boolean(modulos.ia);
+  const mostrarOpec = isOpec || Boolean(modulos.opec);
 
   let menuItems: any[] = [];
 
@@ -44,10 +48,13 @@ export default function Navbar() {
     menuItems = [
       { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
       { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
-      { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' }, 
-      { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' },
-      { name: 'Clientes', icon: <Users size={20} />, href: '/customers' }, 
+      { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' },
+      { name: 'Clientes', icon: <Users size={20} />, href: '/customers' },
     ];
+
+    if (mostrarOpec) {
+      menuItems.splice(3, 0, { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' });
+    }
 
     if (mostrarFinanceiro) {
       menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' });
@@ -55,8 +62,10 @@ export default function Navbar() {
 
     if (isDirector || isManager) {
       if (isDirector) {
-        menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });
-        menuItems.splice(2, 0, { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
+        if (mostrarIA) {
+          menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });
+        }
+        menuItems.splice(mostrarIA ? 2 : 1, 0, { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
       } else {
         menuItems.push({ name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
       }

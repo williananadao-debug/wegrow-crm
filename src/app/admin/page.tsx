@@ -44,6 +44,7 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
 
   // Form empresa selecionada
+  const [editNome, setEditNome] = useState('');
   const [editPlano, setEditPlano] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editModulos, setEditModulos] = useState<Record<string, boolean>>({});
@@ -84,6 +85,7 @@ export default function AdminPage() {
 
   const abrirEmpresa = async (e: Empresa) => {
     setEmpresaSelecionada(e);
+    setEditNome(e.nome);
     setEditPlano(e.plano);
     setEditStatus(e.status);
     setEditModulos({ ...e.modulos });
@@ -98,7 +100,7 @@ export default function AdminPage() {
     await fetch('/api/admin/empresas', {
       method: 'PATCH',
       headers: headers(),
-      body: JSON.stringify({ id: empresaSelecionada.id, plano: editPlano, status: editStatus, modulos: editModulos }),
+      body: JSON.stringify({ id: empresaSelecionada.id, nome: editNome, plano: editPlano, status: editStatus, modulos: editModulos }),
     });
     await carregarEmpresas();
     setSaving(false);
@@ -230,6 +232,11 @@ export default function AdminPage() {
                   <button onClick={salvarEmpresa} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2">
                     {saving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
                   </button>
+                </div>
+
+                <div className="mb-5">
+                  <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Nome da Empresa</label>
+                  <input value={editNome} onChange={e => setEditNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-5">

@@ -1161,10 +1161,10 @@ export default function DealsPage() {
                     telefone: novoTelefone || null,
                     cidade: novaCidade || null,
                     status: 'ativo',
-                    risco: 'verde',
+                    status_risco: 'em_analise',
                     empresa_id: perfil?.empresa_id
                 }])
-                .select('id, risco')
+                .select('id, status_risco')
                 .single();
                 
             if (errCli) throw errCli;
@@ -1178,7 +1178,7 @@ export default function DealsPage() {
                     cnpj: novoCnpj,
                     inscricao_estadual: novoIE,
                     cidade: novaCidade,
-                    risco: novoCliente.risco
+                    status_risco: novoCliente.status_risco
                 }]);
                 setToastMessage("✨ Novo cliente cadastrado automaticamente!");
                 setShowToast(true);

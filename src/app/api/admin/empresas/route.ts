@@ -35,7 +35,6 @@ export async function GET(request: Request) {
 
   if (errProfiles) console.error('[admin/empresas] profiles error:', errProfiles);
   if (errEmpresas) console.error('[admin/empresas] empresas error:', errEmpresas);
-  console.log('[admin/empresas] profiles count:', profiles?.length, '| empresas count:', empresasData?.length);
 
   // Agrupa por empresa_id — fonte da verdade são os profiles
   const tenantMap = new Map<string, { diretor: string; total: number }>();

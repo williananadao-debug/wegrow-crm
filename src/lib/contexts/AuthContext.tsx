@@ -15,45 +15,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         setUser(session.user);
-        
-        // Busca o perfil que agora GARANTIMOS que existe via Trigger no SQL
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
 
-        let empresa = null;
+        let empData = null;
         if (profile?.empresa_id) {
           const { data: emp } = await supabase
             .from('empresas')
             .select('modulos, plano, status')
             .eq('id', profile.empresa_id)
             .single();
-          empresa = emp;
+          empData = emp;
         }
 
         setPerfil(profile);
-        setEmpresa(empresa);
+        setEmpresa(empData);
       } else {
-        // 👇 A LISTA VIP DO LEÃO DE CHÁCARA (Agora com o Site Público liberado!) 👇
-        const isPublicPage = window.location.pathname === '/' || window.location.pathname === '/login' || window.location.pathname === '/solicitar' || window.location.pathname === '/portal';
-        
-        if (!isPublicPage) {
-          router.replace('/login');
-        }
+        const isPublicPage = ['/', '/login', '/solicitar', '/portal'].includes(window.location.pathname);
+        if (!isPublicPage) router.replace('/login');
       }
       setLoading(false);
     };
 
     checkSession();
 
-    // Ouve mudanças na sessão (Login/Logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-        checkSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') checkSession();
     });
 
     return () => subscription.unsubscribe();

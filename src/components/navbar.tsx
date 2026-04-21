@@ -46,31 +46,16 @@ export default function Navbar() {
     ];
   } else {
     menuItems = [
-      { name: 'Dashboard', icon: <LayoutDashboard size={20} />, href: '/dashboard' },
-      { name: 'Metas', icon: <Target size={20} />, href: '/goals' },
-      { name: 'Vendas', icon: <Zap size={20} />, href: '/deals' },
-      { name: 'Clientes', icon: <Users size={20} />, href: '/customers' },
-    ];
-
-    if (mostrarOpec) {
-      menuItems.splice(3, 0, { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' });
-    }
-
-    if (mostrarFinanceiro) {
-      menuItems.push({ name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' });
-    }
-
-    if (isDirector || isManager) {
-      if (isDirector) {
-        if (mostrarIA) {
-          menuItems.splice(1, 0, { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' });
-        }
-        menuItems.splice(mostrarIA ? 2 : 1, 0, { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
-      } else {
-        menuItems.push({ name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' });
-      }
-      menuItems.push({ name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' });
-    }
+      { name: 'Dashboard',  icon: <LayoutDashboard size={20} />, href: '/dashboard' },
+      isDirector && mostrarIA ? { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' } : null,
+      isDirector || isManager ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
+      { name: 'Metas',      icon: <Target size={20} />,          href: '/goals' },
+      { name: 'Vendas',     icon: <Zap size={20} />,             href: '/deals' },
+      mostrarOpec           ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
+      { name: 'Clientes',   icon: <Users size={20} />,           href: '/customers' },
+      mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
+      isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
+    ].filter(Boolean) as any[];
   }
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);

@@ -28,10 +28,14 @@ export async function GET(request: Request) {
 
   const db = supabaseAdmin();
 
-  const [{ data: profiles }, { data: empresasData }] = await Promise.all([
+  const [{ data: profiles, error: errProfiles }, { data: empresasData, error: errEmpresas }] = await Promise.all([
     db.from('profiles').select('empresa_id, nome, cargo, email').not('empresa_id', 'is', null),
     db.from('empresas').select('*'),
   ]);
+
+  if (errProfiles) console.error('[admin/empresas] profiles error:', errProfiles);
+  if (errEmpresas) console.error('[admin/empresas] empresas error:', errEmpresas);
+  console.log('[admin/empresas] profiles count:', profiles?.length, '| empresas count:', empresasData?.length);
 
   // Agrupa por empresa_id — fonte da verdade são os profiles
   const tenantMap = new Map<string, { diretor: string; total: number }>();

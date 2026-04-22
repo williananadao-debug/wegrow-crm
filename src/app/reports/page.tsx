@@ -123,7 +123,7 @@ export default function ReportsPage() {
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, graficoMensal, inadimplentes } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, graficoMensal, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
@@ -181,7 +181,18 @@ export default function ReportsPage() {
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, leadsCount: 0, ganhosCount: 0 };
          acc[chave].leadsCount += 1; if (lead.status === 'ganho') { acc[chave].total += (Number(lead.valor_total) || 0); acc[chave].ganhosCount += 1; } return acc;
       }, {});
-      const calcRanking = Object.values(rankObj).map((v: any) => ({ nome: v.nome, total: Number(v.total) || 0, conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0 })).sort((a: any, b: any) => b.total - a.total);
+      // Ranking com comparativo vs período anterior
+      const rankObjPassado = pastLeads.reduce((acc: any, lead) => {
+        const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
+        if (!acc[chave]) acc[chave] = { total: 0 };
+        if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
+        return acc;
+      }, {});
+      const calcRanking = Object.values(rankObj).map((v: any) => ({
+        nome: v.nome, total: Number(v.total) || 0,
+        conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0,
+        totalAnterior: Number(rankObjPassado[v.id]?.total) || 0,
+      })).sort((a: any, b: any) => b.total - a.total);
 
       const leadsJaContabilizados = new Set();
       let estrategiasProcessadas = rawPremissas.map(p => {
@@ -246,7 +257,32 @@ export default function ReportsPage() {
           vendedor: l.vendedor_nome || rawProfiles.find((p: any) => p.id === l.user_id)?.nome || 'N/A',
       })).sort((a, b) => b.diasVencido - a.diasVencido);
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, graficoMensal, inadimplentes };
+      // Ciclo médio de vendas por etapa final
+      const cicloObj: Record<number, { total: number; count: number }> = {};
+      currentGanhos.forEach(l => {
+        const etapa = Number(l.etapa) || 0;
+        const inicio = l.contrato_inicio || l.created_at;
+        if (!inicio) return;
+        const diasCiclo = Math.floor((new Date(dataFim + 'T12:00:00').getTime() - new Date(inicio).getTime()) / 86400000);
+        if (diasCiclo < 0 || diasCiclo > 365) return;
+        if (!cicloObj[etapa]) cicloObj[etapa] = { total: 0, count: 0 };
+        cicloObj[etapa].total += diasCiclo;
+        cicloObj[etapa].count += 1;
+      });
+      const cicloMedio = Object.entries(cicloObj).map(([etapa, v]) => ({
+        etapa: Number(etapa),
+        media: Math.round(v.total / v.count),
+        count: v.count,
+      })).sort((a, b) => a.etapa - b.etapa);
+      const cicloGeral = currentGanhos.length > 0
+        ? Math.round(currentGanhos.reduce((s, l) => {
+            const inicio = l.contrato_inicio || l.created_at;
+            if (!inicio) return s;
+            return s + Math.max(0, Math.floor((new Date(dataFim + 'T12:00:00').getTime() - new Date(inicio).getTime()) / 86400000));
+          }, 0) / currentGanhos.length)
+        : 0;
+
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, graficoMensal, inadimplentes, cicloMedio, cicloGeral };
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
 
   const handleGeneratePreview = async () => {
@@ -525,7 +561,17 @@ export default function ReportsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-end mb-1">
                       <span className="text-white font-black text-xs uppercase group-hover:text-purple-400 transition-colors truncate pr-2">{vend.nome || 'Sem Nome'}</span>
-                      <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
+                      <div className="flex items-center gap-1.5">
+                        {vend.totalAnterior > 0 && (() => {
+                          const delta = ((vendTotal - vend.totalAnterior) / vend.totalAnterior) * 100;
+                          return (
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 ${delta >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                              {delta >= 0 ? <ArrowUpRight size={8}/> : <ArrowDownRight size={8}/>}{Math.abs(Math.round(delta))}%
+                            </span>
+                          );
+                        })()}
+                        <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
+                      </div>
                     </div>
                     <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
                     <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Conversão: {Math.round(vend.conversao || 0)}%</p>
@@ -776,6 +822,34 @@ export default function ReportsPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* CICLO MÉDIO DE VENDAS */}
+      {cicloMedio.length > 0 && (
+        <div className="bg-[#0B1120] border border-white/5 rounded-[32px] p-6 shadow-2xl">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-white font-black uppercase italic flex items-center gap-2">
+              <Clock size={18} className="text-cyan-400" /> Ciclo Médio de Vendas por Etapa
+            </h3>
+            {cicloGeral > 0 && (
+              <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl">
+                Média Geral: {cicloGeral} dias
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {cicloMedio.map(({ etapa, media, count }) => (
+              <div key={etapa} className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl text-center">
+                <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Etapa {etapa}</p>
+                <p className="text-2xl font-black text-cyan-400">{media}d</p>
+                <p className="text-[9px] text-slate-600 font-bold mt-0.5">{count} vendas</p>
+                <div className="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
+                  <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${Math.min((media / Math.max(...cicloMedio.map(c => c.media), 1)) * 100, 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

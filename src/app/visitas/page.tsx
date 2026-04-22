@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import {
-  MapPin, Plus, X, CheckCircle2, Clock, Zap, Filter,
-  ExternalLink, User, ChevronDown, ArrowLeft, Loader2,
-  Navigation, NavigationOff, Building2, Phone, FileText,
-  Calendar, Search
+  MapPin, Plus, X, CheckCircle2, Clock, Zap,
+  ArrowLeft, Loader2,
+  Navigation, Building2, Phone,
+  Calendar, Search, Camera, Route, Image as ImageIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -23,6 +23,7 @@ type Visita = {
   longitude?: number;
   localizacao_url?: string;
   lead_id?: number | null;
+  foto_url?: string | null;
   created_at: string;
 };
 
@@ -68,6 +69,12 @@ export default function VisitasPage() {
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+
+  // Rota do dia
+  const [rotaModalOpen, setRotaModalOpen] = useState(false);
 
   // Modal criar lead a partir de visita
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
@@ -119,6 +126,8 @@ export default function VisitasPage() {
     setCoords(null);
     setGeoStatus('loading');
     setSaveError('');
+    setFotoFile(null);
+    setFotoPreview(null);
     setIsModalOpen(true);
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -130,6 +139,15 @@ export default function VisitasPage() {
     );
   }
 
+  function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFotoFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setFotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
   async function salvarVisita() {
     if (!empresa.trim()) return;
     if (!perfil?.empresa_id) {
@@ -138,6 +156,22 @@ export default function VisitasPage() {
     }
     setSaving(true);
     setSaveError('');
+
+    let foto_url: string | null = null;
+    if (fotoFile) {
+      setUploadingFoto(true);
+      try {
+        const ext = fotoFile.name.split('.').pop() || 'jpg';
+        const path = `${perfil.empresa_id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('visitas').upload(path, fotoFile, { upsert: true });
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('visitas').getPublicUrl(path);
+          foto_url = urlData.publicUrl;
+        }
+      } catch { /* foto upload failure is non-critical */ }
+      setUploadingFoto(false);
+    }
+
     const mapsUrl = coords ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}` : null;
     const payload = {
       empresa: empresa.trim(),
@@ -150,6 +184,7 @@ export default function VisitasPage() {
       longitude: coords?.lng ?? null,
       localizacao_url: mapsUrl,
       lead_id: null,
+      foto_url,
     };
     try {
       const { data, error } = await supabase.from('visitas').insert([payload]).select();
@@ -162,6 +197,20 @@ export default function VisitasPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function abrirRotaDoDia() {
+    setRotaModalOpen(true);
+  }
+
+  function abrirGoogleMapsRota(visitasHoje: Visita[]) {
+    const comCoords = visitasHoje.filter(v => v.latitude && v.longitude);
+    if (comCoords.length === 0) {
+      alert('Nenhuma visita de hoje tem coordenadas GPS para montar a rota.');
+      return;
+    }
+    const waypoints = comCoords.map(v => `${v.latitude},${v.longitude}`).join('/');
+    window.open(`https://www.google.com/maps/dir/${waypoints}`, '_blank');
   }
 
   async function criarLeadDaVisita(visita: Visita) {
@@ -217,6 +266,8 @@ export default function VisitasPage() {
   const totalVisitas = visitas.length;
   const comLead = visitas.filter(v => v.lead_id).length;
   const semLead = visitas.filter(v => !v.lead_id).length;
+  const hoje = new Date().toISOString().substring(0, 10);
+  const visitasHoje = visitas.filter(v => v.created_at.substring(0, 10) === hoje && (!isLideranca || filtroVendedor === 'todos' || v.user_id === filtroVendedor));
 
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2 animate-in fade-in duration-500">
@@ -240,12 +291,22 @@ export default function VisitasPage() {
           </div>
         </div>
 
-        <button
-          onClick={abrirModalNovaVisita}
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(59,130,246,0.3)] flex items-center gap-2"
-        >
-          <Plus size={16} strokeWidth={3} /> Registrar Visita
-        </button>
+        <div className="flex gap-2">
+          {visitasHoje.length > 0 && (
+            <button
+              onClick={abrirRotaDoDia}
+              className="bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2"
+            >
+              <Route size={14} /> Rota do Dia ({visitasHoje.length})
+            </button>
+          )}
+          <button
+            onClick={abrirModalNovaVisita}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(59,130,246,0.3)] flex items-center gap-2"
+          >
+            <Plus size={16} strokeWidth={3} /> Registrar Visita
+          </button>
+        </div>
       </div>
 
       {/* CARDS RESUMO */}
@@ -384,6 +445,11 @@ export default function VisitasPage() {
                       "{visita.observacao}"
                     </p>
                   )}
+                  {visita.foto_url && (
+                    <a href={visita.foto_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+                      <img src={visita.foto_url} alt="Foto da visita" className="w-16 h-16 object-cover rounded-xl border border-white/10 hover:border-blue-500/50 transition-all" />
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -471,6 +537,26 @@ export default function VisitasPage() {
                   onChange={e => setObservacao(e.target.value)}
                 />
               </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block flex items-center gap-2">
+                  <Camera size={12}/> Foto do Check-in (opcional)
+                </label>
+                {fotoPreview ? (
+                  <div className="relative inline-block">
+                    <img src={fotoPreview} alt="Preview" className="w-full max-h-40 object-cover rounded-xl border border-white/10" />
+                    <button type="button" onClick={() => { setFotoFile(null); setFotoPreview(null); }} className="absolute top-2 right-2 bg-black/70 text-white p-1 rounded-lg hover:bg-red-500 transition-colors">
+                      <X size={12}/>
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:border-blue-500/50 transition-colors bg-black/30">
+                    <ImageIcon size={20} className="text-slate-600 mb-1"/>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Tirar foto ou selecionar</span>
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFotoChange} />
+                  </label>
+                )}
+              </div>
             </div>
 
             {saveError && (
@@ -493,7 +579,8 @@ export default function VisitasPage() {
                 disabled={!empresa.trim() || saving}
                 className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all flex items-center justify-center gap-2"
               >
-                <MapPin size={14} /> {saving ? 'Salvando...' : 'Registrar Visita'}
+                {saving ? <Loader2 size={14} className="animate-spin"/> : <MapPin size={14}/>}
+                {uploadingFoto ? 'Enviando foto...' : saving ? 'Salvando...' : 'Registrar Visita'}
               </button>
             </div>
           </div>
@@ -533,6 +620,52 @@ export default function VisitasPage() {
               >
                 {criandoLead ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
                 {criandoLead ? 'Criando...' : 'Criar Lead'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ROTA DO DIA */}
+      {rotaModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[#0B1120] border border-emerald-500/30 w-full max-w-md rounded-[32px] shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[85vh]">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-emerald-500/5 rounded-t-[32px]">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-emerald-400 flex items-center gap-2">
+                <Route size={20}/> Rota do Dia — {visitasHoje.length} visita{visitasHoje.length !== 1 ? 's' : ''}
+              </h2>
+              <button onClick={() => setRotaModalOpen(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
+                <X size={18}/>
+              </button>
+            </div>
+            <div className="overflow-y-auto custom-scrollbar flex-1 p-4 space-y-2">
+              {visitasHoje.map((v, i) => (
+                <div key={v.id} className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl p-3">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm flex-shrink-0">{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-black text-xs uppercase truncate">{v.empresa}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[9px] text-slate-500 font-bold">{v.created_at.substring(11, 16)}</span>
+                      {v.latitude ? <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-0.5"><Navigation size={8}/> GPS</span> : <span className="text-[9px] text-slate-600 font-bold">Sem GPS</span>}
+                    </div>
+                  </div>
+                  {v.localizacao_url && (
+                    <a href={v.localizacao_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 p-1.5 bg-blue-500/10 rounded-lg transition-colors flex-shrink-0">
+                      <Navigation size={12}/>
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="p-6 border-t border-white/10 flex gap-3">
+              <button onClick={() => setRotaModalOpen(false)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+                Fechar
+              </button>
+              <button
+                onClick={() => abrirGoogleMapsRota(visitasHoje)}
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-emerald-600 text-white hover:bg-emerald-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              >
+                <Route size={14}/> Abrir no Maps
               </button>
             </div>
           </div>

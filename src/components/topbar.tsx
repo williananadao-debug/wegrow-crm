@@ -2,8 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Calendar } from 'lucide-react';
-import NotificationBell from '@/components/NotificationBell'; 
+import { Calendar, Search } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 import Link from 'next/link';
 
 export default function Topbar() {
@@ -44,7 +44,16 @@ export default function Topbar() {
 
       {/* A BARRA DE BUSCA FOI REMOVIDA DAQUI PARA NÃO CAUSAR CONFUSÃO */}
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => { const e = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }); window.dispatchEvent(e); }}
+          className="hidden md:flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-slate-500 hover:text-white transition-all"
+          title="Busca Global (Ctrl+K)"
+        >
+          <Search size={14}/>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Buscar</span>
+          <kbd className="text-[9px] font-black bg-white/10 px-1.5 py-0.5 rounded border border-white/10">Ctrl K</kbd>
+        </button>
         <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors cursor-pointer">
             <NotificationBell />
         </div>

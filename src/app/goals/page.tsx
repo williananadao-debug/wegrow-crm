@@ -29,6 +29,11 @@ export default function GoalsPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [comparativo, setComparativo] = useState<any[]>([]);
 
+  const [produtosMes, setProdutosMes] = useState<{ nome: string; qtd: number; valor: number; valorMesAnterior: number }[]>([]);
+  const [servicos, setServicos] = useState<{ id: string; nome: string }[]>([]);
+  const [metasProduto, setMetasProduto] = useState<Record<string, number>>({});
+  const [editandoMetaProduto, setEditandoMetaProduto] = useState<string | null>(null);
+
   const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
@@ -46,6 +51,10 @@ export default function GoalsPage() {
   useEffect(() => {
     if (vendedores.length > 0) fetchComparativo();
   }, [vendedores]);
+
+  useEffect(() => {
+    if (perfil?.empresa_id) { fetchProdutosMes(); fetchServicos(); }
+  }, [perfil?.empresa_id, vendedorSelecionado]);
 
   async function fetchVendedores() {
     let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
@@ -123,6 +132,89 @@ export default function GoalsPage() {
 
     setComparativo(rows);
   }
+
+  async function fetchServicos() {
+    if (!perfil?.empresa_id) return;
+    const { data } = await supabase.from('servicos').select('id, nome').eq('empresa_id', perfil.empresa_id).eq('ativo', true).limit(50);
+    setServicos(data || []);
+  }
+
+  async function fetchProdutosMes() {
+    if (!perfil?.empresa_id) return;
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = hoje.getMonth() + 1;
+    const mesPad = String(mes).padStart(2, '0');
+    const mesAnterior = mes === 1 ? 12 : mes - 1;
+    const anoAnterior = mes === 1 ? ano - 1 : ano;
+    const mesAntPad = String(mesAnterior).padStart(2, '0');
+    const anoAntStr = String(anoAnterior);
+
+    const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
+
+    let q1 = supabase.from('leads').select('itens, valor_total')
+      .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+      .gte('created_at', `${ano}-${mesPad}-01`).lte('created_at', `${ano}-${mesPad}-31`).limit(2000);
+    if (targetUser) q1 = q1.eq('user_id', targetUser);
+
+    let q2 = supabase.from('leads').select('itens')
+      .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+      .gte('created_at', `${anoAntStr}-${mesAntPad}-01`).lte('created_at', `${anoAntStr}-${mesAntPad}-31`).limit(2000);
+    if (targetUser) q2 = q2.eq('user_id', targetUser);
+
+    const [{ data: mesAtualData }, { data: mesAntData }] = await Promise.all([q1, q2]);
+
+    const agg: Record<string, { qtd: number; valor: number; valorMesAnterior: number }> = {};
+    (mesAtualData || []).forEach((l: any) => {
+      if (!Array.isArray(l.itens)) return;
+      l.itens.forEach((item: any) => {
+        if (!item.servico) return;
+        if (!agg[item.servico]) agg[item.servico] = { qtd: 0, valor: 0, valorMesAnterior: 0 };
+        agg[item.servico].qtd += Number(item.quantidade) || 1;
+        agg[item.servico].valor += Number(item.total || item.preco_unitario || 0) * (Number(item.quantidade) || 1);
+      });
+    });
+    (mesAntData || []).forEach((l: any) => {
+      if (!Array.isArray(l.itens)) return;
+      l.itens.forEach((item: any) => {
+        if (!item.servico) return;
+        if (!agg[item.servico]) agg[item.servico] = { qtd: 0, valor: 0, valorMesAnterior: 0 };
+        agg[item.servico].valorMesAnterior += Number(item.total || item.preco_unitario || 0) * (Number(item.quantidade) || 1);
+      });
+    });
+
+    // Fetch saved product goals
+    const { data: metasProdData } = await supabase.from('metas')
+      .select('produto, valor_objetivo').eq('empresa_id', perfil.empresa_id)
+      .eq('ano', ano).eq('mes', mes).not('produto', 'is', null);
+    const mpMap: Record<string, number> = {};
+    (metasProdData || []).forEach((m: any) => { if (m.produto) mpMap[m.produto] = m.valor_objetivo; });
+    setMetasProduto(mpMap);
+
+    const rows = Object.entries(agg)
+      .map(([nome, v]) => ({ nome, ...v }))
+      .sort((a, b) => b.valor - a.valor);
+    setProdutosMes(rows);
+  }
+
+  const handleUpdateMetaProduto = async (produto: string, valor: number) => {
+    if (!isDirector || !perfil?.empresa_id) return;
+    const hoje = new Date();
+    const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
+    await supabase.from('metas').upsert({
+      user_id: targetUser,
+      empresa_id: perfil.empresa_id,
+      ano: hoje.getFullYear(),
+      mes: hoje.getMonth() + 1,
+      valor_objetivo: valor,
+      tipo: 'produto',
+      produto,
+    }, { onConflict: 'user_id,ano,mes,produto' });
+    setMetasProduto(prev => ({ ...prev, [produto]: valor }));
+    setEditandoMetaProduto(null);
+    setToastMessage(`Meta de "${produto}" salva!`);
+    setShowToast(true);
+  };
 
   const handleUpdateMeta = async (mes: number | null, valor: number) => {
     if (!isDirector) return;
@@ -358,6 +450,78 @@ export default function GoalsPage() {
                 {!v.meta && <span className="text-[8px] text-slate-600 font-bold uppercase">Sem meta</span>}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* METAS POR PRODUTO */}
+      {produtosMes.length > 0 && (
+        <div className="bg-[#0B1120] border border-white/10 rounded-[32px] p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-blue-500/20 rounded-xl flex items-center justify-center"><TrendingUp size={18} className="text-blue-400"/></div>
+              <div>
+                <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Desempenho por Produto</h2>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">
+                  {new Date(0, new Date().getMonth()).toLocaleString('pt-BR', { month: 'long' })} {new Date().getFullYear()}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {produtosMes.slice(0, 10).map(prod => {
+              const meta = metasProduto[prod.nome] || 0;
+              const perc = meta > 0 ? Math.min((prod.valor / meta) * 100, 100) : 0;
+              const tendencia = prod.valorMesAnterior > 0
+                ? ((prod.valor - prod.valorMesAnterior) / prod.valorMesAnterior) * 100
+                : null;
+              const isEditing = editandoMetaProduto === prod.nome;
+
+              return (
+                <div key={prod.nome} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-black text-xs uppercase truncate">{prod.nome}</p>
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                        <span className="text-[9px] text-slate-500 font-bold">{prod.qtd}x vendido</span>
+                        <span className="text-[9px] text-[#22C55E] font-black">R$ {prod.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                        {tendencia !== null && (
+                          <span className={`text-[9px] font-black ${tendencia >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {tendencia >= 0 ? '▲' : '▼'} {Math.abs(tendencia).toFixed(0)}% vs mês ant.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isDirector && (
+                      isEditing ? (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <input
+                            type="number"
+                            autoFocus
+                            defaultValue={meta || ''}
+                            className="w-28 bg-[#0B1120] border border-blue-500 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none"
+                            onBlur={(e) => handleUpdateMetaProduto(prod.nome, Number(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateMetaProduto(prod.nome, Number((e.target as HTMLInputElement).value)); if (e.key === 'Escape') setEditandoMetaProduto(null); }}
+                          />
+                        </div>
+                      ) : (
+                        <button onClick={() => setEditandoMetaProduto(prod.nome)} className="text-[9px] font-black text-slate-600 hover:text-blue-400 transition-colors flex-shrink-0 uppercase">
+                          {meta > 0 ? `Meta: R$ ${meta.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '+ Meta'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {meta > 0 && (
+                    <div>
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${perc >= 100 ? 'bg-[#22C55E]' : perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${perc}%` }} />
+                      </div>
+                      <p className="text-[9px] text-slate-600 mt-0.5 font-bold">{Math.round(perc)}% da meta mensal</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

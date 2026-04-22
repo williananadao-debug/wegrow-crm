@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { X, CheckCircle2, Circle, ChevronRight, Rocket, Settings, Users, Zap, Target, LayoutDashboard } from 'lucide-react';
+import { X, CheckCircle2, Circle, ChevronRight, Rocket, Settings, Users, Zap, Target, LayoutDashboard, MapPin, BarChart3, Sparkles } from 'lucide-react';
 
 const STORAGE_KEY = 'wegrow_onboarding_v1';
 
@@ -45,6 +45,30 @@ const STEPS = [
     desc: 'Veja o funil, ranking e previsão de receita em tempo real.',
     href: '/dashboard',
     cta: 'Ver Dashboard',
+  },
+  {
+    id: 'estrategia',
+    icon: <Sparkles size={18} />,
+    title: 'Rode o Algoritmo de Estratégia',
+    desc: 'Gere leads inteligentes: resgate de inativos, prevenção de churn e primeira compra.',
+    href: '/dashboard/premises',
+    cta: 'Ir para Estratégia',
+  },
+  {
+    id: 'visita',
+    icon: <MapPin size={18} />,
+    title: 'Registre sua primeira visita',
+    desc: 'Check-in com GPS, foto e criação de lead no campo — tudo pelo celular.',
+    href: '/visitas',
+    cta: 'Ir para Visitas',
+  },
+  {
+    id: 'relatorio',
+    icon: <BarChart3 size={18} />,
+    title: 'Explore os Relatórios',
+    desc: 'Exporte dados em CSV, veja ranking comparativo e ciclo médio de vendas.',
+    href: '/reports',
+    cta: 'Ver Relatórios',
   },
 ];
 

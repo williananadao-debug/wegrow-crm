@@ -41,6 +41,9 @@ export default function PremisesPage() {
 
   const [rawLeadsIA, setRawLeadsIA] = useState<any[]>([]);
 
+  const [previewModal, setPreviewModal] = useState(false);
+  const [previewDuplicatas, setPreviewDuplicatas] = useState<any[]>([]);
+
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -114,8 +117,27 @@ export default function PremisesPage() {
 
   const gerarInteligente = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!perfil?.empresa_id) return alert("Erro: Empresa não identificada.");
+    if (!perfil?.empresa_id) return;
 
+    // Check for duplicate runs in the last 7 days
+    const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString();
+    const keyword = tipoIA === 'resgate' ? 'Resgate' : tipoIA === 'churn' ? 'Renovação' : 'Primeira Compra';
+    const { data: recentes } = await supabase
+      .from('premissas')
+      .select('id, titulo, created_at, quantidade')
+      .eq('empresa_id', perfil.empresa_id)
+      .gte('created_at', seteDiasAtras)
+      .ilike('titulo', `%${keyword}%`)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    setPreviewDuplicatas(recentes || []);
+    setPreviewModal(true);
+  };
+
+  const confirmarGeracao = async () => {
+    if (!perfil?.empresa_id) return;
+    setPreviewModal(false);
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('gerar_estrategia_ia_v2', {
@@ -129,7 +151,7 @@ export default function PremisesPage() {
         p_unidade: unidadeEstrategiaIA || null,
       });
       if (error) throw error;
-      setToastMessage(`🤖 IA em ação! ${data || 0} novas oportunidades no funil.`);
+      setToastMessage(`🤖 Algoritmo executado! ${data || 0} novas oportunidades no funil.`);
       setShowToast(true);
       fetchHistorico();
       fetchLeadsIA();
@@ -594,6 +616,61 @@ export default function PremisesPage() {
 
       </div>
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
+
+      {/* MODAL DE CONFIRMAÇÃO / PREVIEW */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-[#0B1120] border border-white/10 rounded-[32px] w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b border-white/10">
+              <h2 className="text-lg font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-400"/> Confirmar Algoritmo
+              </h2>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Resumo dos parâmetros */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+                <p className="text-[10px] font-black uppercase text-slate-500 mb-3">Parâmetros da Execução</p>
+                {[
+                  { label: 'Algoritmo', value: tipoIA === 'resgate' ? 'Resgate de Inativos' : tipoIA === 'churn' ? 'Prevenção de Perda' : 'Primeira Compra' },
+                  { label: 'Leads a Gerar', value: `Até ${quantidadeIA}` },
+                  { label: 'Produto Foco', value: produtoFoco || '—' },
+                  { label: 'Vendedor', value: vendedores.find(v => v.id === selectedVendedor)?.nome || 'Distribuição automática' },
+                  { label: 'Unidade', value: unidadeEstrategiaIA || 'Todas as unidades' },
+                  ...(tipoIA === 'resgate' ? [{ label: 'Inatividade mínima', value: `${diasInativo} dias` }] : []),
+                ].map(item => (
+                  <div key={item.label} className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">{item.label}</span>
+                    <span className="text-[10px] font-black text-white uppercase">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Aviso de duplicata */}
+              {previewDuplicatas.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+                  <p className="text-amber-400 font-black text-[10px] uppercase flex items-center gap-2 mb-2">
+                    <AlertCircle size={14}/> Execuções recentes detectadas
+                  </p>
+                  {previewDuplicatas.map(d => (
+                    <p key={d.id} className="text-amber-300/70 text-[10px] font-bold">
+                      · {d.quantidade} leads em {new Date(d.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  ))}
+                  <p className="text-amber-400/60 text-[9px] mt-2">Você pode prosseguir, mas verifique se os leads já foram trabalhados.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 p-6 border-t border-white/10">
+              <button onClick={() => setPreviewModal(false)} className="flex-1 bg-white/5 text-slate-400 hover:text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
+                Cancelar
+              </button>
+              <button onClick={confirmarGeracao} className="flex-1 bg-gradient-to-br from-purple-600 to-blue-700 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
+                <Zap size={14}/> {previewDuplicatas.length > 0 ? 'Gerar mesmo assim' : 'Confirmar e Gerar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

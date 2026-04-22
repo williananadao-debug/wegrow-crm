@@ -109,10 +109,16 @@ const LeadCard = React.memo(({
     }, [lead.contrato_fim]);
 
     const clienteVinculado = lead.client_id ? clientesMap[lead.client_id] : null;
-    const risco = clienteVinculado?.risco?.toLowerCase() || 'verde'; 
-    const corRisco = risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 
-                     risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]' : 
+    const risco = clienteVinculado?.risco?.toLowerCase() || 'verde';
+    const corRisco = risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' :
+                     risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]' :
                      'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.8)]';
+
+    const diasParado = useMemo(() => {
+        if (lead.status !== 'aberto') return null;
+        const criado = new Date(lead.created_at);
+        return Math.floor((Date.now() - criado.getTime()) / 86400000);
+    }, [lead.created_at, lead.status]);
 
     return (
         <Draggable draggableId={lead.id.toString()} index={index}>
@@ -316,9 +322,15 @@ const LeadCard = React.memo(({
                         );
                     })()}
 
+                    {diasParado !== null && diasParado >= 14 && (
+                        <div className={`mb-2 flex items-center gap-1 px-2 py-1 rounded-lg border text-[8px] font-black uppercase ${diasParado >= 30 ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse' : 'bg-orange-500/10 border-orange-500/30 text-orange-400'}`}>
+                            <Clock size={9}/> Parado há {diasParado} dias
+                        </div>
+                    )}
+
                     {lead.status === 'aberto' ? (
                         <div className="space-y-2 pt-1">
-                            <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto')} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
+                            <button onClick={() => mudarEtapa(lead.id, lead.etapa + 1, 'aberto', true)} className="w-full py-1.5 bg-white/5 text-slate-300 hover:bg-blue-600 hover:text-white rounded text-[9px] font-black uppercase tracking-wider transition-colors border border-white/5">
                                 AVANÇAR ETAPA
                             </button>
                             <div className="grid grid-cols-2 gap-2">
@@ -428,6 +440,9 @@ export default function DealsPage() {
 
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
+  const [filtroProduto, setFiltroProduto] = useState<string>('todos');
+  const [proximaAcaoModal, setProximaAcaoModal] = useState<{leadId: number; etapa: number; status: string} | null>(null);
+  const [proximaAcaoDate, setProximaAcaoDate] = useState('');
 
   const clientesMap = useMemo(() => {
       const map: Record<number, ClienteOpcao> = {};
@@ -672,7 +687,12 @@ export default function DealsPage() {
     );
   }, []);
 
-  const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: string) => {
+  const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: string, pedirProximaAcao = false) => {
+    if (pedirProximaAcao && novoStatus === 'aberto' && novaEtapa < 4) {
+      setProximaAcaoModal({ leadId: id, etapa: novaEtapa, status: novoStatus });
+      setProximaAcaoDate('');
+      return;
+    }
     const lead = leads.find(l => l.id === id);
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') return alert("⚠️ NEGÓCIO BLOQUEADO: Aguardando aprovação.");
@@ -1362,14 +1382,16 @@ export default function DealsPage() {
       return leads.filter(l => {
           if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
           if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
-          
+          if (filtroProduto !== 'todos') {
+              const itens = Array.isArray(l.itens) ? l.itens : [];
+              if (!itens.some((i: any) => i.servico === filtroProduto)) return false;
+          }
           const dataLead = l.created_at?.substring(0, 10);
           if (dataInicio && dataLead && dataLead < dataInicio) return false;
           if (dataFim && dataLead && dataLead > dataFim) return false;
-          
           return true;
       });
-  }, [leads, filtroVendedor, filtroUnidade, dataInicio, dataFim]);
+  }, [leads, filtroVendedor, filtroUnidade, filtroProduto, dataInicio, dataFim]);
 
   const totalAberto = useMemo(() => leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
   const totalGanhos = useMemo(() => leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
@@ -1467,10 +1489,17 @@ export default function DealsPage() {
                     ))}
                   </select>
               )}
+
+              <select value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                <option value="todos" className="bg-[#0F172A]">Todos Produtos</option>
+                {listaServicos.map(s => (
+                  <option key={s.id} value={s.nome} className="bg-[#0F172A]">{s.nome}</option>
+                ))}
+              </select>
           </div>
 
-          {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
-              <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
+          {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroProduto !== 'todos' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+              <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroProduto('todos'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
                   <X size={12}/> Limpar
               </button>
           )}
@@ -1866,6 +1895,45 @@ export default function DealsPage() {
                     </button>
                 </div>
             </div>
+        </div>
+      )}
+
+      {proximaAcaoModal && (
+        <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-white font-black uppercase italic text-lg mb-1 flex items-center gap-2">
+              <CalendarDays size={20} className="text-blue-400"/> Próxima Ação
+            </h3>
+            <p className="text-slate-400 text-xs mb-4">Defina o follow-up para este lead antes de avançar.</p>
+            <input
+              type="date"
+              value={proximaAcaoDate}
+              onChange={e => setProximaAcaoDate(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 mb-4"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setProximaAcaoModal(null); }}
+                className="flex-1 py-3 rounded-xl bg-white/5 text-slate-400 text-xs font-black uppercase hover:bg-white/10 transition-colors"
+              >
+                Pular
+              </button>
+              <button
+                onClick={async () => {
+                  const { leadId, etapa, status } = proximaAcaoModal;
+                  setProximaAcaoModal(null);
+                  if (proximaAcaoDate) {
+                    await supabase.from('leads').update({ followup_em: proximaAcaoDate }).eq('id', leadId);
+                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, followup_em: proximaAcaoDate } : l));
+                  }
+                  mudarEtapa(leadId, etapa, status);
+                }}
+                className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-xs font-black uppercase hover:bg-blue-500 transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

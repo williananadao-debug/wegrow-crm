@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Navbar from '@/components/navbar';
 import Topbar from '@/components/topbar';
 import OnboardingTour from '@/components/OnboardingTour';
+import GlobalSearch from '@/components/GlobalSearch';
 
 interface LayoutWrapperProps {
   children: ReactNode;
@@ -40,6 +41,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
           </div>
         </main>
         <OnboardingTour />
+        <GlobalSearch />
       </div>
     </div>
   );

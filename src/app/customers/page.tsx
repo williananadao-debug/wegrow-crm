@@ -65,6 +65,14 @@ export default function CustomersPage() {
     cidade: '', bairro: '', estado: '', status: 'ativo', user_id: '',
     status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
   });
+  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [duplicadosModal, setDuplicadosModal] = useState(false);
+  const [duplicados, setDuplicados] = useState<any[]>([]);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDirector = perfil?.cargo === 'diretor';
@@ -267,20 +275,22 @@ export default function CustomersPage() {
       setFormData({
         nome_empresa: cliente.nome_empresa, telefone: cliente.telefone || '', email: cliente.email || '',
         cnpj: cliente.cnpj || '', inscricao_estadual: cliente.inscricao_estadual || '', cep: cliente.cep || '',
-        endereco: cliente.endereco || '', numero: cliente.numero || '', cidade: cliente.cidade || '', 
+        endereco: cliente.endereco || '', numero: cliente.numero || '', cidade: cliente.cidade || '',
         bairro: cliente.bairro || '', estado: cliente.estado || '', status: cliente.status || 'ativo' as any,
         user_id: cliente.user_id || '',
-        status_risco: cliente.status_risco || 'em_analise', limite_credito: cliente.limite_credito || 0, 
+        status_risco: cliente.status_risco || 'em_analise', limite_credito: cliente.limite_credito || 0,
         score_interno: cliente.score_interno || 0, observacao_risco: cliente.observacao_risco || ''
       });
+      setTags((cliente as any).tags || []);
       fetchHistorico(cliente.id); fetchUnidades(cliente.id); setActiveTab('dados');
     } else {
       setEditingId(null);
-      setFormData({ 
-        nome_empresa: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '', 
+      setFormData({
+        nome_empresa: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '',
         cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || ''),
         status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
       });
+      setTags([]);
       setHistoricoVendas([]); setUnidades([]); setActiveTab('dados');
     }
     setIsModalOpen(true);
@@ -290,7 +300,7 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
     
-    const payload = { ...formData, empresa_id: perfil?.empresa_id };
+    const payload = { ...formData, empresa_id: perfil?.empresa_id, tags };
     
     if (!editingId && !payload.user_id) {
         payload.user_id = user?.id;
@@ -336,6 +346,79 @@ export default function CustomersPage() {
     if (!error) resetAndFetch();
   };
 
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const obj: any = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+        return obj;
+      }).filter(r => r.nome_empresa || r.nome || r['nome empresa']);
+      setCsvPreview(rows.slice(0, 200));
+      setCsvModalOpen(true);
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  };
+
+  const handleCsvImport = async () => {
+    if (!perfil?.empresa_id || csvPreview.length === 0) return;
+    setCsvImporting(true);
+    const payload = csvPreview.map(r => ({
+      nome_empresa: r.nome_empresa || r.nome || r['nome empresa'] || '',
+      telefone: r.telefone || r.fone || '',
+      email: r.email || '',
+      cnpj: r.cnpj || '',
+      cidade: r.cidade || '',
+      estado: r.estado || '',
+      status: 'ativo',
+      status_risco: 'em_analise',
+      empresa_id: perfil.empresa_id,
+    })).filter(r => r.nome_empresa);
+    const chunkSize = 50;
+    for (let i = 0; i < payload.length; i += chunkSize) {
+      await supabase.from('clientes').insert(payload.slice(i, i + chunkSize));
+    }
+    setCsvImporting(false);
+    setCsvModalOpen(false);
+    resetAndFetch();
+  };
+
+  const buscarDuplicados = async () => {
+    if (!perfil?.empresa_id) return;
+    const { data } = await supabase
+      .from('clientes')
+      .select('id, nome_empresa, cnpj, cidade, created_at')
+      .eq('empresa_id', perfil.empresa_id)
+      .not('cnpj', 'is', null)
+      .neq('cnpj', '');
+    if (!data) return;
+    const grupos: Record<string, any[]> = {};
+    data.forEach(c => {
+      const cnpjLimpo = c.cnpj.replace(/\D/g, '');
+      if (cnpjLimpo.length < 11) return;
+      if (!grupos[cnpjLimpo]) grupos[cnpjLimpo] = [];
+      grupos[cnpjLimpo].push(c);
+    });
+    const duplicadosEncontrados = Object.values(grupos).filter(g => g.length > 1);
+    setDuplicados(duplicadosEncontrados);
+    setDuplicadosModal(true);
+  };
+
+  const mesclarClientes = async (manter: number, remover: number) => {
+    if (!confirm('Mesclar clientes? O histórico do duplicado será movido para o principal.')) return;
+    await supabase.from('leads').update({ client_id: manter }).eq('client_id', remover);
+    await supabase.from('clientes').delete().eq('id', remover);
+    setDuplicados(prev => prev.map(grupo => grupo.filter((c: any) => c.id !== remover)).filter(g => g.length > 1));
+    resetAndFetch();
+  };
+
   return (
     <div className="h-full flex flex-col pb-4 animate-in fade-in duration-500">
       
@@ -345,10 +428,16 @@ export default function CustomersPage() {
           <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Carteira de Clientes</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{totalCount} Empresas encontradas</p>
         </div>
-        <div className="flex gap-2">
-            <button className="bg-white/5 border border-white/10 text-slate-300 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
-                <Upload size={16} /> Importar
+        <div className="flex gap-2 flex-wrap">
+            <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+            <button onClick={() => csvInputRef.current?.click()} className="bg-white/5 border border-white/10 text-slate-300 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
+                <Upload size={16} /> Importar CSV
             </button>
+            {isDirector && (
+              <button onClick={buscarDuplicados} className="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-orange-500/20 transition-all flex items-center gap-2">
+                  <Hash size={16} /> Duplicados
+              </button>
+            )}
             <button onClick={() => handleOpenModal()} className="bg-[#22C55E] text-[#0F172A] px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgba(34,197,94,0.2)]">
                 <Plus size={18} strokeWidth={3} /> Novo Cliente
             </button>
@@ -442,6 +531,16 @@ export default function CustomersPage() {
                                     </span>
                                 )}
                             </div>
+                            {((cliente as any).tags || []).length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {((cliente as any).tags as string[]).slice(0, 4).map((t: string) => (
+                                        <span key={t} className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[9px] font-bold">{t}</span>
+                                    ))}
+                                    {((cliente as any).tags as string[]).length > 4 && (
+                                        <span className="text-slate-600 text-[9px] font-bold">+{((cliente as any).tags as string[]).length - 4}</span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -626,6 +725,36 @@ export default function CustomersPage() {
                         </div>
                     </div>
 
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                        <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Tags / Segmentos</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {tags.map(t => (
+                                <span key={t} className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                                    {t}
+                                    <button type="button" onClick={() => setTags(tags.filter(x => x !== t))} className="hover:text-red-400 ml-1"><X size={10}/></button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Ex: sazonalidade alta, pagador pontual..."
+                                className="flex-1 bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-blue-500"
+                                value={tagInput}
+                                onChange={e => setTagInput(e.target.value)}
+                                onKeyDown={e => {
+                                    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                                        e.preventDefault();
+                                        const nova = tagInput.trim().replace(/,$/, '');
+                                        if (nova && !tags.includes(nova)) setTags([...tags, nova]);
+                                        setTagInput('');
+                                    }
+                                }}
+                            />
+                            <button type="button" onClick={() => { if (tagInput.trim() && !tags.includes(tagInput.trim())) { setTags([...tags, tagInput.trim()]); setTagInput(''); } }} className="bg-blue-600 text-white px-3 rounded-xl text-xs font-bold">+</button>
+                        </div>
+                    </div>
+
                     <button type="submit" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-lg mt-4">
                         {editingId ? 'Salvar Alterações' : 'Criar Cliente'}
                     </button>
@@ -722,6 +851,109 @@ export default function CustomersPage() {
                     )}
                 </div>
                 )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CSV PREVIEW */}
+      {csvModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-[#0B1120] border border-white/10 rounded-[32px] w-full max-w-3xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-black uppercase italic tracking-tighter text-white">Importar CSV</h2>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{csvPreview.length} registros detectados</p>
+              </div>
+              <button onClick={() => setCsvModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
+            </div>
+            <div className="overflow-auto custom-scrollbar flex-1 p-4">
+              <table className="w-full text-[10px] font-bold uppercase">
+                <thead>
+                  <tr className="text-slate-500 border-b border-white/5">
+                    <th className="text-left py-2 px-3">#</th>
+                    <th className="text-left py-2 px-3">Nome</th>
+                    <th className="text-left py-2 px-3">Telefone</th>
+                    <th className="text-left py-2 px-3">CNPJ</th>
+                    <th className="text-left py-2 px-3">Cidade</th>
+                    <th className="text-left py-2 px-3">E-mail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvPreview.map((r, i) => (
+                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                      <td className="py-2 px-3 text-slate-600">{i + 1}</td>
+                      <td className="py-2 px-3 text-white">{r.nome_empresa || r.nome || r['nome empresa'] || '—'}</td>
+                      <td className="py-2 px-3 text-slate-400">{r.telefone || r.fone || '—'}</td>
+                      <td className="py-2 px-3 text-slate-400">{r.cnpj || '—'}</td>
+                      <td className="py-2 px-3 text-slate-400">{r.cidade || '—'}</td>
+                      <td className="py-2 px-3 text-slate-400">{r.email || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3 p-6 border-t border-white/10 flex-shrink-0">
+              <button onClick={() => setCsvModalOpen(false)} className="flex-1 bg-white/5 text-slate-400 hover:text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">Cancelar</button>
+              <button onClick={handleCsvImport} disabled={csvImporting} className="flex-1 bg-[#22C55E] text-[#0F172A] py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {csvImporting ? <><Loader2 size={14} className="animate-spin"/> Importando...</> : `Confirmar — ${csvPreview.length} clientes`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DUPLICADOS */}
+      {duplicadosModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-[#0B1120] border border-white/10 rounded-[32px] w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-black uppercase italic tracking-tighter text-white">Clientes Duplicados</h2>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{duplicados.length} grupo{duplicados.length !== 1 ? 's' : ''} com CNPJ duplicado</p>
+              </div>
+              <button onClick={() => setDuplicadosModal(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
+            </div>
+            <div className="overflow-auto custom-scrollbar flex-1 p-4 space-y-4">
+              {duplicados.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500"/>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Nenhum duplicado encontrado</p>
+                </div>
+              ) : duplicados.map((grupo, gi) => (
+                <div key={gi} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                  <p className="text-[9px] font-black uppercase text-slate-600 mb-3">CNPJ: {grupo[0].cnpj}</p>
+                  <div className="space-y-2">
+                    {grupo.map((c: any, ci: number) => (
+                      <div key={c.id} className="flex items-center justify-between gap-3 bg-white/[0.02] p-3 rounded-xl">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-blue-600/10 text-blue-400 rounded-xl flex items-center justify-center font-black text-sm uppercase flex-shrink-0">
+                            {c.nome_empresa?.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-white text-xs font-black uppercase truncate">{c.nome_empresa}</p>
+                            <p className="text-slate-500 text-[9px] uppercase">{c.cidade || '—'} · {new Date(c.created_at).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          {ci > 0 && (
+                            <button
+                              onClick={() => mesclarClientes(grupo[0].id, c.id)}
+                              className="bg-orange-500/10 text-orange-400 border border-orange-500/30 hover:bg-orange-500/20 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all"
+                            >
+                              Mesclar no #{grupo[0].id}
+                            </button>
+                          )}
+                          {ci === 0 && <span className="text-[9px] font-black text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-xl uppercase">Principal</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-6 border-t border-white/10 flex-shrink-0">
+              <button onClick={() => setDuplicadosModal(false)} className="w-full bg-white/5 text-slate-400 hover:text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">Fechar</button>
             </div>
           </div>
         </div>

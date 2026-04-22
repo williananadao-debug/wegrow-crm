@@ -52,6 +52,35 @@ async function enviarEmailConfirmacao(email: string, empresa: string, leadId: nu
     }).catch(err => console.error('[portal/lead] Resend error:', err));
 }
 
+async function enviarAlertaTime(para: string, lead: any, leadId: number) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
+    await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            from: 'Portal WeGrow <portal@wegrow.app.br>',
+            to: [para],
+            subject: `🔔 Novo lead pelo portal — ${lead.empresa}`,
+            html: `
+                <div style="font-family:sans-serif;background:#0B1120;color:#fff;padding:40px;border-radius:16px;max-width:500px;margin:0 auto">
+                    <h1 style="color:#f97316;font-size:22px;margin-bottom:4px">Novo Lead no Portal!</h1>
+                    <p style="color:#94a3b8;margin-bottom:24px">Uma nova solicitação de orçamento foi recebida.</p>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+                        ${[['Empresa', lead.empresa], ['Telefone', lead.telefone], ['E-mail', lead.email || '—'], ['CNPJ', lead.cnpj || '—'], ['Cidade', lead.unidade || '—']].map(([k, v]) => `
+                        <tr><td style="color:#64748b;font-size:11px;text-transform:uppercase;padding:8px 0 2px;border-bottom:1px solid #1e293b">${k}</td></tr>
+                        <tr><td style="color:#fff;font-weight:700;padding:0 0 8px;border-bottom:1px solid #1e293b">${v}</td></tr>`).join('')}
+                        ${lead.descricao ? `<tr><td style="color:#64748b;font-size:11px;text-transform:uppercase;padding:8px 0 2px">Mensagem</td></tr><tr><td style="color:#cbd5e1;font-size:13px;padding:0 0 8px">${lead.descricao}</td></tr>` : ''}
+                    </table>
+                    <a href="${baseUrl}/deals" style="display:inline-block;background:#f97316;color:#fff;padding:12px 24px;border-radius:10px;font-weight:900;text-decoration:none;font-size:13px;text-transform:uppercase;letter-spacing:0.05em">Ver no CRM</a>
+                    <p style="color:#475569;font-size:11px;margin-top:24px">Protocolo #${String(leadId).padStart(6, '0')} · WeGrow CRM</p>
+                </div>
+            `,
+        }),
+    }).catch(err => console.error('[portal/lead] alert email error:', err));
+}
+
 export async function POST(request: Request) {
     const empresaId = process.env.PORTAL_EMPRESA_ID;
     if (!empresaId) {
@@ -102,9 +131,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'Não foi possível registrar sua solicitação.' }, { status: 500 });
     }
 
-    if (email && data?.id) {
-        await enviarEmailConfirmacao(email, empresa, data.id);
-    }
+    const alertEmail = process.env.PORTAL_ALERT_EMAIL;
+    const promises: Promise<any>[] = [];
+    if (email && data?.id) promises.push(enviarEmailConfirmacao(email, empresa, data.id));
+    if (alertEmail && data?.id) promises.push(enviarAlertaTime(alertEmail, { empresa, telefone, email, cnpj, unidade, descricao }, data.id));
+    await Promise.all(promises);
 
     return NextResponse.json({ ok: true, id: data?.id }, { status: 201 });
 }

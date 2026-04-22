@@ -181,6 +181,7 @@ export default function GoalsPage() {
   const esperadoAteHoje = metaMesAtual > 0 ? (metaMesAtual / diasNoMes) * diaAtual : 0;
   const ritmoOk = realizadoMesAtual >= esperadoAteHoje;
   const deltaRitmo = Math.abs(esperadoAteHoje - realizadoMesAtual);
+  const projecaoFechamento = diaAtual > 0 ? Math.round((realizadoMesAtual / diaAtual) * diasNoMes) : 0;
 
   return (
     <div className="p-6 space-y-8 pb-20 animate-in fade-in duration-500">
@@ -268,6 +269,12 @@ export default function GoalsPage() {
                 Dia {diaAtual}/{diasNoMes} — Esperado: <span className="text-white">R$ {Math.round(esperadoAteHoje).toLocaleString('pt-BR')}</span>
                 {' · '}{ritmoOk ? 'Adiantado' : 'Faltam'} <span className={ritmoOk ? 'text-[#22C55E]' : 'text-orange-400'}>R$ {Math.round(deltaRitmo).toLocaleString('pt-BR')}</span> {ritmoOk ? 'acima do ritmo' : 'para atingir o ritmo'}
               </p>
+              {projecaoFechamento > 0 && (
+                <p className="text-[10px] text-slate-500 font-bold mt-1">
+                  Projeção de fechamento: <span className={projecaoFechamento >= metaMesAtual ? 'text-[#22C55E]' : 'text-orange-400'}>R$ {projecaoFechamento.toLocaleString('pt-BR')}</span>
+                  {metaMesAtual > 0 && <span className="ml-1 text-slate-600">({Math.round((projecaoFechamento / metaMesAtual) * 100)}% da meta)</span>}
+                </p>
+              )}
             </div>
           </div>
         )}

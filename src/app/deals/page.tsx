@@ -18,7 +18,8 @@ import { useUnidades } from '@/lib/useUnidades';
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
-type Historico = { id: number; texto: string; created_at: string; }; 
+type Historico = { id: number; texto: string; created_at: string; };
+type Atividade = { id: number; tipo: 'etapa' | 'nota' | 'followup'; descricao: string; created_at: string; };
 type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; };
 
 type Lead = { 
@@ -52,6 +53,7 @@ type Lead = {
   inscricao_estadual?: string;
   parcelas?: string;
   vencimento?: string;
+  atividades?: Atividade[];
 };
 
 type ClienteOpcao = {
@@ -118,6 +120,7 @@ const LeadCard = React.memo(({
                 ref={provided.innerRef}
                 {...provided.draggableProps}
                 {...provided.dragHandleProps}
+                style={{ ...provided.draggableProps.style, touchAction: 'none' }}
                 className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
             >
                     {lead.tipo === 'visita' && (
@@ -408,6 +411,7 @@ export default function DealsPage() {
   const [historico, setHistorico] = useState<Historico[]>([]);
   const [novaNota, setNovaNota] = useState('');
   const [followupEm, setFollowupEm] = useState('');
+  const [atividades, setAtividades] = useState<Atividade[]>([]);
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -439,7 +443,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas');
+    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades');
 
     if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
 
@@ -695,10 +699,15 @@ export default function DealsPage() {
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
 
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus } : l));
+    const stageName = (STAGES as any)[etapaFinal]?.title || `Etapa ${etapaFinal}`;
+    const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `Movido para ${stageName}`, created_at: new Date().toISOString() };
+    const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead?.atividades) ? lead.atividades : [])];
+
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas } : l));
+    if (editingLeadId === id) setAtividades(atividadesAtualizadas);
 
     try {
-        const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus }).eq('id', id);
+        const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas }).eq('id', id);
         if (error) throw error;
         
         if (novoStatus === 'ganho' && lead) {
@@ -713,7 +722,7 @@ export default function DealsPage() {
             setShowToast(true);
         }
     }
-  }, [leads, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
+  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
 
   const confirmarPerda = useCallback(async () => {
     if (!motivoPerda.trim() || motivoPerda.length < 5) return alert("Por favor, detalhe o motivo da perda. Precisamos dessa informação para melhorar as vendas.");
@@ -1130,15 +1139,19 @@ export default function DealsPage() {
 
       const novasNotas = [novaNotaObj, ...historico];
       setHistorico(novasNotas);
+
+      const novaAtividade: Atividade = { id: Date.now() + 1, tipo: 'nota', descricao: novaNota, created_at: new Date().toISOString() };
+      const novasAtividades = [novaAtividade, ...atividades];
+      setAtividades(novasAtividades);
       setNovaNota('');
-      
-      setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
+
+      setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas, atividades: novasAtividades } : l));
 
       if (navigator.onLine) {
-          await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
+          await supabase.from('leads').update({ notas: novasNotas, atividades: novasAtividades }).eq('id', editingLeadId);
       } else {
           await localDb.syncQueue.add({
-              operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas }, data_criacao: new Date().toISOString()
+              operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas, atividades: novasAtividades }, data_criacao: new Date().toISOString()
           });
       }
   };
@@ -1204,6 +1217,14 @@ export default function DealsPage() {
         else novoStatusAprovacao = null;
     }
 
+    let atividadesPayload = [...atividades];
+    if (editingLeadId && followupEm) {
+        const leadAtual = leads.find(l => l.id === editingLeadId);
+        if (leadAtual?.followup_em !== followupEm) {
+            atividadesPayload = [{ id: Date.now(), tipo: 'followup', descricao: `Follow-up agendado para ${followupEm.split('-').reverse().join('/')}`, created_at: new Date().toISOString() }, ...atividadesPayload];
+        }
+    }
+
     const payload = {
         empresa: novaEmpresa,
         telefone: novoTelefone,
@@ -1211,6 +1232,7 @@ export default function DealsPage() {
         cidade: novaCidade,
         descricao: novaDescricao,
         notas: historico,
+        atividades: atividadesPayload,
         tipo: tipoCliente,
         valor_total: valorTotalFinal,
         desconto: desconto,
@@ -1227,7 +1249,7 @@ export default function DealsPage() {
         user_id: isLideranca ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
         client_id: finalClientId,
-        empresa_id: perfil?.empresa_id 
+        empresa_id: perfil?.empresa_id
     };
 
     if (editingLeadId) {
@@ -1313,6 +1335,7 @@ export default function DealsPage() {
         setVencimento(lead.vencimento || '');
         setDesconto(lead.desconto || 0);
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
+        setAtividades(Array.isArray(lead.atividades) ? lead.atividades : []);
         setLeadUserId(lead.user_id || '');
         setMostrarDetalhes(!!(lead.cnpj || lead.contrato_inicio || lead.parcelas !== '1'));
     } else {
@@ -1334,6 +1357,7 @@ export default function DealsPage() {
         setVencimento('');
         setDesconto(0);
         setHistorico([]);
+        setAtividades([]);
         setLeadUserId(user?.id || '');
         setMostrarDetalhes(false);
     }
@@ -1524,7 +1548,7 @@ export default function DealsPage() {
           </div>
       </div>
 
-      <DragDropContext onDragEnd={onDragEnd}>
+      <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
         <div className="flex gap-3 pb-2 h-[calc(100vh-230px)] md:h-[calc(100vh-160px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
           {Object.entries(STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
@@ -1784,6 +1808,26 @@ export default function DealsPage() {
                                     <button type="button" onClick={adicionarNota} className="bg-blue-600 text-white px-3 rounded-lg text-[10px] font-bold">OK</button>
                                 </div>
                             </div>
+                            {atividades.length > 0 && (
+                                <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase mb-3 flex items-center gap-1"><Clock size={10}/> Histórico de Atividades</p>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                                        {atividades.map((a, i) => {
+                                            const d = new Date(a.created_at);
+                                            const fmt = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                                            const color = a.tipo === 'etapa' ? 'text-green-400 bg-green-500/10' : a.tipo === 'followup' ? 'text-orange-400 bg-orange-500/10' : 'text-blue-400 bg-blue-500/10';
+                                            const icon = a.tipo === 'etapa' ? '→' : a.tipo === 'followup' ? '📅' : '💬';
+                                            return (
+                                                <div key={a.id} className={`flex items-start gap-2 text-[10px] p-2 rounded-lg ${color}`}>
+                                                    <span className="flex-shrink-0 font-bold">{icon}</span>
+                                                    <span className="flex-1 font-medium">{a.descricao}</span>
+                                                    <span className="flex-shrink-0 text-[8px] opacity-60 font-mono">{fmt}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                             <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
                                 <p className="text-[10px] font-black text-slate-500 uppercase mb-2 flex items-center gap-1"><CalendarDays size={10}/> Follow-up</p>
                                 <input

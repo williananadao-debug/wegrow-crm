@@ -300,6 +300,9 @@ export default function ReportsPage() {
                 <button onClick={() => setShowExportModal(true)} className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-400 hover:text-white px-5 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_5px_20px_rgba(168,85,247,0.2)] transition-all whitespace-nowrap">
                   <Database size={14}/> Extrair Dados
                 </button>
+                <button onClick={() => window.print()} className="bg-white/5 border border-white/10 text-slate-400 hover:text-white px-4 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all whitespace-nowrap print:hidden">
+                  <Download size={14}/> PDF
+                </button>
             </div>
 
             {/* ATALHOS DE PERÍODO */}

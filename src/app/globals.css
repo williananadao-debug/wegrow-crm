@@ -48,3 +48,11 @@ body {
     animation-fill-mode: forwards;
   }
 }
+
+@media print {
+  nav, aside, header, [data-sidebar], .print\\:hidden { display: none !important; }
+  body { background: white !important; color: black !important; }
+  .bg-\\[\\#0B1120\\], .bg-\\[\\#0F172A\\] { background: #f8fafc !important; }
+  * { color: #0f172a !important; border-color: #e2e8f0 !important; }
+  main { padding: 0 !important; }
+}

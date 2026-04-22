@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Users, Search, Plus, Edit2, Trash2, 
-  Phone, FileText, X, History, CheckCircle2, XCircle, 
-  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert
+import {
+  Users, Search, Plus, Edit2, Trash2,
+  Phone, FileText, X, History, CheckCircle2, XCircle,
+  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -38,6 +38,7 @@ export default function CustomersPage() {
   
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [contratosVencendo, setContratosVencendo] = useState<{ id: number; empresa: string; contrato_fim: string; client_id: number | null }[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -74,7 +75,21 @@ export default function CustomersPage() {
       const { data } = await supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id);
       if (data) setVendedores(data as any);
     }
-    if (perfil) fetchSellers();
+    async function fetchContratosVencendo() {
+      if (!perfil?.empresa_id) return;
+      const hoje = new Date();
+      const em60dias = new Date(hoje); em60dias.setDate(hoje.getDate() + 60);
+      const { data } = await supabase.from('leads')
+        .select('id, empresa, contrato_fim, client_id')
+        .eq('empresa_id', perfil.empresa_id)
+        .eq('status', 'ganho')
+        .gte('contrato_fim', hoje.toISOString().split('T')[0])
+        .lte('contrato_fim', em60dias.toISOString().split('T')[0])
+        .order('contrato_fim', { ascending: true })
+        .limit(20);
+      if (data) setContratosVencendo(data as any);
+    }
+    if (perfil) { fetchSellers(); fetchContratosVencendo(); }
   }, [perfil]);
 
   useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter, riscoFilter]);
@@ -339,6 +354,28 @@ export default function CustomersPage() {
             </button>
         </div>
       </div>
+
+      {/* ALERTA DE RENOVAÇÃO */}
+      {contratosVencendo.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start gap-3">
+          <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-400 font-black text-xs uppercase tracking-widest mb-2">
+              {contratosVencendo.length} contrato{contratosVencendo.length > 1 ? 's' : ''} vencendo nos próximos 60 dias
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {contratosVencendo.map(c => {
+                const dias = Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                return (
+                  <span key={c.id} className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${dias <= 15 ? 'bg-red-500/20 text-red-400 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'}`}>
+                    {c.empresa} — {dias}d
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BARRA DE FILTROS */}
       <div className="bg-[#0B1120] border border-white/10 p-4 rounded-[24px] mb-6 flex flex-col md:flex-row gap-4 items-center shadow-xl">

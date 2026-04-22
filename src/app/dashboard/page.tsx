@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  TrendingUp, Users, Radio, DollarSign, 
-  BarChart3, Calendar, Loader2, 
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw
+import {
+  TrendingUp, Users, Radio, DollarSign,
+  BarChart3, Calendar, Loader2,
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -56,7 +56,7 @@ export default function DashboardPage() {
     try {
         let leadsQuery = supabase
           .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo, contrato_fim, empresa');
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
 
         if (!isDirector) {
             leadsQuery = leadsQuery.eq('user_id', user?.id);
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
   const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[], [rawLeads]);
 
-  const { ranking, statsComercial, statsProducao, statsFinanceiro, previsaoFechamento, contratosVencendo } = useMemo(() => {
+  const { ranking, statsComercial, statsProducao, statsFinanceiro, previsaoFechamento, contratosVencendo, followupsHoje } = useMemo(() => {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -226,6 +226,7 @@ export default function DashboardPage() {
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
           previsaoFechamento: Math.round(previsaoFechamento),
           contratosVencendo,
+          followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
   }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
@@ -260,6 +261,18 @@ export default function DashboardPage() {
 
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
+
+      {followupsHoje.length > 0 && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <Bell size={16} className="text-blue-400 shrink-0 animate-pulse"/>
+          <p className="text-blue-300 text-xs font-black uppercase tracking-wide flex-1">
+            {followupsHoje.length} follow-up{followupsHoje.length > 1 ? 's' : ''} para hoje:
+            <span className="text-white ml-2">{followupsHoje.slice(0, 3).map((l: any) => l.empresa).join(' · ')}{followupsHoje.length > 3 ? ` +${followupsHoje.length - 3}` : ''}</span>
+          </p>
+          <a href="/deals" className="text-[9px] font-black uppercase text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg hover:bg-blue-500/20 transition-colors shrink-0">Ver no Funil →</a>
+        </div>
+      )}
+
       <div className="flex flex-col xl:flex-row justify-end items-start xl:items-center gap-4 mb-2 px-2">
         <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
             <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg items-center">

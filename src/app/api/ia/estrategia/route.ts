@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const agora = new Date();
-    const diasAtras = new Date(agora.getTime() - dias_inativo * 24 * 60 * 60 * 1000);
+    const diasAtras = new Date(agora.getTime() - (dias_inativo || 60) * 24 * 60 * 60 * 1000);
 
     let query = supabaseAdmin
       .from('leads')
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ count: 0, message: 'Nenhum lead encontrado para os critérios.' });
     }
 
-    const leadsResumidos = leads.slice(0, 100).map(l => ({
+    const leadsResumidos = leads.slice(0, 80).map(l => ({
       id: l.id,
       empresa: l.empresa,
       status: l.status,
@@ -83,20 +83,17 @@ ${JSON.stringify(leadsResumidos, null, 2)}
 
 Selecione e priorize os ${limite} melhores leads para a estratégia ${tipo}.`;
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
       max_tokens: 4096,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
       ],
-      messages: [{ role: 'user', content: userPrompt }],
     });
 
-    const rawText = response.content[0].type === 'text' ? response.content[0].text : '';
+    const rawText = response.choices[0]?.message?.content || '';
 
     let leadsIA: any[] = [];
     try {
@@ -117,7 +114,7 @@ Selecione e priorize os ${limite} melhores leads para a estratégia ${tipo}.`;
     };
 
     const { error: premissaError } = await supabaseAdmin.from('premissas').insert([{
-      titulo: `IA Real — ${tipoLabel[tipo] || tipo}`,
+      titulo: `IA — ${tipoLabel[tipo] || tipo}`,
       quantidade: leadsIA.length,
       regiao: produto_foco || 'Geral',
       tipo_cliente: 'Recuperação',
@@ -127,26 +124,15 @@ Selecione e priorize os ${limite} melhores leads para a estratégia ${tipo}.`;
     }]);
     if (premissaError) console.error('Aviso: erro ao salvar premissa:', premissaError.message);
 
-    const leadsParaAtualizar = leadsIA.map((l: any) => ({
-      id: l.id,
-      descricao: `🤖 IA Sugere: ${l.motivo_ia || ''}`,
-      origem: `IA — ${tipoLabel[tipo] || tipo}`,
-      ...(vendedor_id ? { user_id: vendedor_id } : {}),
-    }));
-
-    for (const lead of leadsParaAtualizar) {
+    for (const lead of leadsIA) {
       await supabaseAdmin.from('leads').update({
-        descricao: lead.descricao,
-        origem: lead.origem,
-        ...(lead.user_id ? { user_id: lead.user_id } : {}),
+        descricao: `🤖 IA Sugere: ${lead.motivo_ia || ''}`,
+        origem: `IA — ${tipoLabel[tipo] || tipo}`,
+        ...(vendedor_id ? { user_id: vendedor_id } : {}),
       }).eq('id', lead.id);
     }
 
-    return NextResponse.json({
-      count: leadsIA.length,
-      leads: leadsIA,
-      tokens_usados: response.usage,
-    });
+    return NextResponse.json({ count: leadsIA.length, leads: leadsIA });
   } catch (err: any) {
     console.error('[IA Estratégia] Erro:', err);
     return NextResponse.json({ error: err.message || 'Erro interno.' }, { status: 500 });

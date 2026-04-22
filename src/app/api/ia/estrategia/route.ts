@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     let query = supabaseAdmin
       .from('leads')
-      .select('id, empresa, status, etapa, valor_total, origem, descricao, user_id, created_at, updated_at')
+      .select('id, empresa, status, etapa, valor_total, origem, descricao, user_id, created_at, followup_em')
       .eq('empresa_id', empresa_id)
       .neq('status', 'ganho')
       .neq('status', 'cancelado')
@@ -50,9 +50,9 @@ export async function POST(req: NextRequest) {
     if (vendedor_id) query = query.eq('user_id', vendedor_id);
 
     if (tipo === 'resgate') {
-      query = query.lte('updated_at', diasAtras.toISOString());
+      query = query.lte('created_at', diasAtras.toISOString());
     } else if (tipo === 'churn') {
-      query = query.in('status', ['negociacao', 'aberto']).lte('updated_at', diasAtras.toISOString());
+      query = query.in('status', ['negociacao', 'aberto']).lte('created_at', diasAtras.toISOString());
     } else if (tipo === 'mix') {
       query = query.eq('etapa', 0).eq('status', 'aberto');
     }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       status: l.status,
       etapa: l.etapa,
       valor_historico: l.valor_total,
-      dias_sem_update: Math.floor((agora.getTime() - new Date(l.updated_at || l.created_at).getTime()) / 86400000),
+      dias_criado: Math.floor((agora.getTime() - new Date(l.created_at).getTime()) / 86400000),
       user_id: l.user_id,
     }));
 

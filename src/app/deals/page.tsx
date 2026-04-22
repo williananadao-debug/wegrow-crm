@@ -1493,39 +1493,34 @@ export default function DealsPage() {
   return (
     <div className="h-full flex flex-col pb-20 md:pb-2 animate-in fade-in duration-500">
       
-      {/* 👇 TOPO COMPRIMIDO E EFICIENTE 👇 */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2 px-2">
-          
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Pipeline</h1>
-              <div className="flex items-center gap-2">
-                  <span className="text-blue-400 flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase"><User size={10}/> {perfil?.nome} {isGerente ? '(GERENTE)' : ''}</span>
-                  {isOffline ? ( <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse"><WifiOff size={10} /> Offline</span> ) : isSyncing ? ( <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1"><RefreshCcw size={10} className="animate-spin" /> Sincronizando</span> ) : ( <span className="bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> Online</span> )}
-              </div>
-          </div>
-          
-          <div className="hidden md:block flex-1 max-w-sm px-4">
-             <div className="flex justify-between text-[9px] font-black uppercase tracking-widest mb-1">
-                <span className="text-slate-400 flex items-center gap-1"><Target size={10}/> {labelMeta} <span className="text-white ml-1 font-mono">R$ {valorMetaAlvo.toLocaleString('pt-BR')}</span></span>
-                <span className="text-[#22C55E]">{Math.round(percentMeta)}%</span>
-             </div>
-             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${percentMeta}%` }}></div>
-             </div>
+      {/* Cabeçalho compacto */}
+      <div className="flex items-center gap-3 mb-2 px-2">
+          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic shrink-0">Pipeline</h1>
+
+          {isOffline ? (
+            <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse shrink-0"><WifiOff size={10}/> Offline</span>
+          ) : isSyncing ? (
+            <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0"><RefreshCcw size={10} className="animate-spin"/> Sync</span>
+          ) : null}
+
+          {/* Barra de meta — ocupa o espaço central */}
+          <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
+            <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${Math.min(percentMeta, 100)}%` }}/>
+            </div>
+            <span className="text-[10px] font-black text-[#22C55E] shrink-0">{Math.round(percentMeta)}%</span>
+            <span className="text-[9px] text-slate-500 shrink-0 hidden lg:block">{labelMeta}</span>
           </div>
 
-          <div className="flex items-center gap-2">
-              <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"><MapPin size={16} strokeWidth={3} /> Visitas</button>
-              <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-2"><Plus size={16} strokeWidth={3} /> Gerar</button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5"><MapPin size={14} strokeWidth={3}/> Visitas</button>
+            <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
           </div>
       </div>
 
-      {/* Filtros + KPI cards */}
-      <div className="flex flex-col gap-2 px-2 mb-2">
-          
-          {/* Linha 1: filtros + botão limpar */}
-          <div className="flex items-center gap-2">
-            <div className="flex flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 flex-1 overflow-x-auto custom-scrollbar">
+      {/* Barra de filtros */}
+      <div className="flex items-center gap-2 px-2 mb-2">
+            <div className="flex flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <Filter size={14} className="text-slate-400 ml-3 mr-2 shrink-0" />
 
               <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full shrink-0">
@@ -1563,29 +1558,6 @@ export default function DealsPage() {
                     <X size={12}/> Limpar
                 </button>
             )}
-          </div>
-
-          {/* Linha 2: KPI cards */}
-          <div className="grid grid-cols-3 gap-2">
-              <div className="bg-gradient-to-br from-blue-600/20 to-transparent border border-white/5 p-2.5 rounded-xl shadow-lg flex flex-col justify-center">
-                <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Pipeline Aberto</p>
-                <p className="text-sm md:text-base font-black text-white italic leading-none">R$ {totalAberto.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</p>
-              </div>
-              
-              <div className="bg-gradient-to-br from-[#22C55E]/20 to-transparent border border-white/5 p-2.5 rounded-xl shadow-lg flex flex-col justify-center">
-                <p className="text-[8px] font-black text-[#22C55E] uppercase tracking-widest mb-0.5">Total Ganho</p>
-                <p className="text-sm md:text-base font-black text-white italic leading-none">R$ {totalGanhos.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</p>
-              </div>
-              
-              <div className="bg-white/[0.02] border border-white/5 p-2.5 rounded-xl shadow-lg flex flex-col justify-center overflow-hidden">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Top Serviços</p>
-                <div className="space-y-0.5">
-                  {Object.entries(rankingServicos).slice(0, 2).map(([nome, valor]: any) => (
-                    <div key={nome} className="flex justify-between items-center text-[9px] font-bold"><span className="text-slate-400 uppercase italic truncate pr-2">{nome}</span><span className="text-white">R$ {valor.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</span></div>
-                  ))}
-                </div>
-              </div>
-          </div>
       </div>
 
       <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
@@ -1603,13 +1575,16 @@ export default function DealsPage() {
                         {...provided.droppableProps}
                         className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-2 h-full flex flex-col min-w-[85vw] md:min-w-[250px] md:flex-1 snap-center`}
                     >
-                    <div className="flex items-center justify-between mb-2 px-1 pt-1">
-                        <h3 className="text-white font-black uppercase italic text-xs tracking-wide truncate">{stage.title}</h3>
-                        <span className="text-slate-600 text-[9px] font-bold bg-white/5 px-1.5 py-0.5 rounded-md">{leadsDaColuna.length}</span>
-                    </div>
-                    
-                    <div className="mb-2 px-1 text-[10px] font-mono text-slate-500 text-right border-b border-white/5 pb-1">
-                        Total: R$ {totalColuna.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}
+                    <div className="flex items-center justify-between mb-2 px-1 pt-1 pb-2 border-b border-white/5">
+                        <div>
+                          <h3 className="text-white font-black uppercase italic text-xs tracking-wide leading-none">{stage.title}</h3>
+                          <span className="text-slate-500 text-[9px] font-bold">{leadsDaColuna.length} lead{leadsDaColuna.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {totalColuna > 0 && (
+                          <span className="text-white font-black text-sm font-mono leading-none">
+                            R$ {totalColuna.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
+                          </span>
+                        )}
                     </div>
 
                     <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">

@@ -48,12 +48,10 @@ export async function POST(req: NextRequest) {
 
     if (vendedor_id) query = query.eq('user_id', vendedor_id);
 
-    if (tipo === 'resgate') {
-      query = query.lte('created_at', diasAtras.toISOString());
-    } else if (tipo === 'churn') {
-      query = query.in('status', ['negociacao', 'aberto']).lte('created_at', diasAtras.toISOString());
+    if (tipo === 'churn') {
+      query = query.in('status', ['negociacao', 'aberto']);
     } else if (tipo === 'mix') {
-      query = query.eq('etapa', 0).eq('status', 'aberto');
+      query = query.eq('status', 'aberto');
     }
 
     const { data: leads, error: leadsError } = await query;

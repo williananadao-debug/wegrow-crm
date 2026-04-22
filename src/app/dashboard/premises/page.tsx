@@ -271,7 +271,7 @@ export default function PremisesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <div className="lg:col-span-5">
-          <div className="bg-[#0F172A] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl flex flex-col h-[calc(100vh-140px)]">
+          <div className="bg-[#0F172A] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl flex flex-col">
             
             {/* 👇 MENU CORRIGIDO: Textos não vazam mais e se adaptam ao tamanho 👇 */}
             <div className="flex p-1.5 bg-[#0B1120]/50 m-4 rounded-2xl gap-1.5 shrink-0">
@@ -289,7 +289,7 @@ export default function PremisesPage() {
                 </button>
             </div>
 
-            <div className="p-8 pt-2 flex-1 overflow-y-auto custom-scrollbar pb-12">
+            <div className="p-8 pt-2 pb-10">
               
               {/* ABA IA */}
               {activeTab === 'ai' && (

@@ -6,14 +6,18 @@ import {
   Target, Users, RefreshCcw, AlertTriangle, CheckCircle2,
   User as UserIcon, Loader2, Calendar, TrendingUp, Zap
 } from 'lucide-react';
+import { SkeletonPage } from '@/components/Skeleton';
 import { Toast } from '@/components/Toast';
 
 export default function GoalsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
+  type Vendedor = { id: string; nome: string };
+  type MetaMensal = { mes: number; valor_objetivo: number };
+  type ComparativoRow = { id: string; nome: string; meta: number; realizado: number; perc: number };
   const [loading, setLoading] = useState(true);
-  const [vendedores, setVendedores] = useState<any[]>([]);
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string>('global');
   
   // NAVEGAÇÃO DE PERÍODO
@@ -21,13 +25,13 @@ export default function GoalsPage() {
   const [mesAtualVisual] = useState(new Date().getMonth() + 1);
   
   const [metaAno, setMetaAno] = useState(0);
-  const [metasMensais, setMetasMensais] = useState<any[]>([]);
+  const [metasMensais, setMetasMensais] = useState<MetaMensal[]>([]);
   const [realizadoAno, setRealizadoAno] = useState(0);
   const [realizadoMensalMap, setRealizadoMensalMap] = useState<Record<number, number>>({});
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [comparativo, setComparativo] = useState<any[]>([]);
+  const [comparativo, setComparativo] = useState<ComparativoRow[]>([]);
 
   const [produtosMes, setProdutosMes] = useState<{ nome: string; qtd: number; valor: number; valorMesAnterior: number }[]>([]);
   const [servicos, setServicos] = useState<{ id: string; nome: string }[]>([]);
@@ -117,10 +121,10 @@ export default function GoalsPage() {
     ]);
 
     const metaMap: Record<string, number> = {};
-    (metasData || []).forEach((m: any) => { if (m.user_id) metaMap[m.user_id] = m.valor_objetivo; });
+    (metasData || []).forEach(m => { if (m.user_id) metaMap[m.user_id] = m.valor_objetivo; });
 
     const realizadoMap: Record<string, number> = {};
-    (vendasData || []).forEach((v: any) => { if (v.user_id) realizadoMap[v.user_id] = (realizadoMap[v.user_id] || 0) + Number(v.valor_total); });
+    (vendasData || []).forEach(v => { if (v.user_id) realizadoMap[v.user_id] = (realizadoMap[v.user_id] || 0) + Number(v.valor_total); });
 
     const rows = vendedores.map(v => ({
       id: v.id,
@@ -374,7 +378,7 @@ export default function GoalsPage() {
 
       {/* GRADE MENSAL */}
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#22C55E]" size={32} /></div>
+        <SkeletonPage />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(mes => {

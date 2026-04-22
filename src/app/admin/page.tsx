@@ -7,6 +7,7 @@ import {
   ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
   BarChart2, TrendingUp, Clock, Activity
 } from 'lucide-react';
+import { SkeletonPage } from '@/components/Skeleton';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
@@ -158,7 +159,7 @@ export default function AdminPage() {
     setUnidades(prev => prev.filter(u => u.id !== id));
   };
 
-  if (authLoading) return <div className="p-20 text-white text-center">Carregando...</div>;
+  if (authLoading) return <div className="p-4 md:p-8"><SkeletonPage /></div>;
   if (!isAdmin) return (
     <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
       <div className="text-center">
@@ -170,7 +171,7 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-white p-6 md:p-10">
+    <div className="text-white p-4 md:p-8 pb-20">
       <div className="max-w-7xl mx-auto">
 
         {/* Header */}
@@ -202,7 +203,7 @@ export default function AdminPage() {
           {/* Lista de Empresas */}
           <div className="lg:col-span-2 space-y-2">
             {loading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-500" size={32}/></div>
+              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-white/[0.03] border border-white/5 rounded-2xl animate-pulse"/>)}</div>
             ) : empresas.map(e => (
               <button
                 key={e.id}

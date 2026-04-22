@@ -79,6 +79,18 @@ export async function GET(request: Request) {
         let leadsMap: Record<number, any> = {};
         let clientesMap: Record<number, any> = {};
 
+        // Load OPEC config from unidades table
+        const { data: unidadesData } = await supabaseAdmin
+            .from('unidades')
+            .select('nome, config_opec')
+            .eq('empresa_id', codigoEmissora);
+
+        const configEmissoras: Record<string, any> = {};
+        (unidadesData || []).forEach((u: any) => {
+            if (u.config_opec && u.nome) configEmissoras[u.nome] = u.config_opec;
+        });
+        const finalConfig = Object.keys(configEmissoras).length > 0 ? configEmissoras : undefined;
+
         if (clientIds.length > 0) {
             const [{ data: leadsData }, { data: clientesData }] = await Promise.all([
                 supabaseAdmin.from('leads').select('*').in('client_id', clientIds).order('created_at', { ascending: false }),
@@ -98,7 +110,7 @@ export async function GET(request: Request) {
 
             let opecData: any[] = [{}];
             try {
-                 if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome });
+                 if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome }, finalConfig);
             } catch(e) {}
             
             const pacoteFinal = {

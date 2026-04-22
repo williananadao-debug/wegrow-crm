@@ -85,7 +85,7 @@ export default function JobsPage() {
   useEffect(() => {
     const fetchJobs = async () => {
       setLoading(true);
-      let query = supabase.from('jobs').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('jobs').select('*').order('created_at', { ascending: false }).limit(300);
       if (!mostrarFinalizados) query = query.neq('stage', 'entregue');
       if (!isDirector && !isOpec) query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       const { data } = await query;

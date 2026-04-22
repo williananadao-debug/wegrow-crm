@@ -5,6 +5,7 @@ import {
   Phone, FileText, X, History, CheckCircle2, XCircle,
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle
 } from 'lucide-react';
+import { SkeletonRow } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -68,10 +69,10 @@ export default function CustomersPage() {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
-  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([]);
   const [csvImporting, setCsvImporting] = useState(false);
   const [duplicadosModal, setDuplicadosModal] = useState(false);
-  const [duplicados, setDuplicados] = useState<any[]>([]);
+  const [duplicados, setDuplicados] = useState<Cliente[][]>([]);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -198,6 +199,13 @@ export default function CustomersPage() {
       }
   };
 
+  const fetchWithTimeout = async (url: string, ms = 6000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    try { return await fetch(url, { signal: controller.signal }); }
+    finally { clearTimeout(id); }
+  };
+
   // MOTOR HÍBRIDO (Plano A + Plano B)
   const buscarDadosCNPJ = async () => {
     const cnpj = formData.cnpj.replace(/\D/g, '');
@@ -205,7 +213,7 @@ export default function CustomersPage() {
 
     setIsSearchingCnpj(true);
     try {
-        const res1 = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`);
+        const res1 = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${cnpj}`);
         
         if (res1.ok) {
             const data = await res1.json();
@@ -240,7 +248,7 @@ export default function CustomersPage() {
             return;
         }
 
-        const res2 = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+        const res2 = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
         
         if (res2.ok) {
             const data2 = await res2.json();
@@ -507,9 +515,8 @@ export default function CustomersPage() {
       {/* LISTA DE CLIENTES */}
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2 pb-10">
         {loading && clientes.length === 0 ? (
-            <div className="text-center py-20 text-slate-500 flex flex-col items-center">
-                <Loader2 className="animate-spin mb-4" size={32}/>
-                <p className="text-xs font-bold uppercase">Buscando na base de dados...</p>
+            <div className="space-y-1 pt-2">
+              {Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
         ) : (
             <>

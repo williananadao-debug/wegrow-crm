@@ -31,16 +31,37 @@ export async function POST(req: NextRequest) {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
   );
+
+  // Validate JWT and get empresa_id from profile (never trust the request body)
+  const accessToken = req.headers.get('authorization')?.replace('Bearer ', '');
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+  }
+  const { data: { user: solicitante }, error: authError } = await supabaseAdmin.auth.getUser(accessToken);
+  if (authError || !solicitante) {
+    return NextResponse.json({ error: 'Token inválido.' }, { status: 401 });
+  }
+  const { data: perfilSolicitante } = await supabaseAdmin
+    .from('profiles')
+    .select('cargo, empresa_id')
+    .eq('id', solicitante.id)
+    .single();
+  if (!perfilSolicitante?.empresa_id) {
+    return NextResponse.json({ error: 'Empresa não identificada.' }, { status: 400 });
+  }
+  const empresaIdSeguro = perfilSolicitante.empresa_id;
 
   try {
     const body = await req.json();
-    const { tipo, empresa_id, vendedor_id, limite, dias_inativo, produto_foco, criado_por } = body;
+    const { tipo, vendedor_id, limite, dias_inativo, produto_foco, criado_por } = body;
 
-    if (!empresa_id || !tipo || !criado_por) {
+    if (!tipo || !criado_por) {
       return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes.' }, { status: 400 });
     }
+    const empresa_id = empresaIdSeguro;
 
     const agora = new Date();
     const tipoLabel: Record<string, string> = {

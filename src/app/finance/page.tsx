@@ -4,6 +4,7 @@ import {
   Plus, TrendingUp, AlertTriangle, FileText, Barcode,
   DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw
 } from 'lucide-react';
+import { SkeletonPage } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -89,8 +90,9 @@ function FinanceiroPadrao() {
   const perfil = auth.perfil;
   const { unidades } = useUnidades(perfil?.empresa_id);
 
+  type LeadFinance = { id: string; empresa: string; valor_total: number; status: string; unidade: string; contrato_inicio: string | null; contrato_fim: string | null; data_pagamento: string | null; created_at: string; };
   const [aba, setAba] = useState<'inadimplencia' | 'conciliacao'>('inadimplencia');
-  const [leads, setLeads] = useState<any[]>([]);
+  const [leads, setLeads] = useState<LeadFinance[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState<string | null>(null);
 
@@ -118,7 +120,7 @@ function FinanceiroPadrao() {
       .not('contrato_fim', 'is', null)
       .order('contrato_fim', { ascending: true })
       .limit(1000);
-    setLeads(data || []);
+    setLeads((data || []) as LeadFinance[]);
     setLoading(false);
   };
 
@@ -126,10 +128,10 @@ function FinanceiroPadrao() {
 
   const inadimplentes = useMemo(() => {
     return leads
-      .filter(l => l.contrato_fim < hoje)
+      .filter(l => l.contrato_fim != null && l.contrato_fim < hoje)
       .map(l => ({
         ...l,
-        diasVencido: Math.floor((Date.now() - new Date(l.contrato_fim + 'T00:00:00').getTime()) / 86400000),
+        diasVencido: Math.floor((Date.now() - new Date((l.contrato_fim as string) + 'T00:00:00').getTime()) / 86400000),
       }))
       .filter(l => l.diasVencido >= Number(filtroDias))
       .filter(l => !filtroUnidade || l.unidade === filtroUnidade);
@@ -145,7 +147,7 @@ function FinanceiroPadrao() {
   }, [leads, mesConciliacao]);
 
   const totalInadimplente = inadimplentes.reduce((s, l) => s + (l.valor_total || 0), 0);
-  const totalContratos = leads.filter(l => l.contrato_fim >= hoje).length;
+  const totalContratos = leads.filter(l => l.contrato_fim != null && l.contrato_fim >= hoje).length;
   const taxaInadimplencia = leads.length > 0 ? Math.round((inadimplentes.length / leads.length) * 100) : 0;
 
   const totalEsperado = conciliacaoLeads.reduce((s, l) => s + (l.valor_total || 0), 0);
@@ -201,7 +203,7 @@ function FinanceiroPadrao() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-500" size={32}/></div>
+        <SkeletonPage />
       ) : aba === 'inadimplencia' ? (
         <>
           {/* KPIs */}
@@ -269,7 +271,7 @@ function FinanceiroPadrao() {
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                       <button
-                        onClick={() => renovarContrato(l.id, l.contrato_fim)}
+                        onClick={() => renovarContrato(l.id, l.contrato_fim as string)}
                         disabled={salvando === l.id}
                         className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
                       >

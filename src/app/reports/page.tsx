@@ -330,7 +330,14 @@ export default function ReportsPage() {
 
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
-      
+
+      {rawLeads.length >= 2800 && (
+        <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl px-4 py-3 text-yellow-400 text-xs font-bold">
+          <AlertCircle size={16} className="shrink-0" />
+          Atenção: o período selecionado retornou {rawLeads.length.toLocaleString('pt-BR')} registros — próximo do limite de 3.000. Reduza o período para garantir que todos os dados estão sendo considerados.
+        </div>
+      )}
+
       {/* 👇 HEADER SUPER COMPACTO: APENAS BOTÕES E FILTROS 👇 */}
       <div className="flex flex-col xl:flex-row justify-start items-start xl:items-center gap-2 mb-2 px-2">
         <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">

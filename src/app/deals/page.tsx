@@ -515,14 +515,14 @@ export default function DealsPage() {
     const inicio = dataInicioRef.current + 'T00:00:00';
     const fim = dataFimRef.current + 'T23:59:59';
     const [openRes, closedRes] = await Promise.all([
-        buildQ().lte('etapa', 3).order('created_at', { ascending: false }),
-        buildQ().gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }),
+        buildQ().lte('etapa', 3).order('created_at', { ascending: false }).limit(500),
+        buildQ().gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }).limit(200),
     ]);
 
     const leadsData = (openRes.data || []).length + (closedRes.data || []).length > 0
         ? [...(openRes.data || []), ...(closedRes.data || [])]
         : null;
-    let leadsBase: any[] = leadsData || [];
+    let leadsBase: Lead[] = leadsData || [];
 
     if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
         leadsBase = await localDb.leads.toArray();
@@ -1520,27 +1520,29 @@ export default function DealsPage() {
           </div>
       </div>
 
-      {/* 👇 BARRA DE FILTROS SUPER COMPACTA E CARDS LATERAIS 👇 */}
-      <div className="flex flex-col xl:flex-row gap-2 px-2 mb-2">
+      {/* Filtros + KPI cards */}
+      <div className="flex flex-col gap-2 px-2 mb-2">
           
-          <div className="flex flex-wrap md:flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 w-full xl:w-auto overflow-hidden">
-              <Filter size={14} className="text-slate-400 ml-3 mr-2" />
-              
-              <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
+          {/* Linha 1: filtros + botão limpar */}
+          <div className="flex items-center gap-2">
+            <div className="flex flex-nowrap items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 flex-1 overflow-x-auto custom-scrollbar">
+              <Filter size={14} className="text-slate-400 ml-3 mr-2 shrink-0" />
+
+              <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full shrink-0">
                   <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
                   <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
                   <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
               </div>
 
               {isLideranca && (
-                  <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                  <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
                     <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
                     {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0F172A]">{nome}</option> ))}
                   </select>
               )}
 
               {isDirector && (
-                  <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+                  <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
                     <option value="todas" className="bg-[#0F172A]">Todas Unidades</option>
                     {unidades.map(u => (
                       <option key={u.id} value={u.nome} className="bg-[#0F172A]">{u.nome}</option>
@@ -1548,22 +1550,23 @@ export default function DealsPage() {
                   </select>
               )}
 
-              <select value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
+              <select value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
                 <option value="todos" className="bg-[#0F172A]">Todos Produtos</option>
                 {listaServicos.map(s => (
                   <option key={s.id} value={s.nome} className="bg-[#0F172A]">{s.nome}</option>
                 ))}
               </select>
+            </div>
+
+            {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroProduto !== 'todos' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+                <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroProduto('todos'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg shrink-0">
+                    <X size={12}/> Limpar
+                </button>
+            )}
           </div>
 
-          {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroProduto !== 'todos' || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
-              <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroProduto('todos'); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg">
-                  <X size={12}/> Limpar
-              </button>
-          )}
-
-          {/* CARDS DE RESULTADOS ESPREMIDOS PARA GANHAR ESPAÇO */}
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2">
+          {/* Linha 2: KPI cards */}
+          <div className="grid grid-cols-3 gap-2">
               <div className="bg-gradient-to-br from-blue-600/20 to-transparent border border-white/5 p-2.5 rounded-xl shadow-lg flex flex-col justify-center">
                 <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Pipeline Aberto</p>
                 <p className="text-sm md:text-base font-black text-white italic leading-none">R$ {totalAberto.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</p>

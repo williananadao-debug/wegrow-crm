@@ -23,9 +23,10 @@ const CONFIG_EMISSORAS: Record<string, any> = {
 };
 
 // 2. MOTOR PRINCIPAL: GERA O GABARITO JSON EXATO DA OPEC
-export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any) => {
+export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, configEmissoras?: Record<string, any>) => {
+  const emissorasAtivas = (configEmissoras && Object.keys(configEmissoras).length > 0) ? configEmissoras : CONFIG_EMISSORAS;
   // Puxa a emissora baseada na unidade do Lead (com fallback de segurança)
-  const emissora = CONFIG_EMISSORAS[lead.unidade] || CONFIG_EMISSORAS["DEMAIS FM 104,7"];
+  const emissora = emissorasAtivas[lead.unidade] || Object.values(emissorasAtivas)[0] || {};
   
   // Trata os itens vendidos (se vierem como string do banco, transforma em array)
   let itensContrato = [];

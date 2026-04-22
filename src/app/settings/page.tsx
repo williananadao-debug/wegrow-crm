@@ -1,11 +1,20 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
 
 type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
+
+type OpecUnitConfig = {
+  id: string;
+  nome: string;
+  mercado_id: string;
+  mercado_codigo: string;
+  mercado_descricao: string;
+  mercado_cnpj: string;
+};
 
 type ServicoConfig = {
   id: string;
@@ -27,12 +36,26 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [histModalId, setHistModalId] = useState<string | null>(null);
+  const [unidadesOpec, setUnidadesOpec] = useState<OpecUnitConfig[]>([]);
+  const [savingOpec, setSavingOpec] = useState(false);
+  const [feedbackOpec, setFeedbackOpec] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if(user) carregarDados();
   }, [user]);
+
+  useEffect(() => {
+    setUnidadesOpec(unidades.map(u => ({
+      id: u.id,
+      nome: u.nome,
+      mercado_id: u.config_opec?.mercado_id || '',
+      mercado_codigo: u.config_opec?.mercado_codigo || '',
+      mercado_descricao: u.config_opec?.mercado_descricao || '',
+      mercado_cnpj: u.config_opec?.mercado_cnpj || '',
+    })));
+  }, [unidades]);
 
   const carregarDados = async () => {
     setLoading(true);
@@ -161,6 +184,33 @@ export default function SettingsPage() {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const atualizarOpec = (id: string, campo: keyof OpecUnitConfig, valor: string) => {
+    setUnidadesOpec(prev => prev.map(u => u.id === id ? { ...u, [campo]: valor } : u));
+  };
+
+  const salvarOpec = async () => {
+    setSavingOpec(true);
+    setFeedbackOpec(null);
+    try {
+      await Promise.all(unidadesOpec.map(u =>
+        supabase.from('unidades').update({
+          config_opec: {
+            mercado_id: u.mercado_id,
+            mercado_codigo: u.mercado_codigo,
+            mercado_descricao: u.mercado_descricao,
+            mercado_cnpj: u.mercado_cnpj,
+          }
+        }).eq('id', u.id)
+      ));
+      setFeedbackOpec({ type: 'success', msg: 'Config OPEC salva com sucesso!' });
+    } catch (err: any) {
+      setFeedbackOpec({ type: 'error', msg: 'Erro: ' + (err.message || 'Verifique o console') });
+    } finally {
+      setSavingOpec(false);
+      setTimeout(() => setFeedbackOpec(null), 4000);
+    }
   };
 
   const getIconeCategoria = (tipo: string) => {
@@ -325,6 +375,93 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* OPEC Config Section */}
+      {perfil?.cargo === 'diretor' && (
+        <div className="max-w-6xl mt-6 bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/5 pb-6 mb-6 gap-4">
+            <div className="flex items-center gap-3 text-slate-300">
+              <Settings2 size={18} className="text-purple-400" />
+              <div>
+                <h2 className="font-bold text-sm uppercase tracking-wide">Configuração OPEC por Unidade</h2>
+                <p className="text-slate-600 text-[10px] uppercase font-bold mt-0.5">IDs e códigos de integração com o sistema de automação de rádio</p>
+              </div>
+            </div>
+          </div>
+
+          {unidadesOpec.length === 0 ? (
+            <p className="text-slate-500 text-sm text-center py-8">Nenhuma unidade cadastrada. Crie unidades no módulo de equipe.</p>
+          ) : (
+            <div className="space-y-4">
+              {unidadesOpec.map(u => (
+                <div key={u.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-all">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Radio size={14} className="text-purple-400" />
+                    <span className="text-white font-black text-xs uppercase tracking-wide">{u.nome}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-1">ID Mercado</label>
+                      <input
+                        value={u.mercado_id}
+                        onChange={e => atualizarOpec(u.id, 'mercado_id', e.target.value)}
+                        placeholder="Ex: 1"
+                        className="w-full bg-[#0F172A] border border-white/5 focus:border-purple-500 rounded-lg px-3 py-2 text-white text-xs outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-1">Código</label>
+                      <input
+                        value={u.mercado_codigo}
+                        onChange={e => atualizarOpec(u.id, 'mercado_codigo', e.target.value)}
+                        placeholder="Ex: DM-1047"
+                        className="w-full bg-[#0F172A] border border-white/5 focus:border-purple-500 rounded-lg px-3 py-2 text-white text-xs outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-1">Descrição</label>
+                      <input
+                        value={u.mercado_descricao}
+                        onChange={e => atualizarOpec(u.id, 'mercado_descricao', e.target.value)}
+                        placeholder="Ex: DEMAIS FM 104,7 TAIÓ"
+                        className="w-full bg-[#0F172A] border border-white/5 focus:border-purple-500 rounded-lg px-3 py-2 text-white text-xs outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-1">CNPJ Faturamento</label>
+                      <input
+                        value={u.mercado_cnpj}
+                        onChange={e => atualizarOpec(u.id, 'mercado_cnpj', e.target.value)}
+                        placeholder="Ex: 75.835.629/0001-50"
+                        className="w-full bg-[#0F172A] border border-white/5 focus:border-purple-500 rounded-lg px-3 py-2 text-white text-xs outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6 pt-5 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="h-6">
+              {feedbackOpec && (
+                <div className={`flex items-center gap-2 text-xs font-bold uppercase animate-in slide-in-from-left-2 ${feedbackOpec.type === 'success' ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                  {feedbackOpec.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+                  {feedbackOpec.msg}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={salvarOpec}
+              disabled={savingOpec || unidadesOpec.length === 0}
+              className="w-full md:w-auto bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-purple-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingOpec ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
+              {savingOpec ? 'Salvando...' : 'Salvar Config OPEC'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {histModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4">

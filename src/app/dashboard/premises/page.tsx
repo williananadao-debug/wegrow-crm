@@ -118,22 +118,17 @@ export default function PremisesPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/ia/estrategia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: tipoIA,
-          empresa_id: perfil.empresa_id,
-          vendedor_id: selectedVendedor || null,
-          limite: quantidadeIA,
-          dias_inativo: diasInativo,
-          produto_foco: produtoFoco,
-          criado_por: user.id,
-        }),
+      const { data, error } = await supabase.rpc('gerar_estrategia_ia_v2', {
+        p_tipo: tipoIA,
+        p_dias_inativo: diasInativo,
+        p_vendedor_id: selectedVendedor || null,
+        p_produto_foco: produtoFoco,
+        p_criado_por: user.id,
+        p_empresa_id: perfil?.empresa_id,
+        p_limite: quantidadeIA
       });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Erro desconhecido');
-      setToastMessage(`🤖 IA real em ação! ${result.count || 0} oportunidades selecionadas e priorizadas.`);
+      if (error) throw error;
+      setToastMessage(`🤖 IA em ação! ${data || 0} novas oportunidades no funil.`);
       setShowToast(true);
       fetchHistorico();
       fetchLeadsIA();
@@ -343,7 +338,7 @@ export default function PremisesPage() {
                     </div>
 
                     <button type="submit" disabled={loading} className="w-full bg-gradient-to-br from-purple-600 to-blue-700 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-purple-900/40 flex items-center justify-center gap-3 hover:scale-[1.02] transition-all">
-                        {loading ? <><Clock className="animate-spin" size={18}/> Analisando com IA...</> : <><Sparkles size={18}/> Gerar com IA Real</>}
+                        {loading ? <Clock className="animate-spin" size={18}/> : <><Sparkles size={18}/> Iniciar Algoritmo</>}
                     </button>
                 </form>
               )}

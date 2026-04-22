@@ -2,15 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 
-const SYSTEM_PROMPT = `Você é um especialista em vendas de mídia/rádio local.
-Analise os candidatos fornecidos e selecione os mais promissores para contato comercial.
+const SYSTEM_PROMPT = `Você é um especialista em vendas de mídia/rádio local com profundo conhecimento em publicidade regional.
+Analise os candidatos e sugira um pacote de produtos específico para cada um.
 
 REGRAS:
 - Retorne APENAS um array JSON válido
-- Cada item deve ter: id, nome, motivo_ia (1 frase de justificativa em português), score_ia (0-100), abordagem (dica rápida de como abordar)
+- Cada item deve ter:
+  - id: o mesmo id do candidato
+  - nome: nome da empresa
+  - score_ia: 0 a 100 (prioridade)
+  - motivo_ia: 1 frase explicando por que esse cliente tem potencial agora
+  - abordagem: como o vendedor deve abordar (1 frase direta)
+  - itens_sugeridos: array com os produtos recomendados, cada um com:
+    - servico: nome exato do produto (use os nomes da lista de serviços disponíveis)
+    - quantidade: número inteiro
+    - precoUnitario: preço do produto (use o preço da lista)
+    - tempo: duração se aplicável (ex: "30\"", "60\"") ou omita
+    - programa: programa de veiculação se aplicável ou omita
 - Ordene do maior para o menor score
 - Selecione apenas os melhores dentro do limite informado
-- Seja específico: mencione valor histórico, tempo sem compra, oportunidade concreta
+- Para resgate: sugira os mesmos produtos que o cliente comprou antes, com upgrade se possível
+- Para churn: sugira renovação do pacote atual com algum benefício adicional
+- Para mix: sugira o pacote de entrada mais adequado ao perfil do cliente
 
 Responda SOMENTE com o array JSON, sem markdown, sem texto adicional.`;
 
@@ -36,13 +49,22 @@ export async function POST(req: NextRequest) {
       mix: 'Primeira Compra',
     };
 
+    // Busca catálogo de serviços disponíveis
+    const { data: servicos } = await supabaseAdmin
+      .from('servicos')
+      .select('nome, preco, tipo')
+      .eq('empresa_id', empresa_id)
+      .order('preco', { ascending: true })
+      .limit(30);
+
+    const catalogoServicos = (servicos || []).map(s => `${s.nome} (R$${s.preco}${s.tipo ? ` — ${s.tipo}` : ''})`).join('\n');
+
     let candidatos: any[] = [];
 
     if (tipo === 'resgate') {
-      // Clientes com leads ganhos mas sem lead ativo/aberto hoje
       const { data: ganhos } = await supabaseAdmin
         .from('leads')
-        .select('client_id, empresa, valor_total, created_at, unidade, cidade, user_id')
+        .select('client_id, empresa, valor_total, itens, created_at, unidade, cidade, user_id')
         .eq('empresa_id', empresa_id)
         .eq('status', 'ganho')
         .not('client_id', 'is', null)
@@ -58,7 +80,6 @@ export async function POST(req: NextRequest) {
 
       const clientesAtivos = new Set((ativos || []).map((l: any) => l.client_id));
 
-      // Agrupa por client_id, pega o mais recente de cada cliente
       const porCliente = new Map<string, any>();
       for (const lead of ganhos || []) {
         if (!clientesAtivos.has(lead.client_id) && !porCliente.has(lead.client_id)) {
@@ -66,42 +87,46 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      candidatos = Array.from(porCliente.values()).slice(0, 80).map(l => ({
+      candidatos = Array.from(porCliente.values()).slice(0, 60).map(l => ({
         id: l.client_id,
         nome: l.empresa,
         valor_historico: l.valor_total,
         dias_sem_compra: Math.floor((agora.getTime() - new Date(l.created_at).getTime()) / 86400000),
+        comprou_antes: Array.isArray(l.itens)
+          ? l.itens.map((i: any) => `${i.quantidade}x ${i.servico}`).join(', ')
+          : '',
         cidade: l.cidade,
         unidade: l.unidade,
         user_id_original: l.user_id,
       }));
 
     } else if (tipo === 'churn') {
-      // Clientes com contrato vencendo nos próximos 90 dias
       const em90dias = new Date(agora.getTime() + 90 * 86400000);
       const { data: vencendo } = await supabaseAdmin
         .from('leads')
-        .select('id, client_id, empresa, valor_total, contrato_fim, unidade, cidade, user_id')
+        .select('id, client_id, empresa, valor_total, itens, contrato_fim, unidade, cidade, user_id')
         .eq('empresa_id', empresa_id)
         .eq('status', 'ganho')
         .gte('contrato_fim', agora.toISOString().split('T')[0])
         .lte('contrato_fim', em90dias.toISOString().split('T')[0])
         .order('contrato_fim', { ascending: true })
-        .limit(80);
+        .limit(60);
 
       candidatos = (vencendo || []).map(l => ({
         id: l.id,
         client_id: l.client_id,
         nome: l.empresa,
-        valor_historico: l.valor_total,
+        valor_atual: l.valor_total,
         dias_para_vencer: Math.floor((new Date(l.contrato_fim).getTime() - agora.getTime()) / 86400000),
+        contrato_atual: Array.isArray(l.itens)
+          ? l.itens.map((i: any) => `${i.quantidade}x ${i.servico}`).join(', ')
+          : '',
         cidade: l.cidade,
         unidade: l.unidade,
         user_id_original: l.user_id,
       }));
 
     } else if (tipo === 'mix') {
-      // Clientes cadastrados que nunca tiveram lead ganho
       const { data: clientes } = await supabaseAdmin
         .from('clientes')
         .select('id, nome_empresa, cidade, status_risco, score_interno, limite_credito, user_id')
@@ -120,7 +145,7 @@ export async function POST(req: NextRequest) {
 
       candidatos = (clientes || [])
         .filter(c => !jaCompraram.has(c.id))
-        .slice(0, 80)
+        .slice(0, 60)
         .map(c => ({
           id: c.id,
           nome: c.nome_empresa,
@@ -137,20 +162,20 @@ export async function POST(req: NextRequest) {
     }
 
     const userPrompt = `ESTRATÉGIA: ${tipoLabel[tipo]}
-PRODUTO FOCO: ${produto_foco || 'Geral'}
+PRODUTO FOCO PREFERENCIAL: ${produto_foco || 'Qualquer'}
 LIMITE DE SELEÇÃO: ${limite}
-${tipo === 'resgate' ? `CRITÉRIO: clientes que compraram mas estão há mais de ${dias_inativo} dias sem retornar` : ''}
-${tipo === 'churn' ? 'CRITÉRIO: contratos vencendo em breve — priorize maior valor e menor prazo' : ''}
-${tipo === 'mix' ? 'CRITÉRIO: clientes cadastrados que nunca compraram — priorize score_interno alto e risco aprovado' : ''}
 
-CANDIDATOS DISPONÍVEIS (${candidatos.length} encontrados):
+CATÁLOGO DE SERVIÇOS DISPONÍVEIS:
+${catalogoServicos || 'Sem catálogo cadastrado — use nomes genéricos como "Spot 30s", "Patrocínio de Programa"'}
+
+CANDIDATOS (${candidatos.length} encontrados):
 ${JSON.stringify(candidatos, null, 2)}
 
-Selecione e priorize os ${limite} melhores para a estratégia ${tipoLabel[tipo]}.`;
+Selecione os ${limite} melhores candidatos e para cada um monte um pacote de produtos do catálogo acima.`;
 
     const response = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
-      max_tokens: 4096,
+      max_tokens: 6000,
       temperature: 0.2,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -169,21 +194,25 @@ Selecione e priorize os ${limite} melhores para a estratégia ${tipoLabel[tipo]}
     }
 
     if (selecionados.length === 0) {
-      return NextResponse.json({ count: 0, message: 'IA não selecionou candidatos suficientes.' });
+      return NextResponse.json({ count: 0, message: 'IA não selecionou candidatos.' });
     }
 
-    // Cria novos leads para os selecionados
     const novoLeads = selecionados.map((s: any) => {
       const candidato = candidatos.find(c => c.id === s.id);
+      const itens = Array.isArray(s.itens_sugeridos) ? s.itens_sugeridos : [];
+      const valorTotal = itens.reduce((acc: number, i: any) => acc + ((i.precoUnitario || 0) * (i.quantidade || 1)), 0);
+
       return {
         empresa: s.nome || candidato?.nome || 'Lead IA',
         status: 'aberto',
         etapa: 0,
         user_id: vendedor_id || candidato?.user_id_original || criado_por,
         origem: `IA — ${tipoLabel[tipo]}`,
-        descricao: `🤖 IA Sugere (score ${s.score_ia}/100): ${s.motivo_ia || ''}${s.abordagem ? ` | Abordagem: ${s.abordagem}` : ''}`,
+        descricao: `🤖 IA (score ${s.score_ia}/100): ${s.motivo_ia || ''} | Abordagem: ${s.abordagem || ''}`,
+        itens: itens,
+        valor_total: valorTotal || null,
         empresa_id,
-        ...(tipo !== 'mix' ? { client_id: tipo === 'resgate' ? s.id : candidato?.client_id } : { client_id: s.id }),
+        client_id: tipo === 'churn' ? (candidato?.client_id || null) : s.id,
         unidade: candidato?.unidade || null,
         cidade: candidato?.cidade || null,
       };

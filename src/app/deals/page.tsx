@@ -1572,7 +1572,7 @@ export default function DealsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
-        <div className="flex gap-3 pb-2 h-[calc(100vh-230px)] md:h-[calc(100vh-160px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
+        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
           {Object.entries(STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);

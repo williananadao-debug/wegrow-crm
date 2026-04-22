@@ -479,8 +479,8 @@ export default function VisitasPage() {
       {/* MODAL: NOVA VISITA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-[#0B1120] border border-blue-500/30 w-full max-w-md rounded-[32px] shadow-2xl flex flex-col animate-in zoom-in-95">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-blue-500/5 rounded-t-[32px]">
+          <div className="bg-[#0B1120] border border-blue-500/30 w-full max-w-md rounded-[32px] shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90dvh]">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-blue-500/5 rounded-t-[32px] flex-shrink-0">
               <h2 className="text-xl font-black uppercase italic tracking-tighter text-blue-400 flex items-center gap-2">
                 <MapPin size={22} /> Registrar Visita
               </h2>
@@ -489,7 +489,7 @@ export default function VisitasPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
                 geoStatus === 'ok' ? 'bg-green-500/10 border border-green-500/30 text-green-400'
                 : geoStatus === 'denied' ? 'bg-red-500/10 border border-red-500/30 text-red-400'
@@ -567,7 +567,7 @@ export default function VisitasPage() {
               </div>
             )}
 
-            <div className="p-6 border-t border-white/10 bg-[#0F172A] rounded-b-[32px] flex gap-3">
+            <div className="p-6 border-t border-white/10 bg-[#0F172A] rounded-b-[32px] flex gap-3 flex-shrink-0">
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors"

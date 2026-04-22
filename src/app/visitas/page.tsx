@@ -67,6 +67,7 @@ export default function VisitasPage() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Modal criar lead a partir de visita
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
@@ -117,6 +118,7 @@ export default function VisitasPage() {
     setObservacao('');
     setCoords(null);
     setGeoStatus('loading');
+    setSaveError('');
     setIsModalOpen(true);
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -130,14 +132,19 @@ export default function VisitasPage() {
 
   async function salvarVisita() {
     if (!empresa.trim()) return;
+    if (!perfil?.empresa_id) {
+      setSaveError('Perfil não carregado. Recarregue a página.');
+      return;
+    }
     setSaving(true);
+    setSaveError('');
     const mapsUrl = coords ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}` : null;
     const payload = {
       empresa: empresa.trim(),
       telefone: telefone || null,
       observacao: observacao || null,
       user_id: user?.id,
-      empresa_id: perfil?.empresa_id,
+      empresa_id: perfil.empresa_id,
       unidade: perfil?.unidade || null,
       latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null,
@@ -150,8 +157,8 @@ export default function VisitasPage() {
       if (data) setVisitas(prev => [data[0] as Visita, ...prev]);
       setIsModalOpen(false);
       toast('Visita registrada! 📍');
-    } catch {
-      toast('Erro ao salvar visita.');
+    } catch (err: any) {
+      setSaveError(err?.message || 'Erro ao salvar visita. Verifique se a tabela foi criada no Supabase.');
     } finally {
       setSaving(false);
     }
@@ -465,6 +472,14 @@ export default function VisitasPage() {
                 />
               </div>
             </div>
+
+            {saveError && (
+              <div className="px-6 pb-2">
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 text-xs font-bold">
+                  {saveError}
+                </div>
+              </div>
+            )}
 
             <div className="p-6 border-t border-white/10 bg-[#0F172A] rounded-b-[32px] flex gap-3">
               <button

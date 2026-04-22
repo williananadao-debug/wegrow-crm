@@ -2,13 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const SYSTEM_PROMPT = `Você é um motor de análise de CRM especializado em rádio/mídia local.
 Analise os dados de leads fornecidos e selecione os melhores candidatos para a estratégia solicitada.
 
@@ -28,6 +21,12 @@ FORMATOS DE ESTRATÉGIA:
 Responda SOMENTE com o array JSON, sem markdown, sem explicações adicionais.`;
 
 export async function POST(req: NextRequest) {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const body = await req.json();
     const { tipo, empresa_id, vendedor_id, limite, dias_inativo, produto_foco, criado_por } = body;

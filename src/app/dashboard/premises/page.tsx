@@ -125,7 +125,8 @@ export default function PremisesPage() {
         p_produto_foco: produtoFoco,
         p_criado_por: user.id,
         p_empresa_id: perfil?.empresa_id,
-        p_limite: quantidadeIA
+        p_limite: quantidadeIA,
+        p_unidade: unidadeEstrategiaIA || null,
       });
       if (error) throw error;
       setToastMessage(`🤖 IA em ação! ${data || 0} novas oportunidades no funil.`);

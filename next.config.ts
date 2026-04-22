@@ -16,6 +16,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  serverExternalPackages: ['groq-sdk'],
 };
 
 export default withPWA(nextConfig);

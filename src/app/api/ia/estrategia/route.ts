@@ -49,15 +49,15 @@ export async function POST(req: NextRequest) {
       mix: 'Primeira Compra',
     };
 
-    // Busca catálogo de serviços disponíveis
+    // Busca catálogo de serviços disponíveis (máx 15 para não estourar tokens)
     const { data: servicos } = await supabaseAdmin
       .from('servicos')
       .select('nome, preco, tipo')
       .eq('empresa_id', empresa_id)
       .order('preco', { ascending: true })
-      .limit(30);
+      .limit(15);
 
-    const catalogoServicos = (servicos || []).map(s => `${s.nome} (R$${s.preco}${s.tipo ? ` — ${s.tipo}` : ''})`).join('\n');
+    const catalogoServicos = (servicos || []).map(s => `${s.nome}|R$${s.preco}`).join('; ');
 
     let candidatos: any[] = [];
 
@@ -87,16 +87,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      candidatos = Array.from(porCliente.values()).slice(0, 60).map(l => ({
+      candidatos = Array.from(porCliente.values()).slice(0, 20).map(l => ({
         id: l.client_id,
         nome: l.empresa,
-        valor_historico: l.valor_total,
-        dias_sem_compra: Math.floor((agora.getTime() - new Date(l.created_at).getTime()) / 86400000),
-        comprou_antes: Array.isArray(l.itens)
-          ? l.itens.map((i: any) => `${i.quantidade}x ${i.servico}`).join(', ')
-          : '',
+        val: l.valor_total,
+        dias: Math.floor((agora.getTime() - new Date(l.created_at).getTime()) / 86400000),
+        hist: Array.isArray(l.itens) ? l.itens.slice(0, 2).map((i: any) => `${i.quantidade}x ${i.servico}`).join(',') : '',
         cidade: l.cidade,
-        unidade: l.unidade,
         user_id_original: l.user_id,
       }));
 
@@ -112,17 +109,14 @@ export async function POST(req: NextRequest) {
         .order('contrato_fim', { ascending: true })
         .limit(60);
 
-      candidatos = (vencendo || []).map(l => ({
+      candidatos = (vencendo || []).slice(0, 20).map(l => ({
         id: l.id,
         client_id: l.client_id,
         nome: l.empresa,
-        valor_atual: l.valor_total,
-        dias_para_vencer: Math.floor((new Date(l.contrato_fim).getTime() - agora.getTime()) / 86400000),
-        contrato_atual: Array.isArray(l.itens)
-          ? l.itens.map((i: any) => `${i.quantidade}x ${i.servico}`).join(', ')
-          : '',
+        val: l.valor_total,
+        vence_em: Math.floor((new Date(l.contrato_fim).getTime() - agora.getTime()) / 86400000),
+        atual: Array.isArray(l.itens) ? l.itens.slice(0, 2).map((i: any) => `${i.quantidade}x ${i.servico}`).join(',') : '',
         cidade: l.cidade,
-        unidade: l.unidade,
         user_id_original: l.user_id,
       }));
 
@@ -145,14 +139,14 @@ export async function POST(req: NextRequest) {
 
       candidatos = (clientes || [])
         .filter(c => !jaCompraram.has(c.id))
-        .slice(0, 60)
+        .slice(0, 20)
         .map(c => ({
           id: c.id,
           nome: c.nome_empresa,
           cidade: c.cidade,
-          score_interno: c.score_interno,
-          limite_credito: c.limite_credito,
-          status_risco: c.status_risco,
+          score: c.score_interno,
+          limite: c.limite_credito,
+          risco: c.status_risco,
           user_id_original: c.user_id,
         }));
     }
@@ -174,8 +168,8 @@ ${JSON.stringify(candidatos, null, 2)}
 Selecione os ${limite} melhores candidatos e para cada um monte um pacote de produtos do catálogo acima.`;
 
     const response = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      max_tokens: 6000,
+      model: 'gemma2-9b-it',
+      max_tokens: 3000,
       temperature: 0.2,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

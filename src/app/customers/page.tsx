@@ -154,6 +154,18 @@ export default function CustomersPage() {
     setFormData({ ...formData, cnpj: masked });
   };
 
+  const validarCNPJ = (cnpj: string) => {
+    const s = cnpj.replace(/\D/g, '');
+    if (s.length !== 14 || /^(\d)\1+$/.test(s)) return false;
+    const calc = (x: string, len: number) => {
+      let sum = 0, pos = len - 7;
+      for (let i = len; i >= 1; i--) { sum += parseInt(x[len - i]) * pos--; if (pos < 2) pos = 9; }
+      const r = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+      return r === parseInt(x[len]);
+    };
+    return calc(s, 12) && calc(s, 13);
+  };
+
   // MOTOR DE ANÁLISE DE RISCO
   const avaliarRisco = (capitalStr: any, dataInicioStr: any) => {
       try {
@@ -299,6 +311,9 @@ export default function CustomersPage() {
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
+    const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
+    if (cnpjDigits.length > 0 && cnpjDigits.length < 14) return alert("CNPJ incompleto. Verifique o número digitado.");
+    if (cnpjDigits.length === 14 && !validarCNPJ(formData.cnpj || '')) return alert("CNPJ inválido. Verifique os dígitos verificadores.");
     
     const payload = { ...formData, empresa_id: perfil?.empresa_id, tags };
     

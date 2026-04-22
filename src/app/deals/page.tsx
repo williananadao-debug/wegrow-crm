@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, X, Trash2, Radio, Zap, Mic2, MessageCircle, MapPin,
@@ -93,6 +93,27 @@ const formatarData = (dataIso: string) => {
     const parts = dataIso.split('T')[0].split('-');
     if(parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
     return new Date(dataIso).toLocaleDateString('pt-BR');
+};
+
+const maskCnpj = (v: string) => {
+  const s = v.replace(/\D/g, '').substring(0, 14);
+  if (s.length > 12) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  if (s.length > 8) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+  if (s.length > 5) return s.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+  if (s.length > 2) return s.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+  return s;
+};
+
+const validarCNPJ = (cnpj: string) => {
+  const s = cnpj.replace(/\D/g, '');
+  if (s.length !== 14 || /^(\d)\1+$/.test(s)) return false;
+  const calc = (x: string, len: number) => {
+    let sum = 0, pos = len - 7;
+    for (let i = len; i >= 1; i--) { sum += parseInt(x[len - i]) * pos--; if (pos < 2) pos = 9; }
+    const r = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    return r === parseInt(x[len]);
+  };
+  return calc(s, 12) && calc(s, 13);
 };
 
 const LeadCard = React.memo(({
@@ -405,6 +426,7 @@ export default function DealsPage() {
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
   const [novoCnpj, setNovoCnpj] = useState('');
+  const [cnpjError, setCnpjError] = useState(false);
   const [novoIE, setNovoIE] = useState('');
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
@@ -431,12 +453,17 @@ export default function DealsPage() {
       const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
       return getLocalYYYYMMDD(primeiroDia);
   });
-  
+
   const [dataFim, setDataFim] = useState(() => {
       const hoje = new Date();
       const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
       return getLocalYYYYMMDD(ultimoDia);
   });
+
+  const dataInicioRef = useRef(dataInicio);
+  const dataFimRef = useRef(dataFim);
+  useEffect(() => { dataInicioRef.current = dataInicio; }, [dataInicio]);
+  useEffect(() => { dataFimRef.current = dataFim; }, [dataFim]);
 
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
@@ -452,18 +479,28 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('leads').select('id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades');
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades';
 
-    if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
+    const buildQ = () => {
+        let q = supabase.from('leads').select(COLS);
+        if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+        if (!isDirector) {
+            if (isGerente && perfil?.unidade) q = q.eq('unidade', perfil.unidade);
+            else q = q.eq('user_id', user?.id);
+        }
+        return q;
+    };
 
-    if (isDirector) {
-    } else if (isGerente && perfil?.unidade) {
-        query = query.eq('unidade', perfil.unidade);
-    } else {
-        query = query.eq('user_id', user?.id);
-    }
+    const inicio = dataInicioRef.current + 'T00:00:00';
+    const fim = dataFimRef.current + 'T23:59:59';
+    const [openRes, closedRes] = await Promise.all([
+        buildQ().lte('etapa', 3).order('created_at', { ascending: false }),
+        buildQ().gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }),
+    ]);
 
-    let { data: leadsData } = await query.order('created_at', { ascending: false });
+    const leadsData = (openRes.data || []).length + (closedRes.data || []).length > 0
+        ? [...(openRes.data || []), ...(closedRes.data || [])]
+        : null;
     let leadsBase: any[] = leadsData || [];
 
     if (!navigator.onLine && (!leadsData || leadsData.length === 0)) {
@@ -583,6 +620,12 @@ export default function DealsPage() {
         window.removeEventListener('sync-completed', fetchData);
     };
   }, [user, fetchData]);
+
+  // Re-fetch closed leads when date range changes
+  useEffect(() => {
+    if (user) fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataInicio, dataFim]);
 
   const handleContratoInicio = useCallback((val: string) => {
       setContratoInicio(val);
@@ -1366,6 +1409,7 @@ export default function DealsPage() {
         setContratoFim('');
         setFollowupEm('');
         setNovoCnpj('');
+        setCnpjError(false);
         setNovoIE('');
         setParcelas('1');
         setVencimento('');
@@ -1671,7 +1715,18 @@ export default function DealsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
-                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                                    <input
+                                        className={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-white text-sm font-bold outline-none ${cnpjError ? 'border-red-500 focus:border-red-400' : 'border-white/10 focus:border-[#22C55E]'}`}
+                                        value={novoCnpj}
+                                        onChange={e => {
+                                            const masked = maskCnpj(e.target.value);
+                                            setNovoCnpj(masked);
+                                            const digits = masked.replace(/\D/g, '');
+                                            setCnpjError(digits.length === 14 && !validarCNPJ(masked));
+                                        }}
+                                        placeholder="00.000.000/0001-00"
+                                    />
+                                    {cnpjError && <p className="text-red-400 text-[9px] font-bold uppercase mt-1 ml-2">CNPJ inválido — verifique os dígitos</p>}
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>

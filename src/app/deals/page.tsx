@@ -471,11 +471,32 @@ export default function DealsPage() {
   const [proximaAcaoModal, setProximaAcaoModal] = useState<{leadId: number; etapa: number; status: string} | null>(null);
   const [proximaAcaoDate, setProximaAcaoDate] = useState('');
 
+  const [clientesRiscoMap, setClientesRiscoMap] = useState<Record<number, string>>({});
+  const [clientesBuscando, setClientesBuscando] = useState(false);
+  const clienteBuscaRef = useRef<NodeJS.Timeout | null>(null);
+
   const clientesMap = useMemo(() => {
-      const map: Record<number, ClienteOpcao> = {};
-      clientesOpcoes.forEach(c => map[c.id] = c);
+      const map: Record<number, { risco?: string }> = {};
+      Object.entries(clientesRiscoMap).forEach(([id, risco]) => { map[Number(id)] = { risco }; });
       return map;
-  }, [clientesOpcoes]);
+  }, [clientesRiscoMap]);
+
+  const buscarClientes = useCallback((q: string) => {
+      if (clienteBuscaRef.current) clearTimeout(clienteBuscaRef.current);
+      if (!q || q.length < 2) { setClientesOpcoes([]); return; }
+      clienteBuscaRef.current = setTimeout(async () => {
+          setClientesBuscando(true);
+          const { data } = await supabase.from('clientes')
+              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, status_risco')
+              .eq('status', 'ativo')
+              .eq('empresa_id', perfil?.empresa_id)
+              .ilike('nome_empresa', `%${q}%`)
+              .order('nome_empresa', { ascending: true })
+              .limit(20);
+          setClientesOpcoes((data || []).map((c: any) => ({ ...c, risco: c.status_risco })));
+          setClientesBuscando(false);
+      }, 300);
+  }, [perfil?.empresa_id]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -557,26 +578,19 @@ export default function DealsPage() {
         }
     } catch (err) {}
 
-    let allClientes: ClienteOpcao[] = [];
-    let page = 0;
-    let fetchMore = true;
-    
-    while(fetchMore) {
-        const { data } = await supabase
+    // Carrega só id + status_risco para os semáforos de risco nos cards (leve)
+    if (perfil?.empresa_id) {
+        const { data: riscoData } = await supabase
             .from('clientes')
-            .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade')
+            .select('id, status_risco')
             .eq('status', 'ativo')
-            .order('nome_empresa', { ascending: true })
-            .range(page * 1000, (page + 1) * 1000 - 1);
-            
-        if (data && data.length > 0) {
-            allClientes = [...allClientes, ...(data as any)];
-            page++;
-        } else {
-            fetchMore = false;
+            .eq('empresa_id', perfil.empresa_id);
+        if (riscoData) {
+            const rm: Record<number, string> = {};
+            riscoData.forEach((c: any) => { rm[c.id] = c.status_risco || 'verde'; });
+            setClientesRiscoMap(rm);
         }
     }
-    setClientesOpcoes(allClientes);
 
     const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
     if (servicosData && servicosData.length > 0) {
@@ -1647,7 +1661,7 @@ export default function DealsPage() {
                         <div className="relative">
                             <input 
                                 className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[#22C55E] text-[#22C55E]' : (novaEmpresa.length > 2 ? 'border-blue-500' : 'border-white/10')} rounded-xl pl-4 pr-28 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
-                                placeholder="Buscar ou Cadastrar novo..." value={novaEmpresa} onChange={(e) => { setNovaEmpresa(e.target.value); setSelectedClientId(null); setShowClientDropdown(true); }} onFocus={() => setShowClientDropdown(true)} onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)} required
+                                placeholder="Buscar ou Cadastrar novo..." value={novaEmpresa} onChange={(e) => { setNovaEmpresa(e.target.value); setSelectedClientId(null); setShowClientDropdown(true); buscarClientes(e.target.value); }} onFocus={() => { setShowClientDropdown(true); if (novaEmpresa.length >= 2) buscarClientes(novaEmpresa); }} onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)} required
                             />
                             
                             {selectedClientId ? (
@@ -1663,7 +1677,12 @@ export default function DealsPage() {
                         
                         {showClientDropdown && !selectedClientId && (
                             <div className="absolute z-[9999] w-full mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto custom-scrollbar overflow-x-hidden">
-                                {clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).slice(0, 50).map(c => (
+                                {clientesBuscando && (
+                                    <div className="px-4 py-3 flex items-center gap-2 text-slate-500 text-xs font-bold uppercase">
+                                        <Loader2 size={12} className="animate-spin"/> Buscando...
+                                    </div>
+                                )}
+                                {!clientesBuscando && clientesOpcoes.map(c => (
                                         <div 
                                             key={c.id} className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
                                             onMouseDown={(e) => { e.preventDefault(); setNovaEmpresa(c.nome_empresa); setSelectedClientId(c.id); setNovoTelefone(c.telefone || ''); if (c.cidade) setNovaCidade(c.cidade as string); if (c.cnpj) setNovoCnpj(c.cnpj as string); if (c.inscricao_estadual) setNovoIE(c.inscricao_estadual as string); setShowClientDropdown(false); }}
@@ -1675,8 +1694,11 @@ export default function DealsPage() {
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
                                 ))}
-                                {novaEmpresa.length > 0 && clientesOpcoes.filter(c => c.nome_empresa && c.nome_empresa.toLowerCase().includes((novaEmpresa || '').toLowerCase())).length === 0 && (
+                                {!clientesBuscando && novaEmpresa.length >= 2 && clientesOpcoes.length === 0 && (
                                     <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">Novo Cliente Detectado!<br/><span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span></div>
+                                )}
+                                {novaEmpresa.length < 2 && (
+                                    <div className="px-4 py-3 text-slate-600 text-[10px] font-bold uppercase text-center">Digite ao menos 2 letras para buscar</div>
                                 )}
                             </div>
                         )}

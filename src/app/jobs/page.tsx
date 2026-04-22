@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { SkeletonPage } from '@/components/Skeleton';
 import {
   Clapperboard, Mic2, MonitorPlay, CheckCircle2, Clock, AlertTriangle, Loader2,
   Calendar, Plus, X, Trash2, Edit2, Filter, Building2, User, Hash, Radio, FileText, CalendarDays, ShieldCheck, AlignLeft, Archive, Upload, Music
@@ -163,7 +164,7 @@ export default function JobsPage() {
     return diff <= 2;
   });
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white font-black animate-pulse">CARREGANDO PRODUÇÃO...</div>;
+  if (loading) return <SkeletonPage />;
 
   const VISIBLE_STAGES = mostrarFinalizados ? { ...STAGES, entregue: { title: 'Finalizados (OPEC)', icon: <Archive size={14}/>, color: 'border-slate-500' } } : STAGES;
 
@@ -244,7 +245,7 @@ export default function JobsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 pb-2 h-[calc(100vh-190px)] md:h-[calc(100vh-120px)] items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0 mt-2">
+        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0 mt-2">
           {Object.entries(VISIBLE_STAGES).map(([key, stage]) => {
             const stageJobs = jobsFiltrados.filter(j => j.stage === key);
             

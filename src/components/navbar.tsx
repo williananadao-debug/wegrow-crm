@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useState } from 'react';
-import { 
+import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X

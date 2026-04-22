@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
 import { localDb } from '@/lib/localDb'; 
 import { syncOfflineDataToCloud } from '@/lib/syncService';
@@ -351,6 +352,7 @@ export default function DealsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
+  const router = useRouter();
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   const LIMITE_DESCONTO_MAXIMO = 5;
@@ -368,14 +370,6 @@ export default function DealsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
-
-  const [isVisitaModalOpen, setIsVisitaModalOpen] = useState(false);
-  const [visitaEmpresa, setVisitaEmpresa] = useState('');
-  const [visitaTelefone, setVisitaTelefone] = useState('');
-  const [visitaObs, setVisitaObs] = useState('');
-  const [savingVisita, setSavingVisita] = useState(false);
-  const [visitaCoords, setVisitaCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [visitaGeoStatus, setVisitaGeoStatus] = useState<'loading' | 'ok' | 'denied' | 'idle'>('idle');
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
@@ -1364,41 +1358,6 @@ export default function DealsPage() {
     setIsModalOpen(true);
   }, [perfil?.unidade, user?.id]);
 
-  const salvarVisita = useCallback(async () => {
-    if (!visitaEmpresa.trim()) return;
-    setSavingVisita(true);
-    const mapsUrl = visitaCoords ? `https://www.google.com/maps?q=${visitaCoords.lat},${visitaCoords.lng}` : null;
-    const payload = {
-      empresa: visitaEmpresa.trim(),
-      telefone: visitaTelefone || null,
-      descricao: visitaObs || null,
-      tipo: 'visita',
-      etapa: 0,
-      status: 'aberto',
-      valor_total: 0,
-      user_id: user?.id,
-      empresa_id: perfil?.empresa_id,
-      unidade: perfil?.unidade || null,
-      latitude: visitaCoords?.lat ?? null,
-      longitude: visitaCoords?.lng ?? null,
-      localizacao_url: mapsUrl,
-    };
-    try {
-      const { data, error } = await supabase.from('leads').insert([payload]).select();
-      if (error) throw error;
-      if (data) setLeads(prev => [data[0] as Lead, ...prev]);
-      setIsVisitaModalOpen(false);
-      setVisitaEmpresa(''); setVisitaTelefone(''); setVisitaObs('');
-      setToastMessage('Visita registrada! 📍');
-      setShowToast(true);
-    } catch {
-      setToastMessage('Erro ao salvar visita.');
-      setShowToast(true);
-    } finally {
-      setSavingVisita(false);
-    }
-  }, [visitaEmpresa, visitaTelefone, visitaObs, visitaCoords, user?.id, perfil?.empresa_id, perfil?.unidade]);
-
   const leadsAtivos = useMemo(() => {
       return leads.filter(l => {
           if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
@@ -1476,16 +1435,7 @@ export default function DealsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-              <button onClick={() => {
-                setVisitaEmpresa(''); setVisitaTelefone(''); setVisitaObs('');
-                setVisitaCoords(null); setVisitaGeoStatus('loading');
-                setIsVisitaModalOpen(true);
-                navigator.geolocation.getCurrentPosition(
-                  pos => { setVisitaCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setVisitaGeoStatus('ok'); },
-                  () => setVisitaGeoStatus('denied'),
-                  { enableHighAccuracy: true, timeout: 10000 }
-                );
-              }} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"><MapPin size={16} strokeWidth={3} /> Visita</button>
+              <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"><MapPin size={16} strokeWidth={3} /> Visitas</button>
               <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-2"><Plus size={16} strokeWidth={3} /> Gerar</button>
           </div>
       </div>
@@ -1916,68 +1866,6 @@ export default function DealsPage() {
                     </button>
                 </div>
             </div>
-        </div>
-      )}
-
-      {/* MODAL REGISTRAR VISITA */}
-      {isVisitaModalOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-[#0B1120] border border-blue-500/30 w-full max-w-md rounded-[32px] shadow-2xl flex flex-col animate-in zoom-in-95">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-blue-500/5 rounded-t-[32px]">
-              <h2 className="text-xl font-black uppercase italic tracking-tighter text-blue-400 flex items-center gap-2">
-                <MapPin size={22}/> Registrar Visita
-              </h2>
-              <button onClick={() => setIsVisitaModalOpen(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
-                <X size={20}/>
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${visitaGeoStatus === 'ok' ? 'bg-green-500/10 border border-green-500/30 text-green-400' : visitaGeoStatus === 'denied' ? 'bg-red-500/10 border border-red-500/30 text-red-400' : 'bg-blue-500/10 border border-blue-500/20 text-blue-400'}`}>
-                <MapPin size={12} className={visitaGeoStatus === 'loading' ? 'animate-pulse' : ''}/>
-                {visitaGeoStatus === 'loading' && 'Obtendo localização...'}
-                {visitaGeoStatus === 'ok' && `Localização capturada: ${visitaCoords?.lat.toFixed(5)}, ${visitaCoords?.lng.toFixed(5)}`}
-                {visitaGeoStatus === 'denied' && 'Sem permissão de localização — visita será salva sem coordenadas'}
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Nome do Cliente / Empresa *</label>
-                <input
-                  autoFocus
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
-                  placeholder="Ex: João Silva, Loja ABC..."
-                  value={visitaEmpresa}
-                  onChange={e => setVisitaEmpresa(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Telefone (opcional)</label>
-                <input
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
-                  placeholder="(00) 00000-0000"
-                  value={visitaTelefone}
-                  onChange={e => setVisitaTelefone(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Observação</label>
-                <textarea
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[90px] resize-none custom-scrollbar transition-colors"
-                  placeholder="O que aconteceu na visita? Cliente disse que..."
-                  value={visitaObs}
-                  onChange={e => setVisitaObs(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-white/10 bg-[#0F172A] rounded-b-[32px] flex gap-3">
-              <button onClick={() => setIsVisitaModalOpen(false)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
-                Cancelar
-              </button>
-              <button onClick={salvarVisita} disabled={!visitaEmpresa.trim() || savingVisita} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all flex items-center justify-center gap-2">
-                <MapPin size={14}/> {savingVisita ? 'Salvando...' : 'Registrar Visita'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

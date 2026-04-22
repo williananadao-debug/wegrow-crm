@@ -36,7 +36,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
         
         {/* Conteúdo da Página */}
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B1120] w-full h-full">
-          <div className="pt-20 pb-8 px-4 md:pt-6 md:pb-6 md:px-8 max-w-[1600px] mx-auto w-full">
+          <div className="pt-20 pb-8 px-4 md:pt-6 md:pb-6 md:px-8 max-w-[1600px] mx-auto w-full h-full">
             {children}
           </div>
         </main>

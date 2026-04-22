@@ -265,7 +265,7 @@ export default function PremisesPage() {
   if (!isDirector) return <div className="p-10 text-white text-center font-black uppercase">Acesso Restrito</div>;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 bg-[#0B1120] min-h-screen text-white animate-in fade-in duration-700">
+    <div className="p-4 md:p-8 space-y-8 text-white animate-in fade-in duration-700">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>

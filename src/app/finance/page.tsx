@@ -177,7 +177,7 @@ function FinanceiroPadrao() {
   };
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-4 md:p-8 pb-20 text-white">
+    <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">

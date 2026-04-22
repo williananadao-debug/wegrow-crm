@@ -188,7 +188,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar p-4 md:p-8 pb-20 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 pb-20 animate-in fade-in duration-500">
       
       <header className="mb-8">
         <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">

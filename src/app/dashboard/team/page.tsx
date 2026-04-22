@@ -161,7 +161,7 @@ export default function TeamPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 text-white min-h-screen bg-[#0B1120]">
+    <div className="p-4 md:p-6 text-white">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-white/5 pb-6">
           <div>
               <h1 className="text-2xl md:text-3xl font-black uppercase italic text-white flex items-center gap-2">

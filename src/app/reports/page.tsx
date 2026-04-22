@@ -9,6 +9,7 @@ import {
   FileSpreadsheet, Database, X, Briefcase, Eye, ArrowLeft, CalendarDays, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { SkeletonPage } from '@/components/Skeleton';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
@@ -98,11 +99,17 @@ export default function ReportsPage() {
   const isGerente = perfil?.cargo === 'gerente';
 
   useEffect(() => { if (user) fetchReportData(); }, [user, perfil]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user && rawLeads.length > 0) fetchReportData(); }, [dataInicio, dataFim]);
 
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo').order('created_at', { ascending: false }).limit(5000);
+      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo')
+        .gte('created_at', dataInicio + 'T00:00:00')
+        .lte('created_at', dataFim + 'T23:59:59')
+        .order('created_at', { ascending: false })
+        .limit(3000);
       if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
       if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
       else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
@@ -319,7 +326,7 @@ export default function ReportsPage() {
 
   const getGrowth = (current: number, last: number) => { if (last === 0) return current > 0 ? 100 : 0; return ((current - last) / last) * 100; };
 
-  if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-blue-500 font-black animate-pulse">COMPILANDO DADOS DA SALA DE COMANDO...</div>;
+  if (loading && !rawLeads.length) return <SkeletonPage />;
 
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">

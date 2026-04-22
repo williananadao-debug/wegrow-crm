@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { SkeletonDashboard } from '@/components/Skeleton';
 
 type RankingItem = { id: string; nome: string; total: number; count: number; };
 
@@ -58,6 +59,7 @@ export default function DashboardPage() {
           .from('leads')
           .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
 
+        if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
         if (!isDirector) {
             leadsQuery = leadsQuery.eq('user_id', user?.id);
         }
@@ -86,7 +88,7 @@ export default function DashboardPage() {
         setLoading(false);
         setRefreshing(false);
     }
-  }, [isDirector, user?.id, perfil?.nome]);
+  }, [isDirector, user?.id, perfil?.empresa_id]);
 
   // 👇 O CORAÇÃO DO MODO TV (AUTO-REFRESH 5 MINUTOS) 👇
   useEffect(() => {
@@ -257,7 +259,7 @@ export default function DashboardPage() {
   const getDonutGradient = (visitados: number, pendentes: number) => { const total = visitados + pendentes; if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`; const pct = (visitados / total) * 100; return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`; };
   const formatCompact = (num: number) => { if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k'; return num % 1 === 0 ? num.toString() : num.toFixed(2); };
 
-  if (loading && !rawLeads.length) return <div className="h-screen flex items-center justify-center bg-[#0B1120] text-white"><Loader2 className="animate-spin mr-2"/> Otimizando Dashboard...</div>;
+  if (loading && !rawLeads.length) return <SkeletonDashboard />;
 
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">

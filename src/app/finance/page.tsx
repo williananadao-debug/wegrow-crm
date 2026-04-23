@@ -2,32 +2,42 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Plus, TrendingUp, AlertTriangle, FileText, Barcode,
-  DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw
+  DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw,
+  MessageCircle, Bell, History
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
 
-// ==========================================
-// FINANCEIRO (CDL e Padrão unificados)
-// ==========================================
+type Atividade = { id: number; tipo: string; descricao: string; created_at: string; };
+type LeadFinance = {
+  id: string;
+  empresa: string;
+  valor_total: number;
+  status: string;
+  unidade: string;
+  telefone: string | null;
+  contrato_inicio: string | null;
+  contrato_fim: string | null;
+  data_pagamento: string | null;
+  created_at: string;
+  atividades?: Atividade[];
+};
+
 function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const { unidades } = useUnidades(perfil?.empresa_id);
 
-  type LeadFinance = { id: string; empresa: string; valor_total: number; status: string; unidade: string; contrato_inicio: string | null; contrato_fim: string | null; data_pagamento: string | null; created_at: string; };
-  const [aba, setAba] = useState<'inadimplencia' | 'conciliacao'>('inadimplencia');
+  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao'>('alertas');
   const [leads, setLeads] = useState<LeadFinance[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState<string | null>(null);
 
-  // Filtros inadimplência
   const [filtroUnidade, setFiltroUnidade] = useState('');
   const [filtroDias, setFiltroDias] = useState('0');
 
-  // Filtros conciliação
   const [mesConciliacao, setMesConciliacao] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -41,7 +51,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setLoading(true);
     const { data } = await supabase
       .from('leads')
-      .select('id, empresa, valor_total, status, unidade, contrato_inicio, contrato_fim, data_pagamento, created_at')
+      .select('id, empresa, valor_total, status, unidade, contrato_inicio, contrato_fim, data_pagamento, created_at, telefone, atividades')
       .eq('empresa_id', perfil?.empresa_id)
       .eq('status', 'ganho')
       .not('contrato_fim', 'is', null)
@@ -56,15 +66,24 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const inadimplentes = useMemo(() => {
     return leads
       .filter(l => l.contrato_fim != null && l.contrato_fim < hoje)
-      .map(l => ({
-        ...l,
-        diasVencido: Math.floor((Date.now() - new Date((l.contrato_fim as string) + 'T00:00:00').getTime()) / 86400000),
-      }))
+      .map(l => ({ ...l, diasVencido: Math.floor((Date.now() - new Date((l.contrato_fim as string) + 'T00:00:00').getTime()) / 86400000) }))
       .filter(l => l.diasVencido >= Number(filtroDias))
       .filter(l => !filtroUnidade || l.unidade === filtroUnidade);
   }, [leads, hoje, filtroDias, filtroUnidade]);
 
-  const [anoMes, mesNum] = mesConciliacao.split('-');
+  const vencendoBreve = useMemo(() => {
+    return leads
+      .filter(l => {
+        if (!l.contrato_fim) return false;
+        const dias = Math.floor((new Date(l.contrato_fim + 'T00:00:00').getTime() - Date.now()) / 86400000);
+        return dias >= 0 && dias <= 30;
+      })
+      .map(l => ({ ...l, diasRestantes: Math.floor((new Date((l.contrato_fim as string) + 'T00:00:00').getTime() - Date.now()) / 86400000) }))
+      .filter(l => !filtroUnidade || l.unidade === filtroUnidade)
+      .sort((a, b) => a.diasRestantes - b.diasRestantes);
+  }, [leads, filtroUnidade]);
+
+  const [anoMes] = mesConciliacao.split('-');
   const conciliacaoLeads = useMemo(() => {
     return leads.filter(l => {
       const cf = l.contrato_fim?.substring(0, 7);
@@ -83,8 +102,16 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
 
   const darBaixa = async (id: string) => {
     setSalvando(id);
-    await supabase.from('leads').update({ data_pagamento: hoje }).eq('id', id);
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, data_pagamento: hoje } : l));
+    const lead = leads.find(l => l.id === id);
+    const novoPagamento: Atividade = {
+      id: Date.now(),
+      tipo: 'pagamento',
+      descricao: `Pagamento registrado: R$ ${(lead?.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em ${new Date().toLocaleDateString('pt-BR')}`,
+      created_at: new Date().toISOString(),
+    };
+    const atividadesAtualizadas = [novoPagamento, ...(Array.isArray(lead?.atividades) ? lead.atividades : [])];
+    await supabase.from('leads').update({ data_pagamento: hoje, atividades: atividadesAtualizadas }).eq('id', id);
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, data_pagamento: hoje, atividades: atividadesAtualizadas } : l));
     setSalvando(null);
   };
 
@@ -100,10 +127,26 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     novaData.setFullYear(novaData.getFullYear() + 1);
     const novaDataStr = novaData.toISOString().substring(0, 10);
     setSalvando(id);
-    await supabase.from('leads').update({ contrato_fim: novaDataStr }).eq('id', id);
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, contrato_fim: novaDataStr } : l));
+    await supabase.from('leads').update({ contrato_fim: novaDataStr, data_pagamento: null }).eq('id', id);
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, contrato_fim: novaDataStr, data_pagamento: null } : l));
     setSalvando(null);
   };
+
+  const enviarWhatsAppCobranca = (l: LeadFinance & { diasVencido?: number; diasRestantes?: number }) => {
+    if (!l.telefone) return alert('Telefone não cadastrado neste associado.');
+    const venceu = l.contrato_fim ? new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+    const msg = l.diasVencido != null
+      ? `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *CDL de Taio*.%0A%0ASua anuidade de associação *venceu há ${l.diasVencido} dia${l.diasVencido !== 1 ? 's' : ''}* (em ${venceu}).%0A%0APara manter seus benefícios ativos, entre em contato para regularizar sua situação.%0A%0A_CDL de Taio · Câmara de Dirigentes Lojistas_`
+      : `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *CDL de Taio*.%0A%0APassamos para lembrar que sua anuidade de associação *vence em ${l.diasRestantes} dia${l.diasRestantes !== 1 ? 's' : ''}* (${venceu}).%0A%0AQualquer dúvida, estamos à disposição! 😊%0A%0A_CDL de Taio · Câmara de Dirigentes Lojistas_`;
+    window.open(`https://wa.me/55${l.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
+  };
+
+  const getHistoricoPagamentos = (l: LeadFinance) =>
+    (l.atividades || []).filter(a => a.tipo === 'pagamento');
+
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+
+  const filtrosAtivos = filtroUnidade || filtroDias !== '0';
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
@@ -113,14 +156,18 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             <DollarSign size={32}/> Financeiro
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
-            {isCDL ? 'Inadimplência de Anuidades e conciliação' : 'Inadimplência e conciliação de contratos'}
+            {isCDL ? 'Anuidades · Inadimplência · Conciliação' : 'Inadimplência e conciliação de contratos'}
           </p>
         </div>
       </header>
 
       {/* Abas */}
-      <div className="flex gap-2 mb-6 border-b border-white/5 pb-4">
-        {([['inadimplencia', 'Inadimplência', AlertTriangle], ['conciliacao', 'Conciliação', CheckCircle2]] as const).map(([key, label, Icon]) => (
+      <div className="flex gap-2 mb-6 border-b border-white/5 pb-4 flex-wrap">
+        {([
+          ['alertas', isCDL ? `Vencendo em Breve (${vencendoBreve.length})` : 'Vencendo em Breve', Bell],
+          ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : 'Inadimplência', AlertTriangle],
+          ['conciliacao', 'Conciliação', CheckCircle2],
+        ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
             onClick={() => setAba(key)}
@@ -131,11 +178,91 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
         ))}
       </div>
 
+      {/* Filtros comuns */}
+      <div className="flex flex-wrap items-center gap-3 mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+        <Filter size={14} className="text-slate-500"/>
+        <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none">
+          <option value="">Todas as unidades</option>
+          {unidades.map(u => <option key={u.id} value={u.nome}>{u.nome}</option>)}
+        </select>
+        {aba === 'inadimplencia' && (
+          <select value={filtroDias} onChange={e => setFiltroDias(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none">
+            <option value="0">Todos os vencidos</option>
+            <option value="30">+30 dias</option>
+            <option value="60">+60 dias</option>
+            <option value="90">+90 dias</option>
+          </select>
+        )}
+        {filtrosAtivos && (
+          <button onClick={() => { setFiltroUnidade(''); setFiltroDias('0'); }} className="text-slate-500 hover:text-white flex items-center gap-1 text-xs"><X size={12}/> Limpar</button>
+        )}
+      </div>
+
       {loading ? (
         <SkeletonPage />
+      ) : aba === 'alertas' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-5 rounded-2xl">
+              <Bell className="text-yellow-400 mb-2" size={20}/>
+              <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest">{isCDL ? 'Anuidades Vencendo' : 'Contratos Vencendo'}</p>
+              <h2 className="text-3xl font-black text-white mt-1">{vencendoBreve.length}</h2>
+              <p className="text-[10px] text-yellow-400/60 mt-0.5">nos próximos 30 dias</p>
+            </div>
+            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Vencendo em 7 dias</p>
+              <h2 className="text-2xl font-black text-orange-400 mt-1">{vencendoBreve.filter(l => l.diasRestantes <= 7).length}</h2>
+              <p className="text-[10px] text-slate-500 mt-0.5">atenção imediata</p>
+            </div>
+            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Volume em risco</p>
+              <h2 className="text-2xl font-black text-yellow-400 mt-1">R$ {vencendoBreve.reduce((s, l) => s + (l.valor_total || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <p className="text-[10px] text-slate-500 mt-0.5">potencial de renovação</p>
+            </div>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+            <div className="p-5 border-b border-white/5">
+              <h3 className="font-black uppercase text-sm text-slate-300">{isCDL ? 'Anuidades Vencendo em Breve' : 'Contratos Vencendo em Breve'} ({vencendoBreve.length})</h3>
+            </div>
+            {vencendoBreve.length === 0 ? (
+              <div className="p-10 text-center">
+                <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                <p className="text-slate-500 text-sm font-bold">Nenhum contrato vencendo nos próximos 30 dias.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {vencendoBreve.map(l => (
+                  <div key={l.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-black text-white uppercase truncate">{l.empresa}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[9px] text-slate-500">{l.unidade}</span>
+                        <span className="text-[9px] text-slate-600">Vence: {new Date((l.contrato_fim as string) + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded ${l.diasRestantes <= 7 ? 'bg-red-500/20 text-red-400' : l.diasRestantes <= 15 ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                          {l.diasRestantes}d restantes
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                      {isCDL && l.telefone && (
+                        <button
+                          onClick={() => enviarWhatsAppCobranca(l)}
+                          className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
+                        >
+                          <MessageCircle size={10}/> WhatsApp
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       ) : aba === 'inadimplencia' ? (
         <>
-          {/* KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl">
               <AlertTriangle className="text-red-500 mb-2" size={20}/>
@@ -155,25 +282,6 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
           </div>
 
-          {/* Filtros */}
-          <div className="flex flex-wrap items-center gap-3 mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
-            <Filter size={14} className="text-slate-500"/>
-            <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none">
-              <option value="">Todas as unidades</option>
-              {unidades.map(u => <option key={u.id} value={u.nome}>{u.nome}</option>)}
-            </select>
-            <select value={filtroDias} onChange={e => setFiltroDias(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none">
-              <option value="0">Todos os vencidos</option>
-              <option value="30">+30 dias</option>
-              <option value="60">+60 dias</option>
-              <option value="90">+90 dias</option>
-            </select>
-            {(filtroUnidade || filtroDias !== '0') && (
-              <button onClick={() => { setFiltroUnidade(''); setFiltroDias('0'); }} className="text-slate-500 hover:text-white flex items-center gap-1 text-xs"><X size={12}/> Limpar</button>
-            )}
-          </div>
-
-          {/* Tabela */}
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
             <div className="p-5 border-b border-white/5">
               <h3 className="font-black uppercase text-sm text-slate-300">{isCDL ? 'Anuidades Vencidas' : 'Contratos Vencidos'} ({inadimplentes.length})</h3>
@@ -186,28 +294,50 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             ) : (
               <div className="divide-y divide-white/5">
                 {inadimplentes.map(l => (
-                  <div key={l.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
-                    <div className="min-w-0">
-                      <p className="font-black text-white uppercase truncate">{l.empresa}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-[9px] text-slate-500">{l.unidade}</span>
-                        <span className="text-[9px] text-slate-600">Venceu: {new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded ${l.diasVencido > 90 ? 'bg-red-500/20 text-red-400' : l.diasVencido > 30 ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                          {l.diasVencido}d atraso
-                        </span>
+                  <div key={l.id}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                      <div className="min-w-0">
+                        <p className="font-black text-white uppercase truncate">{l.empresa}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-[9px] text-slate-500">{l.unidade}</span>
+                          <span className="text-[9px] text-slate-600">Venceu: {new Date((l.contrato_fim as string) + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded ${l.diasVencido > 90 ? 'bg-red-500/20 text-red-400' : l.diasVencido > 30 ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                            {l.diasVencido}d atraso
+                          </span>
+                          {getHistoricoPagamentos(l).length > 0 && (
+                            <button onClick={() => setExpandedHistory(expandedHistory === l.id ? null : l.id)} className="text-[9px] font-black text-slate-500 hover:text-white flex items-center gap-0.5">
+                              <History size={9}/> {getHistoricoPagamentos(l).length} pgto{getHistoricoPagamentos(l).length > 1 ? 's' : ''}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                        {isCDL && l.telefone && (
+                          <button onClick={() => enviarWhatsAppCobranca(l)} className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                            <MessageCircle size={10}/> WhatsApp
+                          </button>
+                        )}
+                        <button
+                          onClick={() => renovarContrato(l.id, l.contrato_fim as string)}
+                          disabled={salvando === l.id}
+                          className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
+                        >
+                          {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <RefreshCw size={10}/>}
+                          {isCDL ? 'Renovar Anuidade' : 'Renovar +1 ano'}
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                      <button
-                        onClick={() => renovarContrato(l.id, l.contrato_fim as string)}
-                        disabled={salvando === l.id}
-                        className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
-                      >
-                        {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <RefreshCw size={10}/>}
-                        {isCDL ? 'Renovar Anuidade' : 'Renovar +1 ano'}
-                      </button>
-                    </div>
+                    {expandedHistory === l.id && (
+                      <div className="bg-black/20 border-t border-white/5 px-4 py-3">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Histórico de Pagamentos</p>
+                        <div className="space-y-1">
+                          {getHistoricoPagamentos(l).map(p => (
+                            <p key={p.id} className="text-[10px] text-slate-400">{new Date(p.created_at).toLocaleDateString('pt-BR')} — {p.descricao}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -216,7 +346,6 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
         </>
       ) : (
         <>
-          {/* Filtro mês conciliação */}
           <div className="flex items-center gap-3 mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
             <Clock size={14} className="text-slate-500"/>
             <input
@@ -227,7 +356,6 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             />
           </div>
 
-          {/* KPIs conciliação */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
               { label: 'Esperado', value: totalEsperado, color: 'text-white', bg: 'bg-[#0F172A]' },
@@ -241,7 +369,6 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             ))}
           </div>
 
-          {/* Tabela conciliação */}
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
             <div className="p-5 border-b border-white/5">
               <h3 className="font-black uppercase text-sm text-slate-300">Lançamentos — {new Date(mesConciliacao + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
@@ -254,39 +381,48 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             ) : (
               <div className="divide-y divide-white/5">
                 {conciliacaoLeads.map(l => (
-                  <div key={l.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
-                    <div className="min-w-0">
-                      <p className="font-black text-white uppercase truncate">{l.empresa}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-[9px] text-slate-500">{l.unidade}</span>
-                        {l.contrato_fim && <span className="text-[9px] text-slate-600">Vence: {new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                        {l.data_pagamento && (
-                          <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
-                            Pago em {new Date(l.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
-                          </span>
+                  <div key={l.id}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                      <div className="min-w-0">
+                        <p className="font-black text-white uppercase truncate">{l.empresa}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-[9px] text-slate-500">{l.unidade}</span>
+                          {l.contrato_fim && <span className="text-[9px] text-slate-600">Vence: {new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                          {l.data_pagamento && (
+                            <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
+                              Pago em {new Date(l.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                          {getHistoricoPagamentos(l).length > 0 && (
+                            <button onClick={() => setExpandedHistory(expandedHistory === l.id ? null : l.id)} className="text-[9px] font-black text-slate-500 hover:text-white flex items-center gap-0.5">
+                              <History size={9}/> {getHistoricoPagamentos(l).length} pgto{getHistoricoPagamentos(l).length > 1 ? 's' : ''}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                        {l.data_pagamento ? (
+                          <button onClick={() => estornarBaixa(l.id)} disabled={salvando === l.id} className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                            {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
+                          </button>
+                        ) : (
+                          <button onClick={() => darBaixa(l.id)} disabled={salvando === l.id} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                            {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Dar Baixa
+                          </button>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                      {l.data_pagamento ? (
-                        <button
-                          onClick={() => estornarBaixa(l.id)}
-                          disabled={salvando === l.id}
-                          className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
-                        >
-                          {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => darBaixa(l.id)}
-                          disabled={salvando === l.id}
-                          className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
-                        >
-                          {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Dar Baixa
-                        </button>
-                      )}
-                    </div>
+                    {expandedHistory === l.id && (
+                      <div className="bg-black/20 border-t border-white/5 px-4 py-3">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Histórico de Pagamentos</p>
+                        <div className="space-y-1">
+                          {getHistoricoPagamentos(l).map(p => (
+                            <p key={p.id} className="text-[10px] text-slate-400">{new Date(p.created_at).toLocaleDateString('pt-BR')} — {p.descricao}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

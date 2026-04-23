@@ -6,7 +6,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X
+  Rocket, BarChart3, Menu, X, UsersRound
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell'; 
 
@@ -54,6 +54,7 @@ export default function Navbar() {
       { name: isCDL ? 'Prospecção' : 'Vendas', icon: <Zap size={20} />, href: '/deals' },
       mostrarOpec           ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
       { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' },
+      isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
       mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
     ].filter(Boolean) as any[];

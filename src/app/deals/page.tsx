@@ -485,6 +485,12 @@ export default function DealsPage() {
   const [proximaAcaoModal, setProximaAcaoModal] = useState<{leadId: number; etapa: number; status: string} | null>(null);
   const [proximaAcaoDate, setProximaAcaoDate] = useState('');
 
+  const [cdlFiliacaoModal, setCdlFiliacaoModal] = useState<{leadId: number} | null>(null);
+  const [cdlTipoAssociacao, setCdlTipoAssociacao] = useState('Associado Simples');
+  const [cdlValorAnuidade, setCdlValorAnuidade] = useState('');
+  const [cdlDataInicio, setCdlDataInicio] = useState('');
+  const [cdlDataFim, setCdlDataFim] = useState('');
+
   const [clientesRiscoMap, setClientesRiscoMap] = useState<Record<number, string>>({});
   const [clientesBuscando, setClientesBuscando] = useState(false);
   const clienteBuscaRef = useRef<NodeJS.Timeout | null>(null);
@@ -777,10 +783,21 @@ export default function DealsPage() {
       fazerCheckin(id);
     }
 
+    if (isCDL && (novoStatus === 'ganho' || novaEtapa === 4)) {
+        const d = new Date();
+        setCdlDataInicio(d.toISOString().substring(0, 10));
+        const d2 = new Date(d); d2.setFullYear(d2.getFullYear() + 1);
+        setCdlDataFim(d2.toISOString().substring(0, 10));
+        setCdlValorAnuidade('');
+        setCdlTipoAssociacao('Associado Simples');
+        setCdlFiliacaoModal({ leadId: id });
+        return;
+    }
+
     if (novoStatus === 'perdido' || novaEtapa === 5) {
         setLostLeadId(id);
         setIsLostModalOpen(true);
-        return; 
+        return;
     }
 
     let etapaFinal = novaEtapa;
@@ -844,6 +861,36 @@ export default function DealsPage() {
     setLostLeadId(null);
     setMotivoPerda('');
   }, [motivoPerda, lostLeadId, leads]);
+
+  const confirmarFiliacaoCDL = useCallback(async () => {
+    if (!cdlFiliacaoModal) return;
+    const { leadId } = cdlFiliacaoModal;
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    const valorFinal = parseFloat(cdlValorAnuidade.replace(',', '.')) || lead.valor_total || 0;
+    const stageName = CDL_STAGES[4].title;
+    const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `${stageName} — ${cdlTipoAssociacao}`, created_at: new Date().toISOString() };
+    const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead.atividades) ? lead.atividades : [])];
+
+    setLeads(prev => prev.map(l => l.id === leadId ? {
+        ...l, etapa: 4, status: 'ganho', tipo: cdlTipoAssociacao,
+        contrato_inicio: cdlDataInicio, contrato_fim: cdlDataFim,
+        valor_total: valorFinal, atividades: atividadesAtualizadas,
+    } : l));
+
+    await supabase.from('leads').update({
+        etapa: 4, status: 'ganho', tipo: cdlTipoAssociacao,
+        contrato_inicio: cdlDataInicio, contrato_fim: cdlDataFim,
+        valor_total: valorFinal, atividades: atividadesAtualizadas,
+    }).eq('id', leadId);
+
+    await gerarCobrancaFinanceira({ ...lead, valor_total: valorFinal });
+
+    setCdlFiliacaoModal(null);
+    setToastMessage('🎉 Novo Associado Confirmado!');
+    setShowToast(true);
+  }, [cdlFiliacaoModal, leads, cdlTipoAssociacao, cdlValorAnuidade, cdlDataInicio, cdlDataFim, gerarCobrancaFinanceira]);
 
   const onDragEnd = useCallback(async (result: any) => {
     const { destination, draggableId } = result;
@@ -2085,6 +2132,77 @@ export default function DealsPage() {
           </div>
         </div>
       )}
+      {/* MODAL CONFIRMAR FILIAÇÃO CDL */}
+      {cdlFiliacaoModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-[#22C55E]/30 w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-white/10">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
+                <div>
+                  <h2 className="text-lg font-black text-white uppercase italic tracking-tight">Confirmar Filiação</h2>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">CDL de Taio</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Tipo de Associação *</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {['Associado Simples', 'Associado Plus', 'Associado Premium'].map(tipo => (
+                    <label key={tipo} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cdlTipoAssociacao === tipo ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-slate-300'}`}>
+                      <input type="radio" name="cdlTipo" value={tipo} className="sr-only" onChange={() => setCdlTipoAssociacao(tipo)} />
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${cdlTipoAssociacao === tipo ? 'border-[#22C55E] bg-[#22C55E]' : 'border-slate-600'}`}>
+                        {cdlTipoAssociacao === tipo && <div className="w-1.5 h-1.5 bg-[#0B1120] rounded-full" />}
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-wide">{tipo}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Valor da Anuidade (R$)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Ex: 497,00"
+                  value={cdlValorAnuidade}
+                  onChange={e => setCdlValorAnuidade(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Início</label>
+                  <input type="date" value={cdlDataInicio} onChange={e => setCdlDataInicio(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Vencimento</label>
+                  <input type="date" value={cdlDataFim} onChange={e => setCdlDataFim(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/10 flex gap-3">
+              <button onClick={() => setCdlFiliacaoModal(null)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarFiliacaoCDL}
+                disabled={!cdlDataInicio || !cdlDataFim}
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={14}/> Confirmar Filiação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

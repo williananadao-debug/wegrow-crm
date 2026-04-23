@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Send, CheckCircle2, Search, Loader2, Mail, ExternalLink,
-  Building2, User, Phone, Tag, Award, FileText, ChevronDown, Store
+  Building2, User, Phone, Tag, Award, FileText, ChevronDown, Store, ArrowRight
 } from 'lucide-react';
 
 const SEGMENTOS = [
@@ -130,6 +130,14 @@ export default function PortalCDL() {
             </p>
           )}
 
+          {leadId && (
+            <Link
+              href={`/portal-cdl/status?id=${leadId}`}
+              className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] py-3.5 rounded-xl font-black uppercase tracking-widest transition-colors text-xs flex items-center justify-center gap-2 mb-3"
+            >
+              <ArrowRight size={14} /> Acompanhar Status
+            </Link>
+          )}
           <button
             onClick={resetForm}
             className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold uppercase tracking-widest transition-colors text-xs"

@@ -1054,7 +1054,104 @@ export default function DealsPage() {
         </tr>
     `).join('');
 
-    janela.document.write(`
+    const htmlContrato = isCDL ? `
+        <html>
+            <head>
+                <title>Ficha de Filiação - ${lead.empresa}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
+                    .header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #000; padding-bottom: 16px; }
+                    .header-logo { font-size: 28px; font-weight: 900; letter-spacing: -1px; font-style: italic; }
+                    .header-sub { font-size: 11px; text-transform: uppercase; letter-spacing: 3px; margin-top: 2px; color: #444; }
+                    .header h2 { font-size: 16px; font-weight: bold; margin: 10px 0 0; text-transform: uppercase; }
+                    .texto-base { text-align: justify; margin-bottom: 20px; line-height: 1.6; }
+                    .cliente-box { margin-bottom: 20px; line-height: 1.8; }
+                    .secao-titulo { font-weight: bold; margin-top: 25px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                    th { background-color: #f0f0f0; font-size: 11px; text-align: center; border: 1px solid #000; padding: 8px; }
+                    .condicoes { font-size: 11px; margin-bottom: 20px; }
+                    .condicoes p { margin: 4px 0; }
+                    .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
+                    .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
+                    .protocolo { background: #f9f9f9; border: 1px solid #ddd; padding: 8px 16px; display: inline-block; margin-top: 8px; font-size: 11px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="header-logo">CDL de Taio</div>
+                    <div class="header-sub">Câmara de Dirigentes Lojistas do Alto Vale do Itajaí</div>
+                    <h2>Ficha de Filiação — ${lead.tipo || 'Associado'}</h2>
+                    <div class="protocolo">Protocolo: #${String(lead.id).padStart(6, '0')}</div>
+                </div>
+
+                <div class="texto-base">
+                    Pelo presente instrumento, a empresa abaixo qualificada solicita sua filiação à <strong>Câmara de Dirigentes Lojistas de Taio — CDL de Taio</strong>, CNPJ: ${dadosEmissora.cnpj || '___________________'}, com sede à ${dadosEmissora.endereco || '___________________'}, comprometendo-se a cumprir o Estatuto Social e as deliberações da entidade.
+                </div>
+
+                <div class="secao-titulo">1. DADOS DO ASSOCIADO</div>
+                <div class="cliente-box">
+                    <strong>Razão Social / Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <div style="display: flex; gap: 40px;">
+                        <div><strong>CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
+                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
+                    </div>
+                    <div style="display: flex; gap: 40px;">
+                        <div><strong>Telefone / WhatsApp:</strong> ${lead.telefone || '___________________________'}</div>
+                        <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
+                    </div>
+                </div>
+
+                <div class="secao-titulo">2. PLANO E VIGÊNCIA</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;">
+                    <div>INÍCIO: ${formatarData(lead.contrato_inicio || '')}</div>
+                    <div>VENCIMENTO: ${formatarData(lead.contrato_fim || '')}</div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">PLANO / BENEFÍCIOS</th>
+                            <th>TIPO</th>
+                            <th>VALOR ANUAL R$</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">Anuidade CDL — Acesso a todos os benefícios da associação</td>
+                            <td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${lead.tipo || 'Associado'}</td>
+                            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2}) || '—'}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td>
+                            <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2}) || '—'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="secao-titulo">3. CONDIÇÕES DE FILIAÇÃO</div>
+                <div class="condicoes">
+                    <p>1) A filiação é válida pelo período indicado acima, renovável anualmente mediante pagamento da anuidade;</p>
+                    <p>2) O associado compromete-se a cumprir o Estatuto Social e as deliberações da CDL de Taio;</p>
+                    <p>3) A anuidade paga fora do prazo incidirá em juros de mora de 1% ao mês e multa de 2%;</p>
+                    <p>4) A não renovação da anuidade até 30 dias após o vencimento implica na suspensão automática dos benefícios;</p>
+                    <p>5) Fica eleito o Foro da Comarca de Taió para dirimir eventuais controvérsias oriundas deste instrumento.</p>
+                </div>
+
+                <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
+                <div class="cliente-box">
+                    <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
+                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/>
+                    <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || '___________________'}<br/>
+                </div>
+
+                <div class="assinaturas">
+                    <div>Assinatura do Associado</div>
+                    <div>Representante da CDL de Taio</div>
+                </div>
+
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+        </html>
+    ` : `
         <html>
             <head>
                 <title>Contrato - ${lead.empresa}</title>
@@ -1107,7 +1204,7 @@ export default function DealsPage() {
                     <div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div>
                     <div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div>
                 </div>
-                
+
                 <table>
                     <thead>
                         <tr>
@@ -1151,7 +1248,9 @@ export default function DealsPage() {
                 <script>window.onload = function() { window.print(); }</script>
             </body>
         </html>
-    `);
+    `;
+
+    janela.document.write(htmlContrato);
     janela.document.close();
 
     if (lead.id < 1000000) {
@@ -1164,7 +1263,7 @@ export default function DealsPage() {
       supabase.from('leads').update({ notas: novasNotas }).eq('id', lead.id);
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: novasNotas } : l));
     }
-  }, [perfil?.nome, supabase]);
+  }, [perfil?.nome, supabase, isCDL]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);

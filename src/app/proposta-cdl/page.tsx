@@ -81,26 +81,26 @@ const MODULOS = [
 
 const PLANOS = [
   {
-    nome: 'Pacote Crescimento',
-    preco: 'R$ 2.500',
-    periodo: 'pagamento único',
+    nome: 'Plano Essencial',
+    preco: 'R$ 97',
+    periodo: '/ mês',
     destaque: false,
     cor: 'border-white/10',
     itens: [
       { ok: true,  label: 'Renovação de Anuidade' },
       { ok: true,  label: 'Gestão de Inadimplência' },
       { ok: true,  label: 'WhatsApp de Cobrança' },
-      { ok: true,  label: 'Relatório de Base CDL' },
-      { ok: true,  label: 'Carteirinha Digital' },
+      { ok: false, label: 'Relatório de Base CDL' },
+      { ok: false, label: 'Carteirinha Digital' },
       { ok: false, label: 'Consulta SPC / Serasa' },
     ],
-    prazo: '~20 dias úteis',
-    cta: 'Escolher Pacote',
+    prazo: 'Sem fidelidade',
+    cta: 'Começar com Essencial',
   },
   {
-    nome: 'Pacote Completo',
-    preco: 'R$ 4.000',
-    periodo: 'pagamento único',
+    nome: 'Plano Pro',
+    preco: 'R$ 197',
+    periodo: '/ mês',
     destaque: true,
     cor: 'border-[#22C55E]/50',
     itens: [
@@ -109,27 +109,27 @@ const PLANOS = [
       { ok: true, label: 'WhatsApp de Cobrança' },
       { ok: true, label: 'Relatório de Base CDL' },
       { ok: true, label: 'Carteirinha Digital' },
-      { ok: true, label: 'Consulta SPC / Serasa' },
+      { ok: false, label: 'Consulta SPC / Serasa' },
     ],
-    prazo: '~30 dias úteis',
-    cta: 'Escolher Completo',
+    prazo: 'Sem fidelidade',
+    cta: 'Começar com Pro',
   },
   {
-    nome: 'Expansão Mensal',
-    preco: 'R$ 297',
-    periodo: '/ mês (add-on)',
+    nome: 'Plano Premium',
+    preco: 'R$ 397',
+    periodo: '/ mês',
     destaque: false,
     cor: 'border-white/10',
     itens: [
-      { ok: true,  label: 'Renovação de Anuidade' },
-      { ok: true,  label: 'Gestão de Inadimplência' },
-      { ok: true,  label: 'WhatsApp de Cobrança' },
-      { ok: true,  label: 'Relatório de Base CDL' },
-      { ok: false, label: 'Carteirinha Digital' },
-      { ok: false, label: 'Consulta SPC / Serasa' },
+      { ok: true, label: 'Renovação de Anuidade' },
+      { ok: true, label: 'Gestão de Inadimplência' },
+      { ok: true, label: 'WhatsApp de Cobrança' },
+      { ok: true, label: 'Relatório de Base CDL' },
+      { ok: true, label: 'Carteirinha Digital' },
+      { ok: true, label: 'Consulta SPC / Serasa' },
     ],
-    prazo: 'Entrega imediata',
-    cta: 'Escolher Mensal',
+    prazo: 'Sem fidelidade',
+    cta: 'Começar com Premium',
   },
 ];
 
@@ -242,6 +242,29 @@ export default function PropostaCDL() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ROI */}
+        <div className="bg-[#0F172A] border border-white/5 rounded-3xl p-6 md:p-8 mb-10">
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+            <Sparkles size={12} className="text-[#22C55E]" /> O sistema se paga sozinho
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { num: '5', label: 'inadimplentes recuperados', sub: 'por mês com cobrança automática', cor: 'text-orange-400' },
+              { num: 'R$ 800', label: 'de anuidade por associado', sub: 'valor médio recuperado', cor: 'text-blue-400' },
+              { num: 'R$ 4.000', label: 'de receita recuperada', sub: 'vs. R$ 197/mês do plano Pro', cor: 'text-[#22C55E]' },
+            ].map((item, i) => (
+              <div key={i} className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-center">
+                <p className={`text-3xl font-black ${item.cor} mb-1`}>{item.num}</p>
+                <p className="text-sm font-bold text-white">{item.label}</p>
+                <p className="text-[11px] text-slate-500 mt-1">{item.sub}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-slate-500 text-xs mt-5">
+            Recuperando <strong className="text-white">5 anuidades/mês</strong> que hoje estão inadimplentes, o plano Pro custa <strong className="text-[#22C55E]">menos de 5% do retorno gerado.</strong>
+          </p>
         </div>
 
         {/* INVESTIMENTO */}

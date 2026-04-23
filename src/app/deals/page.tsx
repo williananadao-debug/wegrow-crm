@@ -1316,7 +1316,7 @@ export default function DealsPage() {
 
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
-      if(!confirm("Tem certeza que deseja excluir esta oportunidade?")) return;
+      if(!confirm(isCDL ? "Tem certeza que deseja excluir este prospecto?" : "Tem certeza que deseja excluir esta oportunidade?")) return;
       
       if (id > 1000000) {
           setLeads(prev => prev.filter(l => l.id !== id));
@@ -1781,7 +1781,7 @@ export default function DealsPage() {
               
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
-                      {editingLeadId ? `Editar Oportunidade ` : 'Novo Negócio'}
+                      {editingLeadId ? (isCDL ? 'Editar Prospecto' : 'Editar Oportunidade') : (isCDL ? 'Novo Prospecto' : 'Novo Negócio')}
                       {editingLeadId && editingLeadId < 1000000 && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
                   </h2>
                   <div className="flex items-center gap-2">
@@ -2074,7 +2074,7 @@ export default function DealsPage() {
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
                   <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
-                      {!editingLeadId ? 'Criar Oportunidade' : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
+                      {!editingLeadId ? (isCDL ? 'Cadastrar Prospecto' : 'Criar Oportunidade') : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>
 

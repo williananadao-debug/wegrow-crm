@@ -10,7 +10,7 @@ import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 
 export default function PremisesPage() {
-  const { user, perfil } = useAuth();
+  const { user, perfil, empresa } = useAuth();
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [premissas, setPremissas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +48,7 @@ export default function PremisesPage() {
   const [toastMessage, setToastMessage] = useState('');
 
   const isDirector = perfil?.cargo === 'diretor';
+  const isCDL = Boolean(empresa?.modulos?.cdl);
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   useEffect(() => {
@@ -370,9 +371,9 @@ export default function PremisesPage() {
               {activeTab === 'manual' && (
                 <form onSubmit={gerarManual} className="space-y-6 animate-in fade-in duration-300">
                     <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Vendedor Alvo</label>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">{isCDL ? 'Consultor Alvo' : 'Vendedor Alvo'}</label>
                         <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-blue-500" value={selectedVendedor} onChange={e => setSelectedVendedor(e.target.value)} required>
-                            <option value="" className="bg-[#0B1120]">Selecione o Soldado...</option>
+                            <option value="" className="bg-[#0B1120]">{isCDL ? 'Selecione o Consultor...' : 'Selecione o Soldado...'}</option>
                             {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
                         </select>
                     </div>

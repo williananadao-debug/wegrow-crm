@@ -34,6 +34,7 @@ export default function Navbar() {
   const isManager = perfil?.cargo === 'gerente';
   const modulos = empresa?.modulos || {};
 
+  const isCDL = Boolean(modulos.cdl);
   const mostrarFinanceiro = Boolean(modulos.financeiro);
   const mostrarIA = Boolean(modulos.ia);
   const mostrarOpec = isOpec || Boolean(modulos.opec);
@@ -50,9 +51,9 @@ export default function Navbar() {
       isDirector && mostrarIA ? { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' } : null,
       isDirector || isManager ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
       { name: 'Metas',      icon: <Target size={20} />,          href: '/goals' },
-      { name: 'Vendas',     icon: <Zap size={20} />,             href: '/deals' },
+      { name: isCDL ? 'Prospecção' : 'Vendas', icon: <Zap size={20} />, href: '/deals' },
       mostrarOpec           ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
-      { name: 'Clientes',   icon: <Users size={20} />,           href: '/customers' },
+      { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' },
       mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
     ].filter(Boolean) as any[];

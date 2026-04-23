@@ -36,7 +36,8 @@ export default function CustomersPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
-  
+  const empresa = auth.empresa;
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [contratosVencendo, setContratosVencendo] = useState<{ id: number; empresa: string; contrato_fim: string; client_id: number | null }[]>([]);
@@ -77,6 +78,7 @@ export default function CustomersPage() {
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDirector = perfil?.cargo === 'diretor';
+  const isCDL = Boolean(empresa?.modulos?.cdl);
 
   useEffect(() => {
     async function fetchSellers() {
@@ -342,11 +344,11 @@ export default function CustomersPage() {
         if (data) {
             setEditingId(data[0].id);
             resetAndFetch();
-            alert("Cliente salvo com sucesso!");
+            alert(isCDL ? "Associado salvo com sucesso!" : "Cliente salvo com sucesso!");
         }
       }
       if (editingId) setIsModalOpen(false);
-    } catch (error: any) { alert("Erro ao salvar cliente. Verifique os dados e tente novamente."); }
+    } catch (error: any) { alert("Erro ao salvar. Verifique os dados e tente novamente."); }
   };
 
   const handleSaveUnit = async (e: React.FormEvent) => {
@@ -364,7 +366,7 @@ export default function CustomersPage() {
 
   const handleDeleteCliente = async (id: number) => {
     if (!isDirector) return;
-    if (!confirm("Excluir cliente e todo seu histórico?")) return;
+    if (!confirm(isCDL ? "Excluir associado e todo seu histórico?" : "Excluir cliente e todo seu histórico?")) return;
     const { error } = await supabase.from('clientes').delete().eq('id', id);
     if (!error) resetAndFetch();
   };
@@ -448,8 +450,8 @@ export default function CustomersPage() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6 px-2">
         <div>
-          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Carteira de Clientes</h1>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{totalCount} Empresas encontradas</p>
+          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">{isCDL ? 'Quadro de Associados' : 'Carteira de Clientes'}</h1>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{totalCount} {isCDL ? 'Associados encontrados' : 'Empresas encontradas'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
             <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
@@ -462,7 +464,7 @@ export default function CustomersPage() {
               </button>
             )}
             <button onClick={() => handleOpenModal()} className="bg-[#22C55E] text-[#0F172A] px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgba(34,197,94,0.2)]">
-                <Plus size={18} strokeWidth={3} /> Novo Cliente
+                <Plus size={18} strokeWidth={3} /> {isCDL ? 'Novo Associado' : 'Novo Cliente'}
             </button>
         </div>
       </div>
@@ -600,7 +602,7 @@ export default function CustomersPage() {
             {/* CABEÇALHO FLUIDO (ROLA JUNTO COM A TELA) */}
             <div className="flex justify-between items-start gap-4 mb-6">
                 <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex flex-wrap items-center gap-2">
-                    {editingId ? 'Gerenciar Cliente' : 'Novo Cadastro'}
+                    {editingId ? (isCDL ? 'Gerenciar Associado' : 'Gerenciar Cliente') : 'Novo Cadastro'}
                     {editingId && <span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded-lg text-sm not-italic tracking-widest">#{formatId(editingId, 'CL')}</span>}
                 </h2>
                 
@@ -739,9 +741,9 @@ export default function CustomersPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Vendedor (Dono)</label>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">{isCDL ? 'Consultor (Responsável)' : 'Vendedor (Dono)'}</label>
                             <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.user_id} onChange={e => setFormData({...formData, user_id: e.target.value})}>
-                                <option value="" className="bg-[#0B1120]">Sem Vendedor (Geral)</option>
+                                <option value="" className="bg-[#0B1120]">{isCDL ? 'Sem Consultor (Geral)' : 'Sem Vendedor (Geral)'}</option>
                                 {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
                             </select>
                         </div>
@@ -778,7 +780,7 @@ export default function CustomersPage() {
                     </div>
 
                     <button type="submit" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-lg mt-4">
-                        {editingId ? 'Salvar Alterações' : 'Criar Cliente'}
+                        {editingId ? 'Salvar Alterações' : (isCDL ? 'Cadastrar Associado' : 'Criar Cliente')}
                     </button>
                 </form>
                 )}

@@ -39,7 +39,7 @@ const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`;
 };
 
-const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirector, abrirModal, handleFinalizar, isOpec }: any) => {
+const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirector, abrirModal, handleFinalizar, isOpec, isCDL }: any) => {
     const leadRef = job.briefing?.match(/LD-\d+/)?.[0] || ''; const isFinalizado = job.stage === 'entregue';
     const deadlineDiff = job.deadline && !isFinalizado ? Math.ceil((new Date(job.deadline + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000) : null;
     const deadlineClass = deadlineDiff === null ? '' : deadlineDiff < 0 ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/30' : deadlineDiff <= 2 ? 'bg-orange-500/20 text-orange-400 animate-pulse border border-orange-500/30' : 'bg-white/5 text-slate-400';
@@ -51,7 +51,7 @@ const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirec
               <h4 className="font-black text-sm text-white mb-2 leading-tight uppercase">{job.titulo}</h4>
               {job.itens_opec && job.itens_opec.length > 0 && ( <div className="flex flex-col gap-1 mb-2 bg-black/30 p-2 rounded-lg border border-white/5"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mb-0.5 border-b border-white/5 pb-1">Mídia Contratada</span>{job.itens_opec.map((item: any, idx: number) => (<span key={idx} className="text-[10px] text-slate-300 font-bold uppercase flex items-center gap-1 truncate"><span className="text-emerald-400 bg-emerald-500/10 px-1 rounded">{item.quantidade}x</span> {item.servico}</span>))}</div> )}
               {(job.data_inicio || job.data_fim) && ( <div className="flex flex-col gap-1.5 mb-3 bg-black/30 p-2 rounded-lg border border-white/5"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest mb-0.5 border-b border-white/5 pb-1 flex items-center gap-1"><CalendarDays size={8}/> Período de Veiculação</span><div className="flex justify-between items-center text-[9px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded"><span className="text-[#22C55E] font-black">INÍCIO</span><span className="text-white">{formatarData(job.data_inicio)} {job.hora_inicio ? `às ${job.hora_inicio}` : ''}</span></div><div className="flex justify-between items-center text-[9px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded"><span className="text-red-400 font-black">FIM</span><span className="text-white">{formatarData(job.data_fim)} {job.hora_fim ? `às ${job.hora_fim}` : ''}</span></div></div> )}
-              <div className="flex flex-wrap gap-1 mb-2 mt-auto">{filtroUnidade === 'Todas' && job.unidade && ( <span className="text-[8px] bg-white/5 text-slate-400 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1"><Building2 size={8}/> {job.unidade}</span> )}{job.vendedor_nome && ( <span className="text-[8px] bg-blue-600/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase font-black flex items-center gap-1"><User size={8}/> VEND: {job.vendedor_nome.split(' ')[0]}</span> )}</div>
+          <div className="flex flex-wrap gap-1 mb-2 mt-auto">{filtroUnidade === 'Todas' && job.unidade && ( <span className="text-[8px] bg-white/5 text-slate-400 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1"><Building2 size={8}/> {job.unidade}</span> )}{job.vendedor_nome && ( <span className="text-[8px] bg-blue-600/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded uppercase font-black flex items-center gap-1"><User size={8}/> {isCDL ? 'CONS' : 'VEND'}: {job.vendedor_nome.split(' ')[0]}</span> )}</div>
               <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-2"><div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono font-bold tracking-widest bg-white/5 px-2 py-0.5 rounded"><Hash size={10}/> {formatId(job.id, 'JB')}</div><div className="p-1 bg-white/5 rounded-full text-slate-500 group-hover:text-white transition-colors"><Edit2 size={10}/></div></div>
               {!isFinalizado && !isOpec && ( <button onClick={(e) => handleFinalizar(e, job.id)} className="w-full mt-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]"><ShieldCheck size={14} /> Finalizar e Liberar OPEC</button> )}
             </div>
@@ -62,10 +62,11 @@ const JobCard = React.memo(({ job, index, filtroUnidade, filtroVendedor, isDirec
 JobCard.displayName = 'JobCard';
 
 export default function JobsPage() {
-  const auth = useAuth() || {}; const user = auth.user; const perfil = auth.perfil;
+  const auth = useAuth() || {}; const user = auth.user; const perfil = auth.perfil; const empresa = auth.empresa;
   const isOpec = user?.email === 'opec@wegrow.com.br';
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
+  const isCDL = Boolean(empresa?.modulos?.cdl);
 
   const [rawJobs, setRawJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -261,7 +262,7 @@ export default function JobsPage() {
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pb-10 pr-1">
                       {stageJobs.map((job, index) => (
-                         <JobCard key={job.id} job={job} index={index} filtroUnidade={filtroUnidade} filtroVendedor={filtroVendedor} isDirector={isDirector} abrirModal={abrirModal} handleFinalizar={handleFinalizar} isOpec={isOpec} />
+                         <JobCard key={job.id} job={job} index={index} filtroUnidade={filtroUnidade} filtroVendedor={filtroVendedor} isDirector={isDirector} abrirModal={abrirModal} handleFinalizar={handleFinalizar} isOpec={isOpec} isCDL={isCDL} />
                       ))}
                       {provided.placeholder}
                     </div>
@@ -309,7 +310,7 @@ export default function JobsPage() {
                                     </div>
                                 </div>
                                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-4">
-                                    <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2">Vendedor Origem</label><input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector || isOpec} /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2">{isCDL ? 'Consultor Origem' : 'Vendedor Origem'}</label><input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector || isOpec} /></div>
                                     <hr className="border-white/5" />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 text-red-400">Deadline (Prazo)</label><input disabled={isOpec} type="date" className="w-full bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-3 py-3 text-xs font-bold outline-none focus:border-red-500 disabled:opacity-70" value={formData.deadline || ''} onChange={e => setFormData({...formData, deadline: e.target.value})} /></div>

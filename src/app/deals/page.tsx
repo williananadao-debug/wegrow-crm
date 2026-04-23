@@ -127,7 +127,7 @@ const validarCNPJ = (cnpj: string) => {
 
 const LeadCard = React.memo(({
     lead, index, isDirector, isLideranca, usersMap, clientesMap,
-    abrirModal, enviarWhatsapp, fazerCheckin, mudarEtapa, imprimirContrato, abrirEmailModal
+    abrirModal, enviarWhatsapp, fazerCheckin, mudarEtapa, imprimirContrato, abrirEmailModal, isCDL
 }: any) => {
     const isPhantom = lead.id > 1000000;
 
@@ -1609,7 +1609,7 @@ export default function DealsPage() {
                             if (!lead || !lead.id) return null;
                             return (
                                 <LeadCard
-                                    key={lead.id} lead={lead} index={index} isDirector={isDirector} isLideranca={isLideranca} usersMap={usersMap} clientesMap={clientesMap} abrirModal={abrirModal} enviarWhatsapp={enviarWhatsapp} fazerCheckin={fazerCheckin} mudarEtapa={mudarEtapa} imprimirContrato={imprimirContrato} abrirEmailModal={abrirEmailModal}
+                                    key={lead.id} lead={lead} index={index} isDirector={isDirector} isLideranca={isLideranca} usersMap={usersMap} clientesMap={clientesMap} abrirModal={abrirModal} enviarWhatsapp={enviarWhatsapp} fazerCheckin={fazerCheckin} mudarEtapa={mudarEtapa} imprimirContrato={imprimirContrato} abrirEmailModal={abrirEmailModal} isCDL={isCDL}
                                 />
                             );
                         })}

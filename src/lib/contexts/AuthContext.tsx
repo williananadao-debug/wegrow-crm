@@ -38,7 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPerfil(profile);
         setEmpresa(empData);
       } else {
-        const isPublicPage = ['/', '/login', '/solicitar', '/portal'].includes(window.location.pathname);
+        const path = window.location.pathname;
+        const isPublicPage = ['/', '/login', '/solicitar', '/portal'].includes(path)
+          || path.startsWith('/portal-cdl')
+          || path.startsWith('/proposta-cdl')
+          || path.startsWith('/carteirinha');
         if (!isPublicPage) router.replace('/login');
       }
       setLoading(false);

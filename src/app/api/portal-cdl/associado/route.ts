@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await db
         .from('leads')
-        .select('id, empresa, tipo, contrato_inicio, contrato_fim, valor_total, cnpj, descricao, status, atividades')
+        .select('id, empresa, tipo, contrato_inicio, contrato_fim, valor_total, cnpj, descricao, status, atividades, telefone, cidade')
         .eq('id', Number(id))
         .eq('status', 'ganho')
         .single();
@@ -62,6 +62,9 @@ export async function GET(request: Request) {
         empresa: data.empresa,
         tipo: data.tipo || 'Associado',
         segmento,
+        cnpj: data.cnpj || null,
+        telefone: data.telefone || null,
+        cidade: data.cidade || null,
         contrato_inicio: data.contrato_inicio,
         contrato_fim: data.contrato_fim,
         valor_total: data.valor_total || 0,

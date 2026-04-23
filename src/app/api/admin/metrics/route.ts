@@ -46,17 +46,18 @@ export async function GET(request: Request) {
         db.from('profiles').select('id, nome, cargo, unidade, email').eq('empresa_id', empresaId),
     ]);
 
-    // Busca last_sign_in_at dos usuários via auth admin API
-    const profilesComLogin = await Promise.all(
-        (profiles || []).map(async (p) => {
-            const { data: { user } } = await db.auth.admin.getUserById(p.id);
-            return {
-                ...p,
-                ultimo_acesso: user?.last_sign_in_at || null,
-                ativo_recente: user?.last_sign_in_at ? new Date(user.last_sign_in_at) >= new Date(ha30dias) : false,
-            };
-        })
-    );
+    // Busca last_sign_in_at via listUsers (1 request em vez de N)
+    const profileIds = new Set((profiles || []).map(p => p.id));
+    const { data: authData } = await db.auth.admin.listUsers({ perPage: 1000 });
+    const authMap = new Map((authData?.users || []).filter(u => profileIds.has(u.id)).map(u => [u.id, u]));
+    const profilesComLogin = (profiles || []).map(p => {
+        const u = authMap.get(p.id);
+        return {
+            ...p,
+            ultimo_acesso: u?.last_sign_in_at || null,
+            ativo_recente: u?.last_sign_in_at ? new Date(u.last_sign_in_at) >= new Date(ha30dias) : false,
+        };
+    });
 
     const usuariosAtivos = profilesComLogin.filter(p => p.ativo_recente).length;
 

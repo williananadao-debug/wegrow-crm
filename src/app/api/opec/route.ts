@@ -111,7 +111,7 @@ export async function GET(request: Request) {
             let opecData: any[] = [{}];
             try {
                  if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome }, finalConfig);
-            } catch(e) {}
+            } catch(e) { console.error('[opec] gerarJsonOpec error:', e); }
             
             const pacoteFinal = {
                 ...opecData[0], 

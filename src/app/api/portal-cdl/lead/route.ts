@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const CDL_EMPRESA_ID = '388620c8-4263-4d1a-bf96-ca69a12f621f';
+const CDL_EMPRESA_ID = process.env.CDL_EMPRESA_ID || '388620c8-4263-4d1a-bf96-ca69a12f621f';
 
 const ipRequests = new Map<string, { count: number; resetAt: number }>();
 
@@ -117,6 +117,7 @@ export async function POST(request: Request) {
 
     const descricaoFull = [
         responsavel ? `Responsável: ${responsavel}` : null,
+        email ? `E-mail: ${email}` : null,
         segmento ? `Segmento: ${segmento}` : null,
         tipoAssociacao ? `Tipo de Associação: ${tipoAssociacao}` : null,
         descricao ? `Observação: ${descricao}` : null,

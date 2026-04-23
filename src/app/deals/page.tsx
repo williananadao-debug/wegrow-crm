@@ -490,6 +490,7 @@ export default function DealsPage() {
   const [cdlValorAnuidade, setCdlValorAnuidade] = useState('');
   const [cdlDataInicio, setCdlDataInicio] = useState('');
   const [cdlDataFim, setCdlDataFim] = useState('');
+  const [cdlBemVindoData, setCdlBemVindoData] = useState<{id: number; empresa: string; telefone: string | null} | null>(null);
 
   const [clientesRiscoMap, setClientesRiscoMap] = useState<Record<number, string>>({});
   const [clientesBuscando, setClientesBuscando] = useState(false);
@@ -888,6 +889,7 @@ export default function DealsPage() {
     await gerarCobrancaFinanceira({ ...lead, valor_total: valorFinal });
 
     setCdlFiliacaoModal(null);
+    setCdlBemVindoData({ id: leadId, empresa: lead.empresa, telefone: lead.telefone || null });
     setToastMessage('🎉 Novo Associado Confirmado!');
     setShowToast(true);
   }, [cdlFiliacaoModal, leads, cdlTipoAssociacao, cdlValorAnuidade, cdlDataInicio, cdlDataFim, gerarCobrancaFinanceira]);
@@ -2197,6 +2199,52 @@ export default function DealsPage() {
                 className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={14}/> Confirmar Filiação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL BOAS-VINDAS CDL — aparece após confirmar filiação */}
+      {cdlBemVindoData && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-[#22C55E]/40 w-full max-w-sm rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="bg-[#22C55E]/10 p-6 text-center border-b border-[#22C55E]/20">
+              <div className="w-14 h-14 bg-[#22C55E] rounded-2xl flex items-center justify-center font-black text-[#0B1120] text-xl mx-auto mb-3 shadow-[0_0_30px_rgba(34,197,94,0.4)]">✓</div>
+              <h2 className="text-lg font-black text-white uppercase italic tracking-tight">Filiação Confirmada!</h2>
+              <p className="text-[#22C55E] font-bold text-sm mt-1">{cdlBemVindoData.empresa}</p>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">
+                Protocolo #{String(cdlBemVindoData.id).padStart(6, '0')}
+              </p>
+            </div>
+
+            <div className="p-6 space-y-3">
+              <p className="text-slate-400 text-xs text-center">Envie as credenciais de acesso para o associado via WhatsApp:</p>
+
+              {cdlBemVindoData.telefone ? (
+                <a
+                  href={`https://wa.me/55${cdlBemVindoData.telefone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                    `Bem-vindo à CDL de Taio! 🎉\n\n*${cdlBemVindoData.empresa}* agora faz parte da nossa comunidade de lojistas.\n\n📋 Protocolo: #${String(cdlBemVindoData.id).padStart(6, '0')}\n🔗 Acesse sua área exclusiva:\nhttps://wegrow.app.br/portal-cdl/associado\n\nUse seu CNPJ e o número do protocolo para entrar.\n\n— CDL de Taio`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setCdlBemVindoData(null)}
+                  className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] py-3.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(34,197,94,0.25)]"
+                >
+                  <MessageCircle size={16}/> Enviar Boas-Vindas pelo WhatsApp
+                </a>
+              ) : (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
+                  <p className="text-yellow-400 text-xs font-bold">Telefone não cadastrado — envie o link manualmente:</p>
+                  <p className="text-slate-300 text-[10px] mt-1 font-mono select-all">wegrow.app.br/portal-cdl/associado</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setCdlBemVindoData(null)}
+                className="w-full py-2.5 rounded-xl font-bold uppercase text-xs tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Fechar
               </button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, XCircle, Loader2, AlertCircle, Building2, Tag, Calendar, Award } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, XCircle, Loader2, AlertCircle, Building2, Tag, Calendar, Award, User } from 'lucide-react';
 
 type Carteirinha = {
   id: number;
@@ -134,6 +135,13 @@ export default function CarteirinhaPage() {
             />
           </div>
         </div>
+
+        <Link
+          href="/portal-cdl/associado"
+          className="w-full flex items-center justify-center gap-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-400 hover:text-white py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all mb-3"
+        >
+          <User size={12}/> Acessar minha área
+        </Link>
 
         <p className="text-center text-[9px] text-slate-600 uppercase font-bold tracking-widest">
           CDL de Taio · Câmara de Dirigentes Lojistas do Alto Vale do Itajaí

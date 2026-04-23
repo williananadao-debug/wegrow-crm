@@ -79,57 +79,54 @@ const MODULOS = [
   },
 ];
 
-const PLANOS = [
+const PLANO_BASE = {
+  nome: 'Plano Essencial',
+  preco: 'R$ 497',
+  itens: [
+    'CRM completo + Funil de Associação',
+    'Dashboard com KPIs CDL',
+    'Cadastro de Associados',
+    'Portal público de pré-cadastro',
+    'App mobile (PWA offline)',
+    'Usuários ilimitados',
+  ],
+};
+
+const ADDONS = [
   {
-    nome: 'Plano Essencial',
-    preco: 'R$ 97',
-    periodo: '/ mês',
-    destaque: false,
-    cor: 'border-white/10',
+    nome: 'Add-on WhatsApp',
+    preco: 'R$ 149',
+    cor: 'border-green-500/30',
+    corTexto: 'text-green-400',
     itens: [
-      { ok: true,  label: 'Renovação de Anuidade' },
-      { ok: true,  label: 'Gestão de Inadimplência' },
-      { ok: true,  label: 'WhatsApp de Cobrança' },
-      { ok: false, label: 'Relatório de Base CDL' },
-      { ok: false, label: 'Carteirinha Digital' },
-      { ok: false, label: 'Consulta SPC / Serasa' },
+      'WhatsApp de cobrança de anuidade',
+      'Lembrete automático 7 dias antes',
+      'Envio com 1 clique pelo CRM',
     ],
-    prazo: 'Sem fidelidade',
-    cta: 'Começar com Essencial',
   },
   {
-    nome: 'Plano Pro',
-    preco: 'R$ 197',
-    periodo: '/ mês',
+    nome: 'Add-on Financeiro',
+    preco: 'R$ 199',
+    cor: 'border-blue-500/30',
+    corTexto: 'text-blue-400',
     destaque: true,
-    cor: 'border-[#22C55E]/50',
     itens: [
-      { ok: true, label: 'Renovação de Anuidade' },
-      { ok: true, label: 'Gestão de Inadimplência' },
-      { ok: true, label: 'WhatsApp de Cobrança' },
-      { ok: true, label: 'Relatório de Base CDL' },
-      { ok: true, label: 'Carteirinha Digital' },
-      { ok: false, label: 'Consulta SPC / Serasa' },
+      'Renovação de anuidade automática',
+      'Gestão de inadimplência',
+      'Relatório de base de associados',
+      'Carteirinha digital do associado',
     ],
-    prazo: 'Sem fidelidade',
-    cta: 'Começar com Pro',
   },
   {
-    nome: 'Plano Premium',
-    preco: 'R$ 397',
-    periodo: '/ mês',
-    destaque: false,
-    cor: 'border-white/10',
+    nome: 'Add-on SPC / Serasa',
+    preco: 'A combinar',
+    cor: 'border-[#22C55E]/30',
+    corTexto: 'text-[#22C55E]',
     itens: [
-      { ok: true, label: 'Renovação de Anuidade' },
-      { ok: true, label: 'Gestão de Inadimplência' },
-      { ok: true, label: 'WhatsApp de Cobrança' },
-      { ok: true, label: 'Relatório de Base CDL' },
-      { ok: true, label: 'Carteirinha Digital' },
-      { ok: true, label: 'Consulta SPC / Serasa' },
+      'Consulta de crédito por CNPJ/CPF',
+      'Resultado instantâneo no painel',
+      'O principal benefício do associado CDL',
     ],
-    prazo: 'Sem fidelidade',
-    cta: 'Começar com Premium',
   },
 ];
 
@@ -273,50 +270,65 @@ export default function PropostaCDL() {
             <Star size={12} className="text-[#22C55E]" /> Investimento
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {PLANOS.map((plano, i) => (
-              <div
-                key={i}
-                className={`relative bg-[#0F172A] border-2 ${plano.cor} rounded-3xl p-6 flex flex-col transition-all ${plano.destaque ? 'shadow-[0_0_40px_rgba(34,197,94,0.15)]' : ''}`}
-              >
-                {plano.destaque && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#22C55E] text-[#0B1120] text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full whitespace-nowrap">
-                    Mais Escolhido
-                  </div>
-                )}
-
-                <div className="mb-5">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">{plano.nome}</h3>
-                  <div className="flex items-baseline gap-1">
-                    <span className={`text-3xl font-black ${plano.destaque ? 'text-[#22C55E]' : 'text-white'}`}>{plano.preco}</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{plano.periodo}</p>
-                </div>
-
-                <div className="space-y-2.5 flex-1 mb-5">
-                  {plano.itens.map((item, j) => (
-                    <div key={j} className={`flex items-center gap-2 text-xs ${item.ok ? 'text-slate-300' : 'text-slate-600'}`}>
-                      {item.ok
-                        ? <Check size={13} className="text-[#22C55E] flex-shrink-0" />
-                        : <X size={13} className="flex-shrink-0" />
-                      }
-                      {item.label}
+          {/* Plano base */}
+          <div className="bg-[#0F172A] border-2 border-white/10 rounded-3xl p-6 mb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Plano base já ativo</span>
+                <h3 className="text-lg font-black text-white uppercase tracking-tight mt-1">{PLANO_BASE.nome}</h3>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mt-3">
+                  {PLANO_BASE.itens.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-slate-300">
+                      <CheckCircle2 size={12} className="text-[#22C55E] flex-shrink-0" /> {item}
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-3xl font-black text-white">{PLANO_BASE.preco}</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">/ mês</p>
+              </div>
+            </div>
+          </div>
 
-                <div className="border-t border-white/5 pt-4 mb-4">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                    <Clock size={10} />
-                    <span className="font-bold uppercase tracking-widest">{plano.prazo}</span>
+          {/* Add-ons */}
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 ml-1">
+            + Add-ons da Fase 2 (ativar conforme necessidade)
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {ADDONS.map((addon, i) => (
+              <div key={i} className={`relative bg-[#0F172A] border-2 ${addon.cor} rounded-3xl p-6 flex flex-col ${'destaque' in addon && addon.destaque ? 'shadow-[0_0_30px_rgba(59,130,246,0.1)]' : ''}`}>
+                {'destaque' in addon && addon.destaque && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full whitespace-nowrap">
+                    Recomendado
                   </div>
+                )}
+                <h3 className={`text-xs font-black uppercase tracking-widest mb-3 ${addon.corTexto}`}>{addon.nome}</h3>
+                <div className="space-y-2 flex-1 mb-5">
+                  {addon.itens.map((item, j) => (
+                    <div key={j} className="flex items-start gap-2 text-xs text-slate-300">
+                      <Check size={12} className={`${addon.corTexto} flex-shrink-0 mt-0.5`} /> {item}
+                    </div>
+                  ))}
                 </div>
-
-                <button className={`w-full py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${plano.destaque ? 'bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A]' : 'bg-white/5 text-white hover:bg-white/10'}`}>
-                  {plano.cta} <ArrowRight size={13} />
-                </button>
+                <div className="border-t border-white/5 pt-4">
+                  <p className={`text-2xl font-black ${addon.corTexto}`}>{addon.preco}</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{addon.preco === 'A combinar' ? 'conforme uso de API' : '/ mês'}</p>
+                </div>
               </div>
             ))}
+          </div>
+
+          {/* Total */}
+          <div className="mt-4 bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-500">Total com Fase 2 completa</p>
+              <p className="text-slate-400 text-sm mt-1">Essencial <span className="text-white">R$ 497</span> + WhatsApp <span className="text-white">R$ 149</span> + Financeiro <span className="text-white">R$ 199</span></p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-black text-[#22C55E]">R$ 845<span className="text-lg text-slate-400">/mês</span></p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">sem SPC · cancela quando quiser</p>
+            </div>
           </div>
         </div>
 

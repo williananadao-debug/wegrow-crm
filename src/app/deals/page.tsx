@@ -497,16 +497,17 @@ export default function DealsPage() {
 
   const buscarClientes = useCallback((q: string) => {
       if (clienteBuscaRef.current) clearTimeout(clienteBuscaRef.current);
-      if (!q || q.length < 2) { setClientesOpcoes([]); return; }
+      if (!q || q.length < 2 || !perfil?.empresa_id) { setClientesOpcoes([]); return; }
       clienteBuscaRef.current = setTimeout(async () => {
           setClientesBuscando(true);
-          const { data } = await supabase.from('clientes')
+          const { data, error } = await supabase.from('clientes')
               .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, status_risco')
               .eq('status', 'ativo')
-              .eq('empresa_id', perfil?.empresa_id)
+              .eq('empresa_id', perfil.empresa_id)
               .ilike('nome_empresa', `%${q}%`)
               .order('nome_empresa', { ascending: true })
               .limit(20);
+          if (error) console.error('[buscarClientes]', error);
           setClientesOpcoes((data || []).map((c: any) => ({ ...c, risco: c.status_risco })));
           setClientesBuscando(false);
       }, 300);

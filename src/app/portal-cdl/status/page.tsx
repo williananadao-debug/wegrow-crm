@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { CDL } from '@/lib/cdl-config';
 import { CheckCircle2, Clock, Loader2, AlertCircle, ArrowLeft, Search, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,7 +24,7 @@ function TimelineLead({ data }: { data: any }) {
         <div className="flex items-center justify-center gap-3 mb-2">
           <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
           <div className="text-left">
-            <p className="font-black text-white text-sm uppercase tracking-tight">CDL de Taio</p>
+            <p className="font-black text-white text-sm uppercase tracking-tight">{CDL.nome}</p>
             <p className="text-[10px] text-[#22C55E] uppercase tracking-widest font-bold">Portal do Associado</p>
           </div>
         </div>
@@ -119,7 +120,7 @@ function BuscaForm() {
         <div className="flex items-center justify-center gap-3 mb-4">
           <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
           <div className="text-left">
-            <p className="font-black text-white text-sm uppercase tracking-tight">CDL de Taio</p>
+            <p className="font-black text-white text-sm uppercase tracking-tight">{CDL.nome}</p>
             <p className="text-[10px] text-[#22C55E] uppercase tracking-widest font-bold">Portal do Associado</p>
           </div>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { CDL } from '@/lib/cdl-config';
 import { CheckCircle2, XCircle, Loader2, AlertCircle, LogIn, CreditCard, History, Calendar, Award, ArrowLeft, QrCode } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,7 +37,7 @@ function PortalAssociadoConteudo({ dados, onSair }: { dados: DadosAssociado; onS
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
           <div>
-            <p className="font-black text-white text-sm uppercase tracking-tight">CDL de Taio</p>
+            <p className="font-black text-white text-sm uppercase tracking-tight">{CDL.nome}</p>
             <p className="text-[10px] text-[#22C55E] uppercase tracking-widest font-bold">Área do Associado</p>
           </div>
         </div>
@@ -175,7 +176,7 @@ export default function PortalAssociadoPage() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-xl shadow-[0_0_20px_rgba(34,197,94,0.3)]">CDL</div>
             <div className="text-left">
-              <p className="font-black text-white text-sm uppercase tracking-tight">CDL de Taio</p>
+              <p className="font-black text-white text-sm uppercase tracking-tight">{CDL.nome}</p>
               <p className="text-[10px] text-[#22C55E] uppercase tracking-widest font-bold">Área do Associado</p>
             </div>
           </div>

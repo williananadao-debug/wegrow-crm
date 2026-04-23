@@ -10,6 +10,7 @@ import {
   Mail, Send, Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { CDL } from '@/lib/cdl-config';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
@@ -1078,14 +1079,14 @@ export default function DealsPage() {
             </head>
             <body>
                 <div class="header">
-                    <div class="header-logo">CDL de Taio</div>
-                    <div class="header-sub">Câmara de Dirigentes Lojistas do Alto Vale do Itajaí</div>
+                    <div class="header-logo">${CDL.nome}</div>
+                    <div class="header-sub">${CDL.nomeCompleto} do ${CDL.regiao}</div>
                     <h2>Ficha de Filiação — ${lead.tipo || 'Associado'}</h2>
                     <div class="protocolo">Protocolo: #${String(lead.id).padStart(6, '0')}</div>
                 </div>
 
                 <div class="texto-base">
-                    Pelo presente instrumento, a empresa abaixo qualificada solicita sua filiação à <strong>Câmara de Dirigentes Lojistas de Taio — CDL de Taio</strong>, CNPJ: ${dadosEmissora.cnpj || '___________________'}, com sede à ${dadosEmissora.endereco || '___________________'}, comprometendo-se a cumprir o Estatuto Social e as deliberações da entidade.
+                    Pelo presente instrumento, a empresa abaixo qualificada solicita sua filiação à <strong>${CDL.nomeCompleto} — ${CDL.nome}</strong>, CNPJ: ${dadosEmissora.cnpj || '___________________'}, com sede à ${dadosEmissora.endereco || '___________________'}, comprometendo-se a cumprir o Estatuto Social e as deliberações da entidade.
                 </div>
 
                 <div class="secao-titulo">1. DADOS DO ASSOCIADO</div>
@@ -1130,7 +1131,7 @@ export default function DealsPage() {
                 <div class="secao-titulo">3. CONDIÇÕES DE FILIAÇÃO</div>
                 <div class="condicoes">
                     <p>1) A filiação é válida pelo período indicado acima, renovável anualmente mediante pagamento da anuidade;</p>
-                    <p>2) O associado compromete-se a cumprir o Estatuto Social e as deliberações da CDL de Taio;</p>
+                    <p>2) O associado compromete-se a cumprir o Estatuto Social e as deliberações da ${CDL.nome};</p>
                     <p>3) A anuidade paga fora do prazo incidirá em juros de mora de 1% ao mês e multa de 2%;</p>
                     <p>4) A não renovação da anuidade até 30 dias após o vencimento implica na suspensão automática dos benefícios;</p>
                     <p>5) Fica eleito o Foro da Comarca de Taió para dirimir eventuais controvérsias oriundas deste instrumento.</p>
@@ -1145,7 +1146,7 @@ export default function DealsPage() {
 
                 <div class="assinaturas">
                     <div>Assinatura do Associado</div>
-                    <div>Representante da CDL de Taio</div>
+                    <div>Representante da ${CDL.nome}</div>
                 </div>
 
                 <script>window.onload = function() { window.print(); }</script>
@@ -2242,7 +2243,7 @@ export default function DealsPage() {
                 <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
                 <div>
                   <h2 className="text-lg font-black text-white uppercase italic tracking-tight">Confirmar Filiação</h2>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">CDL de Taio</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{CDL.nome}</p>
                 </div>
               </div>
             </div>
@@ -2323,7 +2324,7 @@ export default function DealsPage() {
               {cdlBemVindoData.telefone ? (
                 <a
                   href={`https://wa.me/55${cdlBemVindoData.telefone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                    `Bem-vindo à CDL de Taio! 🎉\n\n*${cdlBemVindoData.empresa}* agora faz parte da nossa comunidade de lojistas.\n\n📋 Protocolo: #${String(cdlBemVindoData.id).padStart(6, '0')}\n🔗 Acesse sua área exclusiva:\nhttps://wegrow.app.br/portal-cdl/associado\n\nUse seu CNPJ e o número do protocolo para entrar.\n\n— CDL de Taio`
+                    `Bem-vindo à ${CDL.nome}! 🎉\n\n*${cdlBemVindoData.empresa}* agora faz parte da nossa comunidade de lojistas.\n\n📋 Protocolo: #${String(cdlBemVindoData.id).padStart(6, '0')}\n🔗 Acesse sua área exclusiva:\n${CDL.portalUrl}\n\nUse seu CNPJ e o número do protocolo para entrar.\n\n— ${CDL.nome}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

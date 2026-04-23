@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { CDL } from '@/lib/cdl-config';
 import {
   Send, CheckCircle2, Search, Loader2, Mail, ExternalLink,
   Building2, User, Phone, Tag, Award, FileText, ChevronDown, Store, ArrowRight
@@ -114,7 +115,7 @@ export default function PortalCDL() {
           </div>
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">Pré-cadastro Enviado!</h2>
           <p className="text-slate-400 text-sm mb-6">
-            Nossa equipe da CDL de Taio entrará em contato em breve para dar continuidade ao seu processo de filiação.
+            Nossa equipe da {CDL.nome} entrará em contato em breve para dar continuidade ao seu processo de filiação.
           </p>
 
           {leadId && (
@@ -162,13 +163,13 @@ export default function PortalCDL() {
             CDL
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none">CDL de Taio</h1>
-            <p className="text-[11px] font-black text-[#22C55E] uppercase tracking-[0.25em] mt-1">Câmara de Dirigentes Lojistas</p>
+            <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none">{CDL.nome}</h1>
+            <p className="text-[11px] font-black text-[#22C55E] uppercase tracking-[0.25em] mt-1">{CDL.sub}</p>
           </div>
         </div>
         <div className="text-center mt-2">
           <p className="text-slate-400 text-sm max-w-md">
-            Associe-se e faça parte da maior rede de lojistas do Alto Vale do Itajaí.
+            Associe-se e faça parte da maior rede de lojistas do {CDL.regiao}.
             Preencha o formulário e nossa equipe entrará em contato.
           </p>
         </div>
@@ -298,7 +299,7 @@ export default function PortalCDL() {
             </button>
 
             <p className="text-center text-slate-600 text-[9px] uppercase font-bold tracking-widest mt-4">
-              CDL de Taio · Câmara de Dirigentes Lojistas do Alto Vale do Itajaí
+              {CDL.nome} · {CDL.sub} do {CDL.regiao}
             </p>
           </form>
         </div>

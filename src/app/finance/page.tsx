@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
+import { CDL } from '@/lib/cdl-config';
 import {
   Plus, TrendingUp, AlertTriangle, FileText, Barcode,
   DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw,
@@ -136,8 +137,8 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     if (!l.telefone) return alert('Telefone não cadastrado neste associado.');
     const venceu = l.contrato_fim ? new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '';
     const msg = l.diasVencido != null
-      ? `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *CDL de Taio*.%0A%0ASua anuidade de associação *venceu há ${l.diasVencido} dia${l.diasVencido !== 1 ? 's' : ''}* (em ${venceu}).%0A%0APara manter seus benefícios ativos, entre em contato para regularizar sua situação.%0A%0A_CDL de Taio · Câmara de Dirigentes Lojistas_`
-      : `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *CDL de Taio*.%0A%0APassamos para lembrar que sua anuidade de associação *vence em ${l.diasRestantes} dia${l.diasRestantes !== 1 ? 's' : ''}* (${venceu}).%0A%0AQualquer dúvida, estamos à disposição! 😊%0A%0A_CDL de Taio · Câmara de Dirigentes Lojistas_`;
+      ? `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *${CDL.nome}*.%0A%0ASua anuidade de associação *venceu há ${l.diasVencido} dia${l.diasVencido !== 1 ? 's' : ''}* (em ${venceu}).%0A%0APara manter seus benefícios ativos, entre em contato para regularizar sua situação.%0A%0A_${CDL.nome} · ${CDL.sub}_`
+      : `Olá *${l.empresa}*! 👋%0A%0AAqui é a equipe da *${CDL.nome}*.%0A%0APassamos para lembrar que sua anuidade de associação *vence em ${l.diasRestantes} dia${l.diasRestantes !== 1 ? 's' : ''}* (${venceu}).%0A%0AQualquer dúvida, estamos à disposição! 😊%0A%0A_${CDL.nome} · ${CDL.sub}_`;
     window.open(`https://wa.me/55${l.telefone.replace(/\D/g, '')}?text=${msg}`, '_blank');
   };
 

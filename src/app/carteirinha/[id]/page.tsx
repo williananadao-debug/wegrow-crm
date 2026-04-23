@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Building2, Tag, Calendar, Award, User } from 'lucide-react';
+import { CDL } from '@/lib/cdl-config';
 
 type Carteirinha = {
   id: number;
@@ -63,8 +64,8 @@ export default function CarteirinhaPage() {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-lg shadow-[0_0_20px_rgba(34,197,94,0.3)]">CDL</div>
               <div>
-                <p className="font-black text-white text-sm uppercase tracking-tight">CDL de Taio</p>
-                <p className="text-[9px] text-[#22C55E] uppercase tracking-widest font-bold">Câmara de Dirigentes Lojistas</p>
+                <p className="font-black text-white text-sm uppercase tracking-tight">{CDL.nome}</p>
+                <p className="text-[9px] text-[#22C55E] uppercase tracking-widest font-bold">{CDL.sub}</p>
               </div>
             </div>
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ${data.ativa ? 'bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
@@ -144,7 +145,7 @@ export default function CarteirinhaPage() {
         </Link>
 
         <p className="text-center text-[9px] text-slate-600 uppercase font-bold tracking-widest">
-          CDL de Taio · Câmara de Dirigentes Lojistas do Alto Vale do Itajaí
+          {CDL.nome} · {CDL.sub} do {CDL.regiao}
         </p>
       </div>
     </div>

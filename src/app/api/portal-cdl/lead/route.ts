@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { CDL } from '@/lib/cdl-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ async function enviarEmailConfirmacao(email: string, empresa: string, leadId: nu
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            from: 'CDL de Taio <portal@wegrow.app.br>',
+            from: '${CDL.nome} <portal@wegrow.app.br>',
             to: [email],
             subject: `✅ Pré-cadastro recebido — ${empresa}`,
             html: `
@@ -43,7 +44,7 @@ async function enviarEmailConfirmacao(email: string, empresa: string, leadId: nu
                     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
                         <div style="width:44px;height:44px;background:#22C55E;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;color:#0B1120">CDL</div>
                         <div>
-                            <div style="font-weight:900;font-size:18px;color:#fff">CDL de Taio</div>
+                            <div style="font-weight:900;font-size:18px;color:#fff">${CDL.nome}</div>
                             <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.1em">Portal do Associado</div>
                         </div>
                     </div>
@@ -54,7 +55,7 @@ async function enviarEmailConfirmacao(email: string, empresa: string, leadId: nu
                         <p style="color:#22C55E;font-size:24px;font-weight:900;margin:0">#${String(leadId).padStart(6, '0')}</p>
                     </div>
                     <a href="${statusUrl}" style="display:inline-block;background:#22C55E;color:#0B1120;padding:14px 28px;border-radius:12px;font-weight:900;text-decoration:none;font-size:14px;text-transform:uppercase;letter-spacing:0.05em">Acompanhar Status</a>
-                    <p style="color:#475569;font-size:11px;margin-top:32px">CDL de Taio · Câmara de Dirigentes Lojistas</p>
+                    <p style="color:#475569;font-size:11px;margin-top:32px">${CDL.nome} · ${CDL.sub}</p>
                 </div>
             `,
         }),
@@ -69,7 +70,7 @@ async function enviarAlertaTime(para: string, lead: any, leadId: number) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            from: 'CDL de Taio <portal@wegrow.app.br>',
+            from: '${CDL.nome} <portal@wegrow.app.br>',
             to: [para],
             subject: `🔔 Novo prospecto no portal CDL — ${lead.empresa}`,
             html: `
@@ -83,7 +84,7 @@ async function enviarAlertaTime(para: string, lead: any, leadId: number) {
                         ${lead.descricao ? `<tr><td style="color:#64748b;font-size:11px;text-transform:uppercase;padding:8px 0 2px">Observação</td></tr><tr><td style="color:#cbd5e1;font-size:13px;padding:0 0 8px">${lead.descricao}</td></tr>` : ''}
                     </table>
                     <a href="${baseUrl}/deals" style="display:inline-block;background:#22C55E;color:#0B1120;padding:12px 24px;border-radius:10px;font-weight:900;text-decoration:none;font-size:13px;text-transform:uppercase;letter-spacing:0.05em">Ver no CRM</a>
-                    <p style="color:#475569;font-size:11px;margin-top:24px">Protocolo #${String(leadId).padStart(6, '0')} · CDL de Taio</p>
+                    <p style="color:#475569;font-size:11px;margin-top:24px">Protocolo #${String(leadId).padStart(6, '0')} · ${CDL.nome}</p>
                 </div>
             `,
         }),

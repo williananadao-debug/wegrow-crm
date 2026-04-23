@@ -15,7 +15,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
   
   // 👇 AQUI ESTÁ A MÁGICA! Adicionamos o '/' (Site) na Lista VIP 👇
-  const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/portal' || pathname.startsWith('/solicitar');
+  const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/portal' || pathname.startsWith('/solicitar') || pathname.startsWith('/portal-cdl');
 
   if (isPublicPage) {
     return <>{children}</>;

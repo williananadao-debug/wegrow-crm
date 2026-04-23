@@ -77,6 +77,15 @@ const STAGES = {
   5: { title: 'Perdidos', color: 'border-red-500' },
 };
 
+const CDL_STAGES = {
+  0: { title: 'Novo Prospecto', color: 'border-slate-500' },
+  1: { title: 'Contato Feito', color: 'border-blue-500' },
+  2: { title: 'Proposta de Filiação', color: 'border-purple-500' },
+  3: { title: 'Em Negociação', color: 'border-yellow-500' },
+  4: { title: 'Filiados!', color: 'border-[#22C55E]' },
+  5: { title: 'Desistiram', color: 'border-red-500' },
+};
+
 const formatId = (id: number, prefix: string) => {
     return `${prefix}-${String(id).padStart(4, '0')}`;
 };
@@ -366,11 +375,13 @@ const LeadCard = React.memo(({
                         </div>
                     ) : lead.status === 'ganho' ? (
                         <div className="mt-2 flex gap-2 pt-2 border-t border-white/5">
-                            <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                                <Briefcase size={10}/> PRODUÇÃO
-                            </a>
+                            {!isCDL && (
+                                <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
+                                    <Briefcase size={10}/> PRODUÇÃO
+                                </a>
+                            )}
                             <button onClick={(e) => imprimirContrato(e, lead)} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
-                                <FileText size={10}/> CONTRATO
+                                <FileText size={10}/> {isCDL ? 'CADASTRO' : 'CONTRATO'}
                             </button>
                         </div>
                     ) : null}
@@ -385,14 +396,17 @@ export default function DealsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
   const router = useRouter();
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   const LIMITE_DESCONTO_MAXIMO = 5;
-  
+
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
   const isLideranca = isDirector || isGerente;
+  const isCDL = Boolean(empresa?.modulos?.cdl);
+  const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -770,7 +784,7 @@ export default function DealsPage() {
     if (novoStatus === 'ganho') etapaFinal = 4;
     if (novoStatus === 'perdido') etapaFinal = 5;
 
-    const stageName = (STAGES as any)[etapaFinal]?.title || `Etapa ${etapaFinal}`;
+    const stageName = (ACTIVE_STAGES as any)[etapaFinal]?.title || `Etapa ${etapaFinal}`;
     const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `Movido para ${stageName}`, created_at: new Date().toISOString() };
     const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead?.atividades) ? lead.atividades : [])];
 
@@ -782,8 +796,11 @@ export default function DealsPage() {
         if (error) throw error;
         
         if (novoStatus === 'ganho' && lead) {
-            await Promise.all([criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)]);
-            setToastMessage("🎉 Venda Confirmada!"); 
+            const acoes = isCDL
+                ? [gerarCobrancaFinanceira(lead)]
+                : [criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)];
+            await Promise.all(acoes);
+            setToastMessage(isCDL ? "🎉 Novo Associado Confirmado!" : "🎉 Venda Confirmada!");
             setShowToast(true);
         }
     } catch (error: any) {
@@ -1495,7 +1512,7 @@ export default function DealsPage() {
       
       {/* Cabeçalho compacto */}
       <div className="flex items-center gap-3 mb-2 px-2">
-          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic shrink-0">Pipeline</h1>
+          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic shrink-0">{isCDL ? 'Funil de Associação' : 'Pipeline'}</h1>
 
           {isOffline ? (
             <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse shrink-0"><WifiOff size={10}/> Offline</span>
@@ -1531,7 +1548,7 @@ export default function DealsPage() {
 
               {isLideranca && (
                   <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
-                    <option value="todos" className="bg-[#0F172A]">Todos Vendedores</option>
+                    <option value="todos" className="bg-[#0F172A]">{isCDL ? 'Todos Consultores' : 'Todos Vendedores'}</option>
                     {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0F172A]">{nome}</option> ))}
                   </select>
               )}
@@ -1562,7 +1579,7 @@ export default function DealsPage() {
 
       <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
         <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
-          {Object.entries(STAGES).map(([key, stage]) => {
+          {Object.entries(ACTIVE_STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);
             const leadsDaColuna = getLeadsByStage(stageIdx);
@@ -1694,7 +1711,7 @@ export default function DealsPage() {
 
                     {isLideranca && (
                         <div className="bg-yellow-500/5 border border-yellow-500/20 p-4 rounded-2xl">
-                            <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1"><User size={12}/> Vendedor Responsável (Distribuição)</label>
+                            <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1"><User size={12}/> {isCDL ? 'Consultor Responsável (Distribuição)' : 'Vendedor Responsável (Distribuição)'}</label>
                             <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-yellow-500 cursor-pointer appearance-none" value={leadUserId} onChange={e => setLeadUserId(e.target.value)}>
                                 <option value="" className="bg-[#0B1120]">Nenhum (Fila Geral do Diretor)</option>
                                 {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0B1120]">{nome}</option> ))}

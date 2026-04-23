@@ -22,7 +22,9 @@ export default function DashboardPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
-  
+  const empresa = auth.empresa;
+  const isCDL = Boolean(empresa?.modulos?.cdl);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false); // Status para o refresh automático
   const [visao, setVisao] = useState<'comercial' | 'diretoria'>('comercial'); 
@@ -283,7 +285,7 @@ export default function DashboardPage() {
                     <RefreshCw size={12} className={`text-[#22C55E] ${refreshing ? 'animate-spin' : ''}`} />
                 </div>
                 <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
-                    <TrendingUp size={12}/> Comercial
+                    <TrendingUp size={12}/> {isCDL ? 'Captação' : 'Comercial'}
                 </button>
                 {isDirector && (
                   <button onClick={() => setVisao('diretoria')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'diretoria' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
@@ -337,7 +339,7 @@ export default function DashboardPage() {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
-                    <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">Faturamento {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
+                    <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">{isCDL ? 'Receita de Anuidades' : 'Faturamento'} {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>
                     {statsComercial.deltaFat !== null && (
                       <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaFat >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -347,7 +349,7 @@ export default function DashboardPage() {
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
-                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Conversão</p>
+                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Taxa de Filiação' : 'Conversão'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.taxaConversao}%</h3>
                     {statsComercial.deltaConv !== null && (
                       <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaConv >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -362,7 +364,7 @@ export default function DashboardPage() {
                     <MapPin className="absolute top-4 right-4 text-yellow-400 opacity-20" size={24} />
                 </div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
-                    <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-0.5">Leads Totais</p>
+                    <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Prospectos' : 'Leads Totais'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.propostasEnviadas}</h3>
                     <FileText className="absolute top-4 right-4 text-purple-400 opacity-20" size={24} />
                 </div>
@@ -377,7 +379,7 @@ export default function DashboardPage() {
 
             <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                 <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-                    <BarChart3 size={14} className="text-orange-500"/> Vendas por Dia
+                    <BarChart3 size={14} className="text-orange-500"/> {isCDL ? 'Filiações por Dia' : 'Vendas por Dia'}
                 </h3>
                 <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
                     {statsComercial.vendasPorDia.map((d, i) => {
@@ -420,7 +422,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-white mb-3">
-                        <Users size={14} className="text-orange-500" /> Ranking ({filtroUnidade})
+                        <Users size={14} className="text-orange-500" /> {isCDL ? 'Ranking de Captadores' : 'Ranking'} ({filtroUnidade})
                         <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 not-italic font-normal">Clique para isolar</span>
                     </h3>
                     <div className="space-y-2 overflow-y-auto max-h-[200px] pr-1 custom-scrollbar">
@@ -439,7 +441,7 @@ export default function DashboardPage() {
                     <h3 className="text-sm font-black text-white uppercase italic mb-3 flex items-center gap-2"><Target size={14} className="text-blue-500"/> Funil</h3>
                     <div className="space-y-2">
                         <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-slate-400 font-bold uppercase">Abertos</span><span className="text-xs font-black text-white">{statsComercial.leadsAbertos}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-orange-500 font-bold uppercase">Ganhos</span><span className="text-xs font-black text-orange-500">{statsComercial.funil.ganho}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-orange-500 font-bold uppercase">{isCDL ? 'Filiados' : 'Ganhos'}</span><span className="text-xs font-black text-orange-500">{statsComercial.funil.ganho}</span></div>
                         <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-red-500 font-bold uppercase">Perdidos</span><span className="text-xs font-black text-red-500">{statsComercial.funil.perdido}</span></div>
                     </div>
                 </div>
@@ -480,7 +482,7 @@ export default function DashboardPage() {
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-3"><BarChart3 size={14} className="text-blue-500"/> Volume por Etapa</h3>
                     <div className="flex items-end h-40 gap-3 px-2 w-full pt-4">
-                        {[ { label: 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600' }, { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500' }, { label: 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500' }, { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500' }, { label: 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500' }, ].map((etapa, i, arr) => {
+                        {[ { label: isCDL ? 'Prospectos' : 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600' }, { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500' }, { label: isCDL ? 'Filiação' : 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500' }, { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500' }, { label: isCDL ? 'Filiados' : 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500' }, ].map((etapa, i, arr) => {
                             const maxEtapa = Math.max(...arr.map(e => e.val), 1);
                             const h = (etapa.val / maxEtapa) * 100;
                             return (
@@ -511,9 +513,9 @@ export default function DashboardPage() {
                     <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 mb-4">Estimativa baseada na probabilidade por etapa</p>
                     <div className="space-y-1.5">
                         {[
-                            { label: 'Novo Lead', pct: '10%', color: 'bg-slate-500' },
+                            { label: isCDL ? 'Novo Prospecto' : 'Novo Lead', pct: '10%', color: 'bg-slate-500' },
                             { label: 'Em Contato', pct: '25%', color: 'bg-blue-500' },
-                            { label: 'Proposta', pct: '45%', color: 'bg-yellow-500' },
+                            { label: isCDL ? 'Proposta de Filiação' : 'Proposta', pct: '45%', color: 'bg-yellow-500' },
                             { label: 'Negociação', pct: '70%', color: 'bg-purple-500' },
                         ].map((s, i) => (
                             <div key={i} className="flex items-center gap-2 text-[9px]">
@@ -528,7 +530,7 @@ export default function DashboardPage() {
                 {/* CONTRATOS VENCENDO */}
                 <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-                        <AlertCircle size={14} className="text-orange-400"/> Renovações nos Próx. 30 Dias
+                        <AlertCircle size={14} className="text-orange-400"/> {isCDL ? 'Anuidades Vencendo — Próx. 30 Dias' : 'Renovações nos Próx. 30 Dias'}
                         {contratosVencendo.length > 0 && (
                             <span className="ml-auto bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">
                                 {contratosVencendo.length}
@@ -566,12 +568,14 @@ export default function DashboardPage() {
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Entradas</p><h3 className="text-xl font-black text-white">R$ {statsFinanceiro.entradas.toLocaleString()}</h3></div>
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-0.5">Saídas</p><h3 className="text-xl font-black text-white">R$ {statsFinanceiro.saidas.toLocaleString()}</h3></div>
             </div>
+            {!isCDL && (
             <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                 <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4"><Radio className="text-[#22C55E]" size={16} /> Gargalos de Produção</h3>
                 <div className="space-y-4">
                     {[{ label: '📝 Pauta / Roteiro', val: statsProducao.roteiro, color: 'bg-slate-500' }, { label: '🎙️ Cabine / Gravação', val: statsProducao.gravacao, color: 'bg-red-500' }, { label: '🎚️ Edição / Plástica', val: statsProducao.edicao, color: 'bg-blue-500' }, { label: '📡 OPEC / No Ar', val: statsProducao.opec, color: 'bg-[#22C55E]' }].map((step, i) => { const total = statsProducao.roteiro + statsProducao.gravacao + statsProducao.edicao + 1; const pct = (step.val / total) * 100; return (<div key={i} className="group"><div className="flex justify-between text-[9px] font-black uppercase mb-1 text-slate-400 group-hover:text-white"><span>{step.label}</span><span className="text-sm">{step.val}</span></div><div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5"><div className={`h-full ${step.color} rounded-full transition-all duration-1000 relative`} style={{width: `${step.label.includes('OPEC') ? 100 : Math.max(pct, 2)}%`}}></div></div></div>)})}
                 </div>
             </div>
+            )}
         </div>
       )}
     </main>

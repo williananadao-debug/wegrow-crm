@@ -332,6 +332,71 @@ export default function PropostaCDL() {
           </div>
         </div>
 
+        {/* FASE 3 */}
+        <div className="mb-10">
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+            <Sparkles size={12} className="text-[#22C55E]" /> Fase 3 — Módulo de Cobrança (visão futura)
+          </h2>
+
+          <div className="bg-[#0F172A] border border-white/5 rounded-3xl p-6 md:p-8">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <CreditCard size={20} className="text-yellow-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">Cobrança Automática de Anuidades</h3>
+                <p className="text-slate-400 text-sm mt-1">O financeiro deixa de ser só relatório e passa a <strong className="text-white">agir</strong> — gerando cobranças, enviando lembretes e confirmando pagamentos automaticamente.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {[
+                {
+                  titulo: 'Régua de Cobrança',
+                  cor: 'text-blue-400',
+                  bg: 'bg-blue-500/5 border-blue-500/10',
+                  itens: ['D-30: aviso de vencimento', 'D-7: lembrete com link Pix', 'D+1: notificação de atraso', 'D+30: marcação automática como inadimplente'],
+                },
+                {
+                  titulo: 'Geração de Cobranças',
+                  cor: 'text-purple-400',
+                  bg: 'bg-purple-500/5 border-purple-500/10',
+                  itens: ['Boleto bancário por associado', 'Pix com QR Code instantâneo', 'Carnê anual parcelado', 'Link de pagamento por WhatsApp'],
+                },
+                {
+                  titulo: 'Controle de Recebimento',
+                  cor: 'text-[#22C55E]',
+                  bg: 'bg-[#22C55E]/5 border-[#22C55E]/10',
+                  itens: ['Confirmação automática via webhook', 'Status: Pago / Pendente / Vencido', 'Histórico financeiro por associado', 'Relatório de inadimplência em tempo real'],
+                },
+              ].map((bloco, i) => (
+                <div key={i} className={`border rounded-2xl p-4 ${bloco.bg}`}>
+                  <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${bloco.cor}`}>{bloco.titulo}</h4>
+                  <div className="space-y-2">
+                    {bloco.itens.map((item, j) => (
+                      <div key={j} className="flex items-start gap-2 text-xs text-slate-400">
+                        <Check size={11} className={`${bloco.cor} flex-shrink-0 mt-0.5`} /> {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-white/5 pt-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Gateway recomendado</p>
+                <p className="text-sm text-white font-bold">Asaas — boleto R$ 1-2/unidade · Pix 0,99% · régua nativa</p>
+                <p className="text-[11px] text-slate-500 mt-1">Custo do gateway repassado conforme uso real da CDL</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-3xl font-black text-yellow-400">R$ 299<span className="text-lg text-slate-400">/mês</span></p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest">add-on cobrança</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* PRÓXIMOS PASSOS */}
         <div className="bg-gradient-to-br from-[#22C55E]/10 to-[#0F172A] border border-[#22C55E]/20 rounded-3xl p-8 text-center mb-10">
           <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white mb-3">Vamos avançar?</h2>

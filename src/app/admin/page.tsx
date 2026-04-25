@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
@@ -189,6 +190,12 @@ export default function AdminPage() {
                 {empresas.filter(e => e.status === 'ativa').length} ativas
               </p>
             </div>
+            <Link
+              href="/admin/clientes-wegrow"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
+              <TrendingUp size={14}/> Assinaturas
+            </Link>
             <button
               onClick={() => setShowNovaEmpresa(true)}
               className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all"

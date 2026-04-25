@@ -487,6 +487,7 @@ export default function DealsPage() {
   const [proximaAcaoDate, setProximaAcaoDate] = useState('');
 
   const [cdlFiliacaoModal, setCdlFiliacaoModal] = useState<{leadId: number} | null>(null);
+  const [cdlModoFechamento, setCdlModoFechamento] = useState<'filiacao' | 'servico'>('filiacao');
   const [cdlTipoAssociacao, setCdlTipoAssociacao] = useState('Associado Simples');
   const [cdlValorAnuidade, setCdlValorAnuidade] = useState('');
   const [cdlDataInicio, setCdlDataInicio] = useState('');
@@ -792,6 +793,7 @@ export default function DealsPage() {
         setCdlDataFim(d2.toISOString().substring(0, 10));
         setCdlValorAnuidade('');
         setCdlTipoAssociacao('Associado Simples');
+        setCdlModoFechamento('filiacao');
         setCdlFiliacaoModal({ leadId: id });
         return;
     }
@@ -894,6 +896,23 @@ export default function DealsPage() {
     setToastMessage('🎉 Novo Associado Confirmado!');
     setShowToast(true);
   }, [cdlFiliacaoModal, leads, cdlTipoAssociacao, cdlValorAnuidade, cdlDataInicio, cdlDataFim, gerarCobrancaFinanceira]);
+
+  const confirmarVendaSimplesCDL = useCallback(async () => {
+    if (!cdlFiliacaoModal) return;
+    const { leadId } = cdlFiliacaoModal;
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `${CDL_STAGES[4].title} — Venda/Serviço`, created_at: new Date().toISOString() };
+    const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead.atividades) ? lead.atividades : [])];
+
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, etapa: 4, status: 'ganho', atividades: atividadesAtualizadas } : l));
+    await supabase.from('leads').update({ etapa: 4, status: 'ganho', atividades: atividadesAtualizadas }).eq('id', leadId);
+
+    setCdlFiliacaoModal(null);
+    setToastMessage('✅ Venda fechada!');
+    setShowToast(true);
+  }, [cdlFiliacaoModal, leads]);
 
   const onDragEnd = useCallback(async (result: any) => {
     const { destination, draggableId } = result;
@@ -2249,50 +2268,75 @@ export default function DealsPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Tipo de Associação *</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {['Associado Simples', 'Associado Plus', 'Associado Premium'].map(tipo => (
-                    <label key={tipo} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cdlTipoAssociacao === tipo ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-slate-300'}`}>
-                      <input type="radio" name="cdlTipo" value={tipo} className="sr-only" onChange={() => setCdlTipoAssociacao(tipo)} />
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${cdlTipoAssociacao === tipo ? 'border-[#22C55E] bg-[#22C55E]' : 'border-slate-600'}`}>
-                        {cdlTipoAssociacao === tipo && <div className="w-1.5 h-1.5 bg-[#0B1120] rounded-full" />}
-                      </div>
-                      <span className="text-xs font-black uppercase tracking-wide">{tipo}</span>
-                    </label>
-                  ))}
-                </div>
+              {/* Seletor de tipo de fechamento */}
+              <div className="grid grid-cols-2 gap-2">
+                {([['filiacao', 'Filiação CDL'], ['servico', 'Venda / Serviço']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setCdlModoFechamento(val)}
+                    className={`py-2.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all border ${cdlModoFechamento === val ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 text-slate-500 hover:border-white/20'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Valor da Anuidade (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Ex: 497,00"
-                  value={cdlValorAnuidade}
-                  onChange={e => setCdlValorAnuidade(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"
-                />
-              </div>
+              {cdlModoFechamento === 'filiacao' && (
+                <>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Tipo de Associação *</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {['Associado Simples', 'Associado Plus', 'Associado Premium'].map(tipo => (
+                        <label key={tipo} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cdlTipoAssociacao === tipo ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-slate-300'}`}>
+                          <input type="radio" name="cdlTipo" value={tipo} className="sr-only" onChange={() => setCdlTipoAssociacao(tipo)} />
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${cdlTipoAssociacao === tipo ? 'border-[#22C55E] bg-[#22C55E]' : 'border-slate-600'}`}>
+                            {cdlTipoAssociacao === tipo && <div className="w-1.5 h-1.5 bg-[#0B1120] rounded-full" />}
+                          </div>
+                          <span className="text-xs font-black uppercase tracking-wide">{tipo}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Início</label>
-                  <input type="date" value={cdlDataInicio} onChange={e => setCdlDataInicio(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Valor da Anuidade (R$)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Ex: 497,00"
+                      value={cdlValorAnuidade}
+                      onChange={e => setCdlValorAnuidade(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Início</label>
+                      <input type="date" value={cdlDataInicio} onChange={e => setCdlDataInicio(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Vencimento</label>
+                      <input type="date" value={cdlDataFim} onChange={e => setCdlDataFim(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {cdlModoFechamento === 'servico' && (
+                <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 text-center">
+                  <p className="text-slate-400 text-sm">Fechamento como venda/serviço. Não altera dados de filiação do associado.</p>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Vencimento</label>
-                  <input type="date" value={cdlDataFim} onChange={e => setCdlDataFim(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-white/10 flex gap-3">
               <button onClick={() => setCdlFiliacaoModal(null)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
                 Cancelar
               </button>
+              {cdlModoFechamento === 'filiacao' ? (
               <button
                 onClick={confirmarFiliacaoCDL}
                 disabled={!cdlDataInicio || !cdlDataFim}
@@ -2300,6 +2344,14 @@ export default function DealsPage() {
               >
                 <CheckCircle2 size={14}/> Confirmar Filiação
               </button>
+              ) : (
+              <button
+                onClick={confirmarVendaSimplesCDL}
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={14}/> Fechar Venda
+              </button>
+              )}
             </div>
           </div>
         </div>

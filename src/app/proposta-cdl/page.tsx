@@ -89,7 +89,7 @@ const PLANOS = [
 ];
 
 const PRECO_CHEIO = 895;
-const PRECO_PARCEIRO = 647;
+const PRECO_PARCEIRO = 497;
 const DESCONTO = PRECO_CHEIO - PRECO_PARCEIRO;
 
 export default function PropostaCDL() {

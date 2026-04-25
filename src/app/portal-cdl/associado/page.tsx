@@ -5,7 +5,7 @@ import {
   CheckCircle2, XCircle, Loader2, AlertCircle, LogIn,
   CreditCard, History, Calendar, Award, ArrowLeft, QrCode,
   Shield, User, MessageCircle, MapPin, Phone, Hash,
-  ShieldCheck, Clock, ChevronRight, Tag
+  ShieldCheck, Clock, ChevronRight, Tag, ShoppingBag
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,9 +22,10 @@ type DadosAssociado = {
   valor_total: number;
   ativa: boolean;
   historicoPagamentos: { data: string; descricao: string }[];
+  historicoCompras: { id: number; descricao: string; valor: number; data: string }[];
 };
 
-type Aba = 'carteirinha' | 'financeiro' | 'spc' | 'dados';
+type Aba = 'carteirinha' | 'financeiro' | 'compras' | 'spc' | 'dados';
 
 function maskCnpj(value: string) {
   const d = value.replace(/\D/g, '').slice(0, 14);
@@ -322,15 +323,64 @@ function AbaMeusDados({ dados }: { dados: DadosAssociado }) {
   );
 }
 
+/* ── ABA: HISTÓRICO DE COMPRAS ────────────────────────────────── */
+function AbaCompras({ dados }: { dados: DadosAssociado }) {
+  const totalGasto = dados.historicoCompras.reduce((s, c) => s + c.valor, 0);
+
+  return (
+    <div className="space-y-4">
+      {dados.historicoCompras.length === 0 ? (
+        <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-8 text-center">
+          <ShoppingBag size={32} className="text-slate-700 mx-auto mb-3"/>
+          <p className="text-slate-500 text-sm">Nenhuma compra registrada ainda.</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-[#22C55E]/10 border border-[#22C55E]/20 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Total investido com a CDL</p>
+              <p className="text-[#22C55E] font-black text-xl">R$ {totalGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+            <ShoppingBag size={24} className="text-[#22C55E] opacity-60"/>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl overflow-hidden">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-4 py-3 border-b border-white/5">
+              {dados.historicoCompras.length} {dados.historicoCompras.length === 1 ? 'compra' : 'compras'} realizadas
+            </p>
+            <div className="divide-y divide-white/5">
+              {dados.historicoCompras.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-8 h-8 bg-[#22C55E]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <ShoppingBag size={14} className="text-[#22C55E]"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-xs font-bold truncate">{c.descricao}</p>
+                    <p className="text-[9px] text-slate-500 mt-0.5">{new Date(c.data).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <p className="text-[#22C55E] font-black text-sm flex-shrink-0">
+                    R$ {c.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── PORTAL PRINCIPAL ─────────────────────────────────────────── */
 function PortalAssociadoConteudo({ dados, onSair }: { dados: DadosAssociado; onSair: () => void }) {
   const [aba, setAba] = useState<Aba>('carteirinha');
 
   const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
-    { id: 'carteirinha', label: 'Carteirinha', icon: <QrCode size={20}/> },
-    { id: 'financeiro',  label: 'Financeiro',  icon: <CreditCard size={20}/> },
+    { id: 'carteirinha', label: 'Carteirinha',  icon: <QrCode size={20}/> },
+    { id: 'financeiro',  label: 'Financeiro',   icon: <CreditCard size={20}/> },
+    { id: 'compras',     label: 'Compras',      icon: <ShoppingBag size={20}/> },
     { id: 'spc',         label: 'Consulta SPC', icon: <Shield size={20}/> },
-    { id: 'dados',       label: 'Meus Dados',  icon: <User size={20}/> },
+    { id: 'dados',       label: 'Meus Dados',   icon: <User size={20}/> },
   ];
 
   return (
@@ -359,6 +409,7 @@ function PortalAssociadoConteudo({ dados, onSair }: { dados: DadosAssociado; onS
       <div className="flex-1 overflow-y-auto px-4 py-5 pb-28">
         {aba === 'carteirinha' && <AbaCarteirinha dados={dados}/>}
         {aba === 'financeiro'  && <AbaFinanceiro  dados={dados}/>}
+        {aba === 'compras'     && <AbaCompras     dados={dados}/>}
         {aba === 'spc'         && <AbaSPC         dados={dados}/>}
         {aba === 'dados'       && <AbaMeusDados   dados={dados}/>}
       </div>
@@ -396,7 +447,7 @@ export default function PortalAssociadoPage() {
     const res = await fetch(`/api/portal-cdl/associado?cnpj=${encodeURIComponent(cnpj)}&id=${encodeURIComponent(protocolo)}`);
     const json = await res.json();
     if (!res.ok) setErro(json.erro || 'Não foi possível verificar os dados.');
-    else setDados(json);
+    else setDados({ historicoCompras: [], ...json });
     setLoading(false);
   };
 

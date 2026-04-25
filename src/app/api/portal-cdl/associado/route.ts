@@ -57,6 +57,22 @@ export async function GET(request: Request) {
     const hoje = new Date().toISOString().substring(0, 10);
     const ativa = !data.contrato_fim || data.contrato_fim >= hoje;
 
+    const { data: outrasCompras } = await db
+        .from('leads')
+        .select('id, empresa, tipo, valor_total, created_at, itens')
+        .eq('cnpj', data.cnpj)
+        .eq('status', 'ganho')
+        .neq('id', data.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+    const historicoCompras = (outrasCompras || []).map((l: any) => ({
+        id: l.id,
+        descricao: l.tipo || (Array.isArray(l.itens) && l.itens[0]?.servico) || 'Serviço',
+        valor: l.valor_total || 0,
+        data: l.created_at,
+    }));
+
     return NextResponse.json({
         id: data.id,
         empresa: data.empresa,
@@ -70,5 +86,6 @@ export async function GET(request: Request) {
         valor_total: data.valor_total || 0,
         ativa,
         historicoPagamentos,
+        historicoCompras,
     });
 }

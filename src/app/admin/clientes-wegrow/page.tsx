@@ -84,6 +84,7 @@ export default function ClientesWeGrowPage() {
   const [editando, setEditando] = useState<ClienteView | null>(null);
   const [form, setForm] = useState(EMPTY_BILLING);
   const [saving, setSaving] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [registrandoPgto, setRegistrandoPgto] = useState<string | null>(null);
 
   useEffect(() => {
@@ -131,6 +132,7 @@ export default function ClientesWeGrowPage() {
   };
 
   const abrirEdicao = (c: ClienteView) => {
+    setErroSalvar(null);
     setEditando(c);
     setForm({
       valor_mensal: String(c.billing?.valor_mensal ?? ''),
@@ -144,6 +146,7 @@ export default function ClientesWeGrowPage() {
   const salvar = async () => {
     if (!editando) return;
     setSaving(true);
+    setErroSalvar(null);
     const payload: Billing = {
       empresa_id: editando.id,
       valor_mensal: parseFloat(form.valor_mensal) || 0,
@@ -152,8 +155,12 @@ export default function ClientesWeGrowPage() {
       contato: form.contato || null,
       observacao: form.observacao || null,
     };
-    await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
+    const { error } = await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
     setSaving(false);
+    if (error) {
+      setErroSalvar(error.message);
+      return;
+    }
     setEditando(null);
     carregar();
   };
@@ -352,6 +359,13 @@ export default function ClientesWeGrowPage() {
             </div>
 
             <div className="p-6 space-y-4">
+              {erroSalvar && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+                  <p className="text-red-400 font-black text-xs uppercase tracking-widest mb-2">Erro ao salvar — execute no Supabase:</p>
+                  <pre className="text-[10px] text-green-400 font-mono bg-black/40 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap">{`alter table clientes_wegrow disable row level security;`}</pre>
+                  <p className="text-slate-500 text-[10px] mt-2 font-mono">{erroSalvar}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Valor mensal (R$)</label>

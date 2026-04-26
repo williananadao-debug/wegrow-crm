@@ -1,54 +1,51 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
-  Plus, Edit2, X, Loader2, MessageCircle, CheckCircle2,
+  Edit2, X, Loader2, MessageCircle, CheckCircle2,
   AlertTriangle, XCircle, DollarSign, Calendar, Phone,
-  User, Building2, Save, Trash2, RefreshCw, TrendingUp,
-  Clock, Package
+  User, Save, RefreshCw, TrendingUp, Clock, Package,
+  ArrowLeft, ShieldAlert
 } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
-const MODULOS_OPCOES = ['Essencial CDL', 'Add-on WhatsApp', 'Add-on Financeiro'];
-
-const STATUS_CONFIG: Record<string, { label: string; cor: string; icon: React.ReactNode }> = {
-  ativo:        { label: 'Ativo',        cor: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/30',       icon: <CheckCircle2 size={10}/> },
-  trial:        { label: 'Trial',        cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',    icon: <Clock size={10}/> },
-  inadimplente: { label: 'Inadimplente', cor: 'bg-red-500/20 text-red-400 border-red-500/30',             icon: <AlertTriangle size={10}/> },
-  cancelado:    { label: 'Cancelado',    cor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',       icon: <XCircle size={10}/> },
+// Mapa de módulos da empresa → label legível
+const MODULO_LABELS: Record<string, string> = {
+  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp',
 };
 
-type Cliente = {
-  id: string;
-  nome: string;
-  contato: string | null;
-  whatsapp: string | null;
-  email: string | null;
-  modulos: string[];
+type Empresa = {
+  id: string; nome: string; plano: string; status: string;
+  modulos: Record<string, boolean>; created_at: string;
+};
+
+type Billing = {
+  empresa_id: string;
   valor_mensal: number;
-  status: string;
-  data_inicio: string | null;
   proximo_vencimento: string | null;
+  whatsapp: string | null;
+  contato: string | null;
   observacao: string | null;
-  created_at: string;
 };
 
-const EMPTY_FORM = {
-  nome: '', contato: '', whatsapp: '', email: '',
-  modulos: [] as string[], valor_mensal: '', status: 'ativo',
-  data_inicio: '', proximo_vencimento: '', observacao: '',
-};
+type ClienteView = Empresa & { billing: Billing | null };
 
-function fmtData(d: string | null) {
-  if (!d) return '—';
-  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
-}
+const BILLING_VAZIO = (empresa_id: string): Billing => ({
+  empresa_id, valor_mensal: 0, proximo_vencimento: null,
+  whatsapp: null, contato: null, observacao: null,
+});
 
 function diasParaVencer(d: string | null): number | null {
   if (!d) return null;
   return Math.floor((new Date(d + 'T00:00:00').getTime() - Date.now()) / 86400000);
+}
+
+function fmtData(d: string | null) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
 }
 
 function proximoMes(d: string): string {
@@ -57,275 +54,314 @@ function proximoMes(d: string): string {
   return dt.toISOString().substring(0, 10);
 }
 
+function statusPgto(b: Billing | null): 'sem_dados' | 'ativo' | 'vencendo' | 'inadimplente' {
+  if (!b || !b.proximo_vencimento) return 'sem_dados';
+  const dias = diasParaVencer(b.proximo_vencimento);
+  if (dias === null) return 'sem_dados';
+  if (dias < 0) return 'inadimplente';
+  if (dias <= 7) return 'vencendo';
+  return 'ativo';
+}
+
+const STATUS_CFG = {
+  ativo:        { label: 'Em dia',       cor: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/30',    icon: <CheckCircle2 size={10}/> },
+  vencendo:     { label: 'Vence em breve', cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: <Clock size={10}/> },
+  inadimplente: { label: 'Vencido',      cor: 'bg-red-500/20 text-red-400 border-red-500/30',           icon: <AlertTriangle size={10}/> },
+  sem_dados:    { label: 'Sem faturamento', cor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',  icon: <XCircle size={10}/> },
+};
+
+const EMPTY_BILLING = { valor_mensal: '', proximo_vencimento: '', whatsapp: '', contato: '', observacao: '' };
+
 export default function ClientesWeGrowPage() {
   const { user, loading: authLoading } = useAuth();
   const isAdmin = ADMIN_EMAILS.includes(user?.email || '');
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ClienteView[]>([]);
   const [loading, setLoading] = useState(true);
   const [semTabela, setSemTabela] = useState(false);
-  const [modalAberto, setModalAberto] = useState(false);
-  const [editando, setEditando] = useState<Cliente | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [token, setToken] = useState('');
+
+  const [editando, setEditando] = useState<ClienteView | null>(null);
+  const [form, setForm] = useState(EMPTY_BILLING);
   const [saving, setSaving] = useState(false);
   const [registrandoPgto, setRegistrandoPgto] = useState<string | null>(null);
 
-  useEffect(() => { if (isAdmin) carregar(); }, [isAdmin]);
+  useEffect(() => {
+    if (!user) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+  }, [user]);
+
+  useEffect(() => { if (token && isAdmin) carregar(); }, [token, isAdmin]);
 
   const carregar = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+
+    // Busca empresas via API admin
+    const res = await fetch('/api/admin/empresas', {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    const empresas: Empresa[] = res.ok ? await res.json() : [];
+
+    // Busca dados de faturamento
+    const { data: billings, error } = await supabase
       .from('clientes_wegrow')
-      .select('*')
-      .order('proximo_vencimento', { ascending: true });
+      .select('*');
 
     if (error?.code === '42P01') { setSemTabela(true); setLoading(false); return; }
-    setClientes((data || []) as Cliente[]);
+    setSemTabela(false);
+
+    const billingMap = Object.fromEntries((billings || []).map((b: Billing) => [b.empresa_id, b]));
+
+    const merged: ClienteView[] = empresas
+      .filter(e => e.status !== 'suspensa')
+      .map(e => ({ ...e, billing: billingMap[e.id] ?? null }))
+      .sort((a, b) => {
+        const da = diasParaVencer(a.billing?.proximo_vencimento ?? null);
+        const db = diasParaVencer(b.billing?.proximo_vencimento ?? null);
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
+        return da - db;
+      });
+
+    setClientes(merged);
     setLoading(false);
   };
 
-  const abrirNovo = () => {
-    setEditando(null);
-    setForm({ ...EMPTY_FORM, data_inicio: new Date().toISOString().substring(0, 10) });
-    setModalAberto(true);
-  };
-
-  const abrirEdicao = (c: Cliente) => {
+  const abrirEdicao = (c: ClienteView) => {
     setEditando(c);
     setForm({
-      nome: c.nome, contato: c.contato || '', whatsapp: c.whatsapp || '',
-      email: c.email || '', modulos: c.modulos || [], valor_mensal: String(c.valor_mensal),
-      status: c.status, data_inicio: c.data_inicio || '', proximo_vencimento: c.proximo_vencimento || '',
-      observacao: c.observacao || '',
+      valor_mensal: String(c.billing?.valor_mensal ?? ''),
+      proximo_vencimento: c.billing?.proximo_vencimento ?? '',
+      whatsapp: c.billing?.whatsapp ?? '',
+      contato: c.billing?.contato ?? '',
+      observacao: c.billing?.observacao ?? '',
     });
-    setModalAberto(true);
   };
 
   const salvar = async () => {
-    if (!form.nome.trim()) return;
+    if (!editando) return;
     setSaving(true);
-    const payload = {
-      nome: form.nome.trim(), contato: form.contato || null, whatsapp: form.whatsapp || null,
-      email: form.email || null, modulos: form.modulos, valor_mensal: parseFloat(form.valor_mensal) || 0,
-      status: form.status, data_inicio: form.data_inicio || null,
-      proximo_vencimento: form.proximo_vencimento || null, observacao: form.observacao || null,
+    const payload: Billing = {
+      empresa_id: editando.id,
+      valor_mensal: parseFloat(form.valor_mensal) || 0,
+      proximo_vencimento: form.proximo_vencimento || null,
+      whatsapp: form.whatsapp || null,
+      contato: form.contato || null,
+      observacao: form.observacao || null,
     };
-    if (editando) {
-      await supabase.from('clientes_wegrow').update(payload).eq('id', editando.id);
-    } else {
-      await supabase.from('clientes_wegrow').insert(payload);
-    }
+    await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
     setSaving(false);
-    setModalAberto(false);
+    setEditando(null);
     carregar();
   };
 
-  const excluir = async (id: string) => {
-    if (!confirm('Excluir este cliente?')) return;
-    await supabase.from('clientes_wegrow').delete().eq('id', id);
-    carregar();
-  };
-
-  const registrarPagamento = async (c: Cliente) => {
+  const registrarPagamento = async (c: ClienteView) => {
     setRegistrandoPgto(c.id);
-    const novoVenc = c.proximo_vencimento ? proximoMes(c.proximo_vencimento) : proximoMes(new Date().toISOString().substring(0, 10));
-    await supabase.from('clientes_wegrow').update({ status: 'ativo', proximo_vencimento: novoVenc }).eq('id', c.id);
+    const atual = c.billing?.proximo_vencimento ?? new Date().toISOString().substring(0, 10);
+    const novoVenc = proximoMes(atual);
+    await supabase.from('clientes_wegrow').upsert(
+      { ...BILLING_VAZIO(c.id), ...(c.billing ?? {}), empresa_id: c.id, proximo_vencimento: novoVenc },
+      { onConflict: 'empresa_id' }
+    );
     setRegistrandoPgto(null);
     carregar();
-  };
-
-  const toggleModulo = (m: string) => {
-    setForm(f => ({
-      ...f,
-      modulos: f.modulos.includes(m) ? f.modulos.filter(x => x !== m) : [...f.modulos, m],
-    }));
   };
 
   if (authLoading) return null;
   if (!isAdmin) return (
     <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
-      <p className="text-red-400 font-black uppercase tracking-widest">Acesso restrito</p>
+      <div className="text-center"><ShieldAlert size={40} className="text-red-500 mx-auto mb-3"/><p className="text-red-400 font-black uppercase tracking-widest">Acesso restrito</p></div>
     </div>
   );
 
-  const mrr = clientes.filter(c => c.status === 'ativo' || c.status === 'trial').reduce((s, c) => s + c.valor_mensal, 0);
-  const ativos = clientes.filter(c => c.status === 'ativo').length;
-  const vencendoEm7 = clientes.filter(c => { const d = diasParaVencer(c.proximo_vencimento); return d !== null && d <= 7 && d >= 0 && c.status !== 'cancelado'; });
-  const inadimplentes = clientes.filter(c => c.status === 'inadimplente').length;
+  const mrr = clientes.reduce((s, c) => s + (c.billing?.valor_mensal ?? 0), 0);
+  const vencendoBreve = clientes.filter(c => statusPgto(c.billing) === 'vencendo');
+  const inadimplentes = clientes.filter(c => statusPgto(c.billing) === 'inadimplente');
+  const semDados = clientes.filter(c => statusPgto(c.billing) === 'sem_dados');
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-white">
-      <div className="max-w-5xl mx-auto px-4 py-10">
+      <div className="max-w-4xl mx-auto px-4 py-10">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">W</div>
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter">Clientes WeGrow</h1>
+          <div className="flex items-center gap-4">
+            <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
+              <ArrowLeft size={16} className="text-slate-400"/>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
+                <TrendingUp size={22} className="text-[#22C55E]"/> Assinaturas WeGrow
+              </h1>
+              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Clientes ativos · painel interno</p>
             </div>
-            <p className="text-slate-500 text-xs uppercase tracking-widest font-bold ml-13">Assinaturas ativas · Painel interno</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={carregar} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
-              <RefreshCw size={16} className="text-slate-400"/>
-            </button>
-            <button onClick={abrirNovo} className="flex items-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] px-4 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
-              <Plus size={14}/> Novo Cliente
-            </button>
-          </div>
+          <button onClick={carregar} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
+            <RefreshCw size={16} className="text-slate-400"/>
+          </button>
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { label: 'MRR', valor: `R$ ${mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cor: 'text-[#22C55E]', icon: <TrendingUp size={16} className="text-[#22C55E]"/> },
-            { label: 'Ativos', valor: String(ativos), cor: 'text-white', icon: <CheckCircle2 size={16} className="text-[#22C55E]"/> },
-            { label: 'Vencem em 7d', valor: String(vencendoEm7.length), cor: vencendoEm7.length > 0 ? 'text-yellow-400' : 'text-white', icon: <Clock size={16} className="text-yellow-400"/> },
-            { label: 'Inadimplentes', valor: String(inadimplentes), cor: inadimplentes > 0 ? 'text-red-400' : 'text-white', icon: <AlertTriangle size={16} className="text-red-400"/> },
+            { label: 'MRR', valor: `R$ ${mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cor: 'text-[#22C55E]' },
+            { label: 'Clientes', valor: String(clientes.length), cor: 'text-white' },
+            { label: 'Vencem em 7d', valor: String(vencendoBreve.length), cor: vencendoBreve.length > 0 ? 'text-yellow-400' : 'text-white' },
+            { label: 'Vencidos', valor: String(inadimplentes.length), cor: inadimplentes.length > 0 ? 'text-red-400' : 'text-white' },
           ].map((k, i) => (
             <div key={i} className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">{k.icon}<p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{k.label}</p></div>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">{k.label}</p>
               <p className={`text-2xl font-black ${k.cor}`}>{k.valor}</p>
             </div>
           ))}
         </div>
 
-        {/* Alerta vencimentos */}
-        {vencendoEm7.length > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-6 flex items-start gap-3">
-            <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5"/>
+        {/* Alertas */}
+        {vencendoBreve.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4 flex items-start gap-3">
+            <Clock size={14} className="text-yellow-400 shrink-0 mt-0.5"/>
             <div>
-              <p className="text-yellow-400 font-black text-xs uppercase tracking-widest mb-1">Vencimentos próximos</p>
-              <p className="text-slate-300 text-xs">{vencendoEm7.map(c => `${c.nome} (${diasParaVencer(c.proximo_vencimento)}d)`).join(' · ')}</p>
+              <p className="text-yellow-400 font-black text-xs uppercase tracking-widest mb-0.5">Vencimentos próximos</p>
+              <p className="text-slate-300 text-xs">{vencendoBreve.map(c => `${c.nome} (${diasParaVencer(c.billing?.proximo_vencimento ?? null)}d)`).join(' · ')}</p>
             </div>
           </div>
         )}
+        {inadimplentes.length > 0 && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4 flex items-start gap-3">
+            <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5"/>
+            <div>
+              <p className="text-red-400 font-black text-xs uppercase tracking-widest mb-0.5">Pagamento vencido</p>
+              <p className="text-slate-300 text-xs">{inadimplentes.map(c => c.nome).join(' · ')}</p>
+            </div>
+          </div>
+        )}
+        {semDados.length > 0 && (
+          <div className="bg-slate-500/10 border border-slate-500/20 rounded-2xl p-4 mb-6 flex items-start gap-3">
+            <XCircle size={14} className="text-slate-500 shrink-0 mt-0.5"/>
+            <p className="text-slate-500 text-xs"><span className="font-black">{semDados.map(c => c.nome).join(', ')}</span> — sem dados de faturamento. Clique em editar para configurar.</p>
+          </div>
+        )}
 
-        {/* Setup sem tabela */}
+        {/* Setup SQL */}
         {semTabela && (
-          <div className="bg-[#0F172A] border border-yellow-500/20 rounded-3xl p-8">
-            <p className="text-yellow-400 font-black text-sm uppercase tracking-widest mb-4">Tabela não encontrada no Supabase</p>
-            <p className="text-slate-400 text-sm mb-4">Execute o SQL abaixo no painel do Supabase para criar a tabela:</p>
+          <div className="bg-[#0F172A] border border-yellow-500/20 rounded-3xl p-8 mb-6">
+            <p className="text-yellow-400 font-black text-sm uppercase tracking-widest mb-4">Execute no Supabase</p>
             <pre className="bg-black/40 rounded-xl p-4 text-[11px] text-green-400 font-mono overflow-x-auto">{`create table clientes_wegrow (
-  id uuid default gen_random_uuid() primary key,
-  nome text not null,
-  contato text,
-  whatsapp text,
-  email text,
-  modulos text[] default '{}',
-  valor_mensal numeric not null default 0,
-  status text not null default 'ativo',
-  data_inicio date,
+  empresa_id uuid primary key,
+  valor_mensal numeric default 0,
   proximo_vencimento date,
-  observacao text,
-  created_at timestamptz default now()
+  whatsapp text,
+  contato text,
+  observacao text
 );`}</pre>
           </div>
         )}
 
-        {/* Lista de clientes */}
-        {!semTabela && (
-          loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 size={24} className="animate-spin text-slate-600"/>
-            </div>
-          ) : clientes.length === 0 ? (
-            <div className="bg-[#0F172A] border border-white/5 rounded-3xl p-12 text-center">
-              <Building2 size={32} className="text-slate-700 mx-auto mb-3"/>
-              <p className="text-slate-500 text-sm">Nenhum cliente cadastrado ainda.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {clientes.map(c => {
-                const dias = diasParaVencer(c.proximo_vencimento);
-                const urgente = dias !== null && dias <= 7 && dias >= 0;
-                const vencido = dias !== null && dias < 0;
-                const cfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.ativo;
+        {/* Lista */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-slate-600"/></div>
+        ) : (
+          <div className="space-y-3">
+            {clientes.map(c => {
+              const sp = statusPgto(c.billing);
+              const cfg = STATUS_CFG[sp];
+              const dias = diasParaVencer(c.billing?.proximo_vencimento ?? null);
+              const modulosAtivos = Object.entries(c.modulos || {}).filter(([, v]) => v).map(([k]) => MODULO_LABELS[k] || k);
 
-                return (
-                  <div key={c.id} className={`bg-[#0F172A] border rounded-2xl p-5 transition-all ${urgente ? 'border-yellow-500/30' : vencido ? 'border-red-500/20' : 'border-white/5'}`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 flex-wrap mb-2">
-                          <h3 className="font-black text-white text-sm uppercase tracking-tight">{c.nome}</h3>
-                          <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.cor}`}>
-                            {cfg.icon} {cfg.label}
-                          </span>
-                          {urgente && <span className="text-[9px] font-black text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase">Vence em {dias}d</span>}
-                          {vencido && c.status !== 'cancelado' && <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase animate-pulse">Vencido há {Math.abs(dias!)}d</span>}
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 mb-3">
-                          {c.contato && <span className="flex items-center gap-1"><User size={10}/> {c.contato}</span>}
-                          {c.whatsapp && <span className="flex items-center gap-1"><Phone size={10}/> {c.whatsapp}</span>}
-                          <span className="flex items-center gap-1"><Calendar size={10}/> Vence {fmtData(c.proximo_vencimento)}</span>
-                          <span className="flex items-center gap-1"><DollarSign size={10}/> R$ {c.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</span>
-                        </div>
-
-                        {c.modulos?.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {c.modulos.map(m => (
-                              <span key={m} className="text-[9px] font-black uppercase tracking-widest bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#22C55E] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <Package size={8}/> {m}
-                              </span>
-                            ))}
-                          </div>
+              return (
+                <div key={c.id} className={`bg-[#0F172A] border rounded-2xl p-5 transition-all ${sp === 'vencendo' ? 'border-yellow-500/30' : sp === 'inadimplente' ? 'border-red-500/30' : 'border-white/5'}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <h3 className="font-black text-white text-sm uppercase tracking-tight">{c.nome}</h3>
+                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.cor}`}>
+                          {cfg.icon} {cfg.label}
+                        </span>
+                        {dias !== null && dias >= 0 && dias <= 7 && (
+                          <span className="text-[9px] font-black text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase">Vence em {dias}d</span>
+                        )}
+                        {dias !== null && dias < 0 && (
+                          <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase animate-pulse">Vencido há {Math.abs(dias)}d</span>
                         )}
                       </div>
 
-                      <div className="flex flex-col gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => registrarPagamento(c)}
-                          disabled={registrandoPgto === c.id}
-                          className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50"
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 mb-3">
+                        {c.billing?.contato && <span className="flex items-center gap-1"><User size={10}/> {c.billing.contato}</span>}
+                        {c.billing?.whatsapp && <span className="flex items-center gap-1"><Phone size={10}/> {c.billing.whatsapp}</span>}
+                        <span className="flex items-center gap-1"><Calendar size={10}/> Vence {fmtData(c.billing?.proximo_vencimento ?? null)}</span>
+                        <span className="flex items-center gap-1"><DollarSign size={10}/> R$ {(c.billing?.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</span>
+                      </div>
+
+                      {modulosAtivos.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {modulosAtivos.map(m => (
+                            <span key={m} className="text-[9px] font-black uppercase tracking-widest bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#22C55E] px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Package size={8}/> {m}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => registrarPagamento(c)}
+                        disabled={registrandoPgto === c.id}
+                        className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50"
+                      >
+                        {registrandoPgto === c.id ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>}
+                        Pgto recebido
+                      </button>
+                      {c.billing?.whatsapp && (
+                        <a
+                          href={`https://wa.me/55${c.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${c.billing.contato ? ' ' + c.billing.contato : ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${(c.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(c.billing.proximo_vencimento)}.`)}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
                         >
-                          {registrandoPgto === c.id ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>}
-                          Pgto recebido
-                        </button>
-                        {c.whatsapp && (
-                          <a
-                            href={`https://wa.me/55${c.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${c.contato || ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${c.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(c.proximo_vencimento)}.`)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all"
-                          >
-                            <MessageCircle size={11}/> Cobrar
-                          </a>
-                        )}
-                        <div className="flex gap-1.5">
-                          <button onClick={() => abrirEdicao(c)} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 p-2 rounded-xl transition-all flex items-center justify-center">
-                            <Edit2 size={12}/>
-                          </button>
-                          <button onClick={() => excluir(c.id)} className="flex-1 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 text-red-500 p-2 rounded-xl transition-all flex items-center justify-center">
-                            <Trash2 size={12}/>
-                          </button>
-                        </div>
-                      </div>
+                          <MessageCircle size={11}/> Cobrar
+                        </a>
+                      )}
+                      <button
+                        onClick={() => abrirEdicao(c)}
+                        className="flex items-center justify-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white p-2 rounded-xl transition-all"
+                      >
+                        <Edit2 size={12}/>
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Modal novo/edição */}
-      {modalAberto && (
+      {/* Modal edição faturamento */}
+      {editando && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h2 className="font-black text-white uppercase italic tracking-tight">{editando ? 'Editar Cliente' : 'Novo Cliente'}</h2>
-              <button onClick={() => setModalAberto(false)} className="text-slate-500 hover:text-white transition-colors"><X size={18}/></button>
+              <div>
+                <h2 className="font-black text-white uppercase italic tracking-tight">Faturamento</h2>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-0.5">{editando.nome}</p>
+              </div>
+              <button onClick={() => setEditando(null)} className="text-slate-500 hover:text-white transition-colors"><X size={18}/></button>
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Nome da empresa *</label>
-                <input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="CDL de Taio" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Valor mensal (R$)</label>
+                  <input type="number" value={form.valor_mensal} onChange={e => setForm(f => ({ ...f, valor_mensal: e.target.value }))} placeholder="497" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                </div>
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Próx. vencimento</label>
+                  <input type="date" value={form.proximo_vencimento} onChange={e => setForm(f => ({ ...f, proximo_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"/>
+                </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Contato</label>
@@ -336,54 +372,17 @@ export default function ClientesWeGrowPage() {
                   <input value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} placeholder="(47) 99999-9999" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
                 </div>
               </div>
-
-              <div>
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Módulos contratados</label>
-                <div className="flex flex-wrap gap-2">
-                  {MODULOS_OPCOES.map(m => (
-                    <button key={m} type="button" onClick={() => toggleModulo(m)}
-                      className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border transition-all ${form.modulos.includes(m) ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 text-slate-500 hover:border-white/20'}`}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Valor mensal (R$)</label>
-                  <input type="number" value={form.valor_mensal} onChange={e => setForm(f => ({ ...f, valor_mensal: e.target.value }))} placeholder="497" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-                </div>
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Status</label>
-                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors">
-                    {Object.entries(STATUS_CONFIG).map(([val, cfg]) => <option key={val} value={val} className="bg-[#0B1120]">{cfg.label}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Início</label>
-                  <input type="date" value={form.data_inicio} onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"/>
-                </div>
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Próx. vencimento</label>
-                  <input type="date" value={form.proximo_vencimento} onChange={e => setForm(f => ({ ...f, proximo_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"/>
-                </div>
-              </div>
-
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Observação</label>
-                <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Notas internas..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>
+                <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} placeholder="Notas internas..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>
               </div>
             </div>
 
             <div className="p-6 border-t border-white/10 flex gap-3">
-              <button onClick={() => setModalAberto(false)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+              <button onClick={() => setEditando(null)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
                 Cancelar
               </button>
-              <button onClick={salvar} disabled={saving || !form.nome.trim()} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+              <button onClick={salvar} disabled={saving} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2">
                 {saving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>

@@ -73,7 +73,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ erro: 'Este e-mail já está cadastrado.' }, { status: 409 });
         }
         console.error('[team/invite] Erro ao criar usuário:', createError.message);
-        return NextResponse.json({ erro: 'Erro ao criar acesso.' }, { status: 500 });
+        return NextResponse.json({ erro: `Erro ao criar acesso: ${createError.message}` }, { status: 500 });
     }
 
     await supabaseAdmin

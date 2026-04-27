@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, TrendingUp } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, TrendingUp, KeyRound } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 
@@ -29,6 +29,7 @@ export default function TeamPage() {
 
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [resetandoSenha, setResetandoSenha] = useState(false);
 
   useEffect(() => {
     carregarEquipe();
@@ -143,6 +144,21 @@ export default function TeamPage() {
       alert(`Erro: ${error.message}`);
     } finally {
         setSaving(false);
+    }
+  };
+
+  const resetarSenha = async () => {
+    if (!editingUser?.email) return;
+    setResetandoSenha(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    setResetandoSenha(false);
+    if (error) {
+      alert(`Erro: ${error.message}`);
+    } else {
+      setToastMessage(`E-mail de redefinição enviado para ${editingUser.email} ✅`);
+      setShowToast(true);
     }
   };
 
@@ -291,6 +307,17 @@ export default function TeamPage() {
                   <button type="submit" form="userForm" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
                       {saving ? <Loader2 size={16} className="animate-spin"/> : 'Salvar Configurações'}
                   </button>
+                  {editingUser && (
+                      <button
+                        type="button"
+                        onClick={resetarSenha}
+                        disabled={resetandoSenha}
+                        className="w-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 py-3 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500/20 transition-all disabled:opacity-50"
+                      >
+                        {resetandoSenha ? <Loader2 size={14} className="animate-spin"/> : <KeyRound size={14}/>}
+                        {resetandoSenha ? 'Enviando...' : 'Resetar Senha'}
+                      </button>
+                  )}
                   {editingUser && (
                       <button type="button" onClick={excluirUsuario} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 py-3 rounded-xl font-black uppercase text-xs">Apagar Usuário</button>
                   )}

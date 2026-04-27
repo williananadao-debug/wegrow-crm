@@ -57,14 +57,6 @@ export default function RootLayout({
         {/* 👇 RASTREADOR DE VELOCIDADE E PERFORMANCE */}
         <SpeedInsights />
         
-        {/* Chat Brevo */}
-        <Script id="brevo-chat-init" strategy="beforeInteractive">
-          {`window.BrevoConversationsID = '69c29c5c62301a763e028155';`}
-        </Script>
-        <Script
-          src="https://conversations-widget.brevo.com/brevo-conversations.js"
-          strategy="afterInteractive"
-        />
         
       </body>
     </html>

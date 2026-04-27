@@ -16,7 +16,23 @@ export default function ResetPasswordPage() {
   const [verificando, setVerificando] = useState(true);
 
   useEffect(() => {
-    // Supabase processa o token do hash automaticamente via onAuthStateChange
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const type = params.get('type');
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    // Token de recovery no hash — seta sessão manualmente (evita race condition com onAuthStateChange)
+    if (type === 'recovery' && accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (!error) setSessaoOk(true);
+          setVerificando(false);
+        });
+      return;
+    }
+
+    // Fallback: escuta evento (útil quando página é recarregada com sessão ativa)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         setSessaoOk(true);
@@ -24,9 +40,8 @@ export default function ResetPasswordPage() {
       }
     });
 
-    // Verifica se já há sessão ativa (caso o evento já tenha disparado)
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) { setSessaoOk(true); }
+      if (session) setSessaoOk(true);
       setVerificando(false);
     });
 

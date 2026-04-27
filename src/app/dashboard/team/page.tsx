@@ -164,14 +164,27 @@ export default function TeamPage() {
 
   const excluirUsuario = async () => {
     if (!editingUser) return;
-    if (confirm(`Excluir ${editingUser.nome}?`)) {
+    if (confirm(`Excluir ${editingUser.nome}? Esta ação não pode ser desfeita.`)) {
         setSaving(true);
         try {
-            const { error } = await supabase.from('profiles').delete().eq('id', editingUser.id);
-            if (error) throw error;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Sessão expirada.');
+
+            const res = await fetch('/api/team/delete', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ userId: editingUser.id }),
+            });
+
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.erro || 'Erro ao excluir.');
+
             setIsModalOpen(false);
             carregarEquipe();
-        } catch (error: any) { alert(error.message); } 
+        } catch (error: any) { alert(error.message); }
         finally { setSaving(false); }
     }
   };

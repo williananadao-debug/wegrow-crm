@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     });
 
     if (createError) {
-        if (createError.message.includes('already registered')) {
+        if (createError.message.toLowerCase().includes('already') || createError.message.toLowerCase().includes('registered')) {
             return NextResponse.json({ erro: 'Este e-mail já está cadastrado.' }, { status: 409 });
         }
         console.error('[team/invite] Erro ao criar usuário:', createError.message);

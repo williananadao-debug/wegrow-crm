@@ -4,8 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 
 function gerarSenhaTemporaria(): string {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
-    return Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 export async function POST(request: Request) {
@@ -22,7 +22,6 @@ export async function POST(request: Request) {
         { auth: { persistSession: false } }
     );
 
-    // Verifica identidade e cargo do solicitante
     const { data: { user: solicitante }, error: authError } = await supabaseAdmin.auth.getUser(accessToken);
     if (authError || !solicitante) {
         return NextResponse.json({ erro: 'Token inválido.' }, { status: 401 });
@@ -60,8 +59,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'Cargo inválido.' }, { status: 422 });
     }
 
-    // Cria o usuário no Supabase Auth com senha temporária aleatória
     const senhaTemp = gerarSenhaTemporaria();
+
     const { data: novoUsuario, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password: senhaTemp,
@@ -77,30 +76,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'Erro ao criar acesso.' }, { status: 500 });
     }
 
-    // Associa o novo usuário à empresa do diretor
     await supabaseAdmin
         .from('profiles')
         .upsert({ id: novoUsuario.user!.id, nome, cargo, unidade: unidade || null, cpf: cpf || null, empresa_id: empresaId });
 
-    // Gera link de redefinição de senha para o novo usuário definir a própria senha
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '') || 'http://localhost:3000';
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'recovery',
-        email,
-        options: { redirectTo: `${appUrl}/reset-password` },
-    });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
 
-    if (linkError || !linkData?.properties?.action_link) {
-        // Usuário criado mas sem link — ainda funciona, só não envia email
-        console.error('[team/invite] Erro ao gerar link de convite:', linkError?.message);
-        return NextResponse.json({ ok: true, aviso: 'Acesso criado. Não foi possível enviar o e-mail de convite.' });
-    }
-
-    // Envia o e-mail de convite via Resend
     if (process.env.RESEND_API_KEY) {
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
-        const link = linkData.properties.action_link;
 
         await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
@@ -121,12 +105,32 @@ export async function POST(request: Request) {
           <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#fff">Olá, ${nome}!</p>
           <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6">
             Você foi adicionado à equipe do WeGrow CRM com o cargo <strong style="color:#fff">${cargo}</strong>.
-            Clique no botão abaixo para criar sua senha e acessar o sistema.
+            Use os dados abaixo para acessar o sistema agora mesmo.
           </p>
-          <a href="${link}" style="display:inline-block;background:#22c55e;color:#0f172a;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:14px 28px;border-radius:10px;text-decoration:none">
-            Criar minha senha
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b1120;border-radius:12px;border:1px solid #1e293b;margin-bottom:24px">
+            <tr>
+              <td style="padding:16px 20px;border-bottom:1px solid #1e293b">
+                <p style="margin:0 0 4px;font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:1px">E-mail</p>
+                <p style="margin:0;font-size:15px;font-weight:700;color:#fff">${email}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 20px">
+                <p style="margin:0 0 4px;font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:1px">Senha temporária</p>
+                <p style="margin:0;font-size:20px;font-weight:900;color:#22c55e;letter-spacing:3px;font-family:monospace">${senhaTemp}</p>
+              </td>
+            </tr>
+          </table>
+
+          <a href="${appUrl}/login" style="display:inline-block;background:#22c55e;color:#0f172a;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:14px 28px;border-radius:10px;text-decoration:none">
+            Acessar o sistema
           </a>
-          <p style="margin:24px 0 0;font-size:11px;color:#475569">
+
+          <p style="margin:24px 0 0;font-size:12px;color:#475569;line-height:1.6">
+            Após o primeiro acesso, recomendamos alterar sua senha em <strong style="color:#94a3b8">Configurações → Equipe</strong>.
+          </p>
+          <p style="margin:12px 0 0;font-size:11px;color:#334155">
             Se você não esperava esse acesso, ignore este e-mail.
           </p>
         </td></tr>

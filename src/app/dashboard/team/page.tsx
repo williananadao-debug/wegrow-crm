@@ -151,7 +151,7 @@ export default function TeamPage() {
     if (!editingUser?.email) return;
     setResetandoSenha(true);
     const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetandoSenha(false);
     if (error) {

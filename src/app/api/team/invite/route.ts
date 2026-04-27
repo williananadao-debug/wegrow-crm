@@ -83,9 +83,11 @@ export async function POST(request: Request) {
         .upsert({ id: novoUsuario.user!.id, nome, cargo, unidade: unidade || null, cpf: cpf || null, empresa_id: empresaId });
 
     // Gera link de redefinição de senha para o novo usuário definir a própria senha
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '') || 'http://localhost:3000';
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'recovery',
         email,
+        options: { redirectTo: `${appUrl}/reset-password` },
     });
 
     if (linkError || !linkData?.properties?.action_link) {

@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setEmpresa(empData);
       } else {
         const path = window.location.pathname;
-        const isPublicPage = ['/', '/login', '/solicitar', '/portal'].includes(path)
+        const isPublicPage = ['/', '/login', '/solicitar', '/portal', '/reset-password'].includes(path)
           || path.startsWith('/portal-cdl')
           || path.startsWith('/proposta-cdl')
           || path.startsWith('/carteirinha');

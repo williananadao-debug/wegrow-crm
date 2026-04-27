@@ -80,8 +80,7 @@ export async function POST(request: Request) {
     // Associa o novo usuário à empresa do diretor
     await supabaseAdmin
         .from('profiles')
-        .update({ nome, cargo, unidade: unidade || null, cpf: cpf || null, empresa_id: empresaId })
-        .eq('id', novoUsuario.user!.id);
+        .upsert({ id: novoUsuario.user!.id, nome, cargo, unidade: unidade || null, cpf: cpf || null, empresa_id: empresaId });
 
     // Gera link de redefinição de senha para o novo usuário definir a própria senha
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({

@@ -4,7 +4,7 @@ import { CDL } from '@/lib/cdl-config';
 import {
   Plus, TrendingUp, AlertTriangle, FileText, Barcode,
   DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw,
-  MessageCircle, Bell, History
+  MessageCircle, Bell, History, QrCode, Copy, ExternalLink, Zap
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
@@ -147,6 +147,64 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
 
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
+  // --- Cobrança Asaas ---
+  const [cobrancaLead, setCobrancaLead] = useState<LeadFinance | null>(null);
+  const [cobrancaTipo, setCobrancaTipo] = useState<'PIX' | 'BOLETO'>('PIX');
+  const [cobrancaCpfCnpj, setCobrancaCpfCnpj] = useState('');
+  const [cobrancaEmail, setCobrancaEmail] = useState('');
+  const [cobrancaVencimento, setCobrancaVencimento] = useState('');
+  const [cobrancaLoading, setCobrancaLoading] = useState(false);
+  const [cobrancaErro, setCobrancaErro] = useState<string | null>(null);
+  const [cobrancaResultado, setCobrancaResultado] = useState<any>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  const abrirCobranca = (lead: LeadFinance) => {
+    setCobrancaLead(lead);
+    setCobrancaTipo('PIX');
+    setCobrancaCpfCnpj('');
+    setCobrancaEmail('');
+    setCobrancaVencimento(lead.contrato_fim || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10));
+    setCobrancaErro(null);
+    setCobrancaResultado(null);
+  };
+
+  const gerarCobranca = async () => {
+    if (!cobrancaLead) return;
+    setCobrancaLoading(true);
+    setCobrancaErro(null);
+    setCobrancaResultado(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/cobranca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          leadId: cobrancaLead.id,
+          nome: cobrancaLead.empresa,
+          cpfCnpj: cobrancaCpfCnpj,
+          email: cobrancaEmail || undefined,
+          valor: cobrancaLead.valor_total,
+          vencimento: cobrancaVencimento,
+          tipo: cobrancaTipo,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao gerar cobrança.');
+      setCobrancaResultado(json);
+    } catch (e: any) {
+      setCobrancaErro(e.message);
+    } finally {
+      setCobrancaLoading(false);
+    }
+  };
+
+  const copiar = (texto: string) => {
+    navigator.clipboard.writeText(texto);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
   const filtrosAtivos = filtroUnidade || filtroDias !== '0';
 
   return (
@@ -248,13 +306,13 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="font-black text-white">R$ {(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                       {isCDL && l.telefone && (
-                        <button
-                          onClick={() => enviarWhatsAppCobranca(l)}
-                          className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
-                        >
+                        <button onClick={() => enviarWhatsAppCobranca(l)} className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                           <MessageCircle size={10}/> WhatsApp
                         </button>
                       )}
+                      <button onClick={() => abrirCobranca(l)} className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <Zap size={10}/> Cobrar
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -319,6 +377,9 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                             <MessageCircle size={10}/> WhatsApp
                           </button>
                         )}
+                        <button onClick={() => abrirCobranca(l)} className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          <Zap size={10}/> Cobrar
+                        </button>
                         <button
                           onClick={() => renovarContrato(l.id, l.contrato_fim as string)}
                           disabled={salvando === l.id}
@@ -430,6 +491,145 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             )}
           </div>
         </>
+      )}
+      {/* Modal de Cobrança Asaas */}
+      {cobrancaLead && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCobrancaLead(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg">Gerar Cobrança</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{cobrancaLead.empresa}</p>
+              </div>
+              <button onClick={() => setCobrancaLead(null)} className="text-slate-500 hover:text-white p-1"><X size={18}/></button>
+            </div>
+
+            {!cobrancaResultado ? (
+              <div className="space-y-4">
+                <div className="bg-black/30 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold uppercase">Valor</span>
+                  <span className="text-white font-black text-lg">R$ {(cobrancaLead.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Tipo de cobrança</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['PIX', 'BOLETO'] as const).map(t => (
+                      <button key={t} onClick={() => setCobrancaTipo(t)} className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${cobrancaTipo === t ? 'bg-[#22C55E] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+                        {t === 'PIX' ? <QrCode size={14}/> : <Barcode size={14}/>} {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>
+                  <input
+                    type="text"
+                    value={cobrancaCpfCnpj}
+                    onChange={e => setCobrancaCpfCnpj(e.target.value)}
+                    placeholder="00.000.000/0001-00"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
+                  <input
+                    type="date"
+                    value={cobrancaVencimento}
+                    onChange={e => setCobrancaVencimento(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">E-mail (opcional)</label>
+                  <input
+                    type="email"
+                    value={cobrancaEmail}
+                    onChange={e => setCobrancaEmail(e.target.value)}
+                    placeholder="cliente@email.com"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                  />
+                </div>
+
+                {cobrancaErro && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>
+                )}
+
+                <button
+                  onClick={gerarCobranca}
+                  disabled={cobrancaLoading || !cobrancaCpfCnpj || !cobrancaVencimento}
+                  className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {cobrancaLoading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
+                  {cobrancaLoading ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-2xl p-4 text-center">
+                  <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                  <p className="text-white font-black text-sm uppercase">Cobrança gerada com sucesso!</p>
+                  <p className="text-slate-400 text-xs mt-1">R$ {Number(cobrancaResultado.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · Vence {new Date(cobrancaResultado.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                </div>
+
+                {cobrancaResultado.tipo === 'PIX' && cobrancaResultado.pixPayload && (
+                  <div className="space-y-3">
+                    {cobrancaResultado.pixQrcode && (
+                      <div className="flex justify-center">
+                        <img src={`data:image/png;base64,${cobrancaResultado.pixQrcode}`} alt="QR Code PIX" className="w-48 h-48 rounded-xl border border-white/10"/>
+                      </div>
+                    )}
+                    <div className="bg-black/30 border border-white/10 rounded-xl p-3">
+                      <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Copia e cola PIX</p>
+                      <p className="text-white text-xs font-mono break-all leading-relaxed">{cobrancaResultado.pixPayload}</p>
+                    </div>
+                    <button onClick={() => copiar(cobrancaResultado.pixPayload)} className="w-full bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                      <Copy size={14}/> {copiado ? 'Copiado!' : 'Copiar código PIX'}
+                    </button>
+                  </div>
+                )}
+
+                {cobrancaResultado.tipo === 'BOLETO' && (
+                  <div className="space-y-3">
+                    {cobrancaResultado.linhaDigitavel && (
+                      <div className="bg-black/30 border border-white/10 rounded-xl p-3">
+                        <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Linha Digitável</p>
+                        <p className="text-white text-xs font-mono break-all">{cobrancaResultado.linhaDigitavel}</p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      {cobrancaResultado.linhaDigitavel && (
+                        <button onClick={() => copiar(cobrancaResultado.linhaDigitavel)} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                          <Copy size={14}/> {copiado ? 'Copiado!' : 'Copiar código'}
+                        </button>
+                      )}
+                      {cobrancaResultado.bankSlipUrl && (
+                        <a href={cobrancaResultado.bankSlipUrl} target="_blank" rel="noopener noreferrer" className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                          <ExternalLink size={14}/> Ver boleto
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {cobrancaResultado.invoiceUrl && (
+                  <a href={cobrancaResultado.invoiceUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                    <ExternalLink size={14}/> Abrir fatura online
+                  </a>
+                )}
+
+                <p className="text-center text-[10px] text-slate-600">Quando o cliente pagar, o sistema atualiza automaticamente via webhook.</p>
+
+                <button onClick={() => { setCobrancaResultado(null); }} className="w-full text-slate-500 hover:text-white text-xs font-bold uppercase py-2 transition-colors">
+                  Gerar outra cobrança
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

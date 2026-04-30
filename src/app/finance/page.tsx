@@ -24,6 +24,8 @@ type LeadFinance = {
   data_pagamento: string | null;
   created_at: string;
   atividades?: Atividade[];
+  client_id?: string | null;
+  cnpj?: string | null;
 };
 
 function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
@@ -50,15 +52,32 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
 
   const carregarLeads = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data: leadsData } = await supabase
       .from('leads')
-      .select('id, empresa, valor_total, status, unidade, contrato_inicio, contrato_fim, data_pagamento, created_at, telefone, atividades')
+      .select('id, empresa, valor_total, status, unidade, contrato_inicio, contrato_fim, data_pagamento, created_at, telefone, atividades, client_id')
       .eq('empresa_id', perfil?.empresa_id)
       .eq('status', 'ganho')
       .not('contrato_fim', 'is', null)
       .order('contrato_fim', { ascending: true })
       .limit(1000);
-    setLeads((data || []) as LeadFinance[]);
+
+    // Busca CNPJs dos clientes vinculados
+    const clientIds = [...new Set((leadsData || []).map(l => l.client_id).filter(Boolean))];
+    let cnpjMap: Record<string, string> = {};
+    if (clientIds.length > 0) {
+      const { data: clientesData } = await supabase
+        .from('clientes')
+        .select('id, cnpj')
+        .in('id', clientIds);
+      cnpjMap = (clientesData || []).reduce((acc, c) => ({ ...acc, [c.id]: c.cnpj }), {});
+    }
+
+    const leads = (leadsData || []).map(l => ({
+      ...l,
+      cnpj: l.client_id ? (cnpjMap[l.client_id] || null) : null,
+    }));
+
+    setLeads(leads as LeadFinance[]);
     setLoading(false);
   };
 
@@ -161,7 +180,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const abrirCobranca = (lead: LeadFinance) => {
     setCobrancaLead(lead);
     setCobrancaTipo('PIX');
-    setCobrancaCpfCnpj('');
+    setCobrancaCpfCnpj(lead.cnpj || '');
     setCobrancaEmail('');
     setCobrancaVencimento(lead.contrato_fim || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10));
     setCobrancaErro(null);

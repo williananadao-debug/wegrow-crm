@@ -4,7 +4,8 @@ import Link from 'next/link';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
-  TrendingUp, MapPin, Mail, ChevronRight, Star
+  TrendingUp, MapPin, Mail, ChevronRight, Star,
+  Check, MessageCircle, PenLine, Wallet, Bot
 } from 'lucide-react';
 
 const STATS = [
@@ -36,6 +37,65 @@ const STEPS = [
     icon: <Briefcase size={22} />,
     color: 'purple',
   },
+];
+
+const PLANOS = [
+  {
+    nome: 'Essencial',
+    preco: 497,
+    desc: 'Para PMEs saindo das planilhas e organizando o processo comercial.',
+    cor: 'border-white/10',
+    destaque: false,
+    itens: [
+      'Kanban de vendas (drag-and-drop)',
+      'Dashboard 360° com KPIs',
+      'Gestão de equipe + cargos',
+      'Metas por vendedor',
+      'Catálogo de serviços',
+      'Portal público de leads',
+      'PWA offline',
+      'Usuários ilimitados',
+    ],
+  },
+  {
+    nome: 'Pro',
+    preco: 897,
+    desc: 'Para empresas em crescimento que querem IA, relatórios avançados e mais controle.',
+    cor: 'border-[#22C55E]/40',
+    destaque: true,
+    itens: [
+      'Tudo do Essencial +',
+      'IA de prospecção (resgate, churn)',
+      'Análise de risco de crédito CNPJ',
+      'Relatórios avançados + exportação CSV',
+      'Pipeline de produção',
+      'Dashboard financeiro',
+      'Multi-unidade / filiais',
+      'Audit log e histórico completo',
+    ],
+  },
+  {
+    nome: 'Enterprise',
+    preco: 1497,
+    desc: 'Para grupos ou empresas maiores com múltiplos CNPJs e necessidade de SLA.',
+    cor: 'border-white/10',
+    destaque: false,
+    itens: [
+      'Tudo do Pro +',
+      'API pública documentada',
+      'Onboarding dedicado',
+      'Suporte prioritário (SLA 4h)',
+      'Multi-empresa (múltiplos CNPJs)',
+      'White-label parcial',
+    ],
+  },
+];
+
+const ADDONS = [
+  { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', preco: 'R$ 149/mês', cor: 'text-green-400 bg-green-400/10' },
+  { icon: <Bot size={16}/>, label: 'IA Briefing (IAlto)', preco: 'R$ 199/mês', cor: 'text-purple-400 bg-purple-400/10' },
+  { icon: <PenLine size={16}/>, label: 'Assinatura Digital', preco: 'R$ 99/mês', cor: 'text-blue-400 bg-blue-400/10' },
+  { icon: <Wallet size={16}/>, label: 'Módulo Financeiro', preco: 'R$ 199/mês', cor: 'text-yellow-400 bg-yellow-400/10' },
 ];
 
 const FEATURES = [
@@ -313,6 +373,89 @@ export default function LandingPage() {
             "Antes o vendedor fechava, a produção não sabia. Agora tudo está conectado — o job entra na fila automaticamente e o OPEC recebe os dados sem ninguém precisar digitar duas vezes."
           </blockquote>
           <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Diretor Comercial · Rádio Regional</div>
+        </div>
+      </section>
+
+      {/* PREÇOS */}
+      <section className="py-24 px-6" id="precos">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Preços</div>
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
+              Simples. Previsível. Sem surpresas.
+            </h2>
+            <p className="text-slate-400 max-w-xl mx-auto text-sm font-medium">
+              Preço fixo por empresa — sem cobrar por usuário. Sua equipe cresce sem o custo crescer junto.
+            </p>
+          </div>
+
+          {/* Cards de plano */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {PLANOS.map((plano) => (
+              <div
+                key={plano.nome}
+                className={`relative bg-[#0B1120] border-2 ${plano.cor} rounded-[32px] p-8 flex flex-col ${plano.destaque ? 'shadow-[0_0_60px_rgba(34,197,94,0.12)]' : ''}`}
+              >
+                {plano.destaque && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#22C55E] text-[#0B1120] text-[9px] font-black uppercase tracking-[0.2em] px-5 py-1.5 rounded-full whitespace-nowrap shadow-[0_4px_20px_rgba(34,197,94,0.3)]">
+                    Mais popular
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`}>{plano.nome}</p>
+                  <div className="flex items-end gap-1 mb-3">
+                    <span className="text-4xl font-black text-white">R$ {plano.preco.toLocaleString('pt-BR')}</span>
+                    <span className="text-slate-500 text-sm font-bold pb-1">/mês</span>
+                  </div>
+                  <p className="text-slate-500 text-xs font-medium leading-relaxed">{plano.desc}</p>
+                </div>
+
+                <div className="space-y-2.5 flex-1 mb-8">
+                  {plano.itens.map((item) => (
+                    <div key={item} className="flex items-start gap-2.5 text-xs text-slate-300">
+                      <Check size={13} className={`flex-shrink-0 mt-0.5 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`} />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+
+                <a
+                  href="https://wa.me/5547997022381"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`w-full py-3.5 rounded-2xl font-black uppercase text-xs tracking-widest text-center transition-all flex items-center justify-center gap-2
+                    ${plano.destaque
+                      ? 'bg-[#22C55E] text-[#0B1120] hover:bg-[#16a34a] shadow-[0_8px_30px_rgba(34,197,94,0.25)]'
+                      : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'
+                    }`}
+                >
+                  Falar com consultor <ArrowRight size={13}/>
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {/* Add-ons */}
+          <div className="bg-white/[0.03] border border-white/8 rounded-[32px] p-8">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6">Add-ons disponíveis em qualquer plano</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {ADDONS.map((a) => (
+                <div key={a.label} className="flex flex-col gap-3 bg-white/5 border border-white/10 rounded-2xl p-4">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${a.cor}`}>{a.icon}</div>
+                  <div>
+                    <p className="text-white text-xs font-black">{a.label}</p>
+                    <p className="text-slate-500 text-[10px] font-bold mt-0.5">{a.preco}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Nota */}
+          <p className="text-center text-slate-600 text-[10px] uppercase tracking-widest font-bold mt-6">
+            Todos os planos incluem usuários ilimitados · PWA offline · suporte por chat · sem taxa de setup
+          </p>
         </div>
       </section>
 

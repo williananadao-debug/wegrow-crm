@@ -5,7 +5,7 @@ import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight, Star,
-  Check, MessageCircle, PenLine, Wallet, Bot
+  Check, MessageCircle, PenLine, Wallet
 } from 'lucide-react';
 
 const STATS = [
@@ -93,7 +93,6 @@ const PLANOS = [
 
 const ADDONS = [
   { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', preco: 'R$ 149/mês', cor: 'text-green-400 bg-green-400/10' },
-  { icon: <Bot size={16}/>, label: 'IA Briefing (IAlto)', preco: 'R$ 199/mês', cor: 'text-purple-400 bg-purple-400/10' },
   { icon: <PenLine size={16}/>, label: 'Assinatura Digital', preco: 'R$ 99/mês', cor: 'text-blue-400 bg-blue-400/10' },
   { icon: <Wallet size={16}/>, label: 'Módulo Financeiro', preco: 'R$ 199/mês', cor: 'text-yellow-400 bg-yellow-400/10' },
 ];

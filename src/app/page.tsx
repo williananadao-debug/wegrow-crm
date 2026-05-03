@@ -59,7 +59,7 @@ const PLANOS = [
   },
   {
     nome: 'Pro',
-    preco: 897,
+    preco: 697,
     desc: 'Para empresas em crescimento que querem IA, relatórios avançados e mais controle.',
     cor: 'border-[#22C55E]/40',
     destaque: true,
@@ -76,7 +76,7 @@ const PLANOS = [
   },
   {
     nome: 'Enterprise',
-    preco: 1497,
+    preco: 897,
     desc: 'Para grupos ou empresas maiores com múltiplos CNPJs e necessidade de SLA.',
     cor: 'border-white/10',
     destaque: false,

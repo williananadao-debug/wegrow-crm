@@ -6,7 +6,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound
+  Rocket, BarChart3, Menu, X, UsersRound, Globe
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell'; 
 
@@ -57,6 +57,7 @@ export default function Navbar() {
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
       mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
+      isDirector ? { name: 'Portais', icon: <Globe size={20} />, href: '/portais' } : null,
     ].filter(Boolean) as any[];
   }
 

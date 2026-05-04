@@ -13,6 +13,7 @@ function db() {
 }
 
 export async function POST(req: Request) {
+  try {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
@@ -23,10 +24,15 @@ export async function POST(req: Request) {
 
   const supabase = db();
 
-  const [{ data: empresa }, { data: unidades }] = await Promise.all([
+  const [{ data: empresa, error: empErr }, { data: unidades }] = await Promise.all([
     supabase.from('empresas').select('modulos').eq('id', empresa_id).single(),
     supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade').eq('empresa_id', empresa_id),
   ]);
+
+  if (empErr) {
+    console.error('[zapsign/supabase]', empErr);
+    return NextResponse.json({ erro: 'Erro ao buscar dados da empresa: ' + empErr.message }, { status: 500 });
+  }
 
   const apiToken = empresa?.modulos?.zapsign_token;
   if (!apiToken) {
@@ -101,4 +107,9 @@ export async function POST(req: Request) {
 
   const link = zapData.signers?.[0]?.sign_url ?? null;
   return NextResponse.json({ ok: true, doc_token: zapData.token, sign_url: link, open_id: zapData.open_id });
+
+  } catch (err: any) {
+    console.error('[zapsign/unhandled]', err);
+    return NextResponse.json({ erro: 'Erro interno: ' + (err?.message || String(err)) }, { status: 500 });
+  }
 }

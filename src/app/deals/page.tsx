@@ -1299,20 +1299,39 @@ export default function DealsPage() {
     if (!zapSignerName.trim()) { setZapErro('Informe o nome do signatário.'); return; }
     if (!zapSignerEmail.trim() && !zapSignerPhone.trim()) { setZapErro('Informe e-mail ou WhatsApp do signatário.'); return; }
     setZapSending(true); setZapErro(''); setZapLink(null);
+
+    const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
+    const total = Math.max(0, subtotal - desconto);
+
     const res = await fetch('/api/zapsign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         empresa_id: perfil?.empresa_id,
-        doc_name: novaEmpresa ? `Contrato — ${novaEmpresa}` : 'Contrato WeGrow',
         signers: [{ name: zapSignerName.trim(), email: zapSignerEmail.trim() || undefined, phone: zapSignerPhone.trim() || undefined }],
+        deal: {
+          id: editingLeadId,
+          empresa: novaEmpresa,
+          cnpj: novoCnpj,
+          inscricao_estadual: novoIE,
+          telefone: novoTelefone,
+          cidade: novaCidade,
+          unidade: novaUnidade,
+          contrato_inicio: contratoInicio,
+          contrato_fim: contratoFim,
+          itens: itensTemporarios,
+          desconto,
+          valor_total: total,
+          parcelas,
+          vencimento,
+        },
       }),
     });
     const j = await res.json();
     if (!res.ok) setZapErro(j.erro || 'Erro ao enviar para ZapSign.');
     else setZapLink(j.sign_url);
     setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);

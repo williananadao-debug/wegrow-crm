@@ -56,6 +56,8 @@ type Lead = {
   parcelas?: string;
   vencimento?: string;
   atividades?: Atividade[];
+  zapsign_token?: string;
+  zapsign_sign_url?: string;
 };
 
 type ClienteOpcao = {
@@ -294,6 +296,12 @@ const LeadCard = React.memo(({
                         {lead.unidade && (
                             <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                 <Building2 size={8}/> {lead.unidade}
+                            </span>
+                        )}
+
+                        {lead.zapsign_token && (
+                            <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <PenLine size={8}/> Ass. Pendente
                             </span>
                         )}
                     </div>
@@ -536,7 +544,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1329,11 +1337,21 @@ export default function DealsPage() {
     });
     let j: any = {};
     try { j = await res.json(); } catch { j = {}; }
-    if (!res.ok) setZapErro(j.erro || `Erro ${res.status} ao enviar para ZapSign.`);
-    else if (!j.sign_url) setZapErro('ZapSign retornou sem link de assinatura. Verifique o token.');
-    else setZapLink(j.sign_url);
+    if (!res.ok) { setZapErro(j.erro || `Erro ${res.status} ao enviar para ZapSign.`); }
+    else if (!j.sign_url) { setZapErro('ZapSign retornou sem link de assinatura. Verifique o token.'); }
+    else {
+      setZapLink(j.sign_url);
+      // Salva token e link no lead para persistir o status
+      if (editingLeadId) {
+        await supabase.from('leads').update({
+          zapsign_token: j.doc_token,
+          zapsign_sign_url: j.sign_url,
+        }).eq('id', editingLeadId);
+        await carregarLeads();
+      }
+    }
     setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, carregarLeads]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);
@@ -1671,8 +1689,8 @@ export default function DealsPage() {
         setLeadUserId(user?.id || '');
         setMostrarDetalhes(false);
     }
-    setShowAssinatura(false);
-    setZapLink(null);
+    setShowAssinatura(Boolean(lead?.zapsign_sign_url));
+    setZapLink(lead?.zapsign_sign_url || null);
     setZapErro('');
     setZapDocUrl('');
     setIsModalOpen(true);

@@ -108,11 +108,14 @@ export default function AdminPage() {
 
   const salvarEmpresa = async () => {
     if (!empresaSelecionada) return;
+    if (!editNome.trim()) { alert('O nome da empresa não pode ficar vazio.'); return; }
     setSaving(true);
+    // Mescla módulos atuais com os editados para não perder zapsign_token e outros campos não-boolean
+    const modulosMesclados = { ...empresaSelecionada.modulos, ...editModulos };
     await fetch('/api/admin/empresas', {
       method: 'PATCH',
       headers: headers(),
-      body: JSON.stringify({ id: empresaSelecionada.id, nome: editNome, plano: editPlano, status: editStatus, modulos: editModulos }),
+      body: JSON.stringify({ id: empresaSelecionada.id, nome: editNome.trim(), plano: editPlano, status: editStatus, modulos: modulosMesclados }),
     });
     await carregarEmpresas();
     setSaving(false);

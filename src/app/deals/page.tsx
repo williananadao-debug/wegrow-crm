@@ -1347,11 +1347,11 @@ export default function DealsPage() {
           zapsign_token: j.doc_token,
           zapsign_sign_url: j.sign_url,
         }).eq('id', editingLeadId);
-        await carregarLeads();
+        await fetchData();
       }
     }
     setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, carregarLeads]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);

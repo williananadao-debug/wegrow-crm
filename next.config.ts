@@ -13,7 +13,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['groq-sdk'],
+  serverExternalPackages: ['groq-sdk', 'pdfkit'],
 };
 
 export default withPWA(nextConfig);

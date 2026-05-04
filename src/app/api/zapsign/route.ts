@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       signers: signers.map((s: any) => ({
         name: s.name,
         email: s.email || undefined,
-        phone: s.phone ? s.phone.replace(/\D/g, '') : undefined,
+        phone: s.phone ? (() => { const d = s.phone.replace(/\D/g, ''); return d.startsWith('55') ? d : '55' + d; })() : undefined,
         send_automatic_email: Boolean(s.email),
         send_automatic_whatsapp: Boolean(s.phone && !s.email),
       })),

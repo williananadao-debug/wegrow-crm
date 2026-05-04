@@ -152,7 +152,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       doc.text(fmt(data.valor_total), colX[2] + 4, ty + 4, { width: 80, align: 'right' });
       ty += rowH;
 
-      doc.y = ty;
+      doc.text('', 50, ty);
       doc.moveDown(1);
 
       // ── SEÇÃO 2 ──────────────────────────────────────────────────

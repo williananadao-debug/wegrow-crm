@@ -1327,8 +1327,10 @@ export default function DealsPage() {
         },
       }),
     });
-    const j = await res.json();
-    if (!res.ok) setZapErro(j.erro || 'Erro ao enviar para ZapSign.');
+    let j: any = {};
+    try { j = await res.json(); } catch { j = {}; }
+    if (!res.ok) setZapErro(j.erro || `Erro ${res.status} ao enviar para ZapSign.`);
+    else if (!j.sign_url) setZapErro('ZapSign retornou sem link de assinatura. Verifique o token.');
     else setZapLink(j.sign_url);
     setZapSending(false);
   }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId]);

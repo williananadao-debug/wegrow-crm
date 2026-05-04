@@ -99,10 +99,13 @@ export async function POST(req: Request) {
     }),
   });
 
-  const zapData = await zapRes.json();
+  const zapText = await zapRes.text();
+  let zapData: any = {};
+  try { zapData = JSON.parse(zapText); } catch { /* resposta não é JSON */ }
   if (!zapRes.ok) {
-    console.error('[zapsign]', zapData);
-    return NextResponse.json({ erro: zapData?.detail || 'Erro ao criar documento no ZapSign.' }, { status: 502 });
+    console.error('[zapsign]', zapRes.status, zapText.slice(0, 500));
+    const msg = zapData?.detail || zapData?.message || zapText.slice(0, 300) || 'Erro ao criar documento no ZapSign.';
+    return NextResponse.json({ erro: 'ZapSign: ' + msg }, { status: 502 });
   }
 
   const link = zapData.signers?.[0]?.sign_url ?? null;

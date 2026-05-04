@@ -44,13 +44,10 @@ export default function PortaisAdmin() {
   const [segRaw, setSegRaw] = useState('');
   const [expandido, setExpandido] = useState<string | null>(null);
 
-  if (perfil?.cargo !== 'diretor') return (
-    <div className="flex items-center justify-center h-64">
-      <p className="text-slate-500 font-bold">Acesso restrito a diretores.</p>
-    </div>
-  );
-
-  useEffect(() => { carregar(); }, []);
+  // Todos os hooks antes de qualquer return condicional
+  useEffect(() => {
+    if (perfil?.cargo === 'diretor') carregar();
+  }, [perfil]);
 
   async function carregar() {
     setLoading(true);
@@ -81,9 +78,7 @@ export default function PortaisAdmin() {
     let segs: string[] = [];
     try { tipos = JSON.parse(tiposRaw); } catch { alert('JSON de tipos inválido.'); setSaving(false); return; }
     segs = segRaw.split('\n').map(s => s.trim()).filter(Boolean);
-
     const payload = { ...form, tipos_cadastro: tipos, segmentos: segs };
-
     if (editando) {
       const { error } = await supabase.from('empresa_portais').update(payload).eq('id', editando.id);
       if (error) { alert('Erro ao salvar: ' + error.message); setSaving(false); return; }
@@ -107,6 +102,12 @@ export default function PortaisAdmin() {
     setCopiado(slug);
     setTimeout(() => setCopiado(null), 2000);
   }
+
+  if (perfil?.cargo !== 'diretor') return (
+    <div className="flex items-center justify-center h-64">
+      <p className="text-slate-500 font-bold">Acesso restrito a diretores.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -149,9 +150,7 @@ export default function PortaisAdmin() {
                   <button onClick={() => copiar(p.slug)} className="p-2 text-slate-500 hover:text-white transition-colors" title="Copiar link">
                     {copiado === p.slug ? <CheckCircle2 size={16} className="text-[#22C55E]" /> : <Copy size={16} />}
                   </button>
-                  <a href={`/p/${p.slug}`} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-500 hover:text-white transition-colors" title="Abrir portal">
-                    <ExternalLink size={16} />
-                  </a>
+                  <a href={`/p/${p.slug}`} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-500 hover:text-white transition-colors"><ExternalLink size={16} /></a>
                   <button onClick={() => abrirEdicao(p)} className="p-2 text-slate-500 hover:text-white transition-colors"><Edit2 size={16} /></button>
                   <button onClick={() => excluir(p.id)} className="p-2 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
                   <button onClick={() => setExpandido(expandido === p.id ? null : p.id)} className="p-2 text-slate-500 hover:text-white transition-colors">
@@ -172,7 +171,6 @@ export default function PortaisAdmin() {
         </div>
       )}
 
-      {/* Modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-2xl my-8 shadow-2xl">
@@ -181,7 +179,6 @@ export default function PortaisAdmin() {
               <button onClick={() => setModal(false)} className="text-slate-500 hover:text-white"><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4">
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Nome do Portal *</label>
@@ -193,12 +190,10 @@ export default function PortaisAdmin() {
                   {form.slug && <p className="text-[10px] text-slate-600 mt-1 font-mono">/p/{form.slug}</p>}
                 </div>
               </div>
-
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Descrição / tagline</label>
                 <input placeholder="Câmara de Dirigentes Lojistas do Alto Vale" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600" value={form.descricao || ''} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </div>
-
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Cor primária</label>
@@ -209,33 +204,23 @@ export default function PortaisAdmin() {
                 </div>
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Logo (texto curto)</label>
-                  <input maxLength={4} placeholder="CDL" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600 font-black uppercase text-center text-lg" value={form.logo_texto} onChange={e => setForm(f => ({ ...f, logo_texto: e.target.value.toUpperCase() }))} />
+                  <input maxLength={4} placeholder="CDL" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors font-black uppercase text-center text-lg" value={form.logo_texto} onChange={e => setForm(f => ({ ...f, logo_texto: e.target.value.toUpperCase() }))} />
                 </div>
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Preview</label>
                   <div className="w-full h-10 rounded-xl flex items-center justify-center font-black text-[#0B1120] text-lg" style={{ background: form.cor_primaria }}>{form.logo_texto || 'W'}</div>
                 </div>
               </div>
-
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">
                   Tipos de Cadastro (JSON) — [{'{'}nome, desc, valor{'}'}]
                 </label>
-                <textarea
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-mono outline-none focus:border-[#22C55E] transition-colors min-h-[120px] resize-none"
-                  value={tiposRaw} onChange={e => setTiposRaw(e.target.value)}
-                />
+                <textarea className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-mono outline-none focus:border-[#22C55E] transition-colors min-h-[120px] resize-none" value={tiposRaw} onChange={e => setTiposRaw(e.target.value)} />
               </div>
-
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Segmentos (um por linha — deixe vazio para não mostrar)</label>
-                <textarea
-                  placeholder={'Varejo / Comércio Geral\nAlimentação e Bebidas\nModa e Vestuário'}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors min-h-[80px] resize-none placeholder:text-slate-600"
-                  value={segRaw} onChange={e => setSegRaw(e.target.value)}
-                />
+                <textarea placeholder={'Varejo / Comércio Geral\nAlimentação e Bebidas'} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors min-h-[80px] resize-none placeholder:text-slate-600" value={segRaw} onChange={e => setSegRaw(e.target.value)} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">E-mail de alerta (novos leads)</label>
@@ -246,25 +231,19 @@ export default function PortaisAdmin() {
                   <input type="tel" placeholder="(47) 99999-9999" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600" value={form.whatsapp || ''} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} />
                 </div>
               </div>
-
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Mensagem de boas-vindas (tela de sucesso)</label>
-                <input placeholder="Nossa equipe entrará em contato em breve para dar continuidade ao seu cadastro." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600" value={form.texto_boas_vindas || ''} onChange={e => setForm(f => ({ ...f, texto_boas_vindas: e.target.value }))} />
+                <input placeholder="Nossa equipe entrará em contato em breve." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600" value={form.texto_boas_vindas || ''} onChange={e => setForm(f => ({ ...f, texto_boas_vindas: e.target.value }))} />
               </div>
-
               <div className="flex items-center gap-3">
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Portal ativo</label>
-                <button type="button" onClick={() => setForm(f => ({ ...f, ativo: !f.ativo }))}
-                  className={`w-10 h-5 rounded-full transition-all ${form.ativo ? 'bg-[#22C55E]' : 'bg-slate-700'}`}>
-                  <div className={`w-4 h-4 bg-white rounded-full transition-all mx-0.5 ${form.ativo ? 'translate-x-5' : 'translate-x-0'}`} />
+                <button type="button" onClick={() => setForm(f => ({ ...f, ativo: !f.ativo }))} className={`w-10 h-5 rounded-full transition-all relative ${form.ativo ? 'bg-[#22C55E]' : 'bg-slate-700'}`}>
+                  <div className={`w-4 h-4 bg-white rounded-full transition-all absolute top-0.5 ${form.ativo ? 'left-5' : 'left-0.5'}`} />
                 </button>
               </div>
             </div>
-
             <div className="flex gap-3 p-6 border-t border-white/5">
-              <button onClick={() => setModal(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold uppercase text-xs tracking-widest transition-colors">
-                Cancelar
-              </button>
+              <button onClick={() => setModal(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold uppercase text-xs tracking-widest transition-colors">Cancelar</button>
               <button onClick={salvar} disabled={saving || !form.slug || !form.nome_portal} className="flex-1 bg-[#22C55E] hover:bg-[#16a34a] disabled:opacity-50 text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {saving ? 'Salvando...' : 'Salvar Portal'}

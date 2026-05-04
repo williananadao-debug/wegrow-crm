@@ -1296,8 +1296,8 @@ export default function DealsPage() {
   }, [perfil?.nome, supabase, isCDL]);
 
   const enviarParaAssinatura = useCallback(async () => {
-    if (!zapDocUrl.trim()) { setZapErro('Informe a URL do documento PDF.'); return; }
     if (!zapSignerName.trim()) { setZapErro('Informe o nome do signatário.'); return; }
+    if (!zapSignerEmail.trim() && !zapSignerPhone.trim()) { setZapErro('Informe e-mail ou WhatsApp do signatário.'); return; }
     setZapSending(true); setZapErro(''); setZapLink(null);
     const res = await fetch('/api/zapsign', {
       method: 'POST',
@@ -1305,7 +1305,6 @@ export default function DealsPage() {
       body: JSON.stringify({
         empresa_id: perfil?.empresa_id,
         doc_name: novaEmpresa ? `Contrato — ${novaEmpresa}` : 'Contrato WeGrow',
-        doc_url: zapDocUrl.trim(),
         signers: [{ name: zapSignerName.trim(), email: zapSignerEmail.trim() || undefined, phone: zapSignerPhone.trim() || undefined }],
       }),
     });
@@ -1313,7 +1312,7 @@ export default function DealsPage() {
     if (!res.ok) setZapErro(j.erro || 'Erro ao enviar para ZapSign.');
     else setZapLink(j.sign_url);
     setZapSending(false);
-  }, [zapDocUrl, zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);
@@ -1847,13 +1846,15 @@ export default function DealsPage() {
                             <button onClick={imprimirProposta} className="p-2 bg-blue-600/10 text-blue-400 rounded-full hover:bg-blue-600/20 transition-colors">
                                 <Printer size={20}/>
                             </button>
-                            <button
-                              onClick={() => { setShowAssinatura(v => !v); setZapLink(null); setZapErro(''); setZapSignerName(novaEmpresa || ''); setZapSignerPhone(novoTelefone || ''); }}
-                              className={`p-2 rounded-full transition-colors ${showAssinatura ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-slate-400 hover:text-purple-400'}`}
-                              title="Assinatura Digital"
-                            >
-                                <PenLine size={20}/>
-                            </button>
+                            {empresa?.modulos?.zapsign && (
+                              <button
+                                onClick={() => { setShowAssinatura(v => !v); setZapLink(null); setZapErro(''); setZapSignerName(novaEmpresa || ''); setZapSignerPhone(novoTelefone || ''); setZapSignerEmail(''); }}
+                                className={`p-2 rounded-full transition-colors ${showAssinatura ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-slate-400 hover:text-purple-400'}`}
+                                title="Assinatura Digital"
+                              >
+                                  <PenLine size={20}/>
+                              </button>
+                            )}
                         </>
                       )}
                       <button onClick={() => setIsModalOpen(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={20}/></button>
@@ -1885,10 +1886,6 @@ export default function DealsPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2">
-                        <label className="text-[9px] font-black uppercase text-slate-500">URL do PDF *</label>
-                        <input type="url" value={zapDocUrl} onChange={e => setZapDocUrl(e.target.value)} placeholder="https://drive.google.com/..." className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
-                      </div>
                       <div>
                         <label className="text-[9px] font-black uppercase text-slate-500">Nome do Signatário *</label>
                         <input type="text" value={zapSignerName} onChange={e => setZapSignerName(e.target.value)} placeholder="Nome completo" className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
@@ -1901,14 +1898,14 @@ export default function DealsPage() {
                         <label className="text-[9px] font-black uppercase text-slate-500">WhatsApp (com DDD)</label>
                         <input type="tel" value={zapSignerPhone} onChange={e => setZapSignerPhone(e.target.value)} placeholder="47999999999" className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
                       </div>
-                      <div className="md:col-span-2 flex items-center justify-between">
-                        {zapErro && <p className="text-red-400 text-xs font-bold">{zapErro}</p>}
-                        {!zapErro && <span className="text-slate-600 text-[10px]">O link de assinatura será enviado por e-mail ou WhatsApp ao signatário.</span>}
-                        <button type="button" onClick={enviarParaAssinatura} disabled={zapSending} className="ml-auto bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2">
+                      <div className="flex items-end">
+                        <button type="button" onClick={enviarParaAssinatura} disabled={zapSending} className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2">
                           {zapSending ? <Loader2 size={14} className="animate-spin"/> : <PenLine size={14}/>}
-                          {zapSending ? 'Enviando...' : 'Enviar para Assinar'}
+                          {zapSending ? 'Gerando contrato...' : 'Gerar e Enviar Contrato'}
                         </button>
                       </div>
+                      {zapErro && <p className="md:col-span-2 text-red-400 text-xs font-bold">{zapErro}</p>}
+                      {!zapErro && <p className="md:col-span-2 text-slate-600 text-[10px]">O contrato padrão será gerado automaticamente e enviado ao signatário via e-mail ou WhatsApp.</p>}
                     </div>
                   )}
                 </div>

@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [savingOpec, setSavingOpec] = useState(false);
   const [feedbackOpec, setFeedbackOpec] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [zapsignToken, setZapsignToken] = useState('');
+  const [zapsignTemplate, setZapsignTemplate] = useState('');
   const [savingZap, setSavingZap] = useState(false);
   const [feedbackZap, setFeedbackZap] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [showZapToken, setShowZapToken] = useState(false);
@@ -65,6 +66,7 @@ export default function SettingsPage() {
     setLoading(true);
     const { data: emp } = await supabase.from('empresas').select('modulos').eq('id', perfil?.empresa_id).single();
     if (emp?.modulos?.zapsign_token) setZapsignToken(emp.modulos.zapsign_token);
+    if (emp?.modulos?.zapsign_template) setZapsignTemplate(emp.modulos.zapsign_template);
 
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('id', { ascending: true });
     
@@ -225,7 +227,7 @@ export default function SettingsPage() {
     setFeedbackZap(null);
     const { data: emp } = await supabase.from('empresas').select('modulos').eq('id', perfil?.empresa_id).single();
     const modulosAtuais = emp?.modulos || {};
-    const { error } = await supabase.from('empresas').update({ modulos: { ...modulosAtuais, zapsign_token: zapsignToken.trim() } }).eq('id', perfil?.empresa_id);
+    const { error } = await supabase.from('empresas').update({ modulos: { ...modulosAtuais, zapsign_token: zapsignToken.trim(), zapsign_template: zapsignTemplate.trim() } }).eq('id', perfil?.empresa_id);
     if (error) setFeedbackZap({ type: 'error', msg: 'Erro ao salvar token.' });
     else setFeedbackZap({ type: 'success', msg: 'Token ZapSign salvo!' });
     setSavingZap(false);
@@ -509,6 +511,17 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-[10px] text-slate-600 mt-1 ml-1">Encontre em: <span className="text-blue-400 font-bold">app.zapsign.com.br → Configurações → API</span></p>
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Token do Template de Contrato</label>
+              <input
+                type="text"
+                value={zapsignTemplate}
+                onChange={e => setZapsignTemplate(e.target.value)}
+                placeholder="Token do modelo de contrato no ZapSign..."
+                className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors"
+              />
+              <p className="text-[10px] text-slate-600 mt-1 ml-1">Encontre em: <span className="text-blue-400 font-bold">ZapSign → Modelos → selecione o contrato → copie o token</span></p>
             </div>
 
             <div className="flex items-center justify-between pt-2">

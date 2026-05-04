@@ -14,8 +14,10 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 
 // Mapa de módulos da empresa → label legível
 const MODULO_LABELS: Record<string, string> = {
-  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp',
+  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp', zapsign: 'Assinatura Digital',
 };
+
+const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp', 'zapsign'] as const;
 
 type Empresa = {
   id: string; nome: string; plano: string; status: string;
@@ -83,6 +85,8 @@ export default function ClientesWeGrowPage() {
 
   const [editando, setEditando] = useState<ClienteView | null>(null);
   const [form, setForm] = useState(EMPTY_BILLING);
+  const [modulosEdit, setModulosEdit] = useState<Record<string, boolean>>({});
+  const [savingModulos, setSavingModulos] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [registrandoPgto, setRegistrandoPgto] = useState<string | null>(null);
@@ -134,6 +138,7 @@ export default function ClientesWeGrowPage() {
   const abrirEdicao = (c: ClienteView) => {
     setErroSalvar(null);
     setEditando(c);
+    setModulosEdit(c.modulos || {});
     setForm({
       valor_mensal: String(c.billing?.valor_mensal ?? ''),
       proximo_vencimento: c.billing?.proximo_vencimento ?? '',
@@ -141,6 +146,20 @@ export default function ClientesWeGrowPage() {
       contato: c.billing?.contato ?? '',
       observacao: c.billing?.observacao ?? '',
     });
+  };
+
+  const toggleModulo = async (modulo: string) => {
+    if (!editando) return;
+    const novo = { ...modulosEdit, [modulo]: !modulosEdit[modulo] };
+    setModulosEdit(novo);
+    setSavingModulos(true);
+    await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: editando.id, modulos: novo }),
+    });
+    setSavingModulos(false);
+    carregar();
   };
 
   const salvar = async () => {
@@ -389,6 +408,28 @@ export default function ClientesWeGrowPage() {
               <div>
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Observação</label>
                 <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} placeholder="Notas internas..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>
+              </div>
+
+              <div className="pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Módulos Ativos</label>
+                  {savingModulos && <Loader2 size={12} className="animate-spin text-slate-500"/>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {MODULOS_TOGGLEAVEIS.map(mod => {
+                    const ativo = Boolean(modulosEdit[mod]);
+                    return (
+                      <button
+                        key={mod}
+                        type="button"
+                        onClick={() => toggleModulo(mod)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${ativo ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}
+                      >
+                        <Package size={10}/> {MODULO_LABELS[mod]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

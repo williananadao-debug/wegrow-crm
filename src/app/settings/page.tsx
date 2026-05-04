@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, Link2, Eye, EyeOff } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -39,11 +39,6 @@ export default function SettingsPage() {
   const [unidadesOpec, setUnidadesOpec] = useState<OpecUnitConfig[]>([]);
   const [savingOpec, setSavingOpec] = useState(false);
   const [feedbackOpec, setFeedbackOpec] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
-  const [zapsignToken, setZapsignToken] = useState('');
-  const [zapsignTemplate, setZapsignTemplate] = useState('');
-  const [savingZap, setSavingZap] = useState(false);
-  const [feedbackZap, setFeedbackZap] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
-  const [showZapToken, setShowZapToken] = useState(false);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,9 +60,6 @@ export default function SettingsPage() {
   const carregarDados = async () => {
     setLoading(true);
     const { data: emp } = await supabase.from('empresas').select('modulos').eq('id', perfil?.empresa_id).single();
-    if (emp?.modulos?.zapsign_token) setZapsignToken(emp.modulos.zapsign_token);
-    if (emp?.modulos?.zapsign_template) setZapsignTemplate(emp.modulos.zapsign_template);
-
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
@@ -220,18 +212,6 @@ export default function SettingsPage() {
       setSavingOpec(false);
       setTimeout(() => setFeedbackOpec(null), 4000);
     }
-  };
-
-  const salvarZapsign = async () => {
-    setSavingZap(true);
-    setFeedbackZap(null);
-    const { data: emp } = await supabase.from('empresas').select('modulos').eq('id', perfil?.empresa_id).single();
-    const modulosAtuais = emp?.modulos || {};
-    const { error } = await supabase.from('empresas').update({ modulos: { ...modulosAtuais, zapsign_token: zapsignToken.trim(), zapsign_template: zapsignTemplate.trim() } }).eq('id', perfil?.empresa_id);
-    if (error) setFeedbackZap({ type: 'error', msg: 'Erro ao salvar token.' });
-    else setFeedbackZap({ type: 'success', msg: 'Token ZapSign salvo!' });
-    setSavingZap(false);
-    setTimeout(() => setFeedbackZap(null), 4000);
   };
 
   const getIconeCategoria = (tipo: string) => {
@@ -480,66 +460,6 @@ export default function SettingsPage() {
               {savingOpec ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
               {savingOpec ? 'Salvando...' : 'Salvar Config OPEC'}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ZapSign Integration */}
-      {perfil?.cargo === 'diretor' && (
-        <div className="max-w-6xl mt-6 bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl">
-          <div className="flex items-center gap-3 text-slate-300 border-b border-white/5 pb-6 mb-6">
-            <Link2 size={18} className="text-blue-400" />
-            <div>
-              <h2 className="font-bold text-sm uppercase tracking-wide">Assinatura Digital — ZapSign</h2>
-              <p className="text-slate-600 text-[10px] uppercase font-bold mt-0.5">Conecte sua conta ZapSign para enviar contratos para assinatura diretamente dos negócios</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 ml-1">API Token ZapSign</label>
-              <div className="relative mt-1">
-                <input
-                  type={showZapToken ? 'text' : 'password'}
-                  value={zapsignToken}
-                  onChange={e => setZapsignToken(e.target.value)}
-                  placeholder="Cole aqui o seu API Token do ZapSign..."
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors pr-12"
-                />
-                <button type="button" onClick={() => setShowZapToken(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                  {showZapToken ? <EyeOff size={16}/> : <Eye size={16}/>}
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-600 mt-1 ml-1">Encontre em: <span className="text-blue-400 font-bold">app.zapsign.com.br → Configurações → API</span></p>
-            </div>
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Token do Template de Contrato</label>
-              <input
-                type="text"
-                value={zapsignTemplate}
-                onChange={e => setZapsignTemplate(e.target.value)}
-                placeholder="Token do modelo de contrato no ZapSign..."
-                className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors"
-              />
-              <p className="text-[10px] text-slate-600 mt-1 ml-1">Encontre em: <span className="text-blue-400 font-bold">ZapSign → Modelos → selecione o contrato → copie o token</span></p>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              {feedbackZap && (
-                <div className={`flex items-center gap-2 text-xs font-bold ${feedbackZap.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                  {feedbackZap.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>} {feedbackZap.msg}
-                </div>
-              )}
-              {!feedbackZap && <span />}
-              <button
-                onClick={salvarZapsign}
-                disabled={savingZap || !zapsignToken.trim()}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingZap ? <Loader2 className="animate-spin" size={14}/> : <Save size={14}/>}
-                {savingZap ? 'Salvando...' : 'Salvar Token'}
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -74,6 +74,7 @@ export default function ClientesWeGrowPage() {
   // Aba ZapSign
   const [zapToken, setZapToken] = useState('');
   const [zapTemplate, setZapTemplate] = useState('');
+  const [zapSandbox, setZapSandbox] = useState(false);
   const [showZapToken, setShowZapToken] = useState(false);
   const [savingZap, setSavingZap] = useState(false);
   const [feedbackZap, setFeedbackZap] = useState('');
@@ -125,6 +126,7 @@ export default function ClientesWeGrowPage() {
     setModulosEdit(c.modulos || {});
     setZapToken(c.modulos?.zapsign_token || '');
     setZapTemplate(c.modulos?.zapsign_template || '');
+    setZapSandbox(Boolean(c.modulos?.zapsign_sandbox));
     setPortais([]);
     setNovoSlug(''); setNovoNome('');
     setForm({
@@ -196,7 +198,7 @@ export default function ClientesWeGrowPage() {
     const res = await fetch('/api/admin/empresas', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ id: editando.id, modulos: { ...editando.modulos, ...modulosEdit, zapsign_token: zapToken.trim(), zapsign_template: zapTemplate.trim() } }),
+      body: JSON.stringify({ id: editando.id, modulos: { ...editando.modulos, ...modulosEdit, zapsign_token: zapToken.trim(), zapsign_template: zapTemplate.trim(), zapsign_sandbox: zapSandbox } }),
     });
     setSavingZap(false);
     setFeedbackZap(res.ok ? 'ok' : 'erro');
@@ -489,6 +491,12 @@ export default function ClientesWeGrowPage() {
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Token do Template de Contrato</label>
                     <input type="text" value={zapTemplate} onChange={e => setZapTemplate(e.target.value)} placeholder="Token do modelo no ZapSign..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors placeholder:text-slate-600"/>
                   </div>
+                  <button type="button" onClick={() => setZapSandbox(v => !v)}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${zapSandbox ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                    <span className="flex-1 text-left">Modo Sandbox (Desenvolvimento/Teste)</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-black ${zapSandbox ? 'bg-yellow-500/20 text-yellow-300' : 'bg-white/5 text-slate-600'}`}>{zapSandbox ? 'ATIVO' : 'INATIVO'}</span>
+                  </button>
+                  {zapSandbox && <p className="text-yellow-600 text-[10px] font-bold -mt-2">⚠ Sandbox ativo: documentos são de teste, assinaturas não têm validade jurídica. Desative ao contratar o plano API do ZapSign.</p>}
                   <div className="flex items-center justify-between pt-1">
                     {feedbackZap === 'ok' && <span className="text-green-400 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={13}/> Salvo!</span>}
                     {feedbackZap === 'erro' && <span className="text-red-400 text-xs font-bold">Erro ao salvar.</span>}

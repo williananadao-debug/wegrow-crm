@@ -77,6 +77,7 @@ export async function POST(req: Request) {
   }
 
   const docName = deal?.empresa ? `Contrato — ${deal.empresa}` : 'Contrato WeGrow';
+  const sandbox = Boolean(empresa?.modulos?.zapsign_sandbox);
 
   const zapRes = await fetch('https://api.zapsign.com.br/api/v1/docs/', {
     method: 'POST',
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       name: docName,
       base64_pdf: pdfBase64,
+      sandbox,
       signers: signers.map((s: any) => {
         const phoneDigits = s.phone ? s.phone.replace(/\D/g, '') : '';
         const phoneNumber = phoneDigits.startsWith('55') ? phoneDigits.slice(2) : phoneDigits;

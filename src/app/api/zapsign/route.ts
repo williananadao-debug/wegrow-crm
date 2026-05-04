@@ -78,13 +78,18 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       name: docName,
       base64_pdf: pdfBase64,
-      signers: signers.map((s: any) => ({
-        name: s.name,
-        email: s.email || undefined,
-        phone: s.phone ? (() => { const d = s.phone.replace(/\D/g, ''); return d.startsWith('55') ? d : '55' + d; })() : undefined,
-        send_automatic_email: Boolean(s.email),
-        send_automatic_whatsapp: Boolean(s.phone && !s.email),
-      })),
+      signers: signers.map((s: any) => {
+        const phoneDigits = s.phone ? s.phone.replace(/\D/g, '') : '';
+        const phoneNumber = phoneDigits.startsWith('55') ? phoneDigits.slice(2) : phoneDigits;
+        return {
+          name: s.name,
+          email: s.email || undefined,
+          phone_country: phoneDigits ? '55' : undefined,
+          phone_number: phoneNumber || undefined,
+          send_automatic_email: Boolean(s.email),
+          send_automatic_whatsapp: Boolean(phoneDigits && !s.email),
+        };
+      }),
     }),
   });
 

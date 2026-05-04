@@ -58,6 +58,7 @@ type Lead = {
   atividades?: Atividade[];
   zapsign_token?: string;
   zapsign_sign_url?: string;
+  zapsign_assinado?: boolean;
 };
 
 type ClienteOpcao = {
@@ -299,7 +300,12 @@ const LeadCard = React.memo(({
                             </span>
                         )}
 
-                        {lead.zapsign_token && (
+                        {lead.zapsign_assinado && (
+                            <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <PenLine size={8}/> Contrato Assinado
+                            </span>
+                        )}
+                        {lead.zapsign_token && !lead.zapsign_assinado && (
                             <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                                 <PenLine size={8}/> Ass. Pendente
                             </span>
@@ -544,7 +550,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);

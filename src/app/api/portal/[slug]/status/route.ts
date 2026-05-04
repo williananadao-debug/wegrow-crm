@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+    const { slug } = await params;
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const busca = searchParams.get('busca')?.trim();
@@ -17,7 +18,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
     const { data: portal } = await db
         .from('empresa_portais')
         .select('empresa_id, nome_portal, etapas')
-        .eq('slug', params.slug)
+        .eq('slug', slug)
         .eq('ativo', true)
         .single();
 

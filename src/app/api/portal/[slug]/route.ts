@@ -23,19 +23,21 @@ async function getPortal(slug: string) {
 }
 
 // GET — config pública do portal
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
-    const portal = await getPortal(params.slug);
+export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+    const { slug } = await params;
+    const portal = await getPortal(slug);
     if (!portal) return NextResponse.json({ erro: 'Portal não encontrado.' }, { status: 404 });
     const { empresa_id, alert_email, ...pub } = portal;
     return NextResponse.json(pub);
 }
 
 // POST — criar lead
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+    const { slug } = await params;
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
     if (!checkRate(ip)) return NextResponse.json({ erro: 'Muitas requisições. Tente novamente em breve.' }, { status: 429 });
 
-    const portal = await getPortal(params.slug);
+    const portal = await getPortal(slug);
     if (!portal) return NextResponse.json({ erro: 'Portal não encontrado.' }, { status: 404 });
 
     let body: any;
@@ -80,7 +82,7 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
 
     if (apiKey && leadId) {
         const mails: Promise<any>[] = [];
-        const statusUrl = `${base}/p/${params.slug}/status?id=${leadId}`;
+        const statusUrl = `${base}/p/${slug}/status?id=${leadId}`;
 
         if (email) mails.push(fetch('https://api.resend.com/emails', {
             method: 'POST',

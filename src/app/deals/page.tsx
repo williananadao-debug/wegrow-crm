@@ -1827,7 +1827,7 @@ export default function DealsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
-        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory px-1 md:px-0">
+        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto snap-x snap-mandatory px-1 md:px-0" style={{ overflowY: 'hidden' }}>
           {Object.entries(ACTIVE_STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);
@@ -1839,7 +1839,7 @@ export default function DealsPage() {
                     <div 
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-2 h-full flex flex-col min-w-[85vw] md:min-w-[250px] md:flex-1 snap-center`}
+                        className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-2 flex flex-col min-w-[85vw] md:min-w-[250px] md:flex-1 snap-center h-[calc(100svh-180px)] md:h-full`}
                     >
                     <div className="flex items-center justify-between mb-2 px-1 pt-1 pb-2 border-b border-white/5">
                         <div>

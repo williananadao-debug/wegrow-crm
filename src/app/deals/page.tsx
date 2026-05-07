@@ -160,10 +160,12 @@ const LeadCard = React.memo(({
             <div
                 ref={provided.innerRef}
                 {...provided.draggableProps}
-                {...provided.dragHandleProps}
-                style={{ ...provided.draggableProps.style, touchAction: 'none' }}
+                style={provided.draggableProps.style}
                 className={`bg-white/[0.03] p-3 rounded-xl border border-white/5 group hover:border-[#22C55E]/50 transition-all relative ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-2xl bg-[#0F172A] z-50' : ''}`}
             >
+                    <div {...provided.dragHandleProps} className="absolute top-2 right-2 p-1 opacity-30 hover:opacity-70 cursor-grab active:cursor-grabbing touch-none" style={{ touchAction: 'none' }}>
+                        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" className="text-slate-400"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>
+                    </div>
                     {lead.tipo === 'visita' && (
                         <div className="bg-blue-500/20 border border-blue-500/40 p-1.5 rounded-lg mb-2 flex items-center gap-1 text-blue-400">
                             <MapPin size={12}/>

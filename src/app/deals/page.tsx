@@ -1827,7 +1827,7 @@ export default function DealsPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
-        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto snap-x snap-mandatory px-1 md:px-0" style={{ overflowY: 'hidden' }}>
+        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto snap-x snap-mandatory px-1 md:px-0" style={{ overflowY: 'hidden', touchAction: 'pan-x' }}>
           {Object.entries(ACTIVE_STAGES).map(([key, stage]) => {
             const stageIdx = parseInt(key);
             const totalColuna = getStageTotal(stageIdx);
@@ -1853,7 +1853,7 @@ export default function DealsPage() {
                         )}
                     </div>
 
-                    <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
+                    <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
                         {leadsDaColuna.map((lead, index) => {
                             if (!lead || !lead.id) return null;
                             return (

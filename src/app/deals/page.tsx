@@ -536,10 +536,11 @@ export default function DealsPage() {
       const empresaId = perfil?.empresa_id;
       clienteBuscaRef.current = setTimeout(async () => {
           setClientesBuscando(true);
+          const qCnpj = maskCnpj(q.replace(/\D/g, ''));
           let query = supabase.from('clientes')
               .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, status_risco')
               .eq('status', 'ativo')
-              .ilike('nome_empresa', `%${q}%`)
+              .or(`nome_empresa.ilike.%${q}%,cnpj.ilike.%${qCnpj}%`)
               .order('nome_empresa', { ascending: true })
               .limit(20);
           if (empresaId) query = query.eq('empresa_id', empresaId);

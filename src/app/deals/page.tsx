@@ -17,6 +17,9 @@ import { Toast } from '@/components/Toast';
 import { localDb } from '@/lib/localDb'; 
 import { syncOfflineDataToCloud } from '@/lib/syncService';
 import { useUnidades } from '@/lib/useUnidades';
+import dynamic from 'next/dynamic';
+
+const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
@@ -1833,52 +1836,23 @@ export default function DealsPage() {
             )}
       </div>
 
-      <DragDropContext onDragEnd={onDragEnd} enableDefaultSensors>
-        <div className="flex gap-3 pb-2 flex-1 min-h-0 items-start overflow-x-auto md:snap-x md:snap-mandatory px-1 md:px-0" style={{ overflowY: 'hidden' }}>
-          {Object.entries(ACTIVE_STAGES).map(([key, stage]) => {
-            const stageIdx = parseInt(key);
-            const totalColuna = getStageTotal(stageIdx);
-            const leadsDaColuna = getLeadsByStage(stageIdx);
-
-            return (
-                <Droppable key={key} droppableId={key}>
-                {(provided) => (
-                    <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-2 flex flex-col min-w-[85vw] md:min-w-[250px] md:flex-1 md:snap-center`}
-                        style={{ height: 'calc(100dvh - 190px)' }}
-                    >
-                    <div className="flex items-center justify-between mb-2 px-1 pt-1 pb-2 border-b border-white/5">
-                        <div>
-                          <h3 className="text-white font-black uppercase italic text-xs tracking-wide leading-none">{stage.title}</h3>
-                          <span className="text-slate-500 text-[9px] font-bold">{leadsDaColuna.length} lead{leadsDaColuna.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        {totalColuna > 0 && (
-                          <span className="text-white font-black text-sm font-mono leading-none">
-                            R$ {totalColuna.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
-                          </span>
-                        )}
-                    </div>
-
-                    <div className="space-y-2 flex-1 overflow-y-scroll custom-scrollbar pr-1 pb-10" style={{ overscrollBehavior: 'contain' }}>
-                        {leadsDaColuna.map((lead, index) => {
-                            if (!lead || !lead.id) return null;
-                            return (
-                                <LeadCard
-                                    key={lead.id} lead={lead} index={index} isDirector={isDirector} isLideranca={isLideranca} usersMap={usersMap} clientesMap={clientesMap} abrirModal={abrirModal} enviarWhatsapp={enviarWhatsapp} fazerCheckin={fazerCheckin} mudarEtapa={mudarEtapa} imprimirContrato={imprimirContrato} abrirEmailModal={abrirEmailModal} isCDL={isCDL}
-                                />
-                            );
-                        })}
-                        {provided.placeholder}
-                    </div>
-                    </div>
-                )}
-                </Droppable>
-            )
-          })}
-        </div>
-      </DragDropContext>
+      <KanbanBoard
+        activeStages={ACTIVE_STAGES}
+        onDragEnd={onDragEnd}
+        getLeadsByStage={getLeadsByStage}
+        getStageTotal={getStageTotal}
+        isDirector={isDirector}
+        isLideranca={isLideranca}
+        usersMap={usersMap}
+        clientesMap={clientesMap}
+        abrirModal={abrirModal}
+        enviarWhatsapp={enviarWhatsapp}
+        fazerCheckin={fazerCheckin}
+        mudarEtapa={mudarEtapa}
+        imprimirContrato={imprimirContrato}
+        abrirEmailModal={abrirEmailModal}
+        isCDL={isCDL}
+      />
 
       {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
       {isModalOpen && (

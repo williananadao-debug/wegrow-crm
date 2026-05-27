@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Lock, ShieldCheck, KeyRound, Loader2, Camera, Upload } from 'lucide-react';
+import Image from 'next/image';
 import { Toast } from '@/components/Toast';
 
 export default function ProfilePage() {
@@ -116,7 +117,7 @@ export default function ProfilePage() {
                 {loadingFoto ? (
                     <Loader2 className="animate-spin text-white" size={24}/>
                 ) : perfil?.avatar_url ? (
-                    <img src={perfil.avatar_url} alt="Foto de Perfil" className="w-full h-full object-cover" />
+                    <Image src={perfil.avatar_url} alt="Foto de Perfil" fill className="object-cover" sizes="96px" />
                 ) : (
                     <span className="uppercase">{perfil?.nome?.charAt(0) || 'U'}</span>
                 )}

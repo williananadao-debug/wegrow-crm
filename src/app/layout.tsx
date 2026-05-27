@@ -8,10 +8,7 @@ import LayoutWrapper from '../components/layout-wrapper';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
-// 🟢 1. IMPORTANDO A FERRAMENTA DE SCRIPT DO NEXT.JS
-import Script from 'next/script';
-
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], display: 'swap' });
 
 export const viewport: Viewport = {
   themeColor: "#0B1120",

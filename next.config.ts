@@ -14,6 +14,11 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ['groq-sdk', 'pdfkit', 'fontkit', 'linebreak', 'unicode-properties', 'restructure'],
+  images: {
+    remotePatterns: [
+      { protocol: 'https' as const, hostname: 'dzlahpfdgjaqecikkqye.supabase.co' },
+    ],
+  },
 };
 
 export default withPWA(nextConfig);

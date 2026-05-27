@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { Calendar, Search } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Topbar() {
   const auth = useAuth() || {};
@@ -71,7 +72,7 @@ export default function Topbar() {
           
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22C55E] to-emerald-800 border border-white/10 flex items-center justify-center text-sm font-black text-[#0F172A] shadow-lg group-hover:scale-105 transition-transform overflow-hidden relative">
             {perfil?.avatar_url ? (
-                <img src={perfil.avatar_url} alt="Foto de Perfil" className="w-full h-full object-cover" />
+                <Image src={perfil.avatar_url} alt="Foto de Perfil" fill className="object-cover" sizes="40px" />
             ) : (
                 <span className="uppercase">{perfil?.nome?.[0] || user?.email?.[0] || 'U'}</span>
             )}

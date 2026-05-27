@@ -21,22 +21,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('*')
+          .select('*, empresa:empresa_id(modulos, plano, status)')
           .eq('id', session.user.id)
           .single();
 
-        let empData = null;
-        if (profile?.empresa_id) {
-          const { data: emp } = await supabase
-            .from('empresas')
-            .select('modulos, plano, status')
-            .eq('id', profile.empresa_id)
-            .single();
-          empData = emp;
-        }
+        const { empresa: empData, ...perfil } = profile || {};
 
-        setPerfil(profile);
-        setEmpresa(empData);
+        setPerfil(perfil);
+        setEmpresa(empData ?? null);
       } else {
         const path = window.location.pathname;
         const isPublicPage = ['/', '/login', '/solicitar', '/portal', '/reset-password'].includes(path)

@@ -848,6 +848,7 @@ export default function DealsPage() {
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
                     .protocolo { background: #f9f9f9; border: 1px solid #ddd; padding: 8px 16px; display: inline-block; margin-top: 8px; font-size: 11px; }
+                    @media print { .btn-fechar { display: none !important; } }
                 </style>
             </head>
             <body>
@@ -922,6 +923,7 @@ export default function DealsPage() {
                     <div>Representante da ${CDL.nome}</div>
                 </div>
 
+                <button onclick="window.close()" style="position:fixed;bottom:24px;right:24px;background:#e11d48;color:#fff;border:none;border-radius:50px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;letter-spacing:1px;" class="btn-fechar">✕ FECHAR</button>
                 <script>window.onload = function() { window.print(); }</script>
             </body>
         </html>
@@ -943,6 +945,7 @@ export default function DealsPage() {
                     .condicoes p { margin: 4px 0; }
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
+                    @media print { .btn-fechar { display: none !important; } }
                 </style>
             </head>
             <body>
@@ -1019,6 +1022,7 @@ export default function DealsPage() {
                     <div>Representante da Demais FM</div>
                 </div>
 
+                <button onclick="window.close()" style="position:fixed;bottom:24px;right:24px;background:#e11d48;color:#fff;border:none;border-radius:50px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;letter-spacing:1px;" class="btn-fechar">✕ FECHAR</button>
                 <script>window.onload = function() { window.print(); }</script>
             </body>
         </html>

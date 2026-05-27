@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   TrendingUp, Users, Radio, DollarSign,
   BarChart3, Calendar, Loader2,
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -59,7 +59,7 @@ export default function DashboardPage() {
     try {
         let leadsQuery = supabase
           .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
 
         if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
         if (!isDirector) {
@@ -133,6 +133,7 @@ export default function DashboardPage() {
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
       let fat = 0; let ganhos = 0; let perdidos = 0; let visitas = 0; let comVisita = 0;
+      let totalDesconto = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
       let visitasRegistradas = 0; let visitasConvertidas = 0; let visitasGanhas = 0;
 
@@ -145,7 +146,7 @@ export default function DashboardPage() {
               if (et > 0) visitasConvertidas++;
               if (st === 'ganho') visitasGanhas++;
           }
-          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; }
+          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; totalDesconto += (Number(l.desconto) || 0); }
           else if (st === 'perdido') { perdidos++; funil.perdido++; }
           else { if (et === 0) funil.novos++; if (et === 1) funil.contato++; if (et === 2) funil.proposta++; if (et >= 3) funil.negociacao++; }
       });
@@ -225,7 +226,7 @@ export default function DashboardPage() {
 
       return {
           ranking: rankingFinal,
-          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal, totalDesconto },
           statsProducao: prod,
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
           previsaoFechamento: Math.round(previsaoFechamento),
@@ -337,7 +338,7 @@ export default function DashboardPage() {
 
       {visao === 'comercial' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">{isCDL ? 'Receita de Anuidades' : 'Faturamento'} {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>
@@ -367,6 +368,20 @@ export default function DashboardPage() {
                     <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Prospectos' : 'Leads Totais'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.propostasEnviadas}</h3>
                     <FileText className="absolute top-4 right-4 text-purple-400 opacity-20" size={24} />
+                </div>
+                <div className="bg-[#0B1120] border border-red-500/20 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                    <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-0.5">Descontos Dados</p>
+                    <h3 className="text-2xl font-black text-white tracking-tight">
+                        {statsComercial.totalDesconto > 0
+                            ? `R$ ${statsComercial.totalDesconto.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}`
+                            : '—'}
+                    </h3>
+                    {statsComercial.totalDesconto > 0 && statsComercial.faturamentoMês > 0 && (
+                        <p className="text-[9px] font-black text-red-400 mt-1">
+                            {((statsComercial.totalDesconto / (statsComercial.faturamentoMês + statsComercial.totalDesconto)) * 100).toFixed(1)}% do bruto
+                        </p>
+                    )}
+                    <Tag className="absolute top-4 right-4 text-red-400 opacity-20" size={24} />
                 </div>
             </div>
 

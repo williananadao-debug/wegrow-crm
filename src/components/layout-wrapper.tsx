@@ -2,10 +2,12 @@
 
 import React, { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
 import Topbar from '@/components/topbar';
-import OnboardingTour from '@/components/OnboardingTour';
-import GlobalSearch from '@/components/GlobalSearch';
+
+const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
+const GlobalSearch = dynamic(() => import('@/components/GlobalSearch'), { ssr: false });
 
 interface LayoutWrapperProps {
   children: ReactNode;

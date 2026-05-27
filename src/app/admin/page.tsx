@@ -24,7 +24,7 @@ type Unidade = {
 
 const PLANOS = ['essencial', 'pro', 'enterprise'];
 const STATUS_OPTS = ['trial', 'ativa', 'suspensa'];
-const MODULOS_DISPONIVEIS = ['opec', 'ia', 'financeiro', 'whatsapp'];
+const MODULOS_DISPONIVEIS = ['opec', 'ia', 'financeiro', 'whatsapp', 'assinatura'];
 
 const COR_STATUS: Record<string, string> = {
   ativa: 'bg-green-500/20 text-green-400 border-green-500/30',

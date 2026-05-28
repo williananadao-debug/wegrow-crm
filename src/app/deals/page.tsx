@@ -19,6 +19,7 @@ import { useUnidades } from '@/lib/useUnidades';
 import dynamic from 'next/dynamic';
 
 const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
+const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
 
 // --- TIPOS ---
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
@@ -254,6 +255,7 @@ export default function DealsPage() {
   const [cdlDataInicio, setCdlDataInicio] = useState('');
   const [cdlDataFim, setCdlDataFim] = useState('');
   const [cdlBemVindoData, setCdlBemVindoData] = useState<{id: number; empresa: string; telefone: string | null} | null>(null);
+  const [showAgenda, setShowAgenda] = useState(false);
 
   const [clientesRiscoMap, setClientesRiscoMap] = useState<Record<number, string>>({});
   const [clientesBuscando, setClientesBuscando] = useState(false);
@@ -310,6 +312,9 @@ export default function DealsPage() {
         buildQ().lte('etapa', 3).order('created_at', { ascending: false }).limit(500),
         buildQ().gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }).limit(200),
     ]);
+
+    if (openRes.error) console.error('[fetchData] open leads:', openRes.error.message);
+    if (closedRes.error) console.error('[fetchData] closed leads:', closedRes.error.message);
 
     const leadsData = (openRes.data || []).length + (closedRes.data || []).length > 0
         ? [...(openRes.data || []), ...(closedRes.data || [])]
@@ -1580,6 +1585,7 @@ export default function DealsPage() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
+            <button onClick={() => setShowAgenda(true)} className="bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-600/20 hover:border-blue-500/30 hover:text-blue-400 p-2 rounded-xl transition-all" title="Agenda"><CalendarDays size={16} strokeWidth={2.5}/></button>
             <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5"><MapPin size={14} strokeWidth={3}/> Visitas</button>
             <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
           </div>
@@ -2371,6 +2377,14 @@ export default function DealsPage() {
           </div>
         </div>
       )}
+
+      <AgendaCalendar
+        isOpen={showAgenda}
+        onClose={() => setShowAgenda(false)}
+        userId={user?.id || ''}
+        empresaId={perfil?.empresa_id || ''}
+        perfilNome={perfil?.nome}
+      />
 
     </div>
   );

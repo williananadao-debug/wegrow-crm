@@ -28,6 +28,7 @@ export default function AgendaCalendar({ isOpen, onClose, userId, empresaId, per
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [novaTarefa, setNovaTarefa] = useState('');
   const [adicionando, setAdicionando] = useState(false);
+  const [erro, setErro] = useState('');
 
   const fetchDados = useCallback(async () => {
     if (!userId || !empresaId) return;
@@ -72,12 +73,14 @@ export default function AgendaCalendar({ isOpen, onClose, userId, empresaId, per
 
   const adicionarTarefa = async () => {
     if (!novaTarefa.trim() || !selectedDay) return;
-    const { data: inserted } = await supabase.from('tarefas')
+    const { data: inserted, error } = await supabase.from('tarefas')
       .insert([{ titulo: novaTarefa.trim(), data: dayStr(selectedDay), user_id: userId, empresa_id: empresaId, concluido: false }])
       .select('id, titulo, data, concluido').single();
+    if (error) { setErro(error.message); return; }
     if (inserted) setTarefas(prev => [...prev, inserted as Tarefa]);
     setNovaTarefa('');
     setAdicionando(false);
+    setErro('');
   };
 
   const toggleTarefa = async (id: number, concluido: boolean) => {
@@ -175,20 +178,23 @@ export default function AgendaCalendar({ isOpen, onClose, userId, empresaId, per
             </div>
 
             {adicionando && (
-              <div className="flex gap-2 mb-2">
-                <input
-                  autoFocus
-                  value={novaTarefa}
-                  onChange={e => setNovaTarefa(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') adicionarTarefa();
-                    if (e.key === 'Escape') { setAdicionando(false); setNovaTarefa(''); }
-                  }}
-                  placeholder="Ex: Ligar para João às 14h..."
-                  className="flex-1 bg-white/5 border border-blue-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-slate-600"
-                />
-                <button onClick={adicionarTarefa} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-3 text-xs font-black transition-colors">OK</button>
-                <button onClick={() => { setAdicionando(false); setNovaTarefa(''); }} className="text-slate-500 hover:text-white text-xs transition-colors px-1">✕</button>
+              <div className="space-y-1 mb-2">
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    value={novaTarefa}
+                    onChange={e => { setNovaTarefa(e.target.value); setErro(''); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') adicionarTarefa();
+                      if (e.key === 'Escape') { setAdicionando(false); setNovaTarefa(''); setErro(''); }
+                    }}
+                    placeholder="Ex: Ligar para João às 14h..."
+                    className="flex-1 bg-white/5 border border-blue-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-slate-600"
+                  />
+                  <button onClick={adicionarTarefa} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-3 text-xs font-black transition-colors">OK</button>
+                  <button onClick={() => { setAdicionando(false); setNovaTarefa(''); setErro(''); }} className="text-slate-500 hover:text-white text-xs transition-colors px-1">✕</button>
+                </div>
+                {erro && <p className="text-red-400 text-[10px] font-bold px-1">{erro}</p>}
               </div>
             )}
 

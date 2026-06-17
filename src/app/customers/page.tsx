@@ -41,7 +41,8 @@ export default function CustomersPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [contratosVencendo, setContratosVencendo] = useState<{ id: number; empresa: string; contrato_fim: string; client_id: number | null }[]>([]);
-  
+  const [alertaExpandido, setAlertaExpandido] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -470,26 +471,49 @@ export default function CustomersPage() {
       </div>
 
       {/* ALERTA DE RENOVAÇÃO */}
-      {contratosVencendo.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start gap-3">
-          <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
-          <div className="flex-1 min-w-0">
-            <p className="text-amber-400 font-black text-xs uppercase tracking-widest mb-2">
-              {contratosVencendo.length} contrato{contratosVencendo.length > 1 ? 's' : ''} vencendo nos próximos 60 dias
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {contratosVencendo.map(c => {
-                const dias = Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000);
-                return (
-                  <span key={c.id} className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${dias <= 15 ? 'bg-red-500/20 text-red-400 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'}`}>
-                    {c.empresa} — {dias}d
-                  </span>
-                );
-              })}
-            </div>
+      {contratosVencendo.length > 0 && (() => {
+        const criticos = contratosVencendo.filter(c => Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000) <= 15);
+        const atencao  = contratosVencendo.filter(c => { const d = Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000); return d > 15 && d <= 30; });
+        const proximos = contratosVencendo.filter(c => Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000) > 30);
+        return (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl mb-4 overflow-hidden">
+            <button onClick={() => setAlertaExpandido(v => !v)} className="w-full flex items-center gap-3 p-3 hover:bg-amber-500/5 transition-colors text-left">
+              <AlertTriangle className="text-amber-400 flex-shrink-0" size={15} />
+              <span className="text-amber-400 font-black text-[11px] uppercase tracking-widest flex-1">
+                {contratosVencendo.length} contrato{contratosVencendo.length > 1 ? 's' : ''} vencendo em 90 dias
+              </span>
+              <div className="flex items-center gap-3 mr-2">
+                {criticos.length > 0 && <span className="text-[10px] font-black text-red-400 bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded-lg">🔴 {criticos.length} crítico{criticos.length > 1 ? 's' : ''}</span>}
+                {atencao.length  > 0 && <span className="text-[10px] font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg">🟡 {atencao.length} atenção</span>}
+                {proximos.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">⚪ {proximos.length} próximo{proximos.length > 1 ? 's' : ''}</span>}
+              </div>
+              <ChevronDown size={14} className={`text-amber-400 transition-transform flex-shrink-0 ${alertaExpandido ? 'rotate-180' : ''}`} />
+            </button>
+            {alertaExpandido && (
+              <div className="border-t border-amber-500/20 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-amber-500/20">
+                {[
+                  { label: '🔴 Crítico (≤ 15 dias)', items: criticos, text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
+                  { label: '🟡 Atenção (16–30 dias)', items: atencao,  text: 'text-amber-300', bg: 'bg-amber-500/10 border-amber-500/30' },
+                  { label: '⚪ Próximos (31–90 dias)', items: proximos, text: 'text-slate-400', bg: 'bg-white/5 border-white/10' },
+                ].map(grupo => (
+                  <div key={grupo.label} className="p-3">
+                    <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${grupo.text}`}>{grupo.label}</p>
+                    {grupo.items.length === 0
+                      ? <p className="text-[10px] text-slate-600 italic">Nenhum</p>
+                      : <div className="flex flex-wrap gap-1.5">
+                          {grupo.items.map(c => {
+                            const dias = Math.ceil((new Date(c.contrato_fim + 'T00:00:00').getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                            return <span key={c.id} className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${grupo.bg} ${grupo.text}`}>{c.empresa} — {dias}d</span>;
+                          })}
+                        </div>
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* BARRA DE FILTROS */}
       <div className="bg-[#0B1120] border border-white/10 p-4 rounded-[24px] mb-6 flex flex-col md:flex-row gap-4 items-center shadow-xl">

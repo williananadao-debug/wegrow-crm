@@ -106,14 +106,14 @@ export default function DashboardPage() {
   }, [user, carregarDadosOtimizado]);
 
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
-  const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.vendedor_nome).filter(Boolean))) as string[], [rawLeads]);
+  const vendedoresDisponiveis = useMemo(() => rawPerfis.filter((p: any) => p.nome).sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')), [rawPerfis]);
 
   const { ranking, statsComercial, statsProducao, statsFinanceiro, previsaoFechamento, contratosVencendo, followupsHoje } = useMemo(() => {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
-              if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== vendedorSelecionado) return false;
+              if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
           }
           const dataLead = lead.created_at.substring(0, 10); 
           if (dataInicio && dataLead < dataInicio) return false;
@@ -122,8 +122,8 @@ export default function DashboardPage() {
       });
 
       const rankObj = leadsFiltrados.reduce((acc: any, lead) => {
+         const chave = lead.user_id || 'sem_dono';
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
-         const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0 };
          if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
          acc[chave].count += 1;
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       const leadsAnt = rawLeads.filter(l => {
         const d = l.created_at.substring(0, 10);
         if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
-        if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== vendedorSelecionado) return false;
+        if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
         return d >= iniAntStr && d <= fimAntStr;
       });
       const fatAnt = leadsAnt.filter(l => l.status === 'ganho').reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
@@ -323,7 +323,7 @@ export default function DashboardPage() {
                 {isDirector && (
                     <select value={vendedorSelecionado || 'Todos'} onChange={e => setVendedorSelecionado(e.target.value === 'Todos' ? null : e.target.value)} className="bg-transparent border-none text-orange-500 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                         <option value="Todos" className="bg-[#0F172A]">Toda Equipe</option>
-                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                        {vendedoresDisponiveis.map((v: any) => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
                     </select>
                 )}
             </div>

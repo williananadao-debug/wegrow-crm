@@ -85,9 +85,10 @@ export default function ReportsPage() {
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
+  const [rawLeadsGrafico, setRawLeadsGrafico] = useState<any[]>([]);
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
-  const [rawClientes, setRawClientes] = useState<any[]>([]); 
+  const [rawClientes, setRawClientes] = useState<any[]>([]);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState('leads');
@@ -114,11 +115,23 @@ export default function ReportsPage() {
       if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
       else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
 
+      const seisMesesAtras = getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1));
+      const hoje = getLocalYYYYMMDD(new Date());
+      let graficoQuery = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
+        .gte('created_at', seisMesesAtras + 'T00:00:00')
+        .lte('created_at', hoje + 'T23:59:59')
+        .eq('status', 'ganho')
+        .limit(5000);
+      if (perfil?.empresa_id) graficoQuery = graficoQuery.eq('empresa_id', perfil.empresa_id);
+      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.eq('unidade', perfil.unidade);
+      else if (!isDirector) graficoQuery = graficoQuery.eq('user_id', user?.id);
+
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
       if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);
 
-      const [leadsRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
+      const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
         leadsQuery,
+        graficoQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         perfil?.empresa_id
           ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
@@ -126,11 +139,11 @@ export default function ReportsPage() {
         clientesQuery,
       ]);
 
-      setRawLeads(leadsRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []);
+      setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, graficoMensal, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
       const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
@@ -138,7 +151,7 @@ export default function ReportsPage() {
       const baseFiltrada = rawLeads.filter(lead => {
           if (isGerente && lead.unidade !== perfil?.unidade) return false;
           if (!isGerente && filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
-          if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== filtroVendedor) return false;
+          if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== nomesMap[filtroVendedor]) return false;
           return true;
       });
 
@@ -237,21 +250,6 @@ export default function ReportsPage() {
 
       const calcVisitas = { total: visitasBase.length, convertidas: visitasConvertidas.length, ganhas: visitasGanhas.length, porVendedor: visitasPorVendedor };
 
-      // Gráfico mensal - últimos 6 meses
-      const hoje = new Date();
-      const graficoMensal = Array.from({ length: 6 }, (_, i) => {
-          const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
-          const ano = d.getFullYear(); const mes = d.getMonth() + 1;
-          const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
-          const isCurrent = i === 5;
-          const mesStr = String(mes).padStart(2, '0');
-          const ganhos = baseFiltrada.filter(l => {
-              const dt = l.created_at?.substring(0, 7);
-              return l.status === 'ganho' && dt === `${ano}-${mesStr}`;
-          });
-          return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent };
-      });
-
       // Inadimplência: contratos vencidos (ganho + contrato_fim < hoje)
       const hoje2 = getLocalYYYYMMDD(new Date());
       const inadimplentes = baseFiltrada.filter(l =>
@@ -290,8 +288,26 @@ export default function ReportsPage() {
           }, 0) / currentGanhos.length)
         : 0;
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, graficoMensal, inadimplentes, cicloMedio, cicloGeral };
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral };
   }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
+
+  const graficoMensal = useMemo(() => {
+    const nomesMapGraf = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
+    const filtrado = rawLeadsGrafico.filter(lead => {
+      if (!isGerente && filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
+      if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== nomesMapGraf[filtroVendedor]) return false;
+      return true;
+    });
+    const hoje = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+      const ano = d.getFullYear(); const mes = d.getMonth() + 1;
+      const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+      const mesStr = String(mes).padStart(2, '0');
+      const ganhos = filtrado.filter(l => l.created_at?.substring(0, 7) === `${ano}-${mesStr}`);
+      return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === 5 };
+    });
+  }, [rawLeadsGrafico, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);
 
   const handleGeneratePreview = async () => {
       setIsExporting(true);
@@ -320,9 +336,9 @@ export default function ReportsPage() {
 
   const closeModal = () => { setShowExportModal(false); setPreviewData(null); };
 
-  let leadsParaFiltroVendedor = rawLeads;
-  if (isGerente && perfil?.unidade) { leadsParaFiltroVendedor = rawLeads.filter(l => l.unidade === perfil.unidade); }
-  const vendedoresDisponiveis = Array.from(new Set(leadsParaFiltroVendedor.map(l => l.vendedor_nome).filter(Boolean))) as string[];
+  const vendedoresDisponiveis = rawProfiles
+    .filter((p: any) => p.nome)
+    .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const unidadesDisponiveis = Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[];
 
   const getGrowth = (current: number, last: number) => { if (last === 0) return current > 0 ? 100 : 0; return ((current - last) / last) * 100; };
@@ -403,7 +419,7 @@ export default function ReportsPage() {
                 {(isDirector || isGerente) && (
                     <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-black uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                         <option value="Todos" className="bg-[#0F172A]">Equipe Inteira</option>
-                        {vendedoresDisponiveis.map(v => <option key={v} value={v} className="bg-[#0B1120]">{v}</option>)}
+                        {vendedoresDisponiveis.map((v: any) => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
                     </select>
                 )}
             </div>

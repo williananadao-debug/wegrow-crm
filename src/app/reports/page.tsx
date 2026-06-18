@@ -106,7 +106,7 @@ export default function ReportsPage() {
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
+      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
         .gte('created_at', dataInicio + 'T00:00:00')
         .lte('created_at', dataFim + 'T23:59:59')
         .order('created_at', { ascending: false })
@@ -164,8 +164,11 @@ export default function ReportsPage() {
       const currentLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= dataInicio && d <= dataFim; });
       const pastLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= strPastStart && d <= strPastEnd; });
 
-      const currentGanhos = currentLeads.filter(l => l.status === 'ganho'); const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
-      const calcCurrent = { faturamento: fatAtual, ticket: currentGanhos.length > 0 ? fatAtual / currentGanhos.length : 0, leads: currentLeads.length, conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0 };
+      const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
+      const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
+      const fatDesconto = currentGanhos.reduce((acc, curr) => acc + Number(curr.desconto || 0), 0);
+      const fatBruto = fatAtual + fatDesconto;
+      const calcCurrent = { faturamento: fatAtual, fatBruto, fatDesconto, ticket: currentGanhos.length > 0 ? fatAtual / currentGanhos.length : 0, leads: currentLeads.length, conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0 };
 
       const lastGanhos = pastLeads.filter(l => l.status === 'ganho'); const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
       const calcLast = { faturamento: fatPassado, ticket: lastGanhos.length > 0 ? fatPassado / lastGanhos.length : 0, leads: pastLeads.length, conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0 };
@@ -434,14 +437,46 @@ export default function ReportsPage() {
 
       {/* COMPARATIVOS KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+
+        {/* CARD FATURAMENTO — com breakdown bruto / desconto / líquido */}
+        <div className="bg-[#0B1120] border border-white/5 p-6 rounded-[32px] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-all">
+          <TrendingUp className="absolute -right-4 -top-4 w-20 h-20 opacity-5 text-[#22C55E]" />
+          <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Faturamento Selecionado</p>
+          <div className="flex items-end gap-2 mb-3">
+            <h3 className="text-2xl font-black italic tracking-tighter text-[#22C55E]">
+              R$ {(currentMonth.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+            {(() => { const growth = getGrowth(currentMonth.faturamento, lastMonth.faturamento); return (
+              <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
+                {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(growth))}%
+              </div>
+            ); })()}
+          </div>
+          {(currentMonth.fatDesconto > 0 || currentMonth.fatBruto > currentMonth.faturamento) && (
+            <div className="border-t border-white/5 pt-2 space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold uppercase text-slate-500">Valor Bruto</span>
+                <span className="text-[10px] font-black text-slate-300">R$ {(currentMonth.fatBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold uppercase text-red-400">Descontos</span>
+                <span className="text-[10px] font-black text-red-400">- R$ {(currentMonth.fatDesconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-white/5 pt-1">
+                <span className="text-[9px] font-bold uppercase text-[#22C55E]">Líquido</span>
+                <span className="text-[10px] font-black text-[#22C55E]">R$ {(currentMonth.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* DEMAIS KPIs */}
         {[
-          { label: `Faturamento Selecionado`, current: currentMonth.faturamento, last: lastMonth.faturamento, prefix: 'R$ ', icon: TrendingUp, color: 'text-[#22C55E]' },
           { label: `Oportunidades (Vol)`, current: currentMonth.leads, last: lastMonth.leads, prefix: '', icon: Target, color: 'text-blue-500' },
           { label: `Ticket Médio`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
           { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500' },
         ].map((item, i) => {
-          const growth = item.last !== undefined ? getGrowth(item.current, item.last) : null;
-          
+          const growth = getGrowth(item.current, item.last);
           return (
             <div key={i} className="bg-[#0B1120] border border-white/5 p-6 rounded-[32px] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-all">
               <item.icon className={`absolute -right-4 -top-4 w-20 h-20 opacity-5 ${item.color}`} />
@@ -450,12 +485,9 @@ export default function ReportsPage() {
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
                   {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {minimumFractionDigits: item.prefix === 'R$ ' ? 2 : 0, maximumFractionDigits: item.prefix === 'R$ ' ? 2 : 0})}{item.suffix}
                 </h3>
-                {growth !== null && (
-                   <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
-                      {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}
-                      {Math.abs(Math.round(growth))}%
-                   </div>
-                )}
+                <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
+                  {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(growth))}%
+                </div>
               </div>
             </div>
           );

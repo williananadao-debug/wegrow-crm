@@ -44,6 +44,9 @@ type Lead = {
   zapsign_token?: string;
   zapsign_sign_url?: string;
   zapsign_assinado?: boolean;
+  docuseal_submission_id?: string;
+  docuseal_sign_url?: string;
+  docuseal_assinado?: boolean;
 };
 
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
@@ -226,7 +229,7 @@ const LeadCard = React.memo(({
               </span>
             )}
 
-            {lead.zapsign_assinado && (
+            {(lead.zapsign_assinado || lead.docuseal_assinado) && (
               <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                 <PenLine size={8} /> Contrato Assinado
               </span>
@@ -234,6 +237,11 @@ const LeadCard = React.memo(({
             {lead.zapsign_token && !lead.zapsign_assinado && (
               <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                 <PenLine size={8} /> Ass. Pendente
+              </span>
+            )}
+            {lead.docuseal_submission_id && !lead.docuseal_assinado && (
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                <PenLine size={8} /> Ass. Enviada
               </span>
             )}
           </div>

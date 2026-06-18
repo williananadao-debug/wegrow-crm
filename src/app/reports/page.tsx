@@ -550,10 +550,12 @@ export default function ReportsPage() {
           </h3>
           
           <div className="space-y-6 relative z-10 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-            {servicosCurva.length > 0 ? servicosCurva.map(([nome, valor]: any, idx: number) => {
+            {servicosCurva.length > 0 ? (() => {
+              const totalCurva = servicosCurva.reduce((s: number, [, v]: any) => s + Number(v), 0);
+              return servicosCurva.map(([nome, valor]: any, idx: number) => {
               const valorNum = Number(valor) || 0;
               const maxNum = Number(servicosCurva[0][1]) || 1;
-              const share = currentMonth.faturamento > 0 ? Math.round((valorNum / currentMonth.faturamento) * 100) : 0;
+              const share = totalCurva > 0 ? Math.round((valorNum / totalCurva) * 100) : 0;
               
               return (
                 <div key={nome || idx}>
@@ -570,7 +572,8 @@ export default function ReportsPage() {
                   <ProgressBar value={valorNum} max={maxNum} color={idx === 0 ? 'bg-blue-500' : 'bg-white/10'} />
                 </div>
               );
-            }) : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Nenhum item detalhado neste período.</p>}
+            });
+            })() : <p className="text-slate-600 text-xs italic font-bold uppercase flex items-center gap-2"><AlertCircle size={14}/> Nenhum item detalhado neste período.</p>}
           </div>
         </div>
 

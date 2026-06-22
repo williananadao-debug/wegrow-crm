@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     // DEBUG TEMPORÁRIO — remover após confirmar URL correta
-    return NextResponse.json({ debug_url: DOCUSEAL_URL, debug_sign_base: DOCUSEAL_SIGN_BASE }, { status: 200 });
+    return NextResponse.json({ erro: `DEBUG — DOCUSEAL_URL=${DOCUSEAL_URL} | SIGN_BASE=${DOCUSEAL_SIGN_BASE}` }, { status: 502 });
 
     const supabase = db();
 

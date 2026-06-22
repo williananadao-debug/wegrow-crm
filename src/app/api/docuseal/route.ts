@@ -86,7 +86,17 @@ export async function POST(req: Request) {
       headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: `Contrato — ${deal.empresa || 'Cliente'} (#${String(deal.id).padStart(4, '0')})`,
-        documents: [{ name: 'contrato.pdf', file: pdfBuffer.toString('base64') }],
+        documents: [{
+          name: 'contrato.pdf',
+          file: pdfBuffer.toString('base64'),
+          fields: [{
+            name: 'Assinatura',
+            role: 'Signer',
+            type: 'signature',
+            required: true,
+            areas: [{ x: 0.08, y: 0.78, w: 0.30, h: 0.08, page: 1 }],
+          }],
+        }],
       }),
     });
 

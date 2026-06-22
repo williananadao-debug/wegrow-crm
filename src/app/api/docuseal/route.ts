@@ -14,6 +14,9 @@ function db() {
 
 const DOCUSEAL_URL = (process.env.DOCUSEAL_URL || '').replace(/\/$/, '');
 const DOCUSEAL_TOKEN = process.env.DOCUSEAL_TOKEN || '';
+// Para Docuseal Cloud: DOCUSEAL_SIGN_BASE_URL=https://docuseal.com (API fica em api.docuseal.com)
+// Para self-hosted: deixar em branco (usa o mesmo DOCUSEAL_URL)
+const DOCUSEAL_SIGN_BASE = (process.env.DOCUSEAL_SIGN_BASE_URL || DOCUSEAL_URL).replace(/\/$/, '');
 
 export async function POST(req: Request) {
   try {
@@ -77,7 +80,7 @@ export async function POST(req: Request) {
     }
 
     // 1. Cria template no Docuseal com o PDF gerado
-    const templateRes = await fetch(`${DOCUSEAL_URL}/api/templates/pdf`, {
+    const templateRes = await fetch(`${DOCUSEAL_URL}/templates/pdf`, {
       method: 'POST',
       headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -96,7 +99,7 @@ export async function POST(req: Request) {
     const templateId = template.id;
 
     // 2. Cria submissão (envio para assinatura)
-    const submissionRes = await fetch(`${DOCUSEAL_URL}/api/submissions`, {
+    const submissionRes = await fetch(`${DOCUSEAL_URL}/submissions`, {
       method: 'POST',
       headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -119,7 +122,7 @@ export async function POST(req: Request) {
 
     const submitters: any[] = await submissionRes.json();
     const first = submitters[0];
-    const signUrl = `${DOCUSEAL_URL}/s/${first.slug}`;
+    const signUrl = `${DOCUSEAL_SIGN_BASE}/s/${first.slug}`;
 
     return NextResponse.json({
       ok: true,

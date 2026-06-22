@@ -1750,7 +1750,15 @@ export default function DealsPage() {
                     <PenLine size={16} className="text-emerald-400"/>
                     <span className="text-emerald-300 font-black text-sm uppercase tracking-wide">Assinatura Digital</span>
                   </div>
-                  {docuLink ? (
+                  {leads.find(l => l.id === editingLeadId)?.docuseal_assinado ? (
+                    <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+                      <CheckCircle2 size={20} className="text-emerald-400 shrink-0"/>
+                      <div>
+                        <p className="text-emerald-300 text-sm font-black">Contrato Assinado</p>
+                        <p className="text-emerald-400/70 text-xs mt-0.5">Assinatura digital confirmada pelo Docuseal.</p>
+                      </div>
+                    </div>
+                  ) : docuLink ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
                         <CheckCircle2 size={16} className="text-green-400 shrink-0"/>

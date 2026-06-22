@@ -32,8 +32,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ erro: 'Docuseal não configurado no servidor. Defina DOCUSEAL_URL e DOCUSEAL_TOKEN.' }, { status: 500 });
     }
 
-    // DEBUG TEMPORÁRIO — remover após confirmar URL correta
-    return NextResponse.json({ erro: `DEBUG — DOCUSEAL_URL=${DOCUSEAL_URL} | SIGN_BASE=${DOCUSEAL_SIGN_BASE}` }, { status: 502 });
 
     const supabase = db();
 

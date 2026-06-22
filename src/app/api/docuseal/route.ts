@@ -86,14 +86,14 @@ export async function POST(req: Request) {
       headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: `Contrato — ${deal.empresa || 'Cliente'} (#${String(deal.id).padStart(4, '0')})`,
-        documents: [{ name: 'contrato.pdf', type: 'application/pdf', content: pdfBuffer.toString('base64') }],
+        documents: [{ name: 'contrato.pdf', file: pdfBuffer.toString('base64') }],
       }),
     });
 
     if (!templateRes.ok) {
       const txt = await templateRes.text();
       console.error('[docuseal/template]', templateRes.status, txt.slice(0, 300));
-      return NextResponse.json({ erro: `[URL:${DOCUSEAL_URL}] ${txt.slice(0, 200)}` }, { status: 502 });
+      return NextResponse.json({ erro: 'Erro ao criar template no Docuseal: ' + txt.slice(0, 200) }, { status: 502 });
     }
 
     const template = await templateRes.json();

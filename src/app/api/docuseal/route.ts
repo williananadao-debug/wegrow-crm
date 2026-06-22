@@ -110,7 +110,7 @@ export async function POST(req: Request) {
           name: s.name,
           email: s.email || `noreply+${Date.now()}@wegrow.com.br`,
           role: 'Signer',
-          ...(s.phone ? { phone: s.phone.replace(/\D/g, '') } : {}),
+          ...(s.phone ? { phone: '+55' + s.phone.replace(/\D/g, '').replace(/^55/, '') } : {}),
         })),
       }),
     });

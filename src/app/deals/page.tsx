@@ -22,7 +22,7 @@ const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
 
 // --- TIPOS ---
-type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; };
+type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; };
 type Historico = { id: number; texto: string; created_at: string; };
 type Atividade = { id: number; tipo: 'etapa' | 'nota' | 'followup'; descricao: string; created_at: string; };
 type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; };
@@ -208,7 +208,8 @@ export default function DealsPage() {
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
-  const [desconto, setDesconto] = useState(0); 
+  const [desconto, setDesconto] = useState(0);
+  const [valorTotalOverride, setValorTotalOverride] = useState<number | null>(null);
   const [leadUserId, setLeadUserId] = useState<string>('');
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
   const [fotoUrl, setFotoUrl] = useState('');
@@ -839,9 +840,9 @@ export default function DealsPage() {
 
     const itensHtml = listaItens.map(i => `
         <tr>
-            <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}</td>
+            <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}${(i as any).bonificacao ? ' <span style="color:#b45309;font-size:9px;font-weight:bold;text-transform:uppercase;">(Bonificação)</span>' : ''}</td>
             <td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${i.quantidade}</td>
-            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">${(i as any).bonificacao ? '<span style="color:#b45309;font-weight:bold;">BONIFICAÇÃO</span>' : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
     `).join('');
 
@@ -1336,8 +1337,9 @@ export default function DealsPage() {
         }
     }
 
-    const subtotal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
-    const valorTotalFinal = Math.max(0, subtotal - desconto); 
+    const subtotal = itensTemporarios.reduce((acc, item) => !item.bonificacao ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
+    const calculado = Math.max(0, subtotal - desconto);
+    const valorTotalFinal = valorTotalOverride !== null ? valorTotalOverride : calculado;
     const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
 
     let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
@@ -1467,6 +1469,7 @@ export default function DealsPage() {
         setParcelas(lead.parcelas || '1');
         setVencimento(lead.vencimento || '');
         setDesconto(lead.desconto || 0);
+        setValorTotalOverride(null);
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
         setAtividades(Array.isArray(lead.atividades) ? lead.atividades : []);
         setLeadUserId(lead.user_id || '');
@@ -1490,6 +1493,7 @@ export default function DealsPage() {
         setParcelas('1');
         setVencimento('');
         setDesconto(0);
+        setValorTotalOverride(null);
         setHistorico([]);
         setAtividades([]);
         setLeadUserId(user?.id || '');
@@ -1556,8 +1560,10 @@ export default function DealsPage() {
 
   const getStageTotal = useCallback((stageIdx: number) => { return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0); }, [getLeadsByStage]);
 
-  const subtotalModal = itensTemporarios.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
-  const totalModalFinal = Math.max(0, subtotalModal - desconto); const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
+  const subtotalModal = itensTemporarios.reduce((acc, item) => !item.bonificacao ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
+  const totalModalCalculado = Math.max(0, subtotalModal - desconto);
+  const totalModalFinal = valorTotalOverride !== null ? valorTotalOverride : totalModalCalculado;
+  const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
   const servicosFiltradosDaUnidade = listaServicos.filter(s => !s.unidade || s.unidade === novaUnidade);
   const categoriasDisponiveis = Array.from(new Set(servicosFiltradosDaUnidade.map(s => s.tipo || 'Comercial Gravado')));
   const produtosDaCategoria = servicosFiltradosDaUnidade.filter(s => (s.tipo || 'Comercial Gravado') === categoriaSelecionada);
@@ -1984,17 +1990,53 @@ export default function DealsPage() {
                                                 <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                                {item.bonificacao
+                                                  ? <span className="font-black text-amber-400 text-[9px] uppercase tracking-wider">Bonificação</span>
+                                                  : <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                                }
                                                 <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
                                             </div>
                                         </div>
-                                        <div className="pt-2 border-t border-white/5 mt-1">
-                                            <label className="text-[8px] text-slate-500 font-bold uppercase mb-0.5 flex items-center gap-1"><Radio size={8}/> Programa</label>
-                                            <input type="text" value={item.programa || ''} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].programa = e.target.value; setItensTemporarios(novos); }} className="w-full bg-black/50 border border-white/10 rounded p-1.5 outline-none text-white text-[10px] uppercase" placeholder="Ex: ROTATIVO" />
+                                        <div className="pt-2 border-t border-white/5 mt-1 flex items-center gap-3">
+                                            <div className="flex-1">
+                                              <label className="text-[8px] text-slate-500 font-bold uppercase mb-0.5 flex items-center gap-1"><Radio size={8}/> Programa</label>
+                                              <input type="text" value={item.programa || ''} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].programa = e.target.value; setItensTemporarios(novos); }} className="w-full bg-black/50 border border-white/10 rounded p-1.5 outline-none text-white text-[10px] uppercase" placeholder="Ex: ROTATIVO" />
+                                            </div>
+                                            <label className="flex items-center gap-1.5 cursor-pointer mt-3 shrink-0">
+                                              <input type="checkbox" checked={!!item.bonificacao} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].bonificacao = e.target.checked; novos[i].precoUnitario = e.target.checked ? 0 : novos[i].precoUnitario; setItensTemporarios(novos); }} className="accent-amber-400 w-3 h-3"/>
+                                              <span className="text-[8px] font-bold uppercase text-amber-400/80">Bonif.</span>
+                                            </label>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                        )}
+
+                        {isLideranca && itensTemporarios.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-slate-500">Total calculado</p>
+                              <p className="text-slate-400 text-xs font-mono">R$ {totalModalCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <label className="text-[9px] font-black uppercase text-violet-400">Valor final (diretor)</label>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400">R$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder={totalModalCalculado.toFixed(2)}
+                                  value={valorTotalOverride !== null ? valorTotalOverride : ''}
+                                  onChange={e => setValorTotalOverride(e.target.value === '' ? null : parseFloat(e.target.value) || 0)}
+                                  className="w-32 bg-violet-500/10 border border-violet-500/30 rounded-lg px-2 py-1.5 text-sm font-bold text-violet-300 outline-none focus:border-violet-400 text-right"
+                                />
+                                {valorTotalOverride !== null && (
+                                  <button type="button" onClick={() => setValorTotalOverride(null)} className="text-[9px] text-slate-500 hover:text-white px-1">✕</button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         )}
                     </div>
 

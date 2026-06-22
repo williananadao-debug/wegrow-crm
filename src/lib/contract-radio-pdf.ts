@@ -13,7 +13,7 @@ export type ContratoData = {
   cidade: string;
   contrato_inicio: string;
   contrato_fim: string;
-  itens: { servico: string; quantidade: number; precoUnitario: number }[];
+  itens: { servico: string; quantidade: number; precoUnitario: number; bonificacao?: boolean }[];
   desconto: number;
   valor_total: number;
   parcelas: string;
@@ -120,16 +120,20 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       // Linhas de itens
       doc.font('Helvetica').fontSize(8).fillColor('#000');
       for (const item of data.itens) {
-        const total = item.quantidade * item.precoUnitario;
         doc.rect(50, ty, W, rowH).stroke('#000');
         doc.text(item.servico, colX[0] + 4, ty + 4, { width: 295 });
         doc.text(String(item.quantidade), colX[1] + 4, ty + 4, { width: 75, align: 'center' });
-        doc.text(fmt(total), colX[2] + 4, ty + 4, { width: 80, align: 'right' });
+        if (item.bonificacao) {
+          doc.fillColor('#b45309').font('Helvetica-Bold').text('BONIFICAÇÃO', colX[2] + 4, ty + 4, { width: 80, align: 'right' });
+          doc.fillColor('#000').font('Helvetica');
+        } else {
+          doc.text(fmt(item.quantidade * item.precoUnitario), colX[2] + 4, ty + 4, { width: 80, align: 'right' });
+        }
         ty += rowH;
       }
 
       // Desconto (se houver)
-      const subtotal = data.itens.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
+      const subtotal = data.itens.reduce((s, i) => i.bonificacao ? s : s + i.quantidade * i.precoUnitario, 0);
       if (data.desconto > 0) {
         doc.rect(50, ty, W, rowH).stroke('#000');
         doc.font('Helvetica-Bold').text('Subtotal', colX[0] + 4, ty + 4, { width: 295 });

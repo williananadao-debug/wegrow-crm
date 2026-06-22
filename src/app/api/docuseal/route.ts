@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     if (!templateRes.ok) {
       const txt = await templateRes.text();
       console.error('[docuseal/template]', templateRes.status, txt.slice(0, 300));
-      return NextResponse.json({ erro: 'Erro ao criar template no Docuseal: ' + txt.slice(0, 200) }, { status: 502 });
+      return NextResponse.json({ erro: `[URL:${DOCUSEAL_URL}] ${txt.slice(0, 200)}` }, { status: 502 });
     }
 
     const template = await templateRes.json();

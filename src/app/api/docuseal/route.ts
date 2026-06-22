@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade').eq('empresa_id', empresa_id),
     ]);
 
-    if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr.message }, { status: 500 });
+    if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr!.message }, { status: 500 });
     if (!empresa?.modulos?.assinatura) {
       return NextResponse.json({ erro: 'Add-on de Assinatura Digital não habilitado para esta empresa.' }, { status: 403 });
     }

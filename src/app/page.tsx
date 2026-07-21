@@ -5,7 +5,7 @@ import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight, Star,
-  Check, MessageCircle, PenLine, Wallet
+  Check, MessageCircle, PenLine, Wallet, ChevronDown
 } from 'lucide-react';
 
 const STATS = [
@@ -91,6 +91,29 @@ const PLANOS = [
   },
 ];
 
+const FAQ = [
+  {
+    q: 'Preciso mudar todo o processo comercial da empresa?',
+    a: 'Não. O WeGrow se adapta ao funil que sua equipe já usa — você configura as etapas, o catálogo de serviços e os cargos do jeito que já funciona pra vocês, não o contrário.',
+  },
+  {
+    q: 'Tem contrato de fidelidade?',
+    a: 'Não. Cancelamento a qualquer momento, sem multa. Preferimos ganhar a permanência todo mês com o produto.',
+  },
+  {
+    q: 'Quanto tempo leva pra colocar no ar?',
+    a: 'Normalmente alguns dias: criação de usuários, configuração do catálogo/funil e importação da base de clientes. Onboarding com suporte direto do fundador.',
+  },
+  {
+    q: 'Funciona pro meu segmento, mesmo não sendo rádio?',
+    a: 'Sim. O core do WeGrow (Kanban, Agenda, Clientes, Relatórios) serve qualquer PME. O módulo de Produção/OPEC é um complemento específico pra broadcasting — só aparece pra quem precisa dele.',
+  },
+  {
+    q: 'Meus dados ficam seguros?',
+    a: 'Sim — infraestrutura na nuvem com backups automáticos e controle de acesso por cargo. Cada empresa só enxerga os próprios dados.',
+  },
+];
+
 const ADDONS = [
   { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', preco: 'R$ 149/mês', cor: 'text-green-400 bg-green-400/10' },
   { icon: <PenLine size={16}/>, label: 'Assinatura Digital', preco: 'R$ 99/mês', cor: 'text-blue-400 bg-blue-400/10' },
@@ -151,6 +174,7 @@ const FEATURES = [
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const [faqAberta, setFaqAberta] = useState<number | null>(0);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -455,6 +479,40 @@ export default function LandingPage() {
           <p className="text-center text-slate-600 text-[10px] uppercase tracking-widest font-bold mt-6">
             Todos os planos incluem usuários ilimitados · PWA offline · suporte por chat · sem taxa de setup
           </p>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-16 px-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-12">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Dúvidas</div>
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
+              Perguntas frequentes
+            </h2>
+          </div>
+
+          <div className="space-y-3">
+            {FAQ.map((item, i) => {
+              const aberta = faqAberta === i;
+              return (
+                <div key={item.q} className="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden">
+                  <button
+                    onClick={() => setFaqAberta(aberta ? null : i)}
+                    className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                  >
+                    <span className="text-sm md:text-base font-bold text-white">{item.q}</span>
+                    <ChevronDown size={18} className={`text-[#22C55E] flex-shrink-0 transition-transform ${aberta ? 'rotate-180' : ''}`} />
+                  </button>
+                  {aberta && (
+                    <div className="px-6 pb-5 text-sm text-slate-400 font-medium leading-relaxed">
+                      {item.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 

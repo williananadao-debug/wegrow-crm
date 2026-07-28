@@ -14,8 +14,13 @@ type Cliente = {
   inscricao_estadual?: string; cep?: string; endereco?: string; numero?: string;
   estado?: string; cidade?: string; bairro?: string; status: 'ativo' | 'inativo';
   status_risco?: string; limite_credito?: number; score_interno?: number; observacao_risco?: string;
-  user_id?: string; empresa_id?: string; created_at: string;
+  segmento?: string; user_id?: string; empresa_id?: string; created_at: string;
 };
+
+const SEGMENTOS = [
+  'Indústria', 'Comércio', 'Serviços', 'Agropecuária',
+  'Mídia / Comunicação', 'Tecnologia', 'Órgão Público / Associação', 'Outro',
+];
 
 type Unit = { id: string; nome: string; cidade: string; estado?: string; };
 type Vendedor = { id: string; nome: string; };
@@ -66,8 +71,10 @@ export default function CustomersPage() {
     nome_empresa: '', telefone: '', email: '', cnpj: '',
     inscricao_estadual: '', cep: '', endereco: '', numero: '',
     cidade: '', bairro: '', estado: '', status: 'ativo', user_id: '',
-    status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
+    status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: '',
+    segmento: ''
   });
+  const [segmentoCustom, setSegmentoCustom] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
@@ -302,8 +309,10 @@ export default function CustomersPage() {
         bairro: cliente.bairro || '', estado: cliente.estado || '', status: cliente.status || 'ativo' as any,
         user_id: cliente.user_id || '',
         status_risco: cliente.status_risco || 'em_analise', limite_credito: cliente.limite_credito || 0,
-        score_interno: cliente.score_interno || 0, observacao_risco: cliente.observacao_risco || ''
+        score_interno: cliente.score_interno || 0, observacao_risco: cliente.observacao_risco || '',
+        segmento: cliente.segmento && !SEGMENTOS.includes(cliente.segmento) ? 'Outro' : (cliente.segmento || '')
       });
+      setSegmentoCustom(cliente.segmento && !SEGMENTOS.includes(cliente.segmento) ? cliente.segmento : '');
       setTags((cliente as any).tags || []);
       fetchHistorico(cliente.id); fetchUnidades(cliente.id); setActiveTab('dados');
     } else {
@@ -311,8 +320,9 @@ export default function CustomersPage() {
       setFormData({
         nome_empresa: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '',
         cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || ''),
-        status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: ''
+        status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: '', segmento: ''
       });
+      setSegmentoCustom('');
       setTags([]);
       setHistoricoVendas([]); setUnidades([]); setActiveTab('dados');
     }
@@ -322,11 +332,16 @@ export default function CustomersPage() {
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
+    if (formData.segmento === 'Outro' && !segmentoCustom.trim()) return alert("Informe qual é o segmento");
     const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
     if (cnpjDigits.length > 0 && cnpjDigits.length < 14) return alert("CNPJ incompleto. Verifique o número digitado.");
     if (cnpjDigits.length === 14 && !validarCNPJ(formData.cnpj || '')) return alert("CNPJ inválido. Verifique os dígitos verificadores.");
     
-    const payload = { ...formData, empresa_id: perfil?.empresa_id, tags };
+    const payload = {
+      ...formData,
+      segmento: formData.segmento === 'Outro' ? segmentoCustom.trim() : formData.segmento,
+      empresa_id: perfil?.empresa_id, tags
+    };
     
     if (!editingId && !payload.user_id) {
         payload.user_id = user?.id;
@@ -773,8 +788,24 @@ export default function CustomersPage() {
                         </div>
                     </div>
 
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Segmento</label>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.segmento} onChange={e => setFormData({...formData, segmento: e.target.value})}>
+                            <option value="" className="bg-[#0B1120]">Selecione o segmento</option>
+                            {SEGMENTOS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{s}</option>)}
+                        </select>
+                        {formData.segmento === 'Outro' && (
+                            <input
+                                className="w-full mt-2 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                placeholder="Qual segmento?"
+                                value={segmentoCustom}
+                                onChange={e => setSegmentoCustom(e.target.value)}
+                            />
+                        )}
+                    </div>
+
                     <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
-                        <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Tags / Segmentos</label>
+                        <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Tags</label>
                         <div className="flex flex-wrap gap-2 mb-2">
                             {tags.map(t => (
                                 <span key={t} className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1">

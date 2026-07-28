@@ -17,10 +17,62 @@ type Cliente = {
   segmento?: string; user_id?: string; empresa_id?: string; created_at: string;
 };
 
-const SEGMENTOS = [
-  'Indústria', 'Comércio', 'Serviços', 'Agropecuária',
-  'Mídia / Comunicação', 'Tecnologia', 'Órgão Público / Associação', 'Outro',
+const SEGMENTOS_GRUPOS: { grupo: string; itens: string[] }[] = [
+  {
+    grupo: 'Indústria',
+    itens: [
+      'Indústria Têxtil / Confecção', 'Indústria Metalúrgica / Metal-Mecânica',
+      'Indústria Madeireira / Moveleira', 'Indústria Alimentícia',
+      'Indústria Química / Plásticos', 'Indústria de Papel e Celulose',
+      'Construção Civil / Materiais de Construção',
+    ],
+  },
+  {
+    grupo: 'Comércio / Varejo',
+    itens: [
+      'Supermercado / Mercado', 'Farmácia / Drogaria', 'Loja de Roupas / Vestuário',
+      'Loja de Móveis e Decoração', 'Papelaria / Livraria', 'Petshop',
+      'Concessionária / Loja de Veículos', 'Autopeças',
+    ],
+  },
+  {
+    grupo: 'Alimentação',
+    itens: ['Restaurante / Lanchonete', 'Bar / Casa Noturna', 'Padaria / Confeitaria'],
+  },
+  {
+    grupo: 'Saúde',
+    itens: ['Clínica Médica / Odontológica', 'Hospital / Laboratório', 'Academia / Estética / Bem-estar'],
+  },
+  {
+    grupo: 'Serviços Profissionais',
+    itens: [
+      'Contabilidade', 'Advocacia / Jurídico', 'Consultoria',
+      'Tecnologia / Software', 'Marketing / Publicidade', 'Educação / Escola / Curso',
+    ],
+  },
+  {
+    grupo: 'Automotivo',
+    itens: ['Oficina Mecânica / Auto Center'],
+  },
+  {
+    grupo: 'Agro',
+    itens: ['Agropecuária / Agronegócio', 'Cooperativa Agrícola'],
+  },
+  {
+    grupo: 'Mídia',
+    itens: ['Rádio / TV / Mídia'],
+  },
+  {
+    grupo: 'Transporte',
+    itens: ['Transportadora / Logística'],
+  },
+  {
+    grupo: 'Institucional',
+    itens: ['Órgão Público / Associação / Sindicato'],
+  },
 ];
+
+const SEGMENTOS = SEGMENTOS_GRUPOS.flatMap(g => g.itens).concat('Outro');
 
 type Unit = { id: string; nome: string; cidade: string; estado?: string; };
 type Vendedor = { id: string; nome: string; };
@@ -783,7 +835,12 @@ export default function CustomersPage() {
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Segmento</label>
                         <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.segmento} onChange={e => setFormData({...formData, segmento: e.target.value})}>
                             <option value="" className="bg-[#0B1120]">Selecione o segmento</option>
-                            {SEGMENTOS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{s}</option>)}
+                            {SEGMENTOS_GRUPOS.map(g => (
+                                <optgroup key={g.grupo} label={g.grupo} className="bg-[#0B1120]">
+                                    {g.itens.map(s => <option key={s} value={s} className="bg-[#0B1120]">{s}</option>)}
+                                </optgroup>
+                            ))}
+                            <option value="Outro" className="bg-[#0B1120]">Outro</option>
                         </select>
                         {formData.segmento === 'Outro' && (
                             <input

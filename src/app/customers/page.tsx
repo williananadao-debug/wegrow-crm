@@ -771,21 +771,12 @@ export default function CustomersPage() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Status</label>
-                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                                <option value="ativo" className="bg-[#0B1120]">Ativo</option>
-                                <option value="inativo" className="bg-[#0B1120]">Inativo</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">{isCDL ? 'Consultor (Responsável)' : 'Vendedor (Dono)'}</label>
-                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.user_id} onChange={e => setFormData({...formData, user_id: e.target.value})}>
-                                <option value="" className="bg-[#0B1120]">{isCDL ? 'Sem Consultor (Geral)' : 'Sem Vendedor (Geral)'}</option>
-                                {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
-                            </select>
-                        </div>
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Status</label>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                            <option value="ativo" className="bg-[#0B1120]">Ativo</option>
+                            <option value="inativo" className="bg-[#0B1120]">Inativo</option>
+                        </select>
                     </div>
 
                     <div>

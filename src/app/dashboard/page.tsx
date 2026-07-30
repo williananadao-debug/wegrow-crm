@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
   const [rawJobs, setRawJobs] = useState<any[]>([]);
   const [rawLancamentos, setRawLancamentos] = useState<any[]>([]);
+  const [rawVisitas, setRawVisitas] = useState<any[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
 
@@ -72,17 +73,23 @@ export default function DashboardPage() {
         let jobsQuery = supabase.from('jobs').select('stage, deadline');
         if (perfil?.empresa_id) jobsQuery = jobsQuery.eq('empresa_id', perfil.empresa_id) as any;
 
-        const [leadsRes, perfisRes, jobsRes, finRes] = await Promise.all([
+        let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, created_at, lead_id');
+        if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id) as any;
+        if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id) as any;
+
+        const [leadsRes, perfisRes, jobsRes, finRes, visitasRes] = await Promise.all([
             leadsQuery,
             perfisQuery,
             jobsQuery,
-            supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago')
+            supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago'),
+            visitasQuery,
         ]);
 
         setRawLeads(leadsRes.data || []);
         setRawPerfis(perfisRes.data || []);
         setRawJobs(jobsRes.data || []);
         setRawLancamentos(finRes.data || []);
+        setRawVisitas(visitasRes.data || []);
 
     } catch (error) {
         console.error("Erro no refresh do dashboard:", error);
@@ -132,24 +139,32 @@ export default function DashboardPage() {
       
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
-      let fat = 0; let ganhos = 0; let perdidos = 0; let visitas = 0; let comVisita = 0;
+      let fat = 0; let ganhos = 0; let perdidos = 0; let comVisita = 0;
       let totalDesconto = 0;
       const funil = { novos: 0, contato: 0, proposta: 0, negociacao: 0, ganho: 0, perdido: 0 };
-      let visitasRegistradas = 0; let visitasConvertidas = 0; let visitasGanhas = 0;
 
       leadsFiltrados.forEach(l => {
           const st = l.status; const et = Number(l.etapa);
           const hasCheckin = l.checkin && l.checkin.length > 5;
-          if (hasCheckin) { visitas++; comVisita++; }
-          if (l.tipo === 'visita') {
-              visitasRegistradas++;
-              if (et > 0) visitasConvertidas++;
-              if (st === 'ganho') visitasGanhas++;
-          }
+          if (hasCheckin) { comVisita++; }
           if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; totalDesconto += (Number(l.desconto) || 0); }
           else if (st === 'perdido') { perdidos++; funil.perdido++; }
           else { if (et === 0) funil.novos++; if (et === 1) funil.contato++; if (et === 2) funil.proposta++; if (et >= 3) funil.negociacao++; }
       });
+
+      // Visitas reais (tabela visitas — mesma fonte do painel /visitas), respeitando os filtros ativos
+      const visitasFiltradas = rawVisitas.filter((v: any) => {
+          if (filtroUnidade !== 'Todas' && v.unidade !== filtroUnidade) return false;
+          if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && v.user_id !== vendedorSelecionado) return false;
+          const dataVisita = v.created_at.substring(0, 10);
+          if (dataInicio && dataVisita < dataInicio) return false;
+          if (dataFim && dataVisita > dataFim) return false;
+          return true;
+      });
+      const leadsPorId = new Map(rawLeads.map((l: any) => [l.id, l]));
+      const visitasRegistradas = visitasFiltradas.length;
+      const visitasConvertidas = visitasFiltradas.filter((v: any) => v.lead_id).length;
+      const visitasGanhas = visitasFiltradas.filter((v: any) => v.lead_id && leadsPorId.get(v.lead_id)?.status === 'ganho').length;
 
       const totalFinal = ganhos + perdidos;
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
@@ -226,14 +241,14 @@ export default function DashboardPage() {
 
       return {
           ranking: rankingFinal,
-          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal, totalDesconto },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitasRegistradas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal, totalDesconto },
           statsProducao: prod,
           statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
           previsaoFechamento: Math.round(previsaoFechamento),
           contratosVencendo,
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
-  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
+  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, rawVisitas, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   useEffect(() => {
     if (!contratosVencendo.length || !user?.id) return;

@@ -114,6 +114,19 @@ const formatarData = (dataIso: string) => {
     return new Date(dataIso).toLocaleDateString('pt-BR');
 };
 
+const somarMeses = (dataIso: string, meses: number) => {
+    const [y, m, d] = dataIso.split('-').map(Number);
+    const dt = new Date(y, m - 1 + meses, d);
+    if (dt.getDate() !== d) dt.setDate(0); // dia não existe no mês alvo (ex: 31) -> cai pro último dia do mês
+    return getLocalYYYYMMDD(dt);
+};
+
+const formatarVencimentos = (vencimento: string, parcelas: string | number) => {
+    if (!vencimento) return '';
+    const qtd = Math.max(1, parseInt(String(parcelas), 10) || 1);
+    return Array.from({ length: qtd }, (_, i) => formatarData(somarMeses(vencimento, i))).join(', ');
+};
+
 const maskCnpj = (v: string) => {
   const s = v.replace(/\D/g, '').substring(0, 14);
   if (s.length > 12) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
@@ -932,7 +945,7 @@ export default function DealsPage() {
                 <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/>
+                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
                     <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || '___________________'}<br/>
                 </div>
 
@@ -1030,7 +1043,7 @@ export default function DealsPage() {
                 <div class="secao-titulo">3. FORMA DE PAGAMENTO:</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarData(lead.vencimento) : '___________________'}<br/><br/>
+                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
                     <strong>Contato para envio da Fatura: WhatsApp:</strong> ${lead.telefone || '___________________'}<br/>
                     <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
                 </div>
@@ -1059,7 +1072,7 @@ export default function DealsPage() {
       supabase.from('leads').update({ notas: novasNotas }).eq('id', lead.id);
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: novasNotas } : l));
     }
-  }, [perfil?.nome, supabase, isCDL]);
+  }, [perfil?.nome, supabase, isCDL, unidades]);
 
   const enviarParaAssinatura = useCallback(async () => {
     if (!zapSignerName.trim()) { setZapErro('Informe o nome do signatário.'); return; }

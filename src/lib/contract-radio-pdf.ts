@@ -31,6 +31,19 @@ function fmtData(d: string) {
   } catch { return d; }
 }
 
+function somarMeses(dataIso: string, meses: number) {
+  const [y, m, d] = dataIso.split('-').map(Number);
+  const dt = new Date(y, m - 1 + meses, d);
+  if (dt.getDate() !== d) dt.setDate(0); // dia não existe no mês alvo (ex: 31) -> último dia do mês
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+function fmtVencimentos(vencimento: string, parcelas: string) {
+  if (!vencimento) return fmtData('');
+  const qtd = Math.max(1, parseInt(parcelas, 10) || 1);
+  return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join(', ');
+}
+
 export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -187,7 +200,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
 
       doc.fontSize(9).fillColor('#000');
       linha('Parcela(s): ', data.parcelas || '1');
-      linha('Vencimento(s): ', fmtData(data.vencimento));
+      linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1'));
       doc.moveDown(0.3);
       linha('Contato para envio da Fatura — WhatsApp: ', data.telefone || '___________________________');
       linha('Praça de Pagamento: ', data.cidade || '___________________________');

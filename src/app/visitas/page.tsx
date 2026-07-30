@@ -4,7 +4,8 @@ import {
   MapPin, Plus, X, CheckCircle2, Clock, Zap,
   ArrowLeft, Loader2,
   Navigation, Building2, Phone,
-  Calendar, Search, Camera, Route, Image as ImageIcon
+  Calendar, Search, Camera, Route, Image as ImageIcon,
+  Map, User
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -19,6 +20,7 @@ type Visita = {
   user_id?: string;
   empresa_id?: string;
   unidade?: string;
+  cidade?: string;
   latitude?: number;
   longitude?: number;
   localizacao_url?: string;
@@ -64,6 +66,8 @@ export default function VisitasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [empresa, setEmpresa] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [cidadeDetectando, setCidadeDetectando] = useState(false);
   const [observacao, setObservacao] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle');
@@ -106,22 +110,40 @@ export default function VisitasPage() {
   }, [perfil?.empresa_id, user?.id, isLideranca]);
 
   const carregarVendedores = useCallback(async () => {
-    if (!perfil?.empresa_id || !isLideranca) return;
+    if (!perfil?.empresa_id) return;
     const { data } = await supabase
       .from('profiles')
       .select('id, nome, cargo')
       .eq('empresa_id', perfil.empresa_id);
     if (data) setVendedores(data as Perfil[]);
-  }, [perfil?.empresa_id, isLideranca]);
+  }, [perfil?.empresa_id]);
 
   useEffect(() => {
     carregarVisitas();
     carregarVendedores();
   }, [carregarVisitas, carregarVendedores]);
 
+  const nomesMap: Record<string, string> = {};
+  vendedores.forEach(v => { nomesMap[v.id] = v.nome; });
+
+  async function buscarCidadePorCoords(lat: number, lng: number) {
+    setCidadeDetectando(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`);
+      if (res.ok) {
+        const data = await res.json();
+        const addr = data?.address || {};
+        const cidadeDetectada = addr.city || addr.town || addr.village || addr.municipality || addr.county;
+        if (cidadeDetectada) setCidade(cidadeDetectada);
+      }
+    } catch { /* falha silenciosa — usuário pode digitar a cidade manualmente */ }
+    setCidadeDetectando(false);
+  }
+
   function abrirModalNovaVisita() {
     setEmpresa('');
     setTelefone('');
+    setCidade('');
     setObservacao('');
     setCoords(null);
     setGeoStatus('loading');
@@ -133,6 +155,7 @@ export default function VisitasPage() {
       pos => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setGeoStatus('ok');
+        buscarCidadePorCoords(pos.coords.latitude, pos.coords.longitude);
       },
       () => setGeoStatus('denied'),
       { enableHighAccuracy: true, timeout: 10000 }
@@ -176,6 +199,7 @@ export default function VisitasPage() {
     const payload = {
       empresa: empresa.trim(),
       telefone: telefone || null,
+      cidade: cidade || null,
       observacao: observacao || null,
       user_id: user?.id,
       empresa_id: perfil.empresa_id,
@@ -428,6 +452,16 @@ export default function VisitasPage() {
                         <Building2 size={9} /> {visita.unidade}
                       </span>
                     )}
+                    {visita.cidade && (
+                      <span className="flex items-center gap-1">
+                        <Map size={9} /> {visita.cidade}
+                      </span>
+                    )}
+                    {isLideranca && visita.user_id && nomesMap[visita.user_id] && (
+                      <span className="flex items-center gap-1">
+                        <User size={9} /> {nomesMap[visita.user_id]}
+                      </span>
+                    )}
                     {visita.localizacao_url && (
                       <a
                         href={visita.localizacao_url}
@@ -514,16 +548,29 @@ export default function VisitasPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
-                  Telefone (opcional)
-                </label>
-                <input
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
-                  placeholder="(00) 00000-0000"
-                  value={telefone}
-                  onChange={e => setTelefone(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
+                    Telefone (opcional)
+                  </label>
+                  <input
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
+                    placeholder="(00) 00000-0000"
+                    value={telefone}
+                    onChange={e => setTelefone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
+                    Cidade
+                  </label>
+                  <input
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
+                    placeholder={cidadeDetectando ? 'Detectando via GPS...' : 'Ex: Taió'}
+                    value={cidade}
+                    onChange={e => setCidade(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div>

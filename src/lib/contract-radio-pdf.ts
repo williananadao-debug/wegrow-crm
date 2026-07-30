@@ -1,4 +1,6 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
 
 export type ContratoData = {
   protocolo: string;
@@ -6,6 +8,8 @@ export type ContratoData = {
   emissora_endereco: string;
   emissora_cnpj: string;
   emissora_nome: string;
+  emissora_cidade?: string;
+  emissora_estado?: string;
   cliente: string;
   cnpj: string;
   inscricao_estadual: string;
@@ -44,6 +48,28 @@ function fmtVencimentos(vencimento: string, parcelas: string) {
   return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join(', ');
 }
 
+const UF_NOMES: Record<string, string> = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará',
+  DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso',
+  MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+  PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
+  RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
+  SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
+};
+function nomeEstado(uf?: string) {
+  if (!uf) return '';
+  return UF_NOMES[uf.toUpperCase()] || uf;
+}
+
+// Timbrado (marca d'água + logo + onda) — um arquivo por frequência da rádio
+function getTimbradoFile(emissoraNome: string): string | null {
+  const digitos = (emissoraNome || '').replace(/[^0-9]/g, '');
+  if (digitos.startsWith('104')) return 'timbrado-1047.png';
+  if (digitos.startsWith('107')) return 'timbrado-1079.png';
+  if (digitos.startsWith('101')) return 'timbrado-1011.png';
+  return null;
+}
+
 export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -56,6 +82,21 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       const W = doc.page.width - 100; // largura útil
       const corTitulo = '#111111';
 
+      // ── TIMBRADO (marca d'água + logo + onda, por frequência) ────
+      const timbradoArquivo = getTimbradoFile(data.emissora_nome);
+      const timbradoPath = timbradoArquivo ? path.join(process.cwd(), 'public', 'contratos', timbradoArquivo) : null;
+      const desenharTimbrado = () => {
+        if (!timbradoPath) return;
+        try {
+          if (fs.existsSync(timbradoPath)) {
+            doc.image(timbradoPath, 0, 0, { width: doc.page.width, height: doc.page.height });
+          }
+        } catch { /* segue sem o timbrado se o arquivo não puder ser lido */ }
+      };
+      desenharTimbrado();
+      doc.on('pageAdded', desenharTimbrado);
+      if (timbradoPath) doc.y = 110; // desce o início do texto pra não sobrepor a logo do timbrado
+
       // ── HEADER ──────────────────────────────────────────────────
       doc.fontSize(16).font('Helvetica-Bold').fillColor(corTitulo)
         .text('CONTRATO PARA VEICULAÇÃO DE PUBLICIDADE', { align: 'center' });
@@ -67,12 +108,15 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
 
       // ── INTRO ────────────────────────────────────────────────────
       doc.fontSize(9).font('Helvetica').fillColor('#000');
+      const localEmissora = data.emissora_cidade
+        ? `, na cidade de ${data.emissora_cidade}${data.emissora_estado ? ` - Estado de ${nomeEstado(data.emissora_estado)}` : ''}`
+        : '';
       doc.text(
         'Que entre si fazem de um lado a empresa ',
         { continued: true }
       ).font('Helvetica-Bold').text(data.emissora_razao, { continued: true })
         .font('Helvetica').text(
-          `, emissora de radiodifusão com sede à ${data.emissora_endereco || '___'}, CNPJ: ${data.emissora_cnpj || '___'}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:`,
+          `, emissora de radiodifusão com sede à ${data.emissora_endereco || '___'}${localEmissora}, CNPJ: ${data.emissora_cnpj || '___'}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:`,
           { align: 'justify' }
         );
       doc.moveDown(0.8);
@@ -183,7 +227,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
         '3) As parcelas pagas fora do prazo de seus vencimentos incidirão em juros e mora estabelecidos na fatura;',
         '4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;',
         '5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.',
-        '6) Fica eleito o Fórum da Cidade de Taió para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança.',
+        `6) Fica eleito o Fórum da Cidade de ${data.emissora_cidade || 'Taió'} para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança.`,
         '7) As partes reconhecem e aceitam, para todos os fins de direito, a validade jurídica da assinatura eletrônica utilizada na celebração deste contrato, nos termos do art. 10, §2º, da Medida Provisória nº 2.200-2/2001, dispensando a necessidade de certificado digital no padrão ICP-Brasil. A autenticidade e integridade das assinaturas são atestadas pelo registro de auditoria (endereço IP, data, hora e e-mail de cada signatário) gerado pela plataforma de assinatura eletrônica utilizada, o qual constitui parte integrante e inseparável deste instrumento.',
       ];
       doc.font('Helvetica').fontSize(8).fillColor('#000');
@@ -219,7 +263,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       doc.fontSize(7).font('Helvetica').fillColor('#999')
         .text(
           `${data.emissora_razao}  ·  CNPJ ${data.emissora_cnpj}  ·  Gerado em ${new Date().toLocaleDateString('pt-BR')}`,
-          50, doc.page.height - 40, { align: 'center', width: W }
+          50, doc.page.height - 65, { align: 'center', width: W }
         );
 
       doc.end();

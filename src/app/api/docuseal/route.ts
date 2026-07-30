@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     const [{ data: empresa, error: empErr }, { data: unidades }] = await Promise.all([
       supabase.from('empresas').select('modulos').eq('id', empresa_id).single(),
-      supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade').eq('empresa_id', empresa_id),
+      supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade, estado').eq('empresa_id', empresa_id),
     ]);
 
     if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr!.message }, { status: 500 });
@@ -54,6 +54,8 @@ export async function POST(req: Request) {
       cnpj: unidadeMatch?.cnpj || '',
       endereco: unidadeMatch?.endereco || '',
       nome: unidadeMatch?.nome || '',
+      cidade: unidadeMatch?.cidade || '',
+      estado: unidadeMatch?.estado || '',
     };
 
     // Gera PDF do contrato
@@ -65,6 +67,8 @@ export async function POST(req: Request) {
         emissora_cnpj: emissora.cnpj,
         emissora_endereco: emissora.endereco,
         emissora_nome: emissora.nome,
+        emissora_cidade: emissora.cidade,
+        emissora_estado: emissora.estado,
         cliente: deal.empresa || signers[0]?.name || '',
         cnpj: deal.cnpj || '',
         inscricao_estadual: deal.inscricao_estadual || '',

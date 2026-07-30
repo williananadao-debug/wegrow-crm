@@ -129,6 +129,24 @@ const formatarVencimentos = (vencimento: string, parcelas: string | number) => {
     return Array.from({ length: qtd }, (_, i) => formatarData(somarMeses(vencimento, i))).join(', ');
 };
 
+const UF_NOMES: Record<string, string> = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará',
+  DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso',
+  MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+  PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
+  RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
+  SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
+};
+const nomeEstadoExtenso = (uf?: string) => (uf ? (UF_NOMES[uf.toUpperCase()] || uf) : '');
+
+const timbradoPorUnidade = (unidadeNome: string) => {
+  const digitos = (unidadeNome || '').replace(/\D/g, '');
+  if (digitos.startsWith('104')) return '/contratos/timbrado-1047.png';
+  if (digitos.startsWith('107')) return '/contratos/timbrado-1079.png';
+  if (digitos.startsWith('101')) return '/contratos/timbrado-1011.png';
+  return '';
+};
+
 const maskCnpj = (v: string) => {
   const s = v.replace(/\D/g, '').substring(0, 14);
   if (s.length > 12) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
@@ -850,7 +868,13 @@ export default function DealsPage() {
       razao: unidadeData?.razao_social || '',
       endereco: unidadeData?.endereco || '',
       cnpj: unidadeData?.cnpj || '',
+      cidade: unidadeData?.cidade || '',
+      estado: unidadeData?.estado || '',
     };
+    const localEmissora = dadosEmissora.cidade
+      ? `, na cidade de ${dadosEmissora.cidade}${dadosEmissora.estado ? ` - Estado de ${nomeEstadoExtenso(dadosEmissora.estado)}` : ''}`
+      : '';
+    const timbradoUrl = timbradoPorUnidade(unidadeData?.nome || '');
     
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
@@ -985,17 +1009,22 @@ export default function DealsPage() {
                     .condicoes p { margin: 4px 0; }
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
-                    @media print { .btn-fechar { display: none !important; } }
+                    .timbrado-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; object-fit: cover; }
+                    @media print {
+                        .btn-fechar { display: none !important; }
+                        html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    }
                 </style>
             </head>
             <body>
+                ${timbradoUrl ? `<img class="timbrado-bg" src="${timbradoUrl}" alt="" onerror="this.style.display='none'" />` : ''}
                 <div class="header">
                     <img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />
                     <h2>Contrato para Veiculação de Publicidade</h2>
                 </div>
 
                 <div class="texto-base">
-                    Que entre si fazem de um lado a empresa <strong>${dadosEmissora.razao}</strong>, emissora de radiodifusão com sede à ${dadosEmissora.endereco}, CNPJ: ${dadosEmissora.cnpj}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:
+                    Que entre si fazem de um lado a empresa <strong>${dadosEmissora.razao}</strong>, emissora de radiodifusão com sede à ${dadosEmissora.endereco}${localEmissora}, CNPJ: ${dadosEmissora.cnpj}, neste ato representada denominada de EXECUTANTE, e de outro lado o CLIENTE:
                 </div>
 
                 <div class="cliente-box">
@@ -1046,7 +1075,7 @@ export default function DealsPage() {
                     <p>3) As parcelas pagas fora do prazo de seus vencimentos incidirão em juros e mora estabelecidos na fatura;</p>
                     <p>4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;</p>
                     <p>5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.</p>
-                    <p>6) Fica eleito o Fórum da Cidade de Taió para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
+                    <p>6) Fica eleito o Fórum da Cidade de ${dadosEmissora.cidade || 'Taió'} para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
                 </div>
 
                 <div class="secao-titulo">3. FORMA DE PAGAMENTO:</div>
@@ -1059,7 +1088,7 @@ export default function DealsPage() {
 
                 <div class="assinaturas">
                     <div>Assinatura do Cliente</div>
-                    <div>Representante da Demais FM</div>
+                    <div>Representante da ${unidadeData?.nome || 'Demais FM'}</div>
                 </div>
 
                 <button onclick="window.close()" style="position:fixed;bottom:24px;right:24px;background:#e11d48;color:#fff;border:none;border-radius:50px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;letter-spacing:1px;" class="btn-fechar">✕ FECHAR</button>

@@ -287,9 +287,10 @@ export default function VisitasPage() {
     return true;
   });
 
-  const totalVisitas = visitas.length;
-  const comLead = visitas.filter(v => v.lead_id).length;
-  const semLead = visitas.filter(v => !v.lead_id).length;
+  const visitasDoVendedor = visitas.filter(v => filtroVendedor === 'todos' || v.user_id === filtroVendedor);
+  const totalVisitas = visitasDoVendedor.length;
+  const comLead = visitasDoVendedor.filter(v => v.lead_id).length;
+  const semLead = visitasDoVendedor.filter(v => !v.lead_id).length;
   const hoje = new Date().toISOString().substring(0, 10);
   const visitasHoje = visitas.filter(v => v.created_at.substring(0, 10) === hoje && (!isLideranca || filtroVendedor === 'todos' || v.user_id === filtroVendedor));
 

@@ -65,6 +65,8 @@ type Lead = {
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
+  contrato_manual_url?: string;
+  contrato_manual_em?: string;
 };
 
 type ClienteOpcao = {
@@ -189,6 +191,7 @@ export default function DealsPage() {
   const [zapDocUrl, setZapDocUrl] = useState('');
   const [zapSending, setZapSending] = useState(false);
   const [zapLink, setZapLink] = useState<string | null>(null);
+  const [zapConsultorLink, setZapConsultorLink] = useState<string | null>(null);
   const [zapErro, setZapErro] = useState('');
 
   // Assinatura Digital — Docuseal
@@ -198,7 +201,13 @@ export default function DealsPage() {
   const [docuSignerPhone, setDocuSignerPhone] = useState('');
   const [docuSending, setDocuSending] = useState(false);
   const [docuLink, setDocuLink] = useState<string | null>(null);
+  const [docuConsultorLink, setDocuConsultorLink] = useState<string | null>(null);
   const [docuErro, setDocuErro] = useState('');
+
+  // Upload manual do contrato já assinado (sem assinatura eletrônica)
+  const [showUploadManual, setShowUploadManual] = useState(false);
+  const [uploadManualEnviando, setUploadManualEnviando] = useState(false);
+  const [uploadManualErro, setUploadManualErro] = useState('');
 
   // 👇 ESTADOS DO NOVO POP-UP DE PERDA (IA ANALYTICS) 👇
   const [isLostModalOpen, setIsLostModalOpen] = useState(false);
@@ -308,7 +317,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado, docuseal_submission_id, docuseal_sign_url, docuseal_assinado';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -485,7 +494,7 @@ export default function DealsPage() {
         client_id: lead.client_id,
         user_id: lead.user_id || user?.id,
         empresa_id: perfil?.empresa_id,
-        stage: 'roteiro',
+        stage: 'aguardando_assinatura', // fica oculto da produção até o contrato ser assinado (docuseal/zapsign/upload manual)
         prioridade: 'media',
         deadline: lead.contrato_inicio ? new Date(new Date(lead.contrato_inicio).getTime() - 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
         cliente: lead.empresa,
@@ -1077,7 +1086,8 @@ export default function DealsPage() {
   const enviarParaAssinatura = useCallback(async () => {
     if (!zapSignerName.trim()) { setZapErro('Informe o nome do signatário.'); return; }
     if (!zapSignerEmail.trim() && !zapSignerPhone.trim()) { setZapErro('Informe e-mail ou WhatsApp do signatário.'); return; }
-    setZapSending(true); setZapErro(''); setZapLink(null);
+    if (!user?.email) { setZapErro('Seu perfil não tem e-mail cadastrado — fale com o admin. Você (consultor) precisa assinar primeiro que o cliente.'); return; }
+    setZapSending(true); setZapErro(''); setZapLink(null); setZapConsultorLink(null);
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
@@ -1088,6 +1098,7 @@ export default function DealsPage() {
       body: JSON.stringify({
         empresa_id: perfil?.empresa_id,
         signers: [{ name: zapSignerName.trim(), email: zapSignerEmail.trim() || undefined, phone: zapSignerPhone.trim() || undefined }],
+        consultor: { nome: perfil?.nome || 'Consultor', email: user.email },
         deal: {
           id: editingLeadId,
           empresa: novaEmpresa,
@@ -1109,8 +1120,9 @@ export default function DealsPage() {
     let j: any = {};
     try { j = await res.json(); } catch { j = {}; }
     if (!res.ok) { setZapErro(j.erro || `Erro ${res.status} ao enviar para ZapSign.`); }
-    else if (!j.sign_url) { setZapErro('ZapSign retornou sem link de assinatura. Verifique o token.'); }
+    else if (!j.consultor_sign_url) { setZapErro('ZapSign retornou sem link de assinatura do consultor. Verifique o token.'); }
     else {
+      setZapConsultorLink(j.consultor_sign_url);
       setZapLink(j.sign_url);
       // Salva token e link no lead para persistir o status
       if (editingLeadId) {
@@ -1122,12 +1134,13 @@ export default function DealsPage() {
       }
     }
     setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
 
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
     if (!docuSignerEmail.trim() && !docuSignerPhone.trim()) { setDocuErro('Informe e-mail ou telefone do signatário.'); return; }
-    setDocuSending(true); setDocuErro(''); setDocuLink(null);
+    if (!user?.email) { setDocuErro('Seu perfil não tem e-mail cadastrado — fale com o admin. Você (consultor) precisa assinar primeiro que o cliente.'); return; }
+    setDocuSending(true); setDocuErro(''); setDocuLink(null); setDocuConsultorLink(null);
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
@@ -1138,6 +1151,7 @@ export default function DealsPage() {
       body: JSON.stringify({
         empresa_id: perfil?.empresa_id,
         signers: [{ name: docuSignerName.trim(), email: docuSignerEmail.trim() || undefined, phone: docuSignerPhone.trim() || undefined }],
+        consultor: { nome: perfil?.nome || 'Consultor', email: user.email },
         deal: {
           id: editingLeadId,
           empresa: novaEmpresa,
@@ -1159,8 +1173,9 @@ export default function DealsPage() {
     let j: any = {};
     try { j = await res.json(); } catch { j = {}; }
     if (!res.ok) { setDocuErro(j.erro || `Erro ${res.status} ao enviar para Docuseal.`); }
-    else if (!j.sign_url) { setDocuErro('Docuseal não retornou link de assinatura.'); }
+    else if (!j.consultor_sign_url) { setDocuErro('Docuseal não retornou link de assinatura do consultor.'); }
     else {
+      setDocuConsultorLink(j.consultor_sign_url);
       setDocuLink(j.sign_url);
       if (editingLeadId) {
         await supabase.from('leads').update({
@@ -1171,7 +1186,44 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+
+  const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois
+    if (!file || !editingLeadId) return;
+    setUploadManualEnviando(true);
+    setUploadManualErro('');
+    try {
+      const ext = file.name.split('.').pop() || 'pdf';
+      const path = `${editingLeadId}/manual/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('contratos-assinados').upload(path, file, { upsert: true, contentType: 'application/pdf' });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('contratos-assinados').getPublicUrl(path);
+
+      const agora = new Date().toISOString();
+      await supabase.from('leads').update({
+        contrato_manual_url: urlData.publicUrl,
+        contrato_manual_em: agora,
+      }).eq('id', editingLeadId);
+
+      // Libera o(s) job(s) de produção que estavam ocultos aguardando a assinatura do contrato
+      const leadRef = formatId(editingLeadId, 'LD');
+      const { data: jobs } = await supabase.from('jobs').select('id').ilike('briefing', `%${leadRef}%`).eq('stage', 'aguardando_assinatura');
+      if (jobs && jobs.length > 0) {
+        await supabase.from('jobs').update({ stage: 'roteiro' }).in('id', jobs.map((j: any) => j.id));
+      }
+
+      await fetchData();
+      setToastMessage('📄 Contrato assinado anexado — produção liberada!');
+      setShowToast(true);
+      setShowUploadManual(false);
+    } catch (err: any) {
+      setUploadManualErro(err?.message || 'Erro ao enviar o PDF. Tente novamente.');
+    } finally {
+      setUploadManualEnviando(false);
+    }
+  }, [editingLeadId, supabase, fetchData]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);
@@ -1514,11 +1566,15 @@ export default function DealsPage() {
     }
     setShowAssinatura(Boolean(lead?.zapsign_sign_url));
     setZapLink(lead?.zapsign_sign_url || null);
+    setZapConsultorLink(null);
     setZapErro('');
     setZapDocUrl('');
     setShowDocuseal(Boolean(lead?.docuseal_sign_url));
     setDocuLink(lead?.docuseal_sign_url || null);
+    setDocuConsultorLink(null);
     setDocuErro('');
+    setShowUploadManual(false);
+    setUploadManualErro('');
     setDocuSignerName(lead?.empresa || '');
     setDocuSignerEmail('');
     setDocuSignerPhone(lead?.telefone || '');
@@ -1691,7 +1747,7 @@ export default function DealsPage() {
                             </button>
                             {empresa?.modulos?.zapsign && (
                               <button
-                                onClick={() => { setShowAssinatura(v => !v); setZapLink(null); setZapErro(''); setZapSignerName(novaEmpresa || ''); setZapSignerPhone(novoTelefone || ''); setZapSignerEmail(''); }}
+                                onClick={() => { setShowAssinatura(v => !v); setZapLink(null); setZapConsultorLink(null); setZapErro(''); setZapSignerName(novaEmpresa || ''); setZapSignerPhone(novoTelefone || ''); setZapSignerEmail(''); }}
                                 className={`p-2 rounded-full transition-colors ${showAssinatura ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-slate-400 hover:text-purple-400'}`}
                                 title="Assinatura Digital — ZapSign"
                               >
@@ -1700,11 +1756,20 @@ export default function DealsPage() {
                             )}
                             {empresa?.modulos?.assinatura && (
                               <button
-                                onClick={() => { setShowDocuseal(v => !v); setDocuLink(null); setDocuErro(''); setDocuSignerName(novaEmpresa || ''); setDocuSignerPhone(novoTelefone || ''); setDocuSignerEmail(''); }}
+                                onClick={() => { setShowDocuseal(v => !v); setDocuLink(null); setDocuConsultorLink(null); setDocuErro(''); setDocuSignerName(novaEmpresa || ''); setDocuSignerPhone(novoTelefone || ''); setDocuSignerEmail(''); }}
                                 className={`p-2 rounded-full transition-colors ${showDocuseal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400 hover:text-emerald-400'}`}
                                 title="Assinatura Digital"
                               >
                                   <PenLine size={20}/>
+                              </button>
+                            )}
+                            {!isCDL && (
+                              <button
+                                onClick={() => { setShowUploadManual(v => !v); setUploadManualErro(''); }}
+                                className={`p-2 rounded-full transition-colors ${showUploadManual ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-slate-400 hover:text-orange-400'}`}
+                                title="Anexar contrato assinado (PDF)"
+                              >
+                                  <Upload size={20}/>
                               </button>
                             )}
                         </>
@@ -1719,22 +1784,29 @@ export default function DealsPage() {
                     <PenLine size={16} className="text-purple-400"/>
                     <span className="text-purple-300 font-black text-sm uppercase tracking-wide">Assinatura Digital — ZapSign</span>
                   </div>
-                  {zapLink ? (
+                  {zapConsultorLink ? (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-                        <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
-                        <p className="text-green-400 text-xs font-bold">Documento enviado! Compartilhe o link de assinatura:</p>
+                      <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
+                        <PenLine size={16} className="text-orange-400 shrink-0"/>
+                        <p className="text-orange-300 text-xs font-bold">1º) Assine você primeiro como consultor da rádio:</p>
                       </div>
                       <div className="flex gap-2">
-                        <input readOnly value={zapLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
-                        <button type="button" onClick={() => { navigator.clipboard.writeText(zapLink); }} className="px-3 py-2 bg-purple-600/20 text-purple-400 rounded-xl hover:bg-purple-600/30 transition-colors" title="Copiar">
-                          <Link size={14}/>
-                        </button>
-                        <a href={zapLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-white/5 text-slate-400 rounded-xl hover:text-white transition-colors" title="Abrir">
+                        <input readOnly value={zapConsultorLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
+                        <a href={zapConsultorLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-orange-600/20 text-orange-400 rounded-xl hover:bg-orange-600/30 transition-colors" title="Assinar agora">
                           <ExternalLink size={14}/>
                         </a>
                       </div>
-                      <button type="button" onClick={() => { setZapLink(null); setZapDocUrl(''); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Enviar outro documento</button>
+                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+                        <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
+                        <p className="text-green-400 text-xs font-bold">2º) Depois de você assinar, envie este link pro cliente:</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <input readOnly value={zapLink || ''} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
+                        <button type="button" onClick={() => { if (zapLink) navigator.clipboard.writeText(zapLink); }} className="px-3 py-2 bg-purple-600/20 text-purple-400 rounded-xl hover:bg-purple-600/30 transition-colors" title="Copiar">
+                          <Link size={14}/>
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => { setZapLink(null); setZapConsultorLink(null); setZapDocUrl(''); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Enviar outro documento</button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1777,22 +1849,29 @@ export default function DealsPage() {
                         <p className="text-emerald-400/70 text-xs mt-0.5">Assinatura digital confirmada pelo Docuseal.</p>
                       </div>
                     </div>
-                  ) : docuLink ? (
+                  ) : docuConsultorLink ? (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-                        <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
-                        <p className="text-green-400 text-xs font-bold">Contrato enviado! Compartilhe o link de assinatura:</p>
+                      <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
+                        <PenLine size={16} className="text-orange-400 shrink-0"/>
+                        <p className="text-orange-300 text-xs font-bold">1º) Assine você primeiro como consultor da rádio:</p>
                       </div>
                       <div className="flex gap-2">
-                        <input readOnly value={docuLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
-                        <button type="button" onClick={() => navigator.clipboard.writeText(docuLink)} className="px-3 py-2 bg-emerald-600/20 text-emerald-400 rounded-xl hover:bg-emerald-600/30 transition-colors" title="Copiar">
-                          <Link size={14}/>
-                        </button>
-                        <a href={docuLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-white/5 text-slate-400 rounded-xl hover:text-white transition-colors" title="Abrir">
+                        <input readOnly value={docuConsultorLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
+                        <a href={docuConsultorLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-orange-600/20 text-orange-400 rounded-xl hover:bg-orange-600/30 transition-colors" title="Assinar agora">
                           <ExternalLink size={14}/>
                         </a>
                       </div>
-                      <button type="button" onClick={() => setDocuLink(null)} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
+                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+                        <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
+                        <p className="text-green-400 text-xs font-bold">2º) Depois de você assinar, envie este link pro cliente:</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <input readOnly value={docuLink || ''} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
+                        <button type="button" onClick={() => { if (docuLink) navigator.clipboard.writeText(docuLink); }} className="px-3 py-2 bg-emerald-600/20 text-emerald-400 rounded-xl hover:bg-emerald-600/30 transition-colors" title="Copiar">
+                          <Link size={14}/>
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1816,6 +1895,34 @@ export default function DealsPage() {
                       </div>
                       {docuErro && <p className="md:col-span-2 text-red-400 text-xs font-bold">{docuErro}</p>}
                       {!docuErro && <p className="md:col-span-2 text-slate-600 text-[10px]">O contrato será gerado e o link de assinatura ficará disponível aqui. Após assinar, o job avança automaticamente para produção.</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {showUploadManual && (
+                <div className="border-b border-orange-500/20 bg-orange-500/5 px-6 py-5 flex-shrink-0">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Upload size={16} className="text-orange-400"/>
+                    <span className="text-orange-300 font-black text-sm uppercase tracking-wide">Contrato Assinado (PDF)</span>
+                  </div>
+                  {leads.find(l => l.id === editingLeadId)?.contrato_manual_url ? (
+                    <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+                      <CheckCircle2 size={20} className="text-orange-400 shrink-0"/>
+                      <div className="flex-1">
+                        <p className="text-orange-300 text-sm font-black">Contrato anexado — produção liberada</p>
+                        <a href={leads.find(l => l.id === editingLeadId)?.contrato_manual_url} target="_blank" rel="noopener noreferrer" className="text-orange-400/70 text-xs mt-0.5 underline">Ver PDF</a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:border-orange-500/50 transition-colors bg-black/30">
+                        {uploadManualEnviando ? <Loader2 size={20} className="text-orange-400 animate-spin mb-1"/> : <Upload size={20} className="text-slate-600 mb-1"/>}
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">{uploadManualEnviando ? 'Enviando...' : 'Selecionar PDF já assinado'}</span>
+                        <input type="file" accept="application/pdf" className="hidden" disabled={uploadManualEnviando} onChange={enviarContratoManual}/>
+                      </label>
+                      {uploadManualErro && <p className="text-red-400 text-xs font-bold">{uploadManualErro}</p>}
+                      {!uploadManualErro && <p className="text-slate-600 text-[10px]">Use quando o contrato foi assinado fora do fluxo eletrônico. Ao anexar, a produção é liberada na hora.</p>}
                     </div>
                   )}
                 </div>

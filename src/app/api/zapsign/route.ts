@@ -17,9 +17,12 @@ export async function POST(req: Request) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-  const { empresa_id, deal, signers } = body;
+  const { empresa_id, deal, signers, consultor } = body;
   if (!empresa_id || !signers?.length) {
     return NextResponse.json({ erro: 'Campos obrigatórios: empresa_id, signers.' }, { status: 422 });
+  }
+  if (!consultor?.nome || !consultor?.email) {
+    return NextResponse.json({ erro: 'Consultor da rádio (nome/e-mail) é obrigatório — ele assina primeiro que o cliente.' }, { status: 422 });
   }
 
   const supabase = db();
@@ -86,18 +89,28 @@ export async function POST(req: Request) {
       name: docName,
       base64_pdf: pdfBase64,
       sandbox,
-      signers: signers.map((s: any) => {
-        const phoneDigits = s.phone ? s.phone.replace(/\D/g, '') : '';
-        const phoneNumber = phoneDigits.startsWith('55') ? phoneDigits.slice(2) : phoneDigits;
-        return {
-          name: s.name,
-          email: s.email || undefined,
-          phone_country: phoneDigits ? '55' : undefined,
-          phone_number: phoneNumber || undefined,
-          send_automatic_email: Boolean(s.email),
-          send_automatic_whatsapp: Boolean(phoneDigits && !s.email),
-        };
-      }),
+      signature_order_active: true, // consultor assina primeiro; cliente só é notificado depois
+      signers: [
+        {
+          name: consultor.nome,
+          email: consultor.email,
+          send_automatic_email: true,
+          order_group: 1,
+        },
+        ...signers.map((s: any) => {
+          const phoneDigits = s.phone ? s.phone.replace(/\D/g, '') : '';
+          const phoneNumber = phoneDigits.startsWith('55') ? phoneDigits.slice(2) : phoneDigits;
+          return {
+            name: s.name,
+            email: s.email || undefined,
+            phone_country: phoneDigits ? '55' : undefined,
+            phone_number: phoneNumber || undefined,
+            send_automatic_email: Boolean(s.email),
+            send_automatic_whatsapp: Boolean(phoneDigits && !s.email),
+            order_group: 2,
+          };
+        }),
+      ],
     }),
   });
 
@@ -110,8 +123,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: 'ZapSign: ' + msg }, { status: 502 });
   }
 
-  const link = zapData.signers?.[0]?.sign_url ?? null;
-  return NextResponse.json({ ok: true, doc_token: zapData.token, sign_url: link, open_id: zapData.open_id });
+  const consultorSigner = zapData.signers?.find((s: any) => s.email === consultor.email) || zapData.signers?.[0];
+  const clienteSigner = zapData.signers?.find((s: any) => s.email !== consultor.email) || zapData.signers?.[1];
+  return NextResponse.json({
+    ok: true,
+    doc_token: zapData.token,
+    consultor_sign_url: consultorSigner?.sign_url ?? null,
+    sign_url: clienteSigner?.sign_url ?? null,
+    open_id: zapData.open_id,
+  });
 
   } catch (err: any) {
     console.error('[zapsign/unhandled]', err);

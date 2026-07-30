@@ -136,22 +136,22 @@ export async function POST(req: Request) {
     console.error('[docuseal/webhook] Erro ao arquivar documentos assinados:', err.message);
   }
 
-  // Avança job associado para 'aprovacao' (OPEC/No Ar)
+  // Libera o(s) job(s) de produção que estavam ocultos aguardando a assinatura do contrato
   const leadRef = `LD-${String(lead.id).padStart(4, '0')}`;
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, stage')
+    .select('id')
     .ilike('briefing', `%${leadRef}%`)
-    .neq('stage', 'entregue');
+    .eq('stage', 'aguardando_assinatura');
 
   if (jobs && jobs.length > 0) {
     const jobIds = jobs.map((j: any) => j.id);
     await supabase
       .from('jobs')
-      .update({ stage: 'aprovacao' })
+      .update({ stage: 'roteiro' })
       .in('id', jobIds);
 
-    console.log(`[docuseal/webhook] ${jobIds.length} job(s) avançado(s) para aprovacao. Lead: ${lead.id}`);
+    console.log(`[docuseal/webhook] ${jobIds.length} job(s) liberado(s) para roteiro. Lead: ${lead.id}`);
   }
 
   return NextResponse.json({ ok: true, lead_id: lead.id });

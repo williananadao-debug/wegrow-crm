@@ -23,9 +23,12 @@ export async function POST(req: Request) {
     let body: any;
     try { body = await req.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-    const { empresa_id, deal, signers } = body;
+    const { empresa_id, deal, signers, consultor } = body;
     if (!empresa_id || !deal || !signers?.length) {
       return NextResponse.json({ erro: 'Campos obrigatórios: empresa_id, deal, signers.' }, { status: 422 });
+    }
+    if (!consultor?.nome || !consultor?.email) {
+      return NextResponse.json({ erro: 'Consultor da rádio (nome/e-mail) é obrigatório — ele assina primeiro que o cliente.' }, { status: 422 });
     }
 
     if (!DOCUSEAL_URL || !DOCUSEAL_TOKEN) {
@@ -90,8 +93,14 @@ export async function POST(req: Request) {
           name: 'contrato.pdf',
           file: pdfBuffer.toString('base64'),
           fields: [{
-            name: 'Assinatura',
-            role: 'Signer',
+            name: 'Assinatura Consultor',
+            role: 'Consultor',
+            type: 'signature',
+            required: true,
+            areas: [{ x: 0.62, y: 0.78, w: 0.30, h: 0.08, page: 1 }],
+          }, {
+            name: 'Assinatura Cliente',
+            role: 'Cliente',
             type: 'signature',
             required: true,
             areas: [{ x: 0.08, y: 0.78, w: 0.30, h: 0.08, page: 1 }],
@@ -116,12 +125,22 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         template_id: templateId,
         send_email: false,
-        submitters: signers.map((s: any) => ({
-          name: s.name,
-          email: s.email || `noreply+${Date.now()}@wegrow.com.br`,
-          role: 'Signer',
-          ...(s.phone ? { phone: '+55' + s.phone.replace(/\D/g, '').replace(/^55/, '') } : {}),
-        })),
+        order: 'preserved', // consultor assina primeiro; cliente só recebe o link depois
+        submitters: [
+          {
+            name: consultor.nome,
+            email: consultor.email,
+            role: 'Consultor',
+            order: 0,
+          },
+          ...signers.map((s: any) => ({
+            name: s.name,
+            email: s.email || `noreply+${Date.now()}@wegrow.com.br`,
+            role: 'Cliente',
+            order: 1,
+            ...(s.phone ? { phone: '+55' + s.phone.replace(/\D/g, '').replace(/^55/, '') } : {}),
+          })),
+        ],
       }),
     });
 
@@ -132,13 +151,15 @@ export async function POST(req: Request) {
     }
 
     const submitters: any[] = await submissionRes.json();
-    const first = submitters[0];
-    const signUrl = `${DOCUSEAL_SIGN_BASE}/s/${first.slug}`;
+    const consultorSubmitter = submitters.find((s: any) => s.role === 'Consultor') || submitters[0];
+    const clienteSubmitter = submitters.find((s: any) => s.role === 'Cliente') || submitters[1];
 
     return NextResponse.json({
       ok: true,
-      submission_id: String(first.submission_id),
-      sign_url: signUrl,
+      submission_id: String(consultorSubmitter.submission_id),
+      // consultor precisa assinar primeiro; o link do cliente só é utilizável no Docuseal depois disso
+      consultor_sign_url: `${DOCUSEAL_SIGN_BASE}/s/${consultorSubmitter.slug}`,
+      sign_url: clienteSubmitter ? `${DOCUSEAL_SIGN_BASE}/s/${clienteSubmitter.slug}` : null,
     });
 
   } catch (err: any) {

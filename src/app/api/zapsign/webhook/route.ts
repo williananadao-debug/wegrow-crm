@@ -36,14 +36,32 @@ export async function POST(req: Request) {
   }
 
   const supabase = db();
-  const { error } = await supabase
+  const { data: lead, error } = await supabase
     .from('leads')
     .update({ zapsign_assinado: true })
-    .eq('zapsign_token', docToken);
+    .eq('zapsign_token', docToken)
+    .select('id')
+    .single();
 
   if (error) {
     console.error('[zapsign/webhook] update error', error);
     return NextResponse.json({ ok: false, erro: error.message }, { status: 200 }); // 200 para ZapSign não retentar
+  }
+
+  if (lead) {
+    // Libera o(s) job(s) de produção que estavam ocultos aguardando a assinatura do contrato
+    const leadRef = `LD-${String(lead.id).padStart(4, '0')}`;
+    const { data: jobs } = await supabase
+      .from('jobs')
+      .select('id')
+      .ilike('briefing', `%${leadRef}%`)
+      .eq('stage', 'aguardando_assinatura');
+
+    if (jobs && jobs.length > 0) {
+      const jobIds = jobs.map((j: any) => j.id);
+      await supabase.from('jobs').update({ stage: 'roteiro' }).in('id', jobIds);
+      console.log(`[zapsign/webhook] ${jobIds.length} job(s) liberado(s) para roteiro. Lead: ${lead.id}`);
+    }
   }
 
   return NextResponse.json({ ok: true });

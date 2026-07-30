@@ -12,6 +12,7 @@ export type ContratoData = {
   emissora_estado?: string;
   cliente: string;
   cnpj: string;
+  endereco?: string;
   inscricao_estadual: string;
   telefone: string;
   cidade: string;
@@ -136,6 +137,8 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
         .font('Helvetica').text(data.cnpj || '___________________________', { continued: false });
       doc.font('Helvetica-Bold').text('Inscrição Estadual: ', 300, y1, { continued: true })
         .font('Helvetica').text(data.inscricao_estadual || '_______________');
+
+      linha('Endereço: ', data.endereco || '');
 
       const y2 = doc.y;
       doc.font('Helvetica-Bold').text('Fone: ', 50, y2, { continued: true })

@@ -66,6 +66,7 @@ export async function POST(req: Request) {
       emissora_estado: emissora.estado,
       cliente: deal?.empresa || signers[0]?.name || '',
       cnpj: deal?.cnpj || '',
+      endereco: deal?.endereco || '',
       inscricao_estadual: deal?.inscricao_estadual || '',
       telefone: deal?.telefone || '',
       cidade: deal?.cidade || '',

@@ -55,6 +55,7 @@ type Lead = {
   followup_em?: string;
   status_aprovacao?: string | null;
   cnpj?: string;
+  endereco?: string;
   inscricao_estadual?: string;
   parcelas?: string;
   vencimento?: string;
@@ -243,6 +244,7 @@ export default function DealsPage() {
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
   const [novoCnpj, setNovoCnpj] = useState('');
+  const [novoEndereco, setNovoEndereco] = useState('');
   const [cnpjError, setCnpjError] = useState(false);
   const [novoIE, setNovoIE] = useState('');
   const [parcelas, setParcelas] = useState('1');
@@ -335,7 +337,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1035,6 +1037,7 @@ export default function DealsPage() {
                         <div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
                         <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
                     </div>
+                    <div><strong>Endereço:</strong> ${lead.endereco || '_________________________________'}</div>
                     <div style="display: flex; gap: 40px;">
                         <div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div>
                         <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
@@ -1132,6 +1135,7 @@ export default function DealsPage() {
           id: editingLeadId,
           empresa: novaEmpresa,
           cnpj: novoCnpj,
+          endereco: novoEndereco,
           inscricao_estadual: novoIE,
           telefone: novoTelefone,
           cidade: novaCidade,
@@ -1163,7 +1167,7 @@ export default function DealsPage() {
       }
     }
     setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
 
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
@@ -1185,6 +1189,7 @@ export default function DealsPage() {
           id: editingLeadId,
           empresa: novaEmpresa,
           cnpj: novoCnpj,
+          endereco: novoEndereco,
           inscricao_estadual: novoIE,
           telefone: novoTelefone,
           cidade: novaCidade,
@@ -1215,7 +1220,7 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1471,6 +1476,7 @@ export default function DealsPage() {
         contrato_fim: contratoFim || null,
         followup_em: followupEm || null,
         cnpj: novoCnpj,
+        endereco: novoEndereco || null,
         inscricao_estadual: novoIE || null,
         parcelas: parcelas,
         vencimento: vencimento || null,
@@ -1559,6 +1565,7 @@ export default function DealsPage() {
         setContratoFim(lead.contrato_fim || '');
         setFollowupEm(lead.followup_em || '');
         setNovoCnpj(lead.cnpj || '');
+        setNovoEndereco(lead.endereco || '');
         setNovoIE(lead.inscricao_estadual || '');
         setParcelas(lead.parcelas || '1');
         setVencimento(lead.vencimento || '');
@@ -1582,6 +1589,7 @@ export default function DealsPage() {
         setContratoFim('');
         setFollowupEm('');
         setNovoCnpj('');
+        setNovoEndereco('');
         setCnpjError(false);
         setNovoIE('');
         setParcelas('1');
@@ -2058,6 +2066,10 @@ export default function DealsPage() {
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>
                                     <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Endereço</label>
+                                <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoEndereco} onChange={e => setNovoEndereco(e.target.value)} placeholder="Rua, número - Bairro" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>

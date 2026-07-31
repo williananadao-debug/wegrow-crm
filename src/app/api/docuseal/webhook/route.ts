@@ -95,7 +95,9 @@ export async function POST(req: Request) {
 
   console.log('[docuseal/webhook]', JSON.stringify(body).slice(0, 500));
 
-  // Docuseal envia: { event_type: "form.completed", data: { submission: { id, ... }, documents, audit_log_url, ... } }
+  // Docuseal envia "form.completed" a cada assinante individual (dispara 1x por pessoa) e
+  // "submission.completed" só quando TODOS já assinaram — com 2 signatários (consultor + cliente),
+  // precisamos do segundo, senão o contrato é marcado como assinado assim que só o consultor assina.
   const eventType: string = body?.event_type || '';
   const data = body?.data || {};
   const submissionId: string = String(data?.submission?.id || data?.id || body?.submission?.id || '');
@@ -105,7 +107,7 @@ export async function POST(req: Request) {
   }
 
   // Só processa quando todos assinaram
-  if (eventType !== 'form.completed') {
+  if (eventType !== 'submission.completed') {
     return NextResponse.json({ ok: true, ignorado: true, eventType });
   }
 

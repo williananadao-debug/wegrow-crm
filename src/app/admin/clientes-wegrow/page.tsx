@@ -14,9 +14,9 @@ import {
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
 const MODULO_LABELS: Record<string, string> = {
-  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp', zapsign: 'Assinatura Digital',
+  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp',
 };
-const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp', 'zapsign'] as const;
+const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp'] as const;
 
 type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
 type Billing = { empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; whatsapp: string | null; contato: string | null; observacao: string | null; };
@@ -46,7 +46,7 @@ const STATUS_CFG = {
   sem_dados:    { label: 'Sem faturamento',cor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',    icon: <XCircle size={10}/> },
 };
 
-type Aba = 'faturamento' | 'modulos' | 'zapsign' | 'portais';
+type Aba = 'faturamento' | 'modulos' | 'portais';
 
 export default function ClientesWeGrowPage() {
   const { user, loading: authLoading } = useAuth();
@@ -70,14 +70,6 @@ export default function ClientesWeGrowPage() {
   // Aba Módulos
   const [modulosEdit, setModulosEdit] = useState<Record<string, boolean>>({});
   const [savingModulos, setSavingModulos] = useState(false);
-
-  // Aba ZapSign
-  const [zapToken, setZapToken] = useState('');
-  const [zapTemplate, setZapTemplate] = useState('');
-  const [zapSandbox, setZapSandbox] = useState(false);
-  const [showZapToken, setShowZapToken] = useState(false);
-  const [savingZap, setSavingZap] = useState(false);
-  const [feedbackZap, setFeedbackZap] = useState('');
 
   // Aba Portais
   const [portais, setPortais] = useState<Portal[]>([]);
@@ -122,11 +114,7 @@ export default function ClientesWeGrowPage() {
     setEditando(c);
     setAbaAtiva('faturamento');
     setErroSalvar(null);
-    setFeedbackZap('');
     setModulosEdit(c.modulos || {});
-    setZapToken(c.modulos?.zapsign_token || '');
-    setZapTemplate(c.modulos?.zapsign_template || '');
-    setZapSandbox(Boolean(c.modulos?.zapsign_sandbox));
     setPortais([]);
     setNovoSlug(''); setNovoNome('');
     setForm({
@@ -191,21 +179,6 @@ export default function ClientesWeGrowPage() {
     setSavingModulos(false); carregar();
   };
 
-  // ZapSign
-  const salvarZap = async () => {
-    if (!editando) return;
-    setSavingZap(true); setFeedbackZap('');
-    const res = await fetch('/api/admin/empresas', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ id: editando.id, modulos: { ...editando.modulos, ...modulosEdit, zapsign_token: zapToken.trim(), zapsign_template: zapTemplate.trim(), zapsign_sandbox: zapSandbox } }),
-    });
-    setSavingZap(false);
-    setFeedbackZap(res.ok ? 'ok' : 'erro');
-    setTimeout(() => setFeedbackZap(''), 3000);
-    if (res.ok) carregar();
-  };
-
   // Portais
   const criarPortal = async () => {
     if (!editando || !novoSlug.trim() || !novoNome.trim()) return;
@@ -254,7 +227,6 @@ export default function ClientesWeGrowPage() {
   const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={13}/> },
     { id: 'modulos',     label: 'Módulos',     icon: <Package size={13}/> },
-    { id: 'zapsign',     label: 'ZapSign',     icon: <PenLine size={13}/> },
     { id: 'portais',     label: 'Portais',     icon: <Globe size={13}/> },
   ];
 
@@ -470,41 +442,6 @@ export default function ClientesWeGrowPage() {
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-
-              {/* ZAPSIGN */}
-              {abaAtiva === 'zapsign' && (
-                <div className="space-y-4">
-                  <p className="text-slate-500 text-xs">Tokens da conta ZapSign deste cliente. Necessário ativar o módulo "Assinatura Digital" na aba Módulos.</p>
-                  <div>
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">API Token</label>
-                    <div className="relative">
-                      <input type={showZapToken ? 'text' : 'password'} value={zapToken} onChange={e => setZapToken(e.target.value)} placeholder="Token de autenticação ZapSign..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors pr-12 placeholder:text-slate-600"/>
-                      <button type="button" onClick={() => setShowZapToken(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                        {showZapToken ? <EyeOff size={16}/> : <Eye size={16}/>}
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Token do Template de Contrato</label>
-                    <input type="text" value={zapTemplate} onChange={e => setZapTemplate(e.target.value)} placeholder="Token do modelo no ZapSign..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white outline-none focus:border-blue-500 transition-colors placeholder:text-slate-600"/>
-                  </div>
-                  <button type="button" onClick={() => setZapSandbox(v => !v)}
-                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${zapSandbox ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
-                    <span className="flex-1 text-left">Modo Sandbox (Desenvolvimento/Teste)</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-black ${zapSandbox ? 'bg-yellow-500/20 text-yellow-300' : 'bg-white/5 text-slate-600'}`}>{zapSandbox ? 'ATIVO' : 'INATIVO'}</span>
-                  </button>
-                  {zapSandbox && <p className="text-yellow-600 text-[10px] font-bold -mt-2">⚠ Sandbox ativo: documentos são de teste, assinaturas não têm validade jurídica. Desative ao contratar o plano API do ZapSign.</p>}
-                  <div className="flex items-center justify-between pt-1">
-                    {feedbackZap === 'ok' && <span className="text-green-400 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={13}/> Salvo!</span>}
-                    {feedbackZap === 'erro' && <span className="text-red-400 text-xs font-bold">Erro ao salvar.</span>}
-                    {!feedbackZap && <span/>}
-                    <button onClick={salvarZap} disabled={savingZap} className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2">
-                      {savingZap ? <Loader2 size={13} className="animate-spin"/> : <Save size={13}/>}
-                      {savingZap ? 'Salvando...' : 'Salvar Tokens'}
-                    </button>
                   </div>
                 </div>
               )}

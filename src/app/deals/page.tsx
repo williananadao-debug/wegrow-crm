@@ -60,9 +60,6 @@ type Lead = {
   parcelas?: string;
   vencimento?: string;
   atividades?: Atividade[];
-  zapsign_token?: string;
-  zapsign_sign_url?: string;
-  zapsign_assinado?: boolean;
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
@@ -202,17 +199,6 @@ export default function DealsPage() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState<'idle' | 'ok' | 'error'>('idle');
 
-  // Assinatura Digital — ZapSign
-  const [showAssinatura, setShowAssinatura] = useState(false);
-  const [zapSignerName, setZapSignerName] = useState('');
-  const [zapSignerEmail, setZapSignerEmail] = useState('');
-  const [zapSignerPhone, setZapSignerPhone] = useState('');
-  const [zapDocUrl, setZapDocUrl] = useState('');
-  const [zapSending, setZapSending] = useState(false);
-  const [zapLink, setZapLink] = useState<string | null>(null);
-  const [zapConsultorLink, setZapConsultorLink] = useState<string | null>(null);
-  const [zapErro, setZapErro] = useState('');
-
   // Assinatura Digital — Docuseal
   const [showDocuseal, setShowDocuseal] = useState(false);
   const [docuSignerName, setDocuSignerName] = useState('');
@@ -337,7 +323,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, zapsign_token, zapsign_sign_url, zapsign_assinado, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -514,7 +500,7 @@ export default function DealsPage() {
         client_id: lead.client_id,
         user_id: lead.user_id || user?.id,
         empresa_id: perfil?.empresa_id,
-        stage: 'aguardando_assinatura', // fica oculto da produção até o contrato ser assinado (docuseal/zapsign/upload manual)
+        stage: 'aguardando_assinatura', // fica oculto da produção até o contrato ser assinado (docuseal/upload manual)
         prioridade: 'media',
         deadline: lead.contrato_inicio ? new Date(new Date(lead.contrato_inicio).getTime() - 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
         cliente: lead.empresa,
@@ -1115,60 +1101,6 @@ export default function DealsPage() {
     }
   }, [perfil?.nome, supabase, isCDL, unidades]);
 
-  const enviarParaAssinatura = useCallback(async () => {
-    if (!zapSignerName.trim()) { setZapErro('Informe o nome do signatário.'); return; }
-    if (!zapSignerEmail.trim() && !zapSignerPhone.trim()) { setZapErro('Informe e-mail ou WhatsApp do signatário.'); return; }
-    if (!user?.email) { setZapErro('Seu perfil não tem e-mail cadastrado — fale com o admin. Você (consultor) precisa assinar primeiro que o cliente.'); return; }
-    setZapSending(true); setZapErro(''); setZapLink(null); setZapConsultorLink(null);
-
-    const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
-    const total = Math.max(0, subtotal - desconto);
-
-    const res = await fetch('/api/zapsign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        empresa_id: perfil?.empresa_id,
-        signers: [{ name: zapSignerName.trim(), email: zapSignerEmail.trim() || undefined, phone: zapSignerPhone.trim() || undefined }],
-        consultor: { nome: perfil?.nome || 'Consultor', email: user.email },
-        deal: {
-          id: editingLeadId,
-          empresa: novaEmpresa,
-          cnpj: novoCnpj,
-          endereco: novoEndereco,
-          inscricao_estadual: novoIE,
-          telefone: novoTelefone,
-          cidade: novaCidade,
-          unidade: novaUnidade,
-          contrato_inicio: contratoInicio,
-          contrato_fim: contratoFim,
-          itens: itensTemporarios,
-          desconto,
-          valor_total: total,
-          parcelas,
-          vencimento,
-        },
-      }),
-    });
-    let j: any = {};
-    try { j = await res.json(); } catch { j = {}; }
-    if (!res.ok) { setZapErro(j.erro || `Erro ${res.status} ao enviar para ZapSign.`); }
-    else if (!j.consultor_sign_url) { setZapErro('ZapSign retornou sem link de assinatura do consultor. Verifique o token.'); }
-    else {
-      setZapConsultorLink(j.consultor_sign_url);
-      setZapLink(j.sign_url);
-      // Salva token e link no lead para persistir o status
-      if (editingLeadId) {
-        await supabase.from('leads').update({
-          zapsign_token: j.doc_token,
-          zapsign_sign_url: j.sign_url,
-        }).eq('id', editingLeadId);
-        await fetchData();
-      }
-    }
-    setZapSending(false);
-  }, [zapSignerName, zapSignerEmail, zapSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
-
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
     if (!docuSignerEmail.trim() && !docuSignerPhone.trim()) { setDocuErro('Informe e-mail ou telefone do signatário.'); return; }
@@ -1601,11 +1533,6 @@ export default function DealsPage() {
         setLeadUserId(user?.id || '');
         setMostrarDetalhes(false);
     }
-    setShowAssinatura(Boolean(lead?.zapsign_sign_url));
-    setZapLink(lead?.zapsign_sign_url || null);
-    setZapConsultorLink(null);
-    setZapErro('');
-    setZapDocUrl('');
     setShowDocuseal(Boolean(lead?.docuseal_sign_url));
     setDocuLink(lead?.docuseal_sign_url || null);
     setDocuConsultorLink(null);
@@ -1782,15 +1709,6 @@ export default function DealsPage() {
                             <button onClick={imprimirProposta} className="p-2 bg-blue-600/10 text-blue-400 rounded-full hover:bg-blue-600/20 transition-colors">
                                 <Printer size={20}/>
                             </button>
-                            {empresa?.modulos?.zapsign && (
-                              <button
-                                onClick={() => { setShowAssinatura(v => !v); setZapLink(null); setZapConsultorLink(null); setZapErro(''); setZapSignerName(novaEmpresa || ''); setZapSignerPhone(novoTelefone || ''); setZapSignerEmail(''); }}
-                                className={`p-2 rounded-full transition-colors ${showAssinatura ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-slate-400 hover:text-purple-400'}`}
-                                title="Assinatura Digital — ZapSign"
-                              >
-                                  <PenLine size={20}/>
-                              </button>
-                            )}
                             {empresa?.modulos?.assinatura && (
                               <button
                                 onClick={() => { setShowDocuseal(v => !v); setDocuLink(null); setDocuConsultorLink(null); setDocuErro(''); setDocuSignerName(novaEmpresa || ''); setDocuSignerPhone(novoTelefone || ''); setDocuSignerEmail(''); }}
@@ -1814,63 +1732,6 @@ export default function DealsPage() {
                       <button onClick={() => setIsModalOpen(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={20}/></button>
                   </div>
               </div>
-
-              {showAssinatura && (
-                <div className="border-b border-purple-500/20 bg-purple-500/5 px-6 py-5 flex-shrink-0">
-                  <div className="flex items-center gap-2 mb-4">
-                    <PenLine size={16} className="text-purple-400"/>
-                    <span className="text-purple-300 font-black text-sm uppercase tracking-wide">Assinatura Digital — ZapSign</span>
-                  </div>
-                  {zapConsultorLink ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
-                        <PenLine size={16} className="text-orange-400 shrink-0"/>
-                        <p className="text-orange-300 text-xs font-bold">1º) Assine você primeiro como consultor da rádio:</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <input readOnly value={zapConsultorLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
-                        <a href={zapConsultorLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-orange-600/20 text-orange-400 rounded-xl hover:bg-orange-600/30 transition-colors" title="Assinar agora">
-                          <ExternalLink size={14}/>
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-                        <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
-                        <p className="text-green-400 text-xs font-bold">2º) Depois de você assinar, envie este link pro cliente:</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <input readOnly value={zapLink || ''} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
-                        <button type="button" onClick={() => { if (zapLink) navigator.clipboard.writeText(zapLink); }} className="px-3 py-2 bg-purple-600/20 text-purple-400 rounded-xl hover:bg-purple-600/30 transition-colors" title="Copiar">
-                          <Link size={14}/>
-                        </button>
-                      </div>
-                      <button type="button" onClick={() => { setZapLink(null); setZapConsultorLink(null); setZapDocUrl(''); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Enviar outro documento</button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500">Nome do Signatário *</label>
-                        <input type="text" value={zapSignerName} onChange={e => setZapSignerName(e.target.value)} placeholder="Nome completo" className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500">E-mail</label>
-                        <input type="email" value={zapSignerEmail} onChange={e => setZapSignerEmail(e.target.value)} placeholder="email@cliente.com" className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500">WhatsApp (com DDD)</label>
-                        <input type="tel" value={zapSignerPhone} onChange={e => setZapSignerPhone(e.target.value)} placeholder="47999999999" className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-purple-500 transition-colors"/>
-                      </div>
-                      <div className="flex items-end">
-                        <button type="button" onClick={enviarParaAssinatura} disabled={zapSending} className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                          {zapSending ? <Loader2 size={14} className="animate-spin"/> : <PenLine size={14}/>}
-                          {zapSending ? 'Gerando contrato...' : 'Gerar e Enviar Contrato'}
-                        </button>
-                      </div>
-                      {zapErro && <p className="md:col-span-2 text-red-400 text-xs font-bold">{zapErro}</p>}
-                      {!zapErro && <p className="md:col-span-2 text-slate-600 text-[10px]">O contrato padrão será gerado automaticamente e enviado ao signatário via e-mail ou WhatsApp.</p>}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {showDocuseal && (
                 <div className="border-b border-emerald-500/20 bg-emerald-500/5 px-6 py-5 flex-shrink-0">

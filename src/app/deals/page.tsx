@@ -1174,11 +1174,12 @@ export default function DealsPage() {
         contrato_manual_em: agora,
       }).eq('id', editingLeadId);
 
-      // Libera o(s) job(s) de produção que estavam ocultos aguardando a assinatura do contrato
+      // Libera o(s) job(s) direto pra 'entregue' — a OPEC puxa os dados via API assim que o
+      // contrato for confirmado assinado, sem etapa manual no Kanban interno de produção.
       const leadRef = formatId(editingLeadId, 'LD');
       const { data: jobs } = await supabase.from('jobs').select('id').ilike('briefing', `%${leadRef}%`).eq('stage', 'aguardando_assinatura');
       if (jobs && jobs.length > 0) {
-        await supabase.from('jobs').update({ stage: 'roteiro' }).in('id', jobs.map((j: any) => j.id));
+        await supabase.from('jobs').update({ stage: 'entregue' }).in('id', jobs.map((j: any) => j.id));
       }
 
       await fetchData();

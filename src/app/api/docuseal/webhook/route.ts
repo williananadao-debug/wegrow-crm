@@ -166,7 +166,9 @@ export async function POST(req: Request) {
     console.error('[docuseal/webhook] Erro ao arquivar documentos assinados:', err.message);
   }
 
-  // Libera o(s) job(s) de produção que estavam ocultos aguardando a assinatura do contrato
+  // Libera o(s) job(s) de produção direto pra 'entregue' — a OPEC assume a produção em si
+  // (roteiro/gravação/edição) do lado dela; aqui só precisa disponibilizar os dados pra API assim
+  // que o contrato for assinado, sem etapa manual nenhuma no Kanban interno.
   const leadRef = `LD-${String(lead.id).padStart(4, '0')}`;
   const { data: jobs } = await supabase
     .from('jobs')
@@ -178,10 +180,10 @@ export async function POST(req: Request) {
     const jobIds = jobs.map((j: any) => j.id);
     await supabase
       .from('jobs')
-      .update({ stage: 'roteiro' })
+      .update({ stage: 'entregue' })
       .in('id', jobIds);
 
-    console.log(`[docuseal/webhook] ${jobIds.length} job(s) liberado(s) para roteiro. Lead: ${lead.id}`);
+    console.log(`[docuseal/webhook] ${jobIds.length} job(s) liberado(s) para OPEC (entregue). Lead: ${lead.id}`);
   }
 
   return NextResponse.json({ ok: true, lead_id: lead.id });

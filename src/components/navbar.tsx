@@ -40,14 +40,16 @@ export default function Navbar() {
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
 
-  // O menu "Produção" só aparece quando existe pelo menos 1 job já liberado
-  // (fora de "aguardando_assinatura") — enquanto só há jobs ocultos aguardando
-  // a assinatura do contrato, o menu fica escondido.
+  // O menu "Produção" só aparece quando existe algum job em andamento no Kanban visível
+  // (roteiro/gravação/edição/aprovação). Jobs de contrato assinado pulam direto pra
+  // "entregue" (a OPEC puxa via API, sem etapa manual) e ficam ocultos por padrão na
+  // Esteira, então não contam aqui — só jobs manuais ainda em produção acendem o menu.
+  const ESTAGIOS_VISIVEIS = ['roteiro', 'gravacao', 'edicao', 'aprovacao'];
   const [temJobLiberado, setTemJobLiberado] = useState(false);
   useEffect(() => {
     if (!opecHabilitado || !empresa?.id) { setTemJobLiberado(false); return; }
     let ativo = true;
-    supabase.from('jobs').select('id').eq('empresa_id', empresa.id).neq('stage', 'aguardando_assinatura').limit(1)
+    supabase.from('jobs').select('id').eq('empresa_id', empresa.id).in('stage', ESTAGIOS_VISIVEIS).limit(1)
       .then(({ data }) => { if (ativo) setTemJobLiberado(Boolean(data && data.length > 0)); });
     return () => { ativo = false; };
   }, [opecHabilitado, empresa?.id]);

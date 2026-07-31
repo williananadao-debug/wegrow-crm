@@ -882,6 +882,19 @@ export default function DealsPage() {
             <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">${(i as any).bonificacao ? '<span style="color:#b45309;font-weight:bold;">BONIFICAÇÃO</span>' : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
     `).join('');
+    const subtotalItens = listaItens.reduce((s, i) => (i as any).bonificacao ? s : s + i.quantidade * i.precoUnitario, 0);
+    const linhasDesconto = (lead.desconto || 0) > 0 ? `
+        <tr>
+            <td style="padding: 8px; border: 1px solid #000; font-size: 11px; font-weight: bold;">Subtotal</td>
+            <td style="padding: 8px; border: 1px solid #000;"></td>
+            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${subtotalItens.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #000; font-size: 11px; font-weight: bold;">Desconto</td>
+            <td style="padding: 8px; border: 1px solid #000;"></td>
+            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px; color: #cc0000;">- R$ ${(lead.desconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+        </tr>
+    ` : '';
 
     const htmlContrato = isCDL ? `
         <html>
@@ -1037,7 +1050,7 @@ export default function DealsPage() {
                     Visando a veiculação e divulgação da publicidade do CLIENTE acima, por meio da emissora de FM da EXECUTANTE, tudo conforme as condições a seguir indicadas.
                 </div>
 
-                <div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE:</div>
+                <div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE</div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;">
                     <div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div>
                     <div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div>
@@ -1053,6 +1066,7 @@ export default function DealsPage() {
                     </thead>
                     <tbody>
                         ${itensHtml}
+                        ${linhasDesconto}
                         <tr>
                             <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td>
                             <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -1061,13 +1075,13 @@ export default function DealsPage() {
                 </table>
 
                 ${ultimaNota ? `
-                <div class="secao-titulo">2. OBSERVAÇÕES:</div>
+                <div class="secao-titulo">2. OBSERVAÇÕES</div>
                 <div class="condicoes">
                     <p>${ultimaNota}</p>
                 </div>
                 ` : ''}
 
-                <div class="secao-titulo">${ultimaNota ? 3 : 2}. OUTRAS CONDIÇÕES:</div>
+                <div class="secao-titulo">${ultimaNota ? 3 : 2}. OUTRAS CONDIÇÕES</div>
                 <div class="condicoes">
                     <p>1) O presente contrato tem caráter irrevogável;</p>
                     <p>2) As inserções objeto do presente contrato são intransferíveis;</p>
@@ -1075,9 +1089,10 @@ export default function DealsPage() {
                     <p>4) O presente contrato somente poderá ser rescindido 30 (trinta) dias após sua contratação;</p>
                     <p>5) Caso o cliente solicite a rescisão antecipada do contrato (antes do término da vigência total acordada), esta só produzirá efeitos ao final do ciclo mensal de veiculação em andamento, considerando-se ciclos de 30 (trinta) dias corridos contados a partir do início do contrato. Cancelamentos não terão efeito imediato e não serão proporcionais.</p>
                     <p>6) Fica eleito o Fórum da Cidade de ${dadosEmissora.cidade || 'Taió'} para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
+                    <p>7) As partes reconhecem e aceitam, para todos os fins de direito, a validade jurídica da assinatura eletrônica utilizada na celebração deste contrato, nos termos do art. 10, §2º, da Medida Provisória nº 2.200-2/2001, dispensando a necessidade de certificado digital no padrão ICP-Brasil. A autenticidade e integridade das assinaturas são atestadas pelo registro de auditoria (endereço IP, data, hora e e-mail de cada signatário) gerado pela plataforma de assinatura eletrônica utilizada, o qual constitui parte integrante e inseparável deste instrumento.</p>
                 </div>
 
-                <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO:</div>
+                <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
                     <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
@@ -1088,6 +1103,10 @@ export default function DealsPage() {
                 <div class="assinaturas">
                     <div>Assinatura do Cliente</div>
                     <div>Representante da ${unidadeData?.nome || 'Demais FM'}</div>
+                </div>
+
+                <div style="margin-top: 30px; text-align: center; font-size: 9px; color: #999;">
+                    ${dadosEmissora.razao} &middot; CNPJ ${dadosEmissora.cnpj} &middot; Gerado em ${new Date().toLocaleDateString('pt-BR')}
                 </div>
 
                 <button onclick="window.close()" style="position:fixed;bottom:24px;right:24px;background:#e11d48;color:#fff;border:none;border-radius:50px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;letter-spacing:1px;" class="btn-fechar">✕ FECHAR</button>
@@ -1817,6 +1836,9 @@ export default function DealsPage() {
                       </div>
                       {docuErro && <p className="md:col-span-2 text-red-400 text-xs font-bold">{docuErro}</p>}
                       {!docuErro && <p className="md:col-span-2 text-slate-600 text-[10px]">O contrato será gerado e o link de assinatura ficará disponível aqui. Após assinar, o job avança automaticamente para produção.</p>}
+                      <button type="button" onClick={() => { setShowUploadManual(true); setUploadManualErro(''); }} className="md:col-span-2 text-orange-400/80 hover:text-orange-300 text-[10px] font-bold uppercase tracking-widest transition-colors text-left flex items-center gap-1">
+                        <Upload size={11}/> Já foi assinado fora do sistema? Anexar PDF assinado
+                      </button>
                     </div>
                   )}
                 </div>

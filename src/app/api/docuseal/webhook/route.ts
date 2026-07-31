@@ -13,6 +13,8 @@ function db() {
 }
 
 const WEBHOOK_SECRET = process.env.DOCUSEAL_WEBHOOK_SECRET || '';
+const DOCUSEAL_URL = (process.env.DOCUSEAL_URL || '').replace(/\/$/, '');
+const DOCUSEAL_TOKEN = process.env.DOCUSEAL_TOKEN || '';
 const BUCKET = 'contratos-assinados';
 
 // Docuseal assina o corpo com HMAC-SHA256: header "X-Docuseal-Signature: <timestamp>.<assinatura>",
@@ -95,9 +97,10 @@ export async function POST(req: Request) {
 
   console.log('[docuseal/webhook]', JSON.stringify(body).slice(0, 500));
 
-  // Docuseal envia "form.completed" a cada assinante individual (dispara 1x por pessoa) e
-  // "submission.completed" só quando TODOS já assinaram — com 2 signatários (consultor + cliente),
-  // precisamos do segundo, senão o contrato é marcado como assinado assim que só o consultor assina.
+  // Docuseal (nesta conta) só oferece os eventos "form.completed"/"form.declined" — form.completed
+  // dispara 1x por assinante individual, não quando TODOS terminam. Com 2 signatários (consultor +
+  // cliente), não dá pra confiar no event_type: é preciso consultar a submissão na API do Docuseal
+  // e conferir se ela está de fato "completed" (todos assinaram) antes de liberar qualquer coisa.
   const eventType: string = body?.event_type || '';
   const data = body?.data || {};
   const submissionId: string = String(data?.submission?.id || data?.id || body?.submission?.id || '');
@@ -106,9 +109,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, erro: 'submission_id não encontrado no payload' });
   }
 
-  // Só processa quando todos assinaram
-  if (eventType !== 'submission.completed') {
+  if (eventType !== 'form.completed') {
     return NextResponse.json({ ok: true, ignorado: true, eventType });
+  }
+
+  if (!DOCUSEAL_URL || !DOCUSEAL_TOKEN) {
+    console.error('[docuseal/webhook] DOCUSEAL_URL/DOCUSEAL_TOKEN não configurados — não dá pra confirmar se a submissão está completa.');
+    return NextResponse.json({ ok: false, erro: 'Docuseal não configurado no servidor.' });
+  }
+
+  // Confirma na própria API do Docuseal que TODOS os signatários já assinaram
+  let submissao: any;
+  try {
+    const submissaoRes = await fetch(`${DOCUSEAL_URL}/submissions/${submissionId}`, {
+      headers: { 'X-Auth-Token': DOCUSEAL_TOKEN },
+    });
+    if (!submissaoRes.ok) throw new Error(`status ${submissaoRes.status}`);
+    submissao = await submissaoRes.json();
+  } catch (err: any) {
+    console.error('[docuseal/webhook] Erro ao consultar submissão no Docuseal:', err.message);
+    return NextResponse.json({ ok: false, erro: 'Erro ao consultar submissão no Docuseal.' });
+  }
+
+  const todosAssinaram = Array.isArray(submissao?.submitters)
+    ? submissao.submitters.every((s: any) => Boolean(s.completed_at))
+    : submissao?.status === 'completed';
+
+  if (!todosAssinaram) {
+    return NextResponse.json({ ok: true, ignorado: true, motivo: 'aguardando outro(s) signatário(s)' });
   }
 
   const supabase = db();
@@ -133,7 +161,7 @@ export async function POST(req: Request) {
 
   // Baixa e arquiva o contrato assinado + certificado de auditoria (prova jurídica independente do Docuseal)
   try {
-    await arquivarDocumentosAssinados(supabase, lead.id, submissionId, data);
+    await arquivarDocumentosAssinados(supabase, lead.id, submissionId, submissao);
   } catch (err: any) {
     console.error('[docuseal/webhook] Erro ao arquivar documentos assinados:', err.message);
   }

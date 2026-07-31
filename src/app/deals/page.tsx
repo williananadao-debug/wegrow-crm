@@ -1018,7 +1018,7 @@ export default function DealsPage() {
                     .condicoes p { margin: 4px 0; }
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
-                    .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 297mm; z-index: -1; object-fit: cover; }
+                    .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 180mm; z-index: -1; object-fit: cover; object-position: top; }
                     @media print {
                         .btn-fechar { display: none !important; }
                         html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

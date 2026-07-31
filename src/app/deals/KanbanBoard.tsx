@@ -135,7 +135,7 @@ const LeadCard = React.memo(({
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 md:gap-2">
+            <div className="flex flex-row gap-2">
               <button onClick={(e) => enviarWhatsapp(e, lead)} className="bg-white/5 md:bg-transparent p-2 md:p-0 rounded-lg md:rounded-none text-[#22C55E] hover:text-white hover:bg-[#22C55E]/20 transition-all" title="Enviar WhatsApp">
                 <MessageCircle size={18} className="md:w-[14px] md:h-[14px]" />
               </button>

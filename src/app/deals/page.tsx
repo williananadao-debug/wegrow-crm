@@ -195,6 +195,10 @@ export default function DealsPage() {
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
 
+  const leadEmEdicao = leads.find(l => l.id === editingLeadId);
+  const contratoJaAssinado = Boolean(leadEmEdicao?.docuseal_assinado || leadEmEdicao?.contrato_manual_url);
+  const leadTravado = contratoJaAssinado && !isDirector;
+
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [emailDestino, setEmailDestino] = useState('');
@@ -1365,7 +1369,8 @@ export default function DealsPage() {
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado para salvar um lead!");
-    
+    if (leadTravado) return alert("🔒 Contrato assinado — edição bloqueada. Somente um diretor pode ajustar.");
+
     setLoading(true);
     let finalClientId = selectedClientId;
 
@@ -1895,7 +1900,14 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
-                    
+                    {leadTravado && (
+                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-center gap-3">
+                            <Lock size={18} className="text-orange-400 shrink-0"/>
+                            <p className="text-orange-300 text-xs font-bold">Contrato assinado — edição bloqueada. Somente um diretor pode ajustar esta oportunidade agora.</p>
+                        </div>
+                    )}
+                    <fieldset disabled={leadTravado} className="space-y-6 border-0 p-0 m-0 min-w-0">
+
                     <div className="mb-4 relative">
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa *</label>
                         <div className="relative">
@@ -2203,12 +2215,13 @@ export default function DealsPage() {
                             ) : ( <p className="text-orange-400 font-black text-xs uppercase animate-pulse border border-orange-500/20 py-2 rounded-xl bg-orange-500/10">Aguardando Diretor/Gerente</p> )}
                         </div>
                     )}
+                    </fieldset>
                 </form>
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
-                      {!editingLeadId ? (isCDL ? 'Cadastrar Prospecto' : 'Criar Oportunidade') : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
+                  <button type="submit" form="leadForm" disabled={leadTravado} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${leadTravado ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                      {leadTravado ? '🔒 Contrato assinado — bloqueado' : !editingLeadId ? (isCDL ? 'Cadastrar Prospecto' : 'Criar Oportunidade') : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>
 

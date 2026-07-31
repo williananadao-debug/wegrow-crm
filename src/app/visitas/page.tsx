@@ -35,6 +35,13 @@ type Perfil = {
   cargo?: string;
 };
 
+function getLocalYYYYMMDD(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function formatDate(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -61,6 +68,14 @@ export default function VisitasPage() {
   const [busca, setBusca] = useState('');
   const [filtroVendedor, setFiltroVendedor] = useState('todos');
   const [filtroLead, setFiltroLead] = useState<'todos' | 'com_lead' | 'sem_lead'>('todos');
+  const [dataInicio, setDataInicio] = useState(() => {
+    const hoje = new Date();
+    return getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  });
+  const [dataFim, setDataFim] = useState(() => {
+    const hoje = new Date();
+    return getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+  });
 
   // Modal de nova visita
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -97,20 +112,23 @@ export default function VisitasPage() {
   const carregarVisitas = useCallback(async () => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
-    const query = supabase
+    let query = supabase
       .from('visitas')
       .select('*')
       .eq('empresa_id', perfil.empresa_id)
       .order('created_at', { ascending: false });
 
+    if (dataInicio) query = query.gte('created_at', dataInicio);
+    if (dataFim) query = query.lte('created_at', `${dataFim}T23:59:59`);
+
     if (!isLideranca) {
-      query.eq('user_id', user?.id);
+      query = query.eq('user_id', user?.id);
     }
 
     const { data, error } = await query;
     if (!error && data) setVisitas(data as Visita[]);
     setLoading(false);
-  }, [perfil?.empresa_id, user?.id, isLideranca]);
+  }, [perfil?.empresa_id, user?.id, isLideranca, dataInicio, dataFim]);
 
   const carregarVendedores = useCallback(async () => {
     if (!perfil?.empresa_id) return;
@@ -394,6 +412,23 @@ export default function VisitasPage() {
             ))}
           </select>
         )}
+
+        <div className="flex items-center gap-2 bg-[#0B1120] border border-white/10 rounded-xl px-3 h-9">
+          <Calendar size={12} className="text-slate-400 shrink-0" />
+          <input
+            type="date"
+            value={dataInicio}
+            onChange={e => setDataInicio(e.target.value)}
+            className="bg-transparent text-white text-[10px] font-bold outline-none"
+          />
+          <span className="text-slate-600 text-[10px]">até</span>
+          <input
+            type="date"
+            value={dataFim}
+            onChange={e => setDataFim(e.target.value)}
+            className="bg-transparent text-white text-[10px] font-bold outline-none"
+          />
+        </div>
       </div>
 
       {/* LISTA DE VISITAS */}

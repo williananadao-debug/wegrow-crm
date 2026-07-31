@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
-  MessageCircle, MapPin, MapPinOff, User, Briefcase, Edit2,
+  MessageCircle, MapPin, MapPinOff, User, Edit2,
   Sparkles, Crosshair, CalendarDays, AlertTriangle,
   Building2, FileText, Hash, CheckCircle2, RefreshCcw,
   Info, Lock, Target, Clock, Mail, PenLine, X,
@@ -316,11 +316,6 @@ const LeadCard = React.memo(({
             </div>
           ) : lead.status === 'ganho' ? (
             <div className="mt-2 flex gap-2 pt-2 border-t border-white/5">
-              {!isCDL && (
-                <a href="/jobs" className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-blue-600/10 text-blue-400 px-2 py-1.5 rounded font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
-                  <Briefcase size={10} /> PRODUÇÃO
-                </a>
-              )}
               <button onClick={(e) => imprimirContrato(e, lead)} className="flex-1 text-center inline-flex justify-center items-center gap-1 text-[8px] bg-purple-600/10 text-purple-400 px-2 py-1.5 rounded font-black uppercase hover:bg-purple-600 hover:text-white transition-all">
                 <FileText size={10} /> {isCDL ? 'CADASTRO' : 'CONTRATO'}
               </button>

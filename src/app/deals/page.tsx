@@ -1008,7 +1008,7 @@ export default function DealsPage() {
             <body>
                 ${timbradoUrl ? `<img class="timbrado-bg" src="${timbradoUrl}" alt="" onerror="this.style.display='none'" />` : ''}
                 <div class="header">
-                    <img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />
+                    ${timbradoUrl ? '' : `<img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />`}
                     <h2>Contrato para Veiculação de Publicidade</h2>
                 </div>
 

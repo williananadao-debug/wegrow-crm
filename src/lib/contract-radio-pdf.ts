@@ -46,7 +46,7 @@ function somarMeses(dataIso: string, meses: number) {
 function fmtVencimentos(vencimento: string, parcelas: string) {
   if (!vencimento) return fmtData('');
   const qtd = Math.max(1, parseInt(parcelas, 10) || 1);
-  return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join(', ');
+  return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join('     ');
 }
 
 const UF_NOMES: Record<string, string> = {

@@ -72,10 +72,11 @@ type ClienteOpcao = {
   nome_empresa: string;
   telefone: string; 
   cnpj?: string;
-  inscricao_estadual?: string; 
+  inscricao_estadual?: string;
   email?: string;
   cidade?: string;
-  risco?: string; 
+  endereco?: string;
+  risco?: string;
 };
 
 const STAGES = {
@@ -124,7 +125,7 @@ const somarMeses = (dataIso: string, meses: number) => {
 const formatarVencimentos = (vencimento: string, parcelas: string | number) => {
     if (!vencimento) return '';
     const qtd = Math.max(1, parseInt(String(parcelas), 10) || 1);
-    return Array.from({ length: qtd }, (_, i) => formatarData(somarMeses(vencimento, i))).join(', ');
+    return Array.from({ length: qtd }, (_, i) => formatarData(somarMeses(vencimento, i))).join(',&nbsp;&nbsp;&nbsp;&nbsp;');
 };
 
 const UF_NOMES: Record<string, string> = {
@@ -309,7 +310,7 @@ export default function DealsPage() {
               ? `nome_empresa.ilike.%${q}%,cnpj.ilike.%${qCnpj}%`
               : `nome_empresa.ilike.%${q}%`;
           let query = supabase.from('clientes')
-              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, status_risco')
+              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, status_risco')
               .eq('status', 'ativo')
               .or(orFilter)
               .order('nome_empresa', { ascending: true })
@@ -1340,15 +1341,16 @@ export default function DealsPage() {
                     inscricao_estadual: novoIE || null,
                     telefone: novoTelefone || null,
                     cidade: novaCidade || null,
+                    endereco: novoEndereco || null,
                     status: 'ativo',
                     status_risco: 'em_analise',
                     empresa_id: perfil?.empresa_id
                 }])
                 .select('id, status_risco')
                 .single();
-                
+
             if (errCli) throw errCli;
-            
+
             if (novoCliente) {
                 finalClientId = novoCliente.id;
                 setClientesOpcoes(prev => [...prev, {
@@ -1358,6 +1360,7 @@ export default function DealsPage() {
                     cnpj: novoCnpj,
                     inscricao_estadual: novoIE,
                     cidade: novaCidade,
+                    endereco: novoEndereco,
                     status_risco: novoCliente.status_risco
                 }]);
                 setToastMessage("✨ Novo cliente cadastrado automaticamente!");
@@ -1868,7 +1871,7 @@ export default function DealsPage() {
                                 {!clientesBuscando && clientesOpcoes.map(c => (
                                         <div 
                                             key={c.id} className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                                            onMouseDown={(e) => { e.preventDefault(); setNovaEmpresa(c.nome_empresa); setSelectedClientId(c.id); setNovoTelefone(c.telefone || ''); if (c.cidade) setNovaCidade(c.cidade as string); if (c.cnpj) setNovoCnpj(c.cnpj as string); if (c.inscricao_estadual) setNovoIE(c.inscricao_estadual as string); setShowClientDropdown(false); }}
+                                            onMouseDown={(e) => { e.preventDefault(); setNovaEmpresa(c.nome_empresa); setSelectedClientId(c.id); setNovoTelefone(c.telefone || ''); if (c.cidade) setNovaCidade(c.cidade as string); if (c.cnpj) setNovoCnpj(c.cnpj as string); if (c.inscricao_estadual) setNovoIE(c.inscricao_estadual as string); if (c.endereco) setNovoEndereco(c.endereco as string); setShowClientDropdown(false); }}
                                         >
                                             <div className="flex items-center gap-2">
                                               <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>

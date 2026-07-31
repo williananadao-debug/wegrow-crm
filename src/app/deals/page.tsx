@@ -63,6 +63,7 @@ type Lead = {
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
+  docuseal_arquivos?: { nome: string; path: string }[];
   contrato_manual_url?: string;
   contrato_manual_em?: string;
 };
@@ -325,7 +326,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, contrato_manual_url, contrato_manual_em';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1197,11 +1198,11 @@ export default function DealsPage() {
       const path = `${editingLeadId}/manual/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('contratos-assinados').upload(path, file, { upsert: true, contentType: 'application/pdf' });
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('contratos-assinados').getPublicUrl(path);
 
+      // O bucket é privado — guarda só o caminho; a URL de visualização é assinada na hora do clique
       const agora = new Date().toISOString();
       await supabase.from('leads').update({
-        contrato_manual_url: urlData.publicUrl,
+        contrato_manual_url: path,
         contrato_manual_em: agora,
       }).eq('id', editingLeadId);
 
@@ -1223,6 +1224,13 @@ export default function DealsPage() {
       setUploadManualEnviando(false);
     }
   }, [editingLeadId, supabase, fetchData]);
+
+  // Bucket "contratos-assinados" é privado — gera um link assinado (temporário) na hora do clique
+  const abrirArquivoAssinado = useCallback(async (path: string) => {
+    const { data, error } = await supabase.storage.from('contratos-assinados').createSignedUrl(path, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    else { setToastMessage('❌ Erro ao abrir o arquivo.'); setShowToast(true); console.error(error); }
+  }, [supabase]);
 
   const abrirEmailModal = useCallback((lead: Lead) => {
     setEmailLead(lead);
@@ -1778,9 +1786,22 @@ export default function DealsPage() {
                   {leads.find(l => l.id === editingLeadId)?.docuseal_assinado ? (
                     <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
                       <CheckCircle2 size={20} className="text-emerald-400 shrink-0"/>
-                      <div>
+                      <div className="flex-1">
                         <p className="text-emerald-300 text-sm font-black">Contrato Assinado</p>
                         <p className="text-emerald-400/70 text-xs mt-0.5">Assinatura digital confirmada pelo Docuseal.</p>
+                        {(() => {
+                          const arquivos = leads.find(l => l.id === editingLeadId)?.docuseal_arquivos;
+                          if (!Array.isArray(arquivos) || arquivos.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-3 mt-2">
+                              {arquivos.map((a, i) => (
+                                <button key={i} type="button" onClick={() => abrirArquivoAssinado(a.path)} className="text-emerald-400 text-xs font-bold underline hover:text-emerald-300">
+                                  {a.nome}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   ) : docuConsultorLink && !docuConsultorAssinou ? (
@@ -1855,7 +1876,7 @@ export default function DealsPage() {
                       <CheckCircle2 size={20} className="text-orange-400 shrink-0"/>
                       <div className="flex-1">
                         <p className="text-orange-300 text-sm font-black">Contrato anexado — produção liberada</p>
-                        <a href={leads.find(l => l.id === editingLeadId)?.contrato_manual_url} target="_blank" rel="noopener noreferrer" className="text-orange-400/70 text-xs mt-0.5 underline">Ver PDF</a>
+                        <button type="button" onClick={() => { const p = leads.find(l => l.id === editingLeadId)?.contrato_manual_url; if (p) abrirArquivoAssinado(p); }} className="text-orange-400/70 text-xs mt-0.5 underline hover:text-orange-300">Ver PDF</button>
                       </div>
                     </div>
                   ) : (

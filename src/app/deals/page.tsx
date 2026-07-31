@@ -865,7 +865,8 @@ export default function DealsPage() {
       ? `, na cidade de ${dadosEmissora.cidade}${dadosEmissora.estado ? ` - Estado de ${nomeEstadoExtenso(dadosEmissora.estado)}` : ''}`
       : '';
     const timbradoUrl = timbradoPorUnidade(unidadeData?.nome || '');
-    
+    const ultimaNota = Array.isArray(lead.notas) && lead.notas.length > 0 ? lead.notas[0].texto : '';
+
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
 
@@ -1018,7 +1019,7 @@ export default function DealsPage() {
                 </div>
 
                 <div class="cliente-box">
-                    <strong>CLIENTE:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <strong>CLIENTE:</strong> <br/>
                     <strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/>
                     <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
                     <div style="display: flex; gap: 40px;">
@@ -1059,7 +1060,14 @@ export default function DealsPage() {
                     </tbody>
                 </table>
 
-                <div class="secao-titulo">2. OUTRAS CONDIÇÕES:</div>
+                ${ultimaNota ? `
+                <div class="secao-titulo">2. OBSERVAÇÕES:</div>
+                <div class="condicoes">
+                    <p>${ultimaNota}</p>
+                </div>
+                ` : ''}
+
+                <div class="secao-titulo">${ultimaNota ? 3 : 2}. OUTRAS CONDIÇÕES:</div>
                 <div class="condicoes">
                     <p>1) O presente contrato tem caráter irrevogável;</p>
                     <p>2) As inserções objeto do presente contrato são intransferíveis;</p>
@@ -1069,11 +1077,11 @@ export default function DealsPage() {
                     <p>6) Fica eleito o Fórum da Cidade de ${dadosEmissora.cidade || 'Taió'} para dirimir dúvidas ou questões oriundas do presente, bem como para ser ajuizada ação de cobrança;</p>
                 </div>
 
-                <div class="secao-titulo">3. FORMA DE PAGAMENTO:</div>
+                <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO:</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
                     <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
-                    <strong>Contato para envio da Fatura: WhatsApp:</strong> ${lead.telefone || '___________________'}<br/>
+                    <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || '___________________'}<br/>
                     <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
                 </div>
 
@@ -1111,6 +1119,8 @@ export default function DealsPage() {
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
+    const notasLead = leads.find(l => l.id === editingLeadId)?.notas;
+    const ultimaNota = Array.isArray(notasLead) && notasLead.length > 0 ? notasLead[0].texto : '';
 
     const res = await fetch('/api/docuseal', {
       method: 'POST',
@@ -1135,6 +1145,7 @@ export default function DealsPage() {
           valor_total: total,
           parcelas,
           vencimento,
+          observacao: ultimaNota,
         },
       }),
     });
@@ -1154,7 +1165,7 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, leads, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

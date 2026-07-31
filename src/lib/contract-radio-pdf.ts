@@ -23,6 +23,7 @@ export type ContratoData = {
   valor_total: number;
   parcelas: string;
   vencimento: string;
+  observacao?: string;
 };
 
 function fmt(v: number) {
@@ -128,7 +129,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
           .font('Helvetica').text(valor || '___________________________');
       };
 
-      linha('CLIENTE: ', data.cliente.toUpperCase());
+      doc.font('Helvetica-Bold').fontSize(9).text('CLIENTE: ');
       linha('Razão Social: ', data.cliente.toUpperCase());
       linha('Nome Fantasia: ', data.cliente.toUpperCase());
 
@@ -219,8 +220,19 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       doc.text('', 50, ty);
       doc.moveDown(1);
 
-      // ── SEÇÃO 2 ──────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('2. OUTRAS CONDIÇÕES');
+      // ── SEÇÃO 2 (OBSERVAÇÕES) — só aparece se houver nota ─────────
+      let proximaSecao = 2;
+      if (data.observacao) {
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`${proximaSecao}. OBSERVAÇÕES`);
+        doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
+        doc.moveDown(0.4);
+        doc.font('Helvetica').fontSize(8).fillColor('#000').text(data.observacao, { align: 'justify' });
+        doc.moveDown(0.6);
+        proximaSecao++;
+      }
+
+      // ── SEÇÃO OUTRAS CONDIÇÕES ─────────────────────────────────────
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`${proximaSecao}. OUTRAS CONDIÇÕES`);
       doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
       doc.moveDown(0.4);
 
@@ -240,8 +252,9 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       }
       doc.moveDown(0.6);
 
-      // ── SEÇÃO 3 ──────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('3. FORMA DE PAGAMENTO');
+      // ── SEÇÃO FORMA DE PAGAMENTO ───────────────────────────────────
+      proximaSecao++;
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`${proximaSecao}. FORMA DE PAGAMENTO`);
       doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
       doc.moveDown(0.4);
 
@@ -249,7 +262,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       linha('Parcela(s): ', data.parcelas || '1');
       linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1'));
       doc.moveDown(0.3);
-      linha('Contato para envio da Fatura — WhatsApp: ', data.telefone || '___________________________');
+      linha('Contato para envio da Fatura — WhatsApp / E-mail: ', data.telefone || '___________________________');
       linha('Praça de Pagamento: ', data.cidade || '___________________________');
       doc.moveDown(1.5);
 

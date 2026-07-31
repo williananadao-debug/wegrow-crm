@@ -82,6 +82,7 @@ export async function POST(req: Request) {
         valor_total: deal.valor_total || 0,
         parcelas: deal.parcelas || '',
         vencimento: deal.vencimento || '',
+        observacao: deal.observacao || '',
       });
     } catch (err: any) {
       console.error('[docuseal/pdf]', err);

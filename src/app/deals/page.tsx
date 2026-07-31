@@ -207,6 +207,7 @@ export default function DealsPage() {
   const [docuSending, setDocuSending] = useState(false);
   const [docuLink, setDocuLink] = useState<string | null>(null);
   const [docuConsultorLink, setDocuConsultorLink] = useState<string | null>(null);
+  const [docuConsultorAssinou, setDocuConsultorAssinou] = useState(false);
   const [docuErro, setDocuErro] = useState('');
 
   // Upload manual do contrato já assinado (sem assinatura eletrônica)
@@ -1105,7 +1106,7 @@ export default function DealsPage() {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
     if (!docuSignerEmail.trim() && !docuSignerPhone.trim()) { setDocuErro('Informe e-mail ou telefone do signatário.'); return; }
     if (!user?.email) { setDocuErro('Seu perfil não tem e-mail cadastrado — fale com o admin. Você (consultor) precisa assinar primeiro que o cliente.'); return; }
-    setDocuSending(true); setDocuErro(''); setDocuLink(null); setDocuConsultorLink(null);
+    setDocuSending(true); setDocuErro(''); setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false);
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
@@ -1536,6 +1537,7 @@ export default function DealsPage() {
     setShowDocuseal(Boolean(lead?.docuseal_sign_url));
     setDocuLink(lead?.docuseal_sign_url || null);
     setDocuConsultorLink(null);
+    setDocuConsultorAssinou(false);
     setDocuErro('');
     setShowUploadManual(false);
     setUploadManualErro('');
@@ -1711,7 +1713,7 @@ export default function DealsPage() {
                             </button>
                             {empresa?.modulos?.assinatura && (
                               <button
-                                onClick={() => { setShowDocuseal(v => !v); setDocuLink(null); setDocuConsultorLink(null); setDocuErro(''); setDocuSignerName(novaEmpresa || ''); setDocuSignerPhone(novoTelefone || ''); setDocuSignerEmail(''); }}
+                                onClick={() => { setShowDocuseal(v => !v); setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); setDocuErro(''); setDocuSignerName(novaEmpresa || ''); setDocuSignerPhone(novoTelefone || ''); setDocuSignerEmail(''); }}
                                 className={`p-2 rounded-full transition-colors ${showDocuseal ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400 hover:text-emerald-400'}`}
                                 title="Assinatura Digital"
                               >
@@ -1747,7 +1749,7 @@ export default function DealsPage() {
                         <p className="text-emerald-400/70 text-xs mt-0.5">Assinatura digital confirmada pelo Docuseal.</p>
                       </div>
                     </div>
-                  ) : docuConsultorLink ? (
+                  ) : docuConsultorLink && !docuConsultorAssinou ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
                         <PenLine size={16} className="text-orange-400 shrink-0"/>
@@ -1759,9 +1761,16 @@ export default function DealsPage() {
                           <ExternalLink size={14}/>
                         </a>
                       </div>
+                      <button type="button" onClick={() => setDocuConsultorAssinou(true)} className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-orange-600/20 border border-orange-500/30 text-orange-300 hover:bg-orange-600/30 transition-colors">
+                        Já assinei — liberar link do cliente
+                      </button>
+                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
+                    </div>
+                  ) : docuConsultorLink ? (
+                    <div className="space-y-3">
                       <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
                         <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
-                        <p className="text-green-400 text-xs font-bold">2º) Depois de você assinar, envie este link pro cliente:</p>
+                        <p className="text-green-400 text-xs font-bold">2º) Envie este link pro cliente assinar:</p>
                       </div>
                       <div className="flex gap-2">
                         <input readOnly value={docuLink || ''} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
@@ -1769,7 +1778,7 @@ export default function DealsPage() {
                           <Link size={14}/>
                         </button>
                       </div>
-                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
+                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

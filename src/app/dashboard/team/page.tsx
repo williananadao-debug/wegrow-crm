@@ -151,7 +151,7 @@ export default function TeamPage() {
     if (!editingUser?.email) return;
     setResetandoSenha(true);
     const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br'}/reset-password`,
     });
     setResetandoSenha(false);
     if (error) {

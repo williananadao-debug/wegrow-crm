@@ -84,6 +84,9 @@ export default function VisitasPage() {
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
   const [criandoLead, setCriandoLead] = useState(false);
 
+  // Modal de detalhe da visita (dados completos + foto)
+  const [visitaDetalhe, setVisitaDetalhe] = useState<Visita | null>(null);
+
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
 
   const toast = useCallback((msg: string) => {
@@ -414,7 +417,8 @@ export default function VisitasPage() {
           visitasFiltradas.map(visita => (
             <div
               key={visita.id}
-              className={`bg-[#0B1120] border rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3 transition-all hover:border-white/20 ${
+              onClick={() => setVisitaDetalhe(visita)}
+              className={`bg-[#0B1120] border rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3 transition-all hover:border-white/20 cursor-pointer ${
                 visita.lead_id ? 'border-[#22C55E]/20' : 'border-white/10'
               }`}
             >
@@ -481,7 +485,7 @@ export default function VisitasPage() {
                     </p>
                   )}
                   {visita.foto_url && (
-                    <a href={visita.foto_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+                    <a href={visita.foto_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="mt-2 inline-block">
                       <img src={visita.foto_url} alt="Foto da visita" className="w-16 h-16 object-cover rounded-xl border border-white/10 hover:border-blue-500/50 transition-all" />
                     </a>
                   )}
@@ -492,14 +496,14 @@ export default function VisitasPage() {
               <div className="flex items-center gap-2 flex-shrink-0">
                 {visita.lead_id ? (
                   <button
-                    onClick={() => router.push('/deals')}
+                    onClick={(e) => { e.stopPropagation(); router.push('/deals'); }}
                     className="flex items-center gap-1.5 px-3 py-2 bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#22C55E]/20 transition-colors"
                   >
                     <Zap size={12} /> Ver Pipeline
                   </button>
                 ) : (
                   <button
-                    onClick={() => setCriarLeadVisita(visita)}
+                    onClick={(e) => { e.stopPropagation(); setCriarLeadVisita(visita); }}
                     className="flex items-center gap-1.5 px-3 py-2 bg-blue-600/15 border border-blue-500/30 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
                   >
                     <Plus size={12} /> Criar Lead
@@ -715,6 +719,102 @@ export default function VisitasPage() {
               >
                 <Route size={14}/> Abrir no Maps
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETALHE DA VISITA */}
+      {visitaDetalhe && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" onClick={() => setVisitaDetalhe(null)}>
+          <div className="bg-[#0B1120] border border-white/10 w-full max-w-md rounded-[28px] shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90dvh]" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-white/10 flex justify-between items-start bg-blue-500/5 rounded-t-[28px] flex-shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-black text-white">{visitaDetalhe.empresa}</h2>
+                {visitaDetalhe.lead_id ? (
+                  <span className="bg-[#22C55E]/15 border border-[#22C55E]/40 text-[#22C55E] text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 size={9} /> Lead no Pipeline
+                  </span>
+                ) : (
+                  <span className="bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Clock size={9} /> Sem Lead
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setVisitaDetalhe(null)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors flex-shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              {visitaDetalhe.foto_url && (
+                <a href={visitaDetalhe.foto_url} target="_blank" rel="noopener noreferrer">
+                  <img src={visitaDetalhe.foto_url} alt="Foto da visita" className="w-full max-h-80 object-cover rounded-2xl border border-white/10 hover:border-blue-500/50 transition-all" />
+                </a>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <Calendar size={12} className="text-blue-400 shrink-0"/>
+                  {formatDate(visitaDetalhe.created_at)} às {formatTime(visitaDetalhe.created_at)}
+                </div>
+                {visitaDetalhe.telefone && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Phone size={12} className="text-blue-400 shrink-0"/> {visitaDetalhe.telefone}
+                  </div>
+                )}
+                {visitaDetalhe.unidade && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Building2 size={12} className="text-blue-400 shrink-0"/> {visitaDetalhe.unidade}
+                  </div>
+                )}
+                {visitaDetalhe.cidade && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <Map size={12} className="text-blue-400 shrink-0"/> {visitaDetalhe.cidade}
+                  </div>
+                )}
+                {isLideranca && visitaDetalhe.user_id && nomesMap[visitaDetalhe.user_id] && (
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <User size={12} className="text-blue-400 shrink-0"/> {nomesMap[visitaDetalhe.user_id]}
+                  </div>
+                )}
+              </div>
+
+              {visitaDetalhe.observacao && (
+                <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Observação</p>
+                  <p className="text-slate-300 text-sm italic">"{visitaDetalhe.observacao}"</p>
+                </div>
+              )}
+
+              {visitaDetalhe.localizacao_url && (
+                <a
+                  href={visitaDetalhe.localizacao_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 rounded-xl py-2.5 text-xs font-black uppercase tracking-widest transition-colors"
+                >
+                  <Navigation size={14} /> Ver no Maps
+                </a>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-white/10 flex gap-3 flex-shrink-0">
+              {visitaDetalhe.lead_id ? (
+                <button
+                  onClick={() => { setVisitaDetalhe(null); router.push('/deals'); }}
+                  className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <Zap size={14} /> Ver Pipeline
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setCriarLeadVisita(visitaDetalhe); setVisitaDetalhe(null); }}
+                  className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={14} /> Criar Lead
+                </button>
+              )}
             </div>
           </div>
         </div>

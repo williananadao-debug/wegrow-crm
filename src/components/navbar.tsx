@@ -2,13 +2,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound
 } from 'lucide-react';
-import NotificationBell from '@/components/NotificationBell'; 
+import NotificationBell from '@/components/NotificationBell';
+import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -37,7 +38,21 @@ export default function Navbar() {
   const isCDL = Boolean(modulos.cdl);
   const mostrarFinanceiro = Boolean(modulos.financeiro);
   const mostrarIA = Boolean(modulos.ia);
-  const mostrarOpec = isOpec || Boolean(modulos.opec);
+  const opecHabilitado = Boolean(modulos.opec);
+
+  // O menu "Produção" só aparece quando existe pelo menos 1 job já liberado
+  // (fora de "aguardando_assinatura") — enquanto só há jobs ocultos aguardando
+  // a assinatura do contrato, o menu fica escondido.
+  const [temJobLiberado, setTemJobLiberado] = useState(false);
+  useEffect(() => {
+    if (!opecHabilitado || !empresa?.id) { setTemJobLiberado(false); return; }
+    let ativo = true;
+    supabase.from('jobs').select('id').eq('empresa_id', empresa.id).neq('stage', 'aguardando_assinatura').limit(1)
+      .then(({ data }) => { if (ativo) setTemJobLiberado(Boolean(data && data.length > 0)); });
+    return () => { ativo = false; };
+  }, [opecHabilitado, empresa?.id]);
+
+  const mostrarOpec = isOpec || (opecHabilitado && temJobLiberado);
 
   let menuItems: any[] = [];
 

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Target, Users, RefreshCcw, AlertTriangle, CheckCircle2,
-  User as UserIcon, Loader2, Calendar, TrendingUp, Zap
+  User as UserIcon, Loader2, Calendar, TrendingUp, Zap, Mail
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Toast } from '@/components/Toast';
@@ -32,6 +32,7 @@ export default function GoalsPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [comparativo, setComparativo] = useState<ComparativoRow[]>([]);
+  const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
 
   const [produtosMes, setProdutosMes] = useState<{ nome: string; qtd: number; valor: number; valorMesAnterior: number }[]>([]);
   const [servicos, setServicos] = useState<{ id: string; nome: string }[]>([]);
@@ -279,6 +280,39 @@ export default function GoalsPage() {
   const deltaRitmo = Math.abs(esperadoAteHoje - realizadoMesAtual);
   const projecaoFechamento = diaAtual > 0 ? Math.round((realizadoMesAtual / diaAtual) * diasNoMes) : 0;
 
+  const enviarRelatorioEmail = async () => {
+    if (!user?.email) { setToastMessage('Seu perfil não tem e-mail cadastrado.'); setShowToast(true); return; }
+    setEnviandoRelatorio(true);
+    try {
+      const escopo = vendedorSelecionado === 'global' ? 'Global Empresa' : `Foco: ${vendedores.find(v => v.id === vendedorSelecionado)?.nome || ''}`;
+      const nomeMes = new Date(0, mesAtual - 1).toLocaleString('pt-BR', { month: 'long' });
+      const res = await fetch('/api/email/relatorio-metas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          escopo,
+          periodo: `Ano Fiscal ${anoFiltro}`,
+          metaAno, realizadoAno, percentAno,
+          metaMesAtual, realizadoMesAtual, esperadoAteHoje, ritmoOk, deltaRitmo, projecaoFechamento,
+          diaAtual, diasNoMes, nomeMes,
+          ranking: isDirector ? comparativo : [],
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        setToastMessage(`📧 Relatório enviado pra ${user.email}!`);
+      } else {
+        setToastMessage(j.erro || 'Erro ao enviar relatório.');
+      }
+    } catch {
+      setToastMessage('Erro ao enviar relatório.');
+    } finally {
+      setEnviandoRelatorio(false);
+      setShowToast(true);
+    }
+  };
+
   return (
     <div className="p-6 space-y-8 pb-20 animate-in fade-in duration-500">
       
@@ -294,12 +328,24 @@ export default function GoalsPage() {
             </div>
           )}
 
-          {/* Seletor de Ano */}
-          <div className="flex items-center bg-[#0B1120] border border-white/10 rounded-2xl px-4 py-2 gap-3">
-              <Calendar size={16} className="text-slate-500"/>
-              <select className="bg-transparent text-white font-black text-[10px] outline-none cursor-pointer uppercase" value={anoFiltro} onChange={(e) => setAnoFiltro(Number(e.target.value))}>
-                  {[2024, 2025, 2026, 2027].map(a => <option key={a} value={a} className="bg-[#0B1120]">{a}</option>)}
-              </select>
+          <div className="flex items-center gap-3">
+            {/* Seletor de Ano */}
+            <div className="flex items-center bg-[#0B1120] border border-white/10 rounded-2xl px-4 py-2 gap-3">
+                <Calendar size={16} className="text-slate-500"/>
+                <select className="bg-transparent text-white font-black text-[10px] outline-none cursor-pointer uppercase" value={anoFiltro} onChange={(e) => setAnoFiltro(Number(e.target.value))}>
+                    {[2024, 2025, 2026, 2027].map(a => <option key={a} value={a} className="bg-[#0B1120]">{a}</option>)}
+                </select>
+            </div>
+
+            {/* Enviar Relatório por E-mail */}
+            <button
+              onClick={enviarRelatorioEmail}
+              disabled={enviandoRelatorio}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+            >
+              {enviandoRelatorio ? <Loader2 size={14} className="animate-spin"/> : <Mail size={14}/>}
+              {enviandoRelatorio ? 'Enviando...' : 'Relatório por E-mail'}
+            </button>
           </div>
       </div>
 

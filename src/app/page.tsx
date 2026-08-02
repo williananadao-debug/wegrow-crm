@@ -59,7 +59,7 @@ const PLANOS = [
   },
   {
     nome: 'Pro',
-    preco: 697,
+    preco: 'consultar' as const,
     desc: 'Para empresas em crescimento que querem IA, relatórios avançados e mais controle.',
     cor: 'border-[#22C55E]/40',
     destaque: true,
@@ -76,8 +76,8 @@ const PLANOS = [
   },
   {
     nome: 'Enterprise',
-    preco: 897,
-    desc: 'Para grupos ou empresas maiores com múltiplos CNPJs e necessidade de SLA.',
+    preco: 'consultar' as const,
+    desc: 'Para grupos, redes ou projetos maiores — múltiplos CNPJs, integrações e escopo sob medida.',
     cor: 'border-white/10',
     destaque: false,
     itens: [
@@ -87,6 +87,7 @@ const PLANOS = [
       'Suporte prioritário (SLA 4h)',
       'Multi-empresa (múltiplos CNPJs)',
       'White-label parcial',
+      'Integrações e desenvolvimento sob medida',
     ],
   },
 ];
@@ -115,9 +116,9 @@ const FAQ = [
 ];
 
 const ADDONS = [
-  { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', preco: 'R$ 149/mês', cor: 'text-green-400 bg-green-400/10' },
-  { icon: <PenLine size={16}/>, label: 'Assinatura Digital', preco: 'R$ 99/mês', cor: 'text-blue-400 bg-blue-400/10' },
-  { icon: <Wallet size={16}/>, label: 'Módulo Financeiro', preco: 'R$ 199/mês', cor: 'text-yellow-400 bg-yellow-400/10' },
+  { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', cor: 'text-green-400 bg-green-400/10' },
+  { icon: <PenLine size={16}/>, label: 'Assinatura Digital', cor: 'text-blue-400 bg-blue-400/10' },
+  { icon: <Wallet size={16}/>, label: 'Módulo Financeiro', cor: 'text-yellow-400 bg-yellow-400/10' },
 ];
 
 const FEATURES = [
@@ -193,7 +194,7 @@ export default function LandingPage() {
             <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden md:block text-xs text-slate-500 font-semibold">CRM adaptável ao seu negócio</span>
+            <span className="hidden md:block text-xs text-slate-500 font-semibold">Soluções tecnológicas para o seu negócio</span>
             <Link href="/login" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
               Acessar
             </Link>
@@ -209,7 +210,7 @@ export default function LandingPage() {
 
         <div className="max-w-5xl mx-auto text-center relative">
           <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 px-4 py-1.5 rounded-full text-[#22C55E] text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-            <Sparkles size={12} /> CRM inteligente e adaptável ao seu negócio
+            <Sparkles size={12} /> Soluções tecnológicas inteligentes para o seu negócio
           </div>
 
           <h1 className="text-5xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-[0.9] mb-6">
@@ -408,7 +409,7 @@ export default function LandingPage() {
               Simples. Previsível. Sem surpresas.
             </h2>
             <p className="text-slate-400 max-w-xl mx-auto text-sm font-medium">
-              Preço fixo por empresa — sem cobrar por usuário. Sua equipe cresce sem o custo crescer junto.
+              A partir de R$ 497/mês, por empresa — sem cobrar por usuário. Projetos maiores e integrações sob medida? Fale com a gente.
             </p>
           </div>
 
@@ -428,8 +429,14 @@ export default function LandingPage() {
                 <div className="mb-6">
                   <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`}>{plano.nome}</p>
                   <div className="flex items-end gap-1 mb-3">
-                    <span className="text-4xl font-black text-white">R$ {plano.preco.toLocaleString('pt-BR')}</span>
-                    <span className="text-slate-500 text-sm font-bold pb-1">/mês</span>
+                    {plano.preco === 'consultar' ? (
+                      <span className="text-3xl font-black text-white">Sob consulta</span>
+                    ) : (
+                      <>
+                        <span className="text-4xl font-black text-white">R$ {plano.preco.toLocaleString('pt-BR')}</span>
+                        <span className="text-slate-500 text-sm font-bold pb-1">/mês</span>
+                      </>
+                    )}
                   </div>
                   <p className="text-slate-500 text-xs font-medium leading-relaxed">{plano.desc}</p>
                 </div>
@@ -468,7 +475,7 @@ export default function LandingPage() {
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${a.cor}`}>{a.icon}</div>
                   <div>
                     <p className="text-white text-xs font-black">{a.label}</p>
-                    <p className="text-slate-500 text-[10px] font-bold mt-0.5">{a.preco}</p>
+                    <p className="text-slate-500 text-[10px] font-bold mt-0.5 uppercase tracking-wide">Sob consulta</p>
                   </div>
                 </div>
               ))}

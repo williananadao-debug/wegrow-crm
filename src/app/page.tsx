@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
-  TrendingUp, MapPin, Mail, ChevronRight, Star,
+  TrendingUp, MapPin, Mail, ChevronRight,
   Check, MessageCircle, PenLine, Wallet, ChevronDown
 } from 'lucide-react';
 
@@ -193,8 +193,12 @@ export default function LandingPage() {
             <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-2xl shadow-[0_0_20px_rgba(34,197,94,0.5)]">W</div>
             <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
           </div>
+          <div className="hidden lg:flex items-center gap-8">
+            <a href="#funcionalidades" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Funcionalidades</a>
+            <a href="#precos" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Preços</a>
+            <a href="#duvidas" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Dúvidas</a>
+          </div>
           <div className="flex items-center gap-3">
-            <span className="hidden md:block text-xs text-slate-500 font-semibold">Soluções tecnológicas para o seu negócio</span>
             <Link href="/login" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
               Acessar
             </Link>
@@ -240,6 +244,12 @@ export default function LandingPage() {
             >
               Já tenho acesso
             </Link>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-16 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Sem fidelidade</span>
+            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Suporte direto do fundador</span>
+            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Onboarding em dias, não meses</span>
           </div>
 
           {/* STATS BAR */}
@@ -315,7 +325,7 @@ export default function LandingPage() {
       </section>
 
       {/* FEATURES BENTO */}
-      <section className="py-16 px-6">
+      <section className="py-16 px-6 bg-white/[0.015] border-y border-white/5" id="funcionalidades">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Funcionalidades</div>
@@ -387,21 +397,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* TESTIMONIAL PLACEHOLDER */}
-      <section className="py-16 px-6">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="flex justify-center gap-1 mb-6">
-            {[1,2,3,4,5].map((s) => <Star key={s} size={18} className="text-[#22C55E] fill-[#22C55E]" />)}
+      {/* DIFERENCIAIS */}
+      <section className="py-20 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-14">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Por que WeGrow</div>
+            <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight max-w-3xl mx-auto leading-tight">
+              Não é mais um SaaS genérico feito pra bonito na demo.
+            </h2>
           </div>
-          <blockquote className="text-xl md:text-2xl font-semibold text-white/80 italic leading-relaxed mb-6">
-            "Antes o vendedor fechava, a produção não sabia. Agora tudo está conectado — o job entra na fila automaticamente e o OPEC recebe os dados sem ninguém precisar digitar duas vezes."
-          </blockquote>
-          <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Diretor Comercial · Rádio Regional</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              { icon: <ShieldCheck size={22}/>, title: 'Validado em operação real', desc: 'Construído e testado no dia a dia de uma operação de verdade, com pressão de prazo e cliente de verdade — não em uma planilha de investidor.' },
+              { icon: <Target size={22}/>, title: 'Se adapta a você, não o contrário', desc: 'Funil, catálogo, cargos e módulos configuráveis. Você não muda seu processo pra caber no sistema.' },
+              { icon: <MessageCircle size={22}/>, title: 'Suporte de quem construiu', desc: 'Sem fila de ticket genérica: onboarding e suporte direto de quem desenvolve o produto.' },
+            ].map((d) => (
+              <div key={d.title} className="bg-white/[0.04] border border-white/10 rounded-[28px] p-7 hover:border-[#22C55E]/30 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-[#22C55E]/10 text-[#22C55E] flex items-center justify-center mb-5">{d.icon}</div>
+                <h3 className="text-white font-black text-sm uppercase italic mb-2">{d.title}</h3>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed">{d.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* PREÇOS */}
-      <section className="py-24 px-6" id="precos">
+      <section className="py-24 px-6 bg-white/[0.015] border-y border-white/5" id="precos">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Preços</div>
@@ -418,7 +440,7 @@ export default function LandingPage() {
             {PLANOS.map((plano) => (
               <div
                 key={plano.nome}
-                className={`relative bg-[#0B1120] border-2 ${plano.cor} rounded-[32px] p-8 flex flex-col ${plano.destaque ? 'shadow-[0_0_60px_rgba(34,197,94,0.12)]' : ''}`}
+                className={`relative bg-[#0B1120] border-2 ${plano.cor} rounded-[32px] p-8 flex flex-col transition-transform ${plano.destaque ? 'shadow-[0_0_60px_rgba(34,197,94,0.16)] md:scale-105 md:-translate-y-2' : ''}`}
               >
                 {plano.destaque && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#22C55E] text-[#0B1120] text-[9px] font-black uppercase tracking-[0.2em] px-5 py-1.5 rounded-full whitespace-nowrap shadow-[0_4px_20px_rgba(34,197,94,0.3)]">
@@ -490,7 +512,7 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6">
+      <section className="py-16 px-6" id="duvidas">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Dúvidas</div>
@@ -533,7 +555,7 @@ export default function LandingPage() {
                 Escale sua operação<br />comercial agora.
               </h2>
               <p className="text-[#0F172A]/70 font-medium mb-10 max-w-xl mx-auto">
-                Agende uma demonstração e veja como o WeGrow se adapta à sua rádio ou veículo em menos de 30 minutos.
+                Agende uma demonstração e veja como o WeGrow se adapta ao seu negócio em menos de 30 minutos.
               </p>
               <a
                 href="https://wa.me/5547997022381"

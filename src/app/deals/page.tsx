@@ -1830,13 +1830,23 @@ export default function DealsPage() {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
                         <CheckCircle2 size={16} className="text-green-400 shrink-0"/>
-                        <p className="text-green-400 text-xs font-bold">2º) Envie este link pro cliente assinar:</p>
+                        <p className="text-green-400 text-xs font-bold">2º) Envie este link pro cliente assinar (o Docuseal já mandou por e-mail automaticamente):</p>
                       </div>
                       <div className="flex gap-2">
                         <input readOnly value={docuLink || ''} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>
                         <button type="button" onClick={() => { if (docuLink) navigator.clipboard.writeText(docuLink); }} className="px-3 py-2 bg-emerald-600/20 text-emerald-400 rounded-xl hover:bg-emerald-600/30 transition-colors" title="Copiar">
                           <Link size={14}/>
                         </button>
+                        {docuSignerPhone.trim() && docuLink && (
+                          <a
+                            href={`https://wa.me/55${docuSignerPhone.replace(/\D/g, '').replace(/^55/, '')}?text=${encodeURIComponent(`Olá, ${docuSignerName}! Segue o link para assinatura do seu contrato:\n${docuLink}`)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="px-3 py-2 bg-green-600/20 text-green-400 rounded-xl hover:bg-green-600/30 transition-colors"
+                            title="Enviar por WhatsApp"
+                          >
+                            <MessageCircle size={14}/>
+                          </a>
+                        )}
                       </div>
                       <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
                     </div>

@@ -130,8 +130,8 @@ export async function POST(req: Request) {
       headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template_id: templateId,
-        send_email: false,
-        order: 'preserved', // consultor assina primeiro; cliente só recebe o link depois
+        send_email: true, // Docuseal envia automaticamente por e-mail quando chega a vez de cada signatário (ordem preservada)
+        order: 'preserved', // consultor assina primeiro; cliente só recebe o link (e o e-mail) depois
         submitters: [
           {
             name: consultor.nome,

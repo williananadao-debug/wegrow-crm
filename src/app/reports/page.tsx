@@ -155,7 +155,10 @@ export default function ReportsPage() {
           return true;
       });
 
-      const start = new Date(dataInicio + 'T12:00:00'); const end = new Date(dataFim + 'T12:00:00');
+      const start = new Date(dataInicio + 'T12:00:00');
+      const hojeStr = getLocalYYYYMMDD(new Date());
+      const dataFimEfetiva = dataFim > hojeStr ? hojeStr : dataFim; // não deixa o período "atual" contar dias futuros que ainda nem aconteceram
+      const end = new Date(dataFimEfetiva + 'T12:00:00');
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
       const pastEnd = new Date(start); pastEnd.setDate(start.getDate() - 1);
       const pastStart = new Date(pastEnd); pastStart.setDate(pastEnd.getDate() - diffDays);

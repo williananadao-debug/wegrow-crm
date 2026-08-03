@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonDashboard } from '@/components/Skeleton';
 
-type RankingItem = { id: string; nome: string; total: number; count: number; };
+type RankingItem = { id: string; nome: string; total: number; count: number; visitas: number; };
 
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
@@ -161,6 +161,10 @@ export default function DashboardPage() {
           if (dataFim && dataVisita > dataFim) return false;
           return true;
       });
+      const visitasPorVendedor: Record<string, number> = {};
+      visitasFiltradas.forEach((v: any) => { const k = v.user_id || 'sem_dono'; visitasPorVendedor[k] = (visitasPorVendedor[k] || 0) + 1; });
+      rankingFinal.forEach((r: any) => { r.visitas = visitasPorVendedor[r.id] || 0; });
+
       const leadsPorId = new Map(rawLeads.map((l: any) => [l.id, l]));
       const visitasRegistradas = visitasFiltradas.length;
       const visitasConvertidas = visitasFiltradas.filter((v: any) => v.lead_id).length;
@@ -170,9 +174,13 @@ export default function DashboardPage() {
       const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
       const semVisita = leadsFiltrados.length - comVisita;
 
-      // Período anterior para comparativo (mesmo comprimento, imediatamente antes)
-      const periodoDias = dataInicio && dataFim
-        ? Math.ceil((new Date(dataFim + 'T12:00:00').getTime() - new Date(dataInicio + 'T12:00:00').getTime()) / 86400000) + 1
+      // Período anterior para comparativo (mesmo comprimento, imediatamente antes).
+      // Usa o fim efetivo (hoje, se o período selecionado ainda não acabou) pra não comparar
+      // poucos dias reais do período atual contra o mês anterior inteiro.
+      const hojeStr = getLocalYYYYMMDD(new Date());
+      const dataFimEfetiva = dataFim && dataFim > hojeStr ? hojeStr : dataFim;
+      const periodoDias = dataInicio && dataFimEfetiva
+        ? Math.ceil((new Date(dataFimEfetiva + 'T12:00:00').getTime() - new Date(dataInicio + 'T12:00:00').getTime()) / 86400000) + 1
         : 30;
       const fimAnt = dataInicio ? new Date(new Date(dataInicio + 'T12:00:00').getTime() - 86400000) : new Date();
       const iniAnt = new Date(fimAnt.getTime() - (periodoDias - 1) * 86400000);
@@ -455,7 +463,7 @@ export default function DashboardPage() {
                             <div key={r.id} onClick={() => handleSellerClick(r.id)} className={`flex items-center justify-between p-2 rounded-xl border cursor-pointer transition-all group ${vendedorSelecionado === r.id ? 'bg-orange-500/10 border-orange-500' : 'bg-white/5 border-white/5 hover:border-orange-500/50'}`}>
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${index === 0 ? 'bg-orange-500 text-[#0B1120]' : 'bg-blue-600 text-white'}`}>{index + 1}º</div>
-                                    <div><p className="font-black uppercase text-xs text-white">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} Vendas</p></div>
+                                    <div><p className="font-black uppercase text-xs text-white">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} Vendas · {r.visitas} Visitas</p></div>
                                 </div>
                                 <p className={`text-sm font-black ${vendedorSelecionado === r.id ? 'text-orange-500' : 'text-slate-300'}`}>R$ {r.total.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</p>
                             </div>

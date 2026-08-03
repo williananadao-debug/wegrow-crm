@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import {
-  Users, Search, Plus, Edit2, Trash2,
+  Users, Search, Plus, Trash2,
   Phone, FileText, X, History, CheckCircle2, XCircle,
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle
 } from 'lucide-react';
@@ -614,7 +614,7 @@ export default function CustomersPage() {
         ) : (
             <>
                 {clientes.map(cliente => (
-                <div key={cliente.id} className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between hover:border-white/10 transition-all group relative overflow-hidden">
+                <div key={cliente.id} onClick={() => handleOpenModal(cliente)} className="cursor-pointer bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between hover:border-white/10 hover:bg-white/[0.04] transition-all group relative overflow-hidden">
                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${cliente.status === 'ativo' ? 'bg-[#22C55E]' : 'bg-red-500'}`}></div>
                     <div className="flex items-center gap-5 pl-3">
                         <div className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-2xl flex items-center justify-center font-black text-xl uppercase shadow-inner flex-shrink-0">
@@ -660,10 +660,7 @@ export default function CustomersPage() {
                     </div>
 
                     <div className="flex items-center gap-2 mt-4 md:mt-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleOpenModal(cliente)} className="flex items-center gap-2 px-3 py-2 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl text-[10px] font-bold uppercase transition-colors">
-                            <Edit2 size={14} /> Editar
-                        </button>
-                        <button onClick={() => handleDeleteCliente(cliente.id)} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteCliente(cliente.id); }} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors">
                             <Trash2 size={14} />
                         </button>
                     </div>

@@ -75,10 +75,19 @@ function getTimbradoFile(emissoraNome: string): string | null {
 export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: `Contrato — ${data.cliente}` } });
+      // margem inferior de 80pt: reserva espaço suficiente pro rodapé (desenhado a
+      // 65pt da borda, pra não bater na onda do timbrado) sem o texto do corpo invadir essa área.
+      // As mesmas margens valem pra página 1 e pra qualquer página extra que o pdfkit
+      // crie sozinho por overflow — margens diferentes entre páginas é o que causava
+      // o rodapé quebrado/sobrepondo conteúdo.
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: 50, bottom: 80, left: 50, right: 50 },
+        bufferPages: true,
+        info: { Title: `Contrato — ${data.cliente}` },
+      });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
       const W = doc.page.width - 100; // largura útil
@@ -275,14 +284,24 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
         .text('Assinatura do Cliente', 50, sigY + 4, { width: sigW, align: 'center' });
       doc.text(`Representante da ${data.emissora_nome || 'Emissora'}`, doc.page.width - 50 - sigW, sigY + 4, { width: sigW, align: 'center' });
 
-      // ── FOOTER ───────────────────────────────────────────────────
-      doc.fontSize(7).font('Helvetica').fillColor('#999')
-        .text(
-          `${data.emissora_razao}  ·  CNPJ ${data.emissora_cnpj}  ·  Gerado em ${new Date().toLocaleDateString('pt-BR')}`,
-          50, doc.page.height - 65, { align: 'center', width: W }
-        );
+      // ── FOOTER (em todas as páginas, não só na última) ────────────
+      // zera a margem inferior de cada página nesse momento: sem isso, o pdfkit acha
+      // que o texto do rodapé (desenhado dentro da área de margem, de propósito) estourou
+      // o limite da página e cria uma página extra em branco. Como é a última coisa
+      // desenhada antes do doc.end(), não afeta o fluxo do conteúdo do corpo.
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i++) {
+        doc.switchToPage(i);
+        doc.page.margins.bottom = 0;
+        doc.fontSize(7).font('Helvetica').fillColor('#999')
+          .text(
+            `${data.emissora_razao}  ·  CNPJ ${data.emissora_cnpj}  ·  Gerado em ${new Date().toLocaleDateString('pt-BR')}`,
+            50, doc.page.height - 65, { align: 'center', width: W }
+          );
+      }
 
       doc.end();
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
     } catch (err) {
       reject(err);
     }

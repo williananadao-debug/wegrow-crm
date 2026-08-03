@@ -1005,7 +1005,7 @@ export default function DealsPage() {
             <head>
                 <title>Contrato - ${lead.empresa}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; padding: 40px 40px 70px 40px; color: #000; line-height: 1.5; font-size: 12px; }
+                    body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
                     .header { text-align: center; margin-bottom: 20px; }
                     .header img { max-height: 80px; margin-bottom: 10px; }
                     .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
@@ -1019,16 +1019,18 @@ export default function DealsPage() {
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
                     .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 180mm; z-index: -1; object-fit: cover; object-position: top; }
-                    .rodape-fixo { position: fixed; bottom: 10px; left: 0; width: 100%; text-align: center; font-size: 9px; color: #999; }
+                    .pagina-tabela { page-break-inside: auto; }
+                    .rodape-fixo { text-align: center; font-size: 9px; color: #999; padding-top: 10px; }
                     @media print {
                         .btn-fechar { display: none !important; }
                         html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                        .rodape-fixo { position: fixed; bottom: 10px; }
                     }
                 </style>
             </head>
             <body>
                 ${timbradoUrl ? `<img class="timbrado-bg" src="${timbradoUrl}" alt="" onerror="this.style.display='none'" />` : ''}
+                <table class="pagina-tabela" style="width: 100%; border-collapse: collapse;">
+                <tbody><tr><td>
                 <div class="header" ${timbradoUrl ? 'style="margin-top: 130px;"' : ''}>
                     ${timbradoUrl ? '' : `<img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />`}
                     <h2>Contrato para Veiculação de Publicidade</h2>
@@ -1111,10 +1113,11 @@ export default function DealsPage() {
                     <div>Assinatura do Cliente</div>
                     <div>Representante da ${unidadeData?.nome || 'Demais FM'}</div>
                 </div>
-
-                <div class="rodape-fixo">
+                </td></tr></tbody>
+                <tfoot><tr><td class="rodape-fixo">
                     ${dadosEmissora.razao} &middot; CNPJ ${dadosEmissora.cnpj} &middot; Gerado em ${new Date().toLocaleDateString('pt-BR')}
-                </div>
+                </td></tr></tfoot>
+                </table>
 
                 <button onclick="window.close()" style="position:fixed;bottom:24px;right:24px;background:#e11d48;color:#fff;border:none;border-radius:50px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;letter-spacing:1px;" class="btn-fechar">✕ FECHAR</button>
                 <script>window.onload = function() { window.print(); }</script>

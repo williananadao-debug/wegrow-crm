@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2,
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Route, Image as ImageIcon,
-  Map, User
+  Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -101,6 +101,18 @@ export default function VisitasPage() {
 
   // Modal de detalhe da visita (dados completos + foto)
   const [visitaDetalhe, setVisitaDetalhe] = useState<Visita | null>(null);
+
+  // Relatório Estratégico IA (analisa observações das visitas filtradas)
+  const [relatorioIAOpen, setRelatorioIAOpen] = useState(false);
+  const [relatorioIALoading, setRelatorioIALoading] = useState(false);
+  const [relatorioIAErro, setRelatorioIAErro] = useState('');
+  const [relatorioIA, setRelatorioIA] = useState<{
+    resumo_executivo?: string;
+    sinais_compra?: { cliente: string; sinal: string; comentario_origem: string }[];
+    objecoes?: { padrao: string; ocorrencias: number; exemplo: string }[];
+    risco_perda?: { cliente: string; motivo: string; comentario_origem: string }[];
+  } | null>(null);
+  const [relatorioIAContagem, setRelatorioIAContagem] = useState(0);
 
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
 
@@ -308,6 +320,34 @@ export default function VisitasPage() {
     return true;
   });
 
+  async function gerarRelatorioIA() {
+    if (visitasFiltradas.length === 0) {
+      toast('Nenhuma visita no filtro atual pra analisar.');
+      return;
+    }
+    setRelatorioIAOpen(true);
+    setRelatorioIALoading(true);
+    setRelatorioIAErro('');
+    setRelatorioIA(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/ia/relatorio-visitas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ visitaIds: visitasFiltradas.map(v => v.id) }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || 'Erro ao gerar relatório.');
+      setRelatorioIA(j.relatorio);
+      setRelatorioIAContagem(j.visitasAnalisadas || 0);
+    } catch (err: any) {
+      setRelatorioIAErro(err?.message || 'Erro ao gerar relatório.');
+    } finally {
+      setRelatorioIALoading(false);
+    }
+  }
+
   const visitasDoVendedor = visitas.filter(v => filtroVendedor === 'todos' || v.user_id === filtroVendedor);
   const totalVisitas = visitasDoVendedor.length;
   const comLead = visitasDoVendedor.filter(v => v.lead_id).length;
@@ -429,6 +469,14 @@ export default function VisitasPage() {
             className="bg-transparent text-white text-[10px] font-bold outline-none"
           />
         </div>
+
+        <button
+          onClick={gerarRelatorioIA}
+          disabled={visitasFiltradas.length === 0}
+          className="flex items-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-4 h-9 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+        >
+          <Sparkles size={12} /> Relatório Estratégico IA ({visitasFiltradas.length})
+        </button>
       </div>
 
       {/* LISTA DE VISITAS */}
@@ -849,6 +897,105 @@ export default function VisitasPage() {
                 >
                   <Plus size={14} /> Criar Lead
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {relatorioIAOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setRelatorioIAOpen(false)}>
+          <div className="bg-[#0B1120] border border-purple-500/20 rounded-[32px] max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-white/10 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-purple-500/20 rounded-xl flex items-center justify-center"><Sparkles size={18} className="text-purple-400"/></div>
+                <div>
+                  <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Relatório Estratégico IA</h2>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">
+                    {relatorioIALoading ? 'Analisando comentários...' : `Baseado em ${relatorioIAContagem} visita${relatorioIAContagem === 1 ? '' : 's'} com observação`}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setRelatorioIAOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all">
+                <X size={18}/>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+              {relatorioIALoading && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 size={28} className="animate-spin text-purple-400" />
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Cruzando comentários e GPS...</p>
+                </div>
+              )}
+
+              {!relatorioIALoading && relatorioIAErro && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 text-red-400 text-sm font-bold">
+                  {relatorioIAErro}
+                </div>
+              )}
+
+              {!relatorioIALoading && relatorioIA && (
+                <>
+                  {relatorioIA.resumo_executivo && (
+                    <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4">
+                      <p className="text-purple-300 text-sm font-bold italic">{relatorioIA.resumo_executivo}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-black text-[#22C55E] uppercase tracking-widest mb-3">
+                      <TrendingUp size={14}/> Sinais de Compra {relatorioIA.sinais_compra?.length ? `(${relatorioIA.sinais_compra.length})` : ''}
+                    </h3>
+                    {relatorioIA.sinais_compra && relatorioIA.sinais_compra.length > 0 ? (
+                      <div className="space-y-2">
+                        {relatorioIA.sinais_compra.map((s, i) => (
+                          <div key={i} className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-3">
+                            <p className="text-white text-xs font-black uppercase">{s.cliente}</p>
+                            <p className="text-[#22C55E] text-xs font-bold mt-0.5">{s.sinal}</p>
+                            <p className="text-slate-500 text-[10px] italic mt-1">&quot;{s.comentario_origem}&quot;</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-slate-600 text-xs">Nenhum sinal claro de compra encontrado neste recorte.</p>}
+                  </div>
+
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-black text-orange-400 uppercase tracking-widest mb-3">
+                      <AlertTriangle size={14}/> Objeções Recorrentes {relatorioIA.objecoes?.length ? `(${relatorioIA.objecoes.length})` : ''}
+                    </h3>
+                    {relatorioIA.objecoes && relatorioIA.objecoes.length > 0 ? (
+                      <div className="space-y-2">
+                        {relatorioIA.objecoes.map((o, i) => (
+                          <div key={i} className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-white text-xs font-black uppercase">{o.padrao}</p>
+                              <span className="text-orange-400 text-[10px] font-black">{o.ocorrencias}x</span>
+                            </div>
+                            <p className="text-slate-500 text-[10px] italic mt-1">&quot;{o.exemplo}&quot;</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-slate-600 text-xs">Nenhum padrão de objeção recorrente identificado.</p>}
+                  </div>
+
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-black text-red-400 uppercase tracking-widest mb-3">
+                      <ShieldAlert size={14}/> Risco de Perda {relatorioIA.risco_perda?.length ? `(${relatorioIA.risco_perda.length})` : ''}
+                    </h3>
+                    {relatorioIA.risco_perda && relatorioIA.risco_perda.length > 0 ? (
+                      <div className="space-y-2">
+                        {relatorioIA.risco_perda.map((r, i) => (
+                          <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+                            <p className="text-white text-xs font-black uppercase">{r.cliente}</p>
+                            <p className="text-red-400 text-xs font-bold mt-0.5">{r.motivo}</p>
+                            <p className="text-slate-500 text-[10px] italic mt-1">&quot;{r.comentario_origem}&quot;</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-slate-600 text-xs">Nenhum sinal de risco/insatisfação identificado.</p>}
+                  </div>
+                </>
               )}
             </div>
           </div>

@@ -41,9 +41,11 @@ export default function GoalsPage() {
   const [editandoMetaProduto, setEditandoMetaProduto] = useState<string | null>(null);
 
   const { unidades } = useUnidades(perfil?.empresa_id);
-  const [realizadoPorUnidade, setRealizadoPorUnidade] = useState<Record<string, number>>({});
-  const [metasPorUnidade, setMetasPorUnidade] = useState<Record<string, number>>({});
-  const [editandoMetaUnidade, setEditandoMetaUnidade] = useState<string | null>(null);
+  const [unidadeSelecionadaMeta, setUnidadeSelecionadaMeta] = useState<string>('');
+  const [metaAnoUnidade, setMetaAnoUnidade] = useState(0);
+  const [metasMensaisUnidade, setMetasMensaisUnidade] = useState<MetaMensal[]>([]);
+  const [realizadoAnoUnidade, setRealizadoAnoUnidade] = useState(0);
+  const [realizadoMensalMapUnidade, setRealizadoMensalMapUnidade] = useState<Record<number, number>>({});
 
   const isDirector = perfil?.cargo === 'diretor';
 
@@ -68,8 +70,12 @@ export default function GoalsPage() {
   }, [perfil?.empresa_id, vendedorSelecionado]);
 
   useEffect(() => {
-    if (perfil?.empresa_id && unidades.length > 0) fetchMetasPorUnidade();
-  }, [perfil?.empresa_id, unidades]);
+    if (unidades.length > 0 && !unidadeSelecionadaMeta) setUnidadeSelecionadaMeta(unidades[0].nome);
+  }, [unidades]);
+
+  useEffect(() => {
+    if (perfil?.empresa_id && unidadeSelecionadaMeta) fetchMetasERealizadoUnidade();
+  }, [perfil?.empresa_id, unidadeSelecionadaMeta, anoFiltro]);
 
   async function fetchVendedores() {
     let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
@@ -212,55 +218,71 @@ export default function GoalsPage() {
     setProdutosMes(rows);
   }
 
-  async function fetchMetasPorUnidade() {
-    if (!perfil?.empresa_id) return;
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = hoje.getMonth() + 1;
-    const mesPad = String(mes).padStart(2, '0');
-
-    const [{ data: vendasData }, { data: metasData }] = await Promise.all([
-      supabase.from('leads').select('unidade, valor_total')
-        .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
-        .gte('created_at', `${ano}-${mesPad}-01`).lte('created_at', `${ano}-${mesPad}-31`)
-        .limit(2000),
-      supabase.from('metas').select('unidade, valor_objetivo')
+  async function fetchMetasERealizadoUnidade() {
+    if (!perfil?.empresa_id || !unidadeSelecionadaMeta) return;
+    const [{ data: metasData }, { data: vendas }] = await Promise.all([
+      supabase.from('metas').select('mes, valor_objetivo')
         .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
-        .eq('ano', ano).eq('mes', mes).not('unidade', 'is', null),
+        .eq('unidade', unidadeSelecionadaMeta).eq('ano', anoFiltro),
+      supabase.from('leads').select('valor_total, created_at')
+        .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id).eq('unidade', unidadeSelecionadaMeta)
+        .gte('created_at', `${anoFiltro}-01-01`).lte('created_at', `${anoFiltro}-12-31`),
     ]);
 
-    const realizadoMap: Record<string, number> = {};
-    (vendasData || []).forEach((v: any) => {
-      if (!v.unidade) return;
-      realizadoMap[v.unidade] = (realizadoMap[v.unidade] || 0) + Number(v.valor_total);
-    });
-    setRealizadoPorUnidade(realizadoMap);
+    setMetaAnoUnidade(metasData?.find(m => m.mes === null)?.valor_objetivo || 0);
+    setMetasMensaisUnidade(metasData?.filter(m => m.mes !== null) || []);
 
-    const metaMap: Record<string, number> = {};
-    (metasData || []).forEach((m: any) => { if (m.unidade) metaMap[m.unidade] = m.valor_objetivo; });
-    setMetasPorUnidade(metaMap);
+    const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
+    setRealizadoAnoUnidade(totalAno);
+
+    const mensalMap: Record<number, number> = {};
+    vendas?.forEach(v => {
+      const mesVenda = new Date(v.created_at).getMonth() + 1;
+      mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
+    });
+    setRealizadoMensalMapUnidade(mensalMap);
   }
 
-  const handleUpdateMetaUnidade = async (unidade: string, valor: number) => {
-    if (!isDirector || !perfil?.empresa_id) return;
-    const hoje = new Date();
+  const handleUpdateMetaUnidade = async (mes: number | null, valor: number) => {
+    if (!isDirector || !perfil?.empresa_id || !unidadeSelecionadaMeta) return;
     const { error } = await supabase.from('metas').upsert({
-      unidade,
+      unidade: unidadeSelecionadaMeta,
       empresa_id: perfil.empresa_id,
-      ano: hoje.getFullYear(),
-      mes: hoje.getMonth() + 1,
-      valor_objetivo: valor,
+      ano: anoFiltro,
+      mes,
+      valor_objetivo: Number(valor),
       tipo: 'unidade',
       user_id: null,
     }, { onConflict: 'unidade,ano,mes' });
     if (!error) {
-      setMetasPorUnidade(prev => ({ ...prev, [unidade]: valor }));
-      setToastMessage(`Meta de "${unidade}" salva!`);
+      setToastMessage('Meta salva com sucesso! 🚀');
+      setShowToast(true);
+      fetchMetasERealizadoUnidade();
     } else {
       setToastMessage(`Erro ao salvar meta: ${error.message}`);
+      setShowToast(true);
     }
-    setEditandoMetaUnidade(null);
+  };
+
+  const distribuirMetaAnoUnidade = async () => {
+    if (!metaAnoUnidade || metaAnoUnidade <= 0 || !unidadeSelecionadaMeta) return;
+    if (!confirm(`Dividir R$ ${metaAnoUnidade.toLocaleString()} igualmente entre os 12 meses de ${unidadeSelecionadaMeta}?`)) return;
+
+    const valorMensal = metaAnoUnidade / 12;
+    const novasMetas = Array.from({ length: 12 }).map((_, i) => ({
+      unidade: unidadeSelecionadaMeta,
+      empresa_id: perfil?.empresa_id,
+      ano: anoFiltro,
+      mes: i + 1,
+      valor_objetivo: valorMensal,
+      tipo: 'unidade',
+      user_id: null,
+    }));
+
+    await supabase.from('metas').upsert(novasMetas, { onConflict: 'unidade,ano,mes' });
+    setToastMessage('Meta anual distribuída!');
     setShowToast(true);
+    fetchMetasERealizadoUnidade();
   };
 
   const handleUpdateMetaProduto = async (produto: string, valor: number) => {
@@ -327,6 +349,7 @@ export default function GoalsPage() {
   };
 
   const percentAno = metaAno > 0 ? (realizadoAno / metaAno) * 100 : 0;
+  const percentAnoUnidade = metaAnoUnidade > 0 ? (realizadoAnoUnidade / metaAnoUnidade) * 100 : 0;
 
   // Ritmo do mês atual
   const hoje = new Date();
@@ -535,53 +558,100 @@ export default function GoalsPage() {
 
       {/* METAS POR UNIDADE */}
       {unidades.length > 0 && (
-        <div className="bg-[#0B1120] border border-white/10 rounded-[32px] p-6 shadow-xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-9 h-9 bg-orange-500/20 rounded-xl flex items-center justify-center"><Building2 size={18} className="text-orange-400"/></div>
+        <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-8 shadow-2xl">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
             <div>
-              <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Metas por Unidade</h2>
-              <p className="text-[10px] text-slate-500 font-bold uppercase">{new Date(0, mesAtual - 1).toLocaleString('pt-BR', { month: 'long' })} {anoAtual}</p>
+              <h2 className="text-lg font-black text-white uppercase italic tracking-tighter flex items-center gap-2">
+                <Building2 size={20} className="text-orange-400"/> Metas por Unidade
+              </h2>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Ano Fiscal {anoFiltro} — {unidadeSelecionadaMeta}</p>
+            </div>
+
+            <div className="flex flex-col items-end">
+              <p className="text-[10px] font-black text-slate-500 uppercase mb-1">Meta do Ano</p>
+              <div className="flex items-center gap-3">
+                {isDirector && (
+                  <button onClick={distribuirMetaAnoUnidade} className="p-2 bg-orange-600/20 text-orange-400 rounded-lg hover:bg-orange-600 hover:text-white transition-all"><RefreshCcw size={16}/></button>
+                )}
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-orange-500">
+                  <span className="text-slate-500 font-bold mr-2 text-sm">R$</span>
+                  <input
+                    type="number"
+                    className="bg-transparent text-xl font-black text-white text-right outline-none w-32"
+                    value={metaAnoUnidade}
+                    onChange={(e) => setMetaAnoUnidade(Number(e.target.value))}
+                    onBlur={(e) => handleUpdateMetaUnidade(null, Number(e.target.value))}
+                    disabled={!isDirector}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-          <div className="space-y-4">
-            {unidades.map(u => {
-              const meta = metasPorUnidade[u.nome] || 0;
-              const realizado = realizadoPorUnidade[u.nome] || 0;
-              const perc = meta > 0 ? Math.min((realizado / meta) * 100, 100) : 0;
-              const isEditing = editandoMetaUnidade === u.nome;
+
+          {/* Seletor de Unidade */}
+          <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar mb-6">
+            {unidades.map(u => (
+              <button key={u.id} onClick={() => setUnidadeSelecionadaMeta(u.nome)} className={`px-5 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex-shrink-0 ${unidadeSelecionadaMeta === u.nome ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}>
+                {u.nome}
+              </button>
+            ))}
+          </div>
+
+          {/* Progresso Anual */}
+          <div className="mb-8">
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-xs font-black text-white uppercase italic">Atingimento Acumulado</span>
+              <span className={`text-xl font-black ${percentAnoUnidade >= 100 ? 'text-[#22C55E]' : 'text-orange-400'}`}>{Math.round(percentAnoUnidade)}%</span>
+            </div>
+            <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
+              <div className={`h-full transition-all duration-1000 rounded-full ${percentAnoUnidade >= 100 ? 'bg-[#22C55E]' : 'bg-orange-500'}`} style={{ width: `${Math.min(percentAnoUnidade, 100)}%` }} />
+            </div>
+            <div className="flex justify-between mt-2 text-[10px] font-bold uppercase">
+              <div><span className="text-slate-500">Realizado:</span> <span className="text-white ml-1">R$ {realizadoAnoUnidade.toLocaleString('pt-BR')}</span></div>
+              <div><span className="text-slate-500">Falta para Meta:</span> <span className="text-red-400 ml-1">R$ {Math.max(0, metaAnoUnidade - realizadoAnoUnidade).toLocaleString('pt-BR')}</span></div>
+            </div>
+          </div>
+
+          {/* Grade Mensal por Unidade */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(mes => {
+              const mMeta = metasMensaisUnidade.find(m => m.mes === mes)?.valor_objetivo || 0;
+              const mReal = realizadoMensalMapUnidade[mes] || 0;
+              const mPerc = mMeta > 0 ? (mReal / mMeta) * 100 : 0;
+              const active = mes === mesAtualVisual && anoFiltro === new Date().getFullYear();
 
               return (
-                <div key={u.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white font-black text-xs uppercase truncate">{u.nome}</p>
-                      <span className="text-[9px] text-[#22C55E] font-black">R$ {realizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} realizado</span>
-                    </div>
-                    {isDirector && (
-                      isEditing ? (
+                <div key={mes} className={`bg-white/[0.02] border ${active ? 'border-orange-500/50 shadow-xl shadow-orange-500/5' : 'border-white/5'} p-5 rounded-[24px] hover:border-white/20 transition-all flex flex-col group`}>
+                  <div className="flex justify-between mb-6">
+                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black uppercase ${active ? 'bg-orange-600 text-white' : 'bg-white/5 text-slate-400'}`}>
+                      {new Date(0, mes - 1).toLocaleString('pt-BR', { month: 'short' })}
+                    </span>
+                    {mPerc >= 100 && <div className="bg-[#22C55E]/20 text-[#22C55E] text-[8px] font-black px-2 py-1 rounded-full uppercase">Meta Batida 🏆</div>}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Meta Mensal</p>
+                      <div className="flex items-center gap-1 border-b border-white/5 focus-within:border-orange-500 transition-all">
+                        <span className="text-slate-600 text-xs font-bold">R$</span>
                         <input
                           type="number"
-                          autoFocus
-                          defaultValue={meta || ''}
-                          className="w-28 bg-[#0B1120] border border-blue-500 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none flex-shrink-0"
-                          onBlur={(e) => handleUpdateMetaUnidade(u.nome, Number(e.target.value))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateMetaUnidade(u.nome, Number((e.target as HTMLInputElement).value)); if (e.key === 'Escape') setEditandoMetaUnidade(null); }}
+                          className="bg-transparent text-lg font-black text-white outline-none py-1 w-full"
+                          defaultValue={mMeta}
+                          onBlur={(e) => handleUpdateMetaUnidade(mes, Number(e.target.value))}
+                          disabled={!isDirector}
                         />
-                      ) : (
-                        <button onClick={() => setEditandoMetaUnidade(u.nome)} className="text-[9px] font-black text-slate-600 hover:text-blue-400 transition-colors flex-shrink-0 uppercase">
-                          {meta > 0 ? `Meta: R$ ${meta.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '+ Meta'}
-                        </button>
-                      )
-                    )}
-                  </div>
-                  {meta > 0 && (
-                    <div>
-                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-700 ${perc >= 100 ? 'bg-[#22C55E]' : perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${perc}%` }} />
                       </div>
-                      <p className="text-[9px] text-slate-600 mt-0.5 font-bold">{Math.round(perc)}% da meta mensal</p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Realizado</p>
+                      <p className="text-sm font-black text-[#22C55E]">R$ {mReal.toLocaleString('pt-BR')}</p>
+                    </div>
+
+                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
+                      <div className={`h-full transition-all duration-700 ${mPerc >= 100 ? 'bg-[#22C55E]' : 'bg-orange-500'}`} style={{ width: `${Math.min(mPerc, 100)}%` }} />
+                    </div>
+                  </div>
                 </div>
               );
             })}

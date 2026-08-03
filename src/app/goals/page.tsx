@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { useUnidades } from '@/lib/useUnidades';
 import {
   Target, Users, RefreshCcw, AlertTriangle, CheckCircle2,
-  User as UserIcon, Loader2, Calendar, TrendingUp, Zap, Mail
+  User as UserIcon, Loader2, Calendar, TrendingUp, Zap, Mail, Building2
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Toast } from '@/components/Toast';
@@ -39,6 +40,11 @@ export default function GoalsPage() {
   const [metasProduto, setMetasProduto] = useState<Record<string, number>>({});
   const [editandoMetaProduto, setEditandoMetaProduto] = useState<string | null>(null);
 
+  const { unidades } = useUnidades(perfil?.empresa_id);
+  const [realizadoPorUnidade, setRealizadoPorUnidade] = useState<Record<string, number>>({});
+  const [metasPorUnidade, setMetasPorUnidade] = useState<Record<string, number>>({});
+  const [editandoMetaUnidade, setEditandoMetaUnidade] = useState<string | null>(null);
+
   const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
@@ -60,6 +66,10 @@ export default function GoalsPage() {
   useEffect(() => {
     if (perfil?.empresa_id) { fetchProdutosMes(); fetchServicos(); }
   }, [perfil?.empresa_id, vendedorSelecionado]);
+
+  useEffect(() => {
+    if (perfil?.empresa_id && unidades.length > 0) fetchMetasPorUnidade();
+  }, [perfil?.empresa_id, unidades]);
 
   async function fetchVendedores() {
     let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
@@ -201,6 +211,57 @@ export default function GoalsPage() {
       .sort((a, b) => b.valor - a.valor);
     setProdutosMes(rows);
   }
+
+  async function fetchMetasPorUnidade() {
+    if (!perfil?.empresa_id) return;
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = hoje.getMonth() + 1;
+    const mesPad = String(mes).padStart(2, '0');
+
+    const [{ data: vendasData }, { data: metasData }] = await Promise.all([
+      supabase.from('leads').select('unidade, valor_total')
+        .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+        .gte('created_at', `${ano}-${mesPad}-01`).lte('created_at', `${ano}-${mesPad}-31`)
+        .limit(2000),
+      supabase.from('metas').select('unidade, valor_objetivo')
+        .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
+        .eq('ano', ano).eq('mes', mes).not('unidade', 'is', null),
+    ]);
+
+    const realizadoMap: Record<string, number> = {};
+    (vendasData || []).forEach((v: any) => {
+      if (!v.unidade) return;
+      realizadoMap[v.unidade] = (realizadoMap[v.unidade] || 0) + Number(v.valor_total);
+    });
+    setRealizadoPorUnidade(realizadoMap);
+
+    const metaMap: Record<string, number> = {};
+    (metasData || []).forEach((m: any) => { if (m.unidade) metaMap[m.unidade] = m.valor_objetivo; });
+    setMetasPorUnidade(metaMap);
+  }
+
+  const handleUpdateMetaUnidade = async (unidade: string, valor: number) => {
+    if (!isDirector || !perfil?.empresa_id) return;
+    const hoje = new Date();
+    const { error } = await supabase.from('metas').upsert({
+      unidade,
+      empresa_id: perfil.empresa_id,
+      ano: hoje.getFullYear(),
+      mes: hoje.getMonth() + 1,
+      valor_objetivo: valor,
+      tipo: 'unidade',
+      user_id: null,
+    }, { onConflict: 'unidade,ano,mes' });
+    if (!error) {
+      setMetasPorUnidade(prev => ({ ...prev, [unidade]: valor }));
+      setToastMessage(`Meta de "${unidade}" salva!`);
+    } else {
+      setToastMessage(`Erro ao salvar meta: ${error.message}`);
+    }
+    setEditandoMetaUnidade(null);
+    setShowToast(true);
+  };
 
   const handleUpdateMetaProduto = async (produto: string, valor: number) => {
     if (!isDirector || !perfil?.empresa_id) return;
@@ -469,6 +530,62 @@ export default function GoalsPage() {
                 </div>
               )
             })}
+        </div>
+      )}
+
+      {/* METAS POR UNIDADE */}
+      {unidades.length > 0 && (
+        <div className="bg-[#0B1120] border border-white/10 rounded-[32px] p-6 shadow-xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 bg-orange-500/20 rounded-xl flex items-center justify-center"><Building2 size={18} className="text-orange-400"/></div>
+            <div>
+              <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Metas por Unidade</h2>
+              <p className="text-[10px] text-slate-500 font-bold uppercase">{new Date(0, mesAtual - 1).toLocaleString('pt-BR', { month: 'long' })} {anoAtual}</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {unidades.map(u => {
+              const meta = metasPorUnidade[u.nome] || 0;
+              const realizado = realizadoPorUnidade[u.nome] || 0;
+              const perc = meta > 0 ? Math.min((realizado / meta) * 100, 100) : 0;
+              const isEditing = editandoMetaUnidade === u.nome;
+
+              return (
+                <div key={u.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-black text-xs uppercase truncate">{u.nome}</p>
+                      <span className="text-[9px] text-[#22C55E] font-black">R$ {realizado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} realizado</span>
+                    </div>
+                    {isDirector && (
+                      isEditing ? (
+                        <input
+                          type="number"
+                          autoFocus
+                          defaultValue={meta || ''}
+                          className="w-28 bg-[#0B1120] border border-blue-500 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none flex-shrink-0"
+                          onBlur={(e) => handleUpdateMetaUnidade(u.nome, Number(e.target.value))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateMetaUnidade(u.nome, Number((e.target as HTMLInputElement).value)); if (e.key === 'Escape') setEditandoMetaUnidade(null); }}
+                        />
+                      ) : (
+                        <button onClick={() => setEditandoMetaUnidade(u.nome)} className="text-[9px] font-black text-slate-600 hover:text-blue-400 transition-colors flex-shrink-0 uppercase">
+                          {meta > 0 ? `Meta: R$ ${meta.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '+ Meta'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {meta > 0 && (
+                    <div>
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${perc >= 100 ? 'bg-[#22C55E]' : perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${perc}%` }} />
+                      </div>
+                      <p className="text-[9px] text-slate-600 mt-0.5 font-bold">{Math.round(perc)}% da meta mensal</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

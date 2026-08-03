@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  TrendingUp, Users, Radio, DollarSign,
+  TrendingUp, Users, DollarSign,
   BarChart3, Calendar, Loader2,
   CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag
 } from 'lucide-react';
@@ -115,7 +115,7 @@ export default function DashboardPage() {
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
   const vendedoresDisponiveis = useMemo(() => rawPerfis.filter((p: any) => p.nome).sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')), [rawPerfis]);
 
-  const { ranking, statsComercial, statsProducao, statsFinanceiro, previsaoFechamento, contratosVencendo, followupsHoje } = useMemo(() => {
+  const { ranking, statsComercial, previsaoFechamento, contratosVencendo, followupsHoje } = useMemo(() => {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -303,11 +303,6 @@ export default function DashboardPage() {
                 <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
                     <TrendingUp size={12}/> {isCDL ? 'Captação' : 'Comercial'}
                 </button>
-                {isDirector && (
-                  <button onClick={() => setVisao('diretoria')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'diretoria' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
-                      <Radio size={12}/> Gestão
-                  </button>
-                )}
             </div>
             
             <div className="hidden lg:flex items-center gap-1 h-10">
@@ -591,23 +586,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {visao === 'diretoria' && isDirector && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Saldo</p><h3 className={`text-2xl font-black tracking-tight ${statsFinanceiro.saldo >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>R$ {statsFinanceiro.saldo.toLocaleString()}</h3></div>
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Entradas</p><h3 className="text-xl font-black text-white">R$ {statsFinanceiro.entradas.toLocaleString()}</h3></div>
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl"><p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-0.5">Saídas</p><h3 className="text-xl font-black text-white">R$ {statsFinanceiro.saidas.toLocaleString()}</h3></div>
-            </div>
-            {!isCDL && (
-            <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
-                <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4"><Radio className="text-[#22C55E]" size={16} /> Gargalos de Produção</h3>
-                <div className="space-y-4">
-                    {[{ label: '📝 Pauta / Roteiro', val: statsProducao.roteiro, color: 'bg-slate-500' }, { label: '🎙️ Cabine / Gravação', val: statsProducao.gravacao, color: 'bg-red-500' }, { label: '🎚️ Edição / Plástica', val: statsProducao.edicao, color: 'bg-blue-500' }, { label: '📡 OPEC / No Ar', val: statsProducao.opec, color: 'bg-[#22C55E]' }].map((step, i) => { const total = statsProducao.roteiro + statsProducao.gravacao + statsProducao.edicao + 1; const pct = (step.val / total) * 100; return (<div key={i} className="group"><div className="flex justify-between text-[9px] font-black uppercase mb-1 text-slate-400 group-hover:text-white"><span>{step.label}</span><span className="text-sm">{step.val}</span></div><div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5"><div className={`h-full ${step.color} rounded-full transition-all duration-1000 relative`} style={{width: `${step.label.includes('OPEC') ? 100 : Math.max(pct, 2)}%`}}></div></div></div>)})}
-                </div>
-            </div>
-            )}
-        </div>
-      )}
     </main>
   );
 }

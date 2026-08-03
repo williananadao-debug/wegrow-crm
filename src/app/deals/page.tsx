@@ -1005,7 +1005,7 @@ export default function DealsPage() {
             <head>
                 <title>Contrato - ${lead.empresa}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
+                    body { font-family: Arial, sans-serif; padding: 40px 40px 70px 40px; color: #000; line-height: 1.5; font-size: 12px; }
                     .header { text-align: center; margin-bottom: 20px; }
                     .header img { max-height: 80px; margin-bottom: 10px; }
                     .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
@@ -1019,9 +1019,11 @@ export default function DealsPage() {
                     .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
                     .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 180mm; z-index: -1; object-fit: cover; object-position: top; }
+                    .rodape-fixo { position: fixed; bottom: 10px; left: 0; width: 100%; text-align: center; font-size: 9px; color: #999; }
                     @media print {
                         .btn-fechar { display: none !important; }
                         html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .rodape-fixo { position: fixed; bottom: 10px; }
                     }
                 </style>
             </head>
@@ -1110,7 +1112,7 @@ export default function DealsPage() {
                     <div>Representante da ${unidadeData?.nome || 'Demais FM'}</div>
                 </div>
 
-                <div style="margin-top: 30px; text-align: center; font-size: 9px; color: #999;">
+                <div class="rodape-fixo">
                     ${dadosEmissora.razao} &middot; CNPJ ${dadosEmissora.cnpj} &middot; Gerado em ${new Date().toLocaleDateString('pt-BR')}
                 </div>
 

@@ -105,13 +105,17 @@ export default function VisitasPage() {
   const [relatorioIAErro, setRelatorioIAErro] = useState('');
   const [relatorioIA, setRelatorioIA] = useState<{
     resumo_executivo?: string;
-    sinais_compra?: { cliente: string; sinal: string; comentario_origem: string }[];
-    objecoes?: { padrao: string; ocorrencias: number; exemplo: string }[];
-    risco_perda?: { cliente: string; motivo: string; comentario_origem: string }[];
+    sinais_compra?: { cliente: string; sinal: string; comentario_origem: string; recomendacao?: string; cidade?: string }[];
+    objecoes?: { padrao: string; ocorrencias: number; exemplo: string; recomendacao?: string }[];
+    risco_perda?: { cliente: string; motivo: string; comentario_origem: string; recomendacao?: string; cidade?: string }[];
+    concentracao_regional?: { cidade: string; oportunidades: number; riscos: number }[];
   } | null>(null);
   const [relatorioIAContagem, setRelatorioIAContagem] = useState(0);
+  const [relatorioIAClientes, setRelatorioIAClientes] = useState(0);
 
-  const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
+  const isDirector = perfil?.cargo === 'diretor';
+  const isGerente = perfil?.cargo === 'gerente';
+  const isLideranca = isDirector || isGerente;
 
   const toast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -130,23 +134,26 @@ export default function VisitasPage() {
     if (dataInicio) query = query.gte('created_at', dataInicio);
     if (dataFim) query = query.lte('created_at', `${dataFim}T23:59:59`);
 
-    if (!isLideranca) {
-      query = query.eq('user_id', user?.id);
+    if (!isDirector) {
+      if (isGerente && perfil?.unidade) query = query.eq('unidade', perfil.unidade);
+      else query = query.eq('user_id', user?.id);
     }
 
     const { data, error } = await query;
     if (!error && data) setVisitas(data as Visita[]);
     setLoading(false);
-  }, [perfil?.empresa_id, user?.id, isLideranca, dataInicio, dataFim]);
+  }, [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim]);
 
   const carregarVendedores = useCallback(async () => {
     if (!perfil?.empresa_id) return;
-    const { data } = await supabase
+    let query = supabase
       .from('profiles')
       .select('id, nome, cargo')
       .eq('empresa_id', perfil.empresa_id);
+    if (!isDirector && isGerente && perfil?.unidade) query = query.eq('unidade', perfil.unidade);
+    const { data } = await query;
     if (data) setVendedores(data as Perfil[]);
-  }, [perfil?.empresa_id]);
+  }, [perfil?.empresa_id, perfil?.unidade, isDirector, isGerente]);
 
   useEffect(() => {
     carregarVisitas();
@@ -324,6 +331,7 @@ export default function VisitasPage() {
       if (!res.ok) throw new Error(j.error || 'Erro ao gerar relatório.');
       setRelatorioIA(j.relatorio);
       setRelatorioIAContagem(j.visitasAnalisadas || 0);
+      setRelatorioIAClientes(j.clientesAnalisados || 0);
     } catch (err: any) {
       setRelatorioIAErro(err?.message || 'Erro ao gerar relatório.');
     } finally {
@@ -837,7 +845,7 @@ export default function VisitasPage() {
                 <div>
                   <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Relatório Estratégico IA</h2>
                   <p className="text-[10px] text-slate-500 font-bold uppercase">
-                    {relatorioIALoading ? 'Analisando comentários...' : `Baseado em ${relatorioIAContagem} visita${relatorioIAContagem === 1 ? '' : 's'} com observação`}
+                    {relatorioIALoading ? 'Analisando comentários...' : `${relatorioIAContagem} visita${relatorioIAContagem === 1 ? '' : 's'} · ${relatorioIAClientes} cliente${relatorioIAClientes === 1 ? '' : 's'}`}
                   </p>
                 </div>
               </div>
@@ -876,9 +884,13 @@ export default function VisitasPage() {
                       <div className="space-y-2">
                         {relatorioIA.sinais_compra.map((s, i) => (
                           <div key={i} className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-3">
-                            <p className="text-white text-xs font-black uppercase">{s.cliente}</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-white text-xs font-black uppercase">{s.cliente}</p>
+                              {s.cidade && <span className="text-[8px] text-slate-500 font-bold uppercase flex items-center gap-0.5 flex-shrink-0"><Map size={8}/> {s.cidade}</span>}
+                            </div>
                             <p className="text-[#22C55E] text-xs font-bold mt-0.5">{s.sinal}</p>
                             <p className="text-slate-500 text-[10px] italic mt-1">&quot;{s.comentario_origem}&quot;</p>
+                            {s.recomendacao && <p className="text-white/80 text-[10px] font-bold mt-2 flex items-start gap-1"><Zap size={10} className="text-[#22C55E] mt-0.5 flex-shrink-0"/> {s.recomendacao}</p>}
                           </div>
                         ))}
                       </div>
@@ -898,6 +910,7 @@ export default function VisitasPage() {
                               <span className="text-orange-400 text-[10px] font-black">{o.ocorrencias}x</span>
                             </div>
                             <p className="text-slate-500 text-[10px] italic mt-1">&quot;{o.exemplo}&quot;</p>
+                            {o.recomendacao && <p className="text-white/80 text-[10px] font-bold mt-2 flex items-start gap-1"><Zap size={10} className="text-orange-400 mt-0.5 flex-shrink-0"/> {o.recomendacao}</p>}
                           </div>
                         ))}
                       </div>
@@ -912,14 +925,37 @@ export default function VisitasPage() {
                       <div className="space-y-2">
                         {relatorioIA.risco_perda.map((r, i) => (
                           <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-xl p-3">
-                            <p className="text-white text-xs font-black uppercase">{r.cliente}</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-white text-xs font-black uppercase">{r.cliente}</p>
+                              {r.cidade && <span className="text-[8px] text-slate-500 font-bold uppercase flex items-center gap-0.5 flex-shrink-0"><Map size={8}/> {r.cidade}</span>}
+                            </div>
                             <p className="text-red-400 text-xs font-bold mt-0.5">{r.motivo}</p>
                             <p className="text-slate-500 text-[10px] italic mt-1">&quot;{r.comentario_origem}&quot;</p>
+                            {r.recomendacao && <p className="text-white/80 text-[10px] font-bold mt-2 flex items-start gap-1"><Zap size={10} className="text-red-400 mt-0.5 flex-shrink-0"/> {r.recomendacao}</p>}
                           </div>
                         ))}
                       </div>
                     ) : <p className="text-slate-600 text-xs">Nenhum sinal de risco/insatisfação identificado.</p>}
                   </div>
+
+                  {relatorioIA.concentracao_regional && relatorioIA.concentracao_regional.length > 0 && (
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-black text-blue-400 uppercase tracking-widest mb-3">
+                        <Map size={14}/> Concentração Regional
+                      </h3>
+                      <div className="space-y-2">
+                        {relatorioIA.concentracao_regional.map((c, i) => (
+                          <div key={i} className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-center justify-between">
+                            <p className="text-white text-xs font-black uppercase">{c.cidade}</p>
+                            <div className="flex items-center gap-3">
+                              {c.oportunidades > 0 && <span className="text-[10px] text-[#22C55E] font-black">{c.oportunidades} oportunidade{c.oportunidades === 1 ? '' : 's'}</span>}
+                              {c.riscos > 0 && <span className="text-[10px] text-red-400 font-black">{c.riscos} risco{c.riscos === 1 ? '' : 's'}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

@@ -44,6 +44,7 @@ type Lead = {
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
+  contrato_manual_url?: string;
 };
 
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
@@ -226,12 +227,12 @@ const LeadCard = React.memo(({
               </span>
             )}
 
-            {lead.docuseal_assinado && (
+            {(lead.docuseal_assinado || lead.contrato_manual_url) && (
               <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                 <PenLine size={8} /> Contrato Assinado
               </span>
             )}
-            {lead.docuseal_submission_id && !lead.docuseal_assinado && (
+            {lead.docuseal_submission_id && !lead.docuseal_assinado && !lead.contrato_manual_url && (
               <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                 <PenLine size={8} /> Ass. Enviada
               </span>

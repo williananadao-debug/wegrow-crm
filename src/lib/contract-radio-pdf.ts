@@ -133,28 +133,35 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       doc.moveDown(0.8);
 
       // ── DADOS DO CLIENTE ─────────────────────────────────────────
+      // Posicionamento explícito em toda linha (sem depender do cursor implícito do
+      // PDFKit entre uma linha de 2 colunas e a próxima) — evita a coluna da direita
+      // "puxar" a linha seguinte e deixar um vão vazio à esquerda.
       const linha = (label: string, valor: string) => {
-        doc.font('Helvetica-Bold').fontSize(9).text(label, { continued: true })
+        doc.font('Helvetica-Bold').fontSize(9).text(label, 50, doc.y, { continued: true })
           .font('Helvetica').text(valor || '___________________________');
       };
 
-      doc.font('Helvetica-Bold').fontSize(9).text('CLIENTE: ');
+      doc.font('Helvetica-Bold').fontSize(9).text('CLIENTE: ', 50, doc.y);
       linha('Razão Social: ', data.cliente.toUpperCase());
       linha('Nome Fantasia: ', data.cliente.toUpperCase());
 
       const y1 = doc.y;
-      doc.font('Helvetica-Bold').text('Inscrição CNPJ: ', 50, y1, { continued: true })
-        .font('Helvetica').text(data.cnpj || '___________________________', { continued: false });
+      doc.font('Helvetica-Bold').text('Inscrição CNPJ: ', 50, y1, { continued: true, width: 240 })
+        .font('Helvetica').text(data.cnpj || '___________________________');
       doc.font('Helvetica-Bold').text('Inscrição Estadual: ', 300, y1, { continued: true })
         .font('Helvetica').text(data.inscricao_estadual || '_______________');
 
-      linha('Endereço: ', data.endereco || '');
+      const y2 = Math.max(doc.y, y1 + 14);
+      doc.font('Helvetica-Bold').text('Endereço: ', 50, y2, { continued: true, width: 490 })
+        .font('Helvetica').text(data.endereco || '___________________________');
 
-      const y2 = doc.y;
-      doc.font('Helvetica-Bold').text('Fone: ', 50, y2, { continued: true })
-        .font('Helvetica').text(data.telefone || '___________________________', { continued: false });
-      doc.font('Helvetica-Bold').text('Município: ', 300, y2, { continued: true })
+      const y3 = Math.max(doc.y, y2 + 14);
+      doc.font('Helvetica-Bold').text('Fone: ', 50, y3, { continued: true, width: 240 })
+        .font('Helvetica').text(data.telefone || '___________________________');
+      doc.font('Helvetica-Bold').text('Município: ', 300, y3, { continued: true })
         .font('Helvetica').text(data.cidade || '___________________________');
+      doc.x = 50;
+      doc.y = Math.max(doc.y, y3 + 14);
 
       doc.moveDown(0.6);
       doc.font('Helvetica').fontSize(9).fillColor('#000')

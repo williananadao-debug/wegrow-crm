@@ -66,6 +66,7 @@ type Lead = {
   docuseal_arquivos?: { nome: string; path: string }[];
   contrato_manual_url?: string;
   contrato_manual_em?: string;
+  contrato_manual_arquivos?: { nome: string; path: string }[];
 };
 
 type ClienteOpcao = {
@@ -330,7 +331,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1197,22 +1198,31 @@ export default function DealsPage() {
   }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, leads, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // permite selecionar o mesmo arquivo de novo depois
-    if (!file || !editingLeadId) return;
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // permite selecionar os mesmos arquivos de novo depois
+    if (files.length === 0 || !editingLeadId) return;
     setUploadManualEnviando(true);
     setUploadManualErro('');
     try {
-      const ext = file.name.split('.').pop() || 'pdf';
-      const path = `${editingLeadId}/manual/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('contratos-assinados').upload(path, file, { upsert: true, contentType: 'application/pdf' });
-      if (upErr) throw upErr;
+      const arquivosExistentes = leads.find(l => l.id === editingLeadId)?.contrato_manual_arquivos || [];
+      const novosArquivos: { nome: string; path: string }[] = [];
+
+      for (const file of files) {
+        const ext = file.name.split('.').pop() || 'pdf';
+        const path = `${editingLeadId}/manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('contratos-assinados').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+        if (upErr) throw upErr;
+        novosArquivos.push({ nome: file.name, path });
+      }
+
+      const todosArquivos = [...arquivosExistentes, ...novosArquivos];
 
       // O bucket é privado — guarda só o caminho; a URL de visualização é assinada na hora do clique
       const agora = new Date().toISOString();
       await supabase.from('leads').update({
-        contrato_manual_url: path,
+        contrato_manual_url: todosArquivos[0].path,
         contrato_manual_em: agora,
+        contrato_manual_arquivos: todosArquivos,
       }).eq('id', editingLeadId);
 
       // Libera o(s) job(s) direto pra 'entregue' — a OPEC puxa os dados via API assim que o
@@ -1232,7 +1242,7 @@ export default function DealsPage() {
     } finally {
       setUploadManualEnviando(false);
     }
-  }, [editingLeadId, supabase, fetchData]);
+  }, [editingLeadId, leads, supabase, fetchData]);
 
   // Bucket "contratos-assinados" é privado — gera um link assinado (temporário) na hora do clique
   const abrirArquivoAssinado = useCallback(async (path: string) => {
@@ -1889,25 +1899,40 @@ export default function DealsPage() {
                 <div className="border-b border-orange-500/20 bg-orange-500/5 px-6 py-5 flex-shrink-0">
                   <div className="flex items-center gap-2 mb-4">
                     <Upload size={16} className="text-orange-400"/>
-                    <span className="text-orange-300 font-black text-sm uppercase tracking-wide">Contrato Assinado (PDF)</span>
+                    <span className="text-orange-300 font-black text-sm uppercase tracking-wide">Contrato Assinado (PDF ou Fotos)</span>
                   </div>
                   {leads.find(l => l.id === editingLeadId)?.contrato_manual_url ? (
-                    <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-                      <CheckCircle2 size={20} className="text-orange-400 shrink-0"/>
-                      <div className="flex-1">
-                        <p className="text-orange-300 text-sm font-black">Contrato anexado — produção liberada</p>
-                        <button type="button" onClick={() => { const p = leads.find(l => l.id === editingLeadId)?.contrato_manual_url; if (p) abrirArquivoAssinado(p); }} className="text-orange-400/70 text-xs mt-0.5 underline hover:text-orange-300">Ver PDF</button>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+                        <CheckCircle2 size={20} className="text-orange-400 shrink-0"/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-orange-300 text-sm font-black">Contrato anexado — produção liberada</p>
+                          <div className="flex flex-col items-start gap-0.5 mt-1">
+                            {(leads.find(l => l.id === editingLeadId)?.contrato_manual_arquivos?.length
+                              ? leads.find(l => l.id === editingLeadId)!.contrato_manual_arquivos!
+                              : [{ nome: 'Contrato assinado', path: leads.find(l => l.id === editingLeadId)!.contrato_manual_url! }]
+                            ).map((arq, i) => (
+                              <button key={i} type="button" onClick={() => abrirArquivoAssinado(arq.path)} className="text-orange-400/70 text-xs underline hover:text-orange-300 truncate max-w-full">{arq.nome || `Arquivo ${i + 1}`}</button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
+                      <label className="flex items-center justify-center gap-2 w-full h-10 border border-dashed border-white/10 rounded-xl cursor-pointer hover:border-orange-500/50 transition-colors bg-black/30">
+                        {uploadManualEnviando ? <Loader2 size={14} className="text-orange-400 animate-spin"/> : <Upload size={14} className="text-slate-600"/>}
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">{uploadManualEnviando ? 'Enviando...' : 'Anexar mais arquivos'}</span>
+                        <input type="file" accept="application/pdf,image/*" multiple className="hidden" disabled={uploadManualEnviando} onChange={enviarContratoManual}/>
+                      </label>
+                      {uploadManualErro && <p className="text-red-400 text-xs font-bold">{uploadManualErro}</p>}
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:border-orange-500/50 transition-colors bg-black/30">
                         {uploadManualEnviando ? <Loader2 size={20} className="text-orange-400 animate-spin mb-1"/> : <Upload size={20} className="text-slate-600 mb-1"/>}
-                        <span className="text-[10px] text-slate-500 font-bold uppercase">{uploadManualEnviando ? 'Enviando...' : 'Selecionar PDF já assinado'}</span>
-                        <input type="file" accept="application/pdf" className="hidden" disabled={uploadManualEnviando} onChange={enviarContratoManual}/>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">{uploadManualEnviando ? 'Enviando...' : 'Selecionar PDF ou fotos do contrato assinado'}</span>
+                        <input type="file" accept="application/pdf,image/*" multiple className="hidden" disabled={uploadManualEnviando} onChange={enviarContratoManual}/>
                       </label>
                       {uploadManualErro && <p className="text-red-400 text-xs font-bold">{uploadManualErro}</p>}
-                      {!uploadManualErro && <p className="text-slate-600 text-[10px]">Use quando o contrato foi assinado fora do fluxo eletrônico. Ao anexar, a produção é liberada na hora.</p>}
+                      {!uploadManualErro && <p className="text-slate-600 text-[10px]">Use quando o contrato foi assinado fora do fluxo eletrônico. Pode selecionar várias fotos (uma por página). Ao anexar, a produção é liberada na hora.</p>}
                     </div>
                   )}
                 </div>

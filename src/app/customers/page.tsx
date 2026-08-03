@@ -136,6 +136,10 @@ export default function CustomersPage() {
   const [duplicados, setDuplicados] = useState<Cliente[][]>([]);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  const cnpjIndexRef = useRef<Map<string, { id: number; nome_empresa: string; status: string }>>(new Map());
+  const [cnpjDuplicado, setCnpjDuplicado] = useState<{ id: number; nome_empresa: string; status: string } | null>(null);
+  const [verificandoCnpjExistente, setVerificandoCnpjExistente] = useState(false);
+
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDirector = perfil?.cargo === 'diretor';
   const isCDL = Boolean(empresa?.modulos?.cdl);
@@ -160,7 +164,31 @@ export default function CustomersPage() {
         .limit(20);
       if (data) setContratosVencendo(data as any);
     }
-    if (perfil) { fetchSellers(); fetchContratosVencendo(); }
+    async function fetchCnpjIndex() {
+      if (!perfil?.empresa_id) return;
+      setVerificandoCnpjExistente(true);
+      let all: { id: number; nome_empresa: string; cnpj: string | null; status: string }[] = [];
+      let from = 0;
+      const step = 1000;
+      while (true) {
+        const { data } = await supabase.from('clientes')
+          .select('id, nome_empresa, cnpj, status')
+          .eq('empresa_id', perfil.empresa_id)
+          .range(from, from + step - 1);
+        if (!data || data.length === 0) break;
+        all = all.concat(data as any);
+        if (data.length < step) break;
+        from += step;
+      }
+      const map = new Map<string, { id: number; nome_empresa: string; status: string }>();
+      all.forEach(c => {
+        const digits = (c.cnpj || '').replace(/\D/g, '');
+        if (digits.length === 14 && !map.has(digits)) map.set(digits, { id: c.id, nome_empresa: c.nome_empresa, status: c.status });
+      });
+      cnpjIndexRef.current = map;
+      setVerificandoCnpjExistente(false);
+    }
+    if (perfil) { fetchSellers(); fetchContratosVencendo(); fetchCnpjIndex(); }
   }, [perfil]);
 
   useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter, riscoFilter]);
@@ -215,6 +243,21 @@ export default function CustomersPage() {
     else if (v.length > 5) masked = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
     else if (v.length > 2) masked = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
     setFormData({ ...formData, cnpj: masked });
+
+    if (v.length === 14) {
+      const match = cnpjIndexRef.current.get(v);
+      setCnpjDuplicado(match && match.id !== editingId ? match : null);
+    } else {
+      setCnpjDuplicado(null);
+    }
+  };
+
+  const abrirClienteExistente = async (id: number, reativar: boolean) => {
+    const { data } = await supabase.from('clientes').select('*').eq('id', id).single();
+    if (!data) return;
+    handleOpenModal(data as any);
+    if (reativar) setFormData(prev => ({ ...prev, status: 'ativo' }));
+    setCnpjDuplicado(null);
   };
 
   const validarCNPJ = (cnpj: string) => {
@@ -352,6 +395,7 @@ export default function CustomersPage() {
   };
 
   const handleOpenModal = (cliente?: Cliente) => {
+    setCnpjDuplicado(null);
     if (cliente) {
       setEditingId(cliente.id);
       setFormData({
@@ -388,7 +432,11 @@ export default function CustomersPage() {
     const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
     if (cnpjDigits.length > 0 && cnpjDigits.length < 14) return alert("CNPJ incompleto. Verifique o número digitado.");
     if (cnpjDigits.length === 14 && !validarCNPJ(formData.cnpj || '')) return alert("CNPJ inválido. Verifique os dígitos verificadores.");
-    
+    if (!editingId && cnpjDigits.length === 14) {
+      const existente = cnpjIndexRef.current.get(cnpjDigits);
+      if (existente) return alert(`Esse CNPJ já está cadastrado para "${existente.nome_empresa}". Abra o cadastro existente em vez de criar um novo.`);
+    }
+
     const payload = {
       ...formData,
       segmento: formData.segmento === 'Outro' ? segmentoCustom.trim() : formData.segmento,
@@ -405,12 +453,14 @@ export default function CustomersPage() {
       if (editingId) {
         const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
         if (error) throw error;
+        if (cnpjDigits.length === 14) cnpjIndexRef.current.set(cnpjDigits, { id: editingId, nome_empresa: formData.nome_empresa, status: formData.status });
         resetAndFetch();
       } else {
         const { data, error } = await supabase.from('clientes').insert([payload]).select();
         if (error) throw error;
         if (data) {
             setEditingId(data[0].id);
+            if (cnpjDigits.length === 14) cnpjIndexRef.current.set(cnpjDigits, { id: data[0].id, nome_empresa: formData.nome_empresa, status: formData.status });
             resetAndFetch();
             alert(isCDL ? "Associado salvo com sucesso!" : "Cliente salvo com sucesso!");
         }
@@ -436,7 +486,11 @@ export default function CustomersPage() {
     if (!isDirector) return;
     if (!confirm(isCDL ? "Excluir associado e todo seu histórico?" : "Excluir cliente e todo seu histórico?")) return;
     const { error } = await supabase.from('clientes').delete().eq('id', id);
-    if (!error) resetAndFetch();
+    if (!error) {
+      for (const [cnpj, c] of cnpjIndexRef.current) { if (c.id === id) { cnpjIndexRef.current.delete(cnpj); break; } }
+      resetAndFetch();
+      setIsModalOpen(false);
+    }
   };
 
   const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -658,12 +712,6 @@ export default function CustomersPage() {
                             )}
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-2 mt-4 md:mt-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteCliente(cliente.id); }} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors">
-                            <Trash2 size={14} />
-                        </button>
-                    </div>
                 </div>
                 ))}
                 
@@ -697,6 +745,16 @@ export default function CustomersPage() {
                 {/* O Semáforo e o 'X' agora moram lado a lado e nunca sobrepõem nada */}
                 <div className="flex items-center gap-3 flex-shrink-0">
                     <SemaforoRisco status={formData.status_risco} />
+                    {editingId && (
+                        <button
+                            type="button"
+                            onClick={() => handleDeleteCliente(editingId)}
+                            title={isCDL ? 'Excluir associado' : 'Excluir cliente'}
+                            className="text-red-500/70 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-full p-2 transition-all flex-shrink-0"
+                        >
+                            <Trash2 size={18}/>
+                        </button>
+                    )}
                     <button onClick={() => setIsModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all flex-shrink-0">
                         <X size={18}/>
                     </button>
@@ -742,6 +800,7 @@ export default function CustomersPage() {
                                         {isSearchingCnpj ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                                     </button>
                                 </div>
+                                {verificandoCnpjExistente && <p className="text-[9px] text-slate-600 font-bold uppercase mt-1 ml-2">Carregando base de CNPJs para checagem de duplicados...</p>}
                             </div>
                             
                             {/* CAIXA DE ALERTA DE RISCO */}
@@ -760,7 +819,26 @@ export default function CustomersPage() {
                                 </div>
                             )}
                         </div>
-                        
+
+                        {cnpjDuplicado && (
+                            <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border ${cnpjDuplicado.status === 'inativo' ? 'bg-orange-500/10 border-orange-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                                <p className={`text-xs font-bold ${cnpjDuplicado.status === 'inativo' ? 'text-orange-300' : 'text-red-300'}`}>
+                                    ⚠️ Esse CNPJ já está cadastrado para <strong>{cnpjDuplicado.nome_empresa}</strong>
+                                    {cnpjDuplicado.status === 'inativo' ? ' (inativo).' : ' (ativo).'}
+                                </p>
+                                <div className="flex gap-2 flex-shrink-0">
+                                    {cnpjDuplicado.status === 'inativo' && (
+                                        <button type="button" onClick={() => abrirClienteExistente(cnpjDuplicado.id, true)} className="bg-orange-500 hover:bg-orange-400 text-[#0B1120] px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
+                                            Reativar este cliente
+                                        </button>
+                                    )}
+                                    <button type="button" onClick={() => abrirClienteExistente(cnpjDuplicado.id, false)} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors">
+                                        Abrir cadastro existente
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {formData.status_risco !== 'em_analise' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                 <div>
@@ -879,8 +957,8 @@ export default function CustomersPage() {
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all shadow-lg mt-4">
-                        {editingId ? 'Salvar Alterações' : (isCDL ? 'Cadastrar Associado' : 'Criar Cliente')}
+                    <button type="submit" disabled={!editingId && !!cnpjDuplicado} className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 transition-all shadow-lg mt-4">
+                        {!editingId && cnpjDuplicado ? 'Resolva o CNPJ duplicado acima' : (editingId ? 'Salvar Alterações' : (isCDL ? 'Cadastrar Associado' : 'Criar Cliente'))}
                     </button>
                 </form>
                 )}

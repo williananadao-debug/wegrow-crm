@@ -182,7 +182,7 @@ export default function ReportsPage() {
               const rawLeadName = lead.empresa || ''; const cleanLeadName = normalizeString(rawLeadName as string);
               if (cleanLeadName && cleanLeadName.length >= 3) { const clienteEncontrado = clientesNormalizados.find(c => c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)); if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro; }
           }
-          if (!rawCity) return acc;
+          if (!rawCity) rawCity = 'NÃO INFORMADA';
           let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); cleanCity = cleanCity.normalize("NFD").replace(/[̀-ͯ]/g, "");
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
           acc[cleanCity].total += Number(lead.valor_total || 0); acc[cleanCity].count += 1; return acc;

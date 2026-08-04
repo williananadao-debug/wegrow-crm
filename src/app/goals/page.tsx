@@ -229,8 +229,10 @@ export default function GoalsPage() {
         .gte('created_at', `${anoFiltro}-01-01`).lte('created_at', `${anoFiltro}-12-31`),
     ]);
 
-    setMetaAnoUnidade(metasData?.find(m => m.mes === null)?.valor_objetivo || 0);
-    setMetasMensaisUnidade(metasData?.filter(m => m.mes !== null) || []);
+    // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
+    // upsert do Supabase não consegue casar via onConflict).
+    setMetaAnoUnidade(metasData?.find(m => m.mes === 0)?.valor_objetivo || 0);
+    setMetasMensaisUnidade(metasData?.filter(m => m.mes !== 0) || []);
 
     const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
     setRealizadoAnoUnidade(totalAno);
@@ -249,11 +251,12 @@ export default function GoalsPage() {
       unidade: unidadeSelecionadaMeta,
       empresa_id: perfil.empresa_id,
       ano: anoFiltro,
-      mes,
+      mes: mes ?? 0, // 0 = sentinela pra "meta do ano" (ver fetchMetasERealizadoUnidade)
       valor_objetivo: Number(valor),
       tipo: 'unidade',
       user_id: null,
-    }, { onConflict: 'unidade,ano,mes' });
+      produto: null,
+    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
     if (!error) {
       setToastMessage('Meta salva com sucesso! 🚀');
       setShowToast(true);
@@ -277,9 +280,10 @@ export default function GoalsPage() {
       valor_objetivo: valorMensal,
       tipo: 'unidade',
       user_id: null,
+      produto: null,
     }));
 
-    await supabase.from('metas').upsert(novasMetas, { onConflict: 'unidade,ano,mes' });
+    await supabase.from('metas').upsert(novasMetas, { onConflict: 'user_id,ano,mes,produto,unidade' });
     setToastMessage('Meta anual distribuída!');
     setShowToast(true);
     fetchMetasERealizadoUnidade();
@@ -297,7 +301,8 @@ export default function GoalsPage() {
       valor_objetivo: valor,
       tipo: 'produto',
       produto,
-    }, { onConflict: 'user_id,ano,mes,produto' });
+      unidade: null,
+    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
     setMetasProduto(prev => ({ ...prev, [produto]: valor }));
     setEditandoMetaProduto(null);
     setToastMessage(`Meta de "${produto}" salva!`);
@@ -314,8 +319,10 @@ export default function GoalsPage() {
       ano: anoFiltro,
       mes: mes,
       valor_objetivo: Number(valor),
-      tipo: 'faturamento'
-    }, { onConflict: 'user_id,ano,mes' });
+      tipo: 'faturamento',
+      produto: null,
+      unidade: null,
+    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
 
     if (!error) {
       setToastMessage("Meta salva com sucesso! 🚀");
@@ -339,10 +346,12 @@ export default function GoalsPage() {
       ano: anoFiltro,
       mes: i + 1,
       valor_objetivo: valorMensal,
-      tipo: 'faturamento'
+      tipo: 'faturamento',
+      produto: null,
+      unidade: null,
     }));
 
-    await supabase.from('metas').upsert(novasMetas, { onConflict: 'user_id,ano,mes' });
+    await supabase.from('metas').upsert(novasMetas, { onConflict: 'user_id,ano,mes,produto,unidade' });
     setToastMessage("Meta anual distribuída!");
     setShowToast(true);
     fetchMetasERealizado();

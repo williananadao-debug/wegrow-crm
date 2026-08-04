@@ -89,13 +89,18 @@ export default function GoalsPage() {
     try {
       const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
 
-      let metaQuery = supabase.from('metas').select('*').eq('ano', anoFiltro);
+      let metaQuery = supabase.from('metas').select('*').eq('ano', anoFiltro).eq('tipo', 'faturamento');
       if (targetUser) metaQuery = metaQuery.eq('user_id', targetUser);
       else metaQuery = metaQuery.is('user_id', null);
 
       const { data: metasData } = await metaQuery;
-      setMetaAno(metasData?.find(m => m.mes === null)?.valor_objetivo || 0);
-      setMetasMensais(metasData?.filter(m => m.mes !== null) || []);
+      const metasMensaisData = metasData?.filter(m => m.mes !== null) || [];
+      const metaAnualSalva = metasData?.find(m => m.mes === null)?.valor_objetivo || 0;
+      const somaMeses = metasMensaisData.reduce((acc, m) => acc + Number(m.valor_objetivo || 0), 0);
+      // Se nunca definiu uma meta do ano manualmente (nem via "distribuir igualmente"), mostra
+      // a soma dos meses já preenchidos em vez de ficar zerado.
+      setMetaAno(metaAnualSalva > 0 ? metaAnualSalva : somaMeses);
+      setMetasMensais(metasMensaisData);
 
       let vendasQuery = supabase.from('leads')
         .select('valor_total, created_at')
@@ -192,7 +197,7 @@ export default function GoalsPage() {
         if (!item.servico) return;
         if (!agg[item.servico]) agg[item.servico] = { qtd: 0, valor: 0, valorMesAnterior: 0 };
         agg[item.servico].qtd += Number(item.quantidade) || 1;
-        agg[item.servico].valor += Number(item.total || item.preco_unitario || 0) * (Number(item.quantidade) || 1);
+        agg[item.servico].valor += Number(item.precoUnitario || 0) * (Number(item.quantidade) || 1);
       });
     });
     (mesAntData || []).forEach((l: any) => {
@@ -200,7 +205,7 @@ export default function GoalsPage() {
       l.itens.forEach((item: any) => {
         if (!item.servico) return;
         if (!agg[item.servico]) agg[item.servico] = { qtd: 0, valor: 0, valorMesAnterior: 0 };
-        agg[item.servico].valorMesAnterior += Number(item.total || item.preco_unitario || 0) * (Number(item.quantidade) || 1);
+        agg[item.servico].valorMesAnterior += Number(item.precoUnitario || 0) * (Number(item.quantidade) || 1);
       });
     });
 
@@ -231,8 +236,13 @@ export default function GoalsPage() {
 
     // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
     // upsert do Supabase não consegue casar via onConflict).
-    setMetaAnoUnidade(metasData?.find(m => m.mes === 0)?.valor_objetivo || 0);
-    setMetasMensaisUnidade(metasData?.filter(m => m.mes !== 0) || []);
+    const metasMensaisDaUnidade = metasData?.filter(m => m.mes !== 0) || [];
+    const metaAnualSalva = metasData?.find(m => m.mes === 0)?.valor_objetivo || 0;
+    const somaMeses = metasMensaisDaUnidade.reduce((acc, m) => acc + Number(m.valor_objetivo || 0), 0);
+    // Se nunca definiu uma meta do ano manualmente (nem via "distribuir igualmente"), mostra
+    // a soma dos meses já preenchidos em vez de ficar zerado.
+    setMetaAnoUnidade(metaAnualSalva > 0 ? metaAnualSalva : somaMeses);
+    setMetasMensaisUnidade(metasMensaisDaUnidade);
 
     const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
     setRealizadoAnoUnidade(totalAno);

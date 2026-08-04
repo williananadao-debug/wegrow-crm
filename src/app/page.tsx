@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
@@ -260,6 +261,39 @@ export default function LandingPage() {
                 <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mt-1">{s.label}</div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PROVA SOCIAL — QUEM USA */}
+      <section className="py-20 px-6 border-y border-white/5 bg-white/[0.015]">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Quem usa</div>
+          <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-4">
+            Nascido dentro de uma operação de verdade.
+          </h2>
+          <p className="text-slate-400 text-sm md:text-base font-medium max-w-xl mx-auto mb-14">
+            O WeGrow roda todos os dias na rotina comercial e de produção da Demais FM — 3 emissoras, uma operação só.
+          </p>
+
+          <div className="group relative inline-flex flex-col items-center">
+            {/* halo que acende com as cores da marca no hover */}
+            <div className="absolute inset-0 -m-8 rounded-full bg-gradient-to-br from-blue-500/0 via-fuchsia-500/0 to-orange-500/0 group-hover:from-blue-500/20 group-hover:via-fuchsia-500/20 group-hover:to-orange-500/20 blur-3xl transition-all duration-700 pointer-events-none" />
+
+            <div className="relative w-40 h-40 md:w-48 md:h-48 rounded-full bg-white/5 border border-white/10 flex items-center justify-center p-9 transition-all duration-500 group-hover:border-white/20 group-hover:scale-105">
+              <Image
+                src="/logo-demais.png"
+                alt="Demais FM"
+                width={220}
+                height={220}
+                className="w-full h-full object-contain grayscale opacity-40 transition-all duration-500 ease-out group-hover:grayscale-0 group-hover:opacity-100"
+              />
+            </div>
+
+            <div className="mt-6">
+              <p className="text-white font-black uppercase italic tracking-tight text-sm">Demais FM</p>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">104,7 · 107,9 · 101,1</p>
+            </div>
           </div>
         </div>
       </section>

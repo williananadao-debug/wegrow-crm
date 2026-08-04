@@ -72,7 +72,15 @@ function getTimbradoFile(emissoraNome: string): string | null {
   return null;
 }
 
-export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
+export type ContratoBufferResult = {
+  buffer: Buffer;
+  /** Página (1-based) onde o bloco de assinaturas foi desenhado — usado pra posicionar os campos de assinatura no Docuseal. */
+  sigPage: number;
+  /** Posição vertical do bloco de assinaturas, em fração da altura da página (0 a 1) — idem. */
+  sigYFrac: number;
+};
+
+export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferResult> {
   return new Promise((resolve, reject) => {
     try {
       // margem inferior de 80pt: reserva espaço suficiente pro rodapé (desenhado a
@@ -105,7 +113,8 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
         } catch { /* segue sem o timbrado se o arquivo não puder ser lido */ }
       };
       desenharTimbrado();
-      doc.on('pageAdded', desenharTimbrado);
+      let paginaAtual = 1; // 1-based — usado pra dizer ao Docuseal em qual página cai a assinatura
+      doc.on('pageAdded', () => { paginaAtual++; desenharTimbrado(); });
       if (timbradoPath) doc.y = 110; // desce o início do texto pra não sobrepor a logo do timbrado
 
       // ── HEADER ──────────────────────────────────────────────────
@@ -283,7 +292,12 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       doc.moveDown(1.5);
 
       // ── ASSINATURAS ──────────────────────────────────────────────
+      // Posição real do bloco (página + fração da altura) — repassada pro Docuseal pra
+      // posicionar os campos de assinatura exatamente aqui, em vez de um y fixo que
+      // ficava sobrepondo dados quando o conteúdo do contrato mudava de tamanho.
+      const sigPage = paginaAtual;
       const sigY = doc.y;
+      const sigYFrac = sigY / doc.page.height;
       const sigW = 180;
       doc.moveTo(50, sigY).lineTo(50 + sigW, sigY).strokeColor('#000').lineWidth(0.8).stroke();
       doc.moveTo(doc.page.width - 50 - sigW, sigY).lineTo(doc.page.width - 50, sigY).stroke();
@@ -308,7 +322,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<Buffer> {
       }
 
       doc.end();
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), sigPage, sigYFrac }));
     } catch (err) {
       reject(err);
     }

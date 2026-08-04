@@ -1133,18 +1133,7 @@ export default function DealsPage() {
 
     janela.document.write(htmlContrato);
     janela.document.close();
-
-    if (lead.id < 1000000) {
-      const notaContrato: Historico = {
-        id: Date.now(),
-        texto: `📄 Contrato impresso por ${perfil?.nome || 'Consultor'}`,
-        created_at: new Date().toISOString(),
-      };
-      const novasNotas = [notaContrato, ...(Array.isArray(lead.notas) ? lead.notas : [])];
-      supabase.from('leads').update({ notas: novasNotas }).eq('id', lead.id);
-      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: novasNotas } : l));
-    }
-  }, [perfil?.nome, supabase, isCDL, unidades]);
+  }, [isCDL, unidades]);
 
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
@@ -1390,6 +1379,22 @@ export default function DealsPage() {
       } else {
           await localDb.syncQueue.add({
               operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas, atividades: novasAtividades }, data_criacao: new Date().toISOString()
+          });
+      }
+  };
+
+  const removerNota = async (notaId: number) => {
+      if (!editingLeadId) return;
+
+      const novasNotas = historico.filter(h => h.id !== notaId);
+      setHistorico(novasNotas);
+      setLeads(prev => prev.map(l => l.id === editingLeadId ? { ...l, notas: novasNotas } : l));
+
+      if (navigator.onLine) {
+          await supabase.from('leads').update({ notas: novasNotas }).eq('id', editingLeadId);
+      } else {
+          await localDb.syncQueue.add({
+              operacao: 'UPDATE', tabela: 'leads', dados: { id: editingLeadId, notas: novasNotas }, data_criacao: new Date().toISOString()
           });
       }
   };
@@ -2201,7 +2206,7 @@ export default function DealsPage() {
                                 <div className="flex-1 overflow-y-auto max-h-32 custom-scrollbar space-y-2 mb-2">
                                     {historico.map(h => {
                                         const rawDate = h.created_at || new Date().toISOString(); const d = new Date(rawDate); const fmt = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} · ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-                                        return ( <div key={h.id} className="border-b border-white/5 pb-1 mb-1"><div className="flex justify-between items-baseline"><span className="text-[10px] text-slate-300 font-medium">{h.texto}</span><span className="text-[8px] text-slate-600 font-mono ml-2">{fmt}</span></div></div> );
+                                        return ( <div key={h.id} className="border-b border-white/5 pb-1 mb-1"><div className="flex justify-between items-baseline gap-2"><span className="text-[10px] text-slate-300 font-medium flex-1">{h.texto}</span><span className="text-[8px] text-slate-600 font-mono ml-2 shrink-0">{fmt}</span><button type="button" onClick={() => removerNota(h.id)} className="text-slate-600 hover:text-red-400 shrink-0" title="Apagar nota"><Trash2 size={10}/></button></div></div> );
                                     })}
                                 </div>
                                 <div className="flex gap-2">

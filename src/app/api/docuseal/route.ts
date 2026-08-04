@@ -60,8 +60,10 @@ export async function POST(req: Request) {
 
     // Gera PDF do contrato
     let pdfBuffer: Buffer;
+    let sigPage: number;
+    let sigYFrac: number;
     try {
-      pdfBuffer = await gerarContratoBuffer({
+      const resultado = await gerarContratoBuffer({
         protocolo: String(deal.id || '').padStart(6, '0'),
         emissora_razao: emissora.razao,
         emissora_cnpj: emissora.cnpj,
@@ -84,6 +86,9 @@ export async function POST(req: Request) {
         vencimento: deal.vencimento || '',
         observacao: deal.observacao || '',
       });
+      pdfBuffer = resultado.buffer;
+      sigPage = resultado.sigPage;
+      sigYFrac = resultado.sigYFrac;
     } catch (err: any) {
       console.error('[docuseal/pdf]', err);
       return NextResponse.json({ erro: 'Erro ao gerar PDF: ' + err.message }, { status: 500 });
@@ -103,13 +108,16 @@ export async function POST(req: Request) {
             role: 'Consultor',
             type: 'signature',
             required: true,
-            areas: [{ x: 0.62, y: 0.78, w: 0.30, h: 0.08, page: 1 }],
+            // y/page vêm do PDF gerado (posição real do bloco "Assinaturas"), não de um
+            // valor fixo — o contrato tem tamanho variável (itens, observação) e um y fixo
+            // fazia o campo de assinatura cair em cima dos dados em contratos mais longos/curtos.
+            areas: [{ x: 0.62, y: sigYFrac, w: 0.30, h: 0.08, page: sigPage }],
           }, {
             name: 'Assinatura Cliente',
             role: 'Cliente',
             type: 'signature',
             required: true,
-            areas: [{ x: 0.08, y: 0.78, w: 0.30, h: 0.08, page: 1 }],
+            areas: [{ x: 0.08, y: sigYFrac, w: 0.30, h: 0.08, page: sigPage }],
           }],
         }],
       }),

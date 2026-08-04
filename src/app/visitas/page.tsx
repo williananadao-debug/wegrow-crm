@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2,
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Image as ImageIcon,
-  Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert
+  Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -95,6 +95,7 @@ export default function VisitasPage() {
   // Modal criar lead a partir de visita
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
   const [criandoLead, setCriandoLead] = useState(false);
+  const [excluindoVisita, setExcluindoVisita] = useState(false);
 
   // Modal de detalhe da visita (dados completos + foto)
   const [visitaDetalhe, setVisitaDetalhe] = useState<Visita | null>(null);
@@ -223,7 +224,10 @@ export default function VisitasPage() {
       try {
         const ext = fotoFile.name.split('.').pop() || 'jpg';
         const path = `${perfil.empresa_id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from('visitas').upload(path, fotoFile, { upsert: true, contentType: fotoFile.type || 'image/jpeg' });
+        // upsert:false — o caminho ja tem timestamp, entao nunca colide de verdade, e evitar
+        // upsert contorna uma exigencia do Postgres de satisfazer a policy de UPDATE tambem
+        // (nao so INSERT) em operacoes de upsert, mesmo pra arquivo novo.
+        const { error: upErr } = await supabase.storage.from('visitas').upload(path, fotoFile, { upsert: false, contentType: fotoFile.type || 'image/jpeg' });
         if (!upErr) {
           const { data: urlData } = supabase.storage.from('visitas').getPublicUrl(path);
           foto_url = urlData.publicUrl;
@@ -263,6 +267,32 @@ export default function VisitasPage() {
       setSaveError(err?.message || 'Erro ao salvar visita. Verifique se a tabela foi criada no Supabase.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function excluirVisita(visita: Visita) {
+    if (!isDirector) return;
+    if (!confirm(`Excluir a visita "${visita.empresa}"? Essa ação não pode ser desfeita.`)) return;
+    setExcluindoVisita(true);
+    try {
+      if (visita.foto_url) {
+        const marcador = '/object/public/visitas/';
+        const idx = visita.foto_url.indexOf(marcador);
+        if (idx !== -1) {
+          const path = decodeURIComponent(visita.foto_url.slice(idx + marcador.length));
+          await supabase.storage.from('visitas').remove([path]);
+        }
+      }
+      const { error } = await supabase.from('visitas').delete().eq('id', visita.id);
+      if (error) throw error;
+      setVisitas(prev => prev.filter(v => v.id !== visita.id));
+      setVisitaDetalhe(null);
+      toast('Visita excluída.');
+    } catch (err) {
+      console.error('[visitas] erro ao excluir:', err);
+      toast('Erro ao excluir a visita.');
+    } finally {
+      setExcluindoVisita(false);
     }
   }
 
@@ -763,9 +793,21 @@ export default function VisitasPage() {
                   </span>
                 )}
               </div>
-              <button onClick={() => setVisitaDetalhe(null)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors flex-shrink-0">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {isDirector && (
+                  <button
+                    onClick={() => excluirVisita(visitaDetalhe)}
+                    disabled={excluindoVisita}
+                    title="Excluir visita"
+                    className="p-2 bg-red-500/10 rounded-full text-red-500/70 hover:text-white hover:bg-red-500 transition-all disabled:opacity-50"
+                  >
+                    {excluindoVisita ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                  </button>
+                )}
+                <button onClick={() => setVisitaDetalhe(null)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">

@@ -582,11 +582,6 @@ export default function VisitasPage() {
                       "{visita.observacao}"
                     </p>
                   )}
-                  {visita.foto_url && (
-                    <a href={visita.foto_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="mt-2 inline-block">
-                      <img src={visita.foto_url} alt="Foto da visita" className="w-16 h-16 object-cover rounded-xl border border-white/10 hover:border-blue-500/50 transition-all" />
-                    </a>
-                  )}
                 </div>
               </div>
 

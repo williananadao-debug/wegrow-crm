@@ -48,9 +48,10 @@ type Lead = {
   contrato_inicio?: string; 
   contrato_fim?: string; 
   origem?: string;
-  unidade?: string; 
-  cidade?: string;    
-  descricao?: string;   
+  unidade?: string;
+  cidade?: string;
+  descricao?: string;
+  vendedor_nome?: string;
   notas?: Historico[];
   followup_em?: string;
   status_aprovacao?: string | null;
@@ -188,7 +189,8 @@ export default function DealsPage() {
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usersMap, setUsersMap] = useState<Record<string, string>>({}); 
+  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+  const [usersEmailMap, setUsersEmailMap] = useState<Record<string, string>>({});
   const [clientesOpcoes, setClientesOpcoes] = useState<ClienteOpcao[]>([]);
   const [listaServicos, setListaServicos] = useState<ServicoConfig[]>([]);
   
@@ -198,6 +200,7 @@ export default function DealsPage() {
 
   const leadEmEdicao = leads.find(l => l.id === editingLeadId);
   const contratoJaAssinado = Boolean(leadEmEdicao?.docuseal_assinado || leadEmEdicao?.contrato_manual_url);
+  const consultorAtualNome = (leadEmEdicao?.user_id && usersMap[leadEmEdicao.user_id]) || leadEmEdicao?.vendedor_nome || perfil?.nome || 'Consultor';
   const leadTravado = contratoJaAssinado && !isDirector;
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -387,12 +390,14 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    let perfisQuery = supabase.from('profiles').select('id, nome').order('nome', { ascending: true });
+    let perfisQuery = supabase.from('profiles').select('id, nome, email').order('nome', { ascending: true });
     if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
     const { data: perfisData } = await perfisQuery;
     if (perfisData) {
         const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
         setUsersMap(mapa);
+        const mapaEmail = perfisData.reduce((acc: any, p: any) => ({...acc, [p.id]: p.email}), {});
+        setUsersEmailMap(mapaEmail);
     }
 
     try {
@@ -1144,12 +1149,20 @@ export default function DealsPage() {
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
     if (!docuSignerEmail.trim() && !docuSignerPhone.trim()) { setDocuErro('Informe e-mail ou telefone do signatário.'); return; }
-    if (!user?.email) { setDocuErro('Seu perfil não tem e-mail cadastrado — fale com o admin. Você (consultor) precisa assinar primeiro que o cliente.'); return; }
+
+    // O consultor que assina primeiro é o vendedor responsável pelo lead — não quem
+    // está logado no momento do envio (pode ser um admin enviando em nome de outro).
+    const leadAtual = leads.find(l => l.id === editingLeadId);
+    const consultorId = leadAtual?.user_id;
+    const consultorNome = (consultorId && usersMap[consultorId]) || leadAtual?.vendedor_nome || perfil?.nome || 'Consultor';
+    const consultorEmail = (consultorId && usersEmailMap[consultorId]) || user?.email;
+
+    if (!consultorEmail) { setDocuErro('O vendedor responsável por este lead não tem e-mail cadastrado — fale com o admin. Ele (consultor) precisa assinar primeiro que o cliente.'); return; }
     setDocuSending(true); setDocuErro(''); setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false);
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
-    const notasLead = leads.find(l => l.id === editingLeadId)?.notas;
+    const notasLead = leadAtual?.notas;
     const ultimaNota = Array.isArray(notasLead) && notasLead.length > 0 ? notasLead[0].texto : '';
 
     const res = await fetch('/api/docuseal', {
@@ -1158,7 +1171,7 @@ export default function DealsPage() {
       body: JSON.stringify({
         empresa_id: perfil?.empresa_id,
         signers: [{ name: docuSignerName.trim(), email: docuSignerEmail.trim() || undefined, phone: docuSignerPhone.trim() || undefined }],
-        consultor: { nome: perfil?.nome || 'Consultor', email: user.email },
+        consultor: { nome: consultorNome, email: consultorEmail },
         deal: {
           id: editingLeadId,
           empresa: novaEmpresa,
@@ -1195,7 +1208,7 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, leads, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, leads, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1828,7 +1841,7 @@ export default function DealsPage() {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
                         <PenLine size={16} className="text-orange-400 shrink-0"/>
-                        <p className="text-orange-300 text-xs font-bold">1º) Assine você primeiro como consultor da rádio:</p>
+                        <p className="text-orange-300 text-xs font-bold">1º) {consultorAtualNome} precisa assinar primeiro como consultor da rádio:</p>
                       </div>
                       <div className="flex gap-2">
                         <input readOnly value={docuConsultorLink} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono outline-none"/>

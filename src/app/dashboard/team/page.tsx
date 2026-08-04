@@ -148,17 +148,34 @@ export default function TeamPage() {
   };
 
   const resetarSenha = async () => {
-    if (!editingUser?.email) return;
+    if (!editingUser?.id) return;
     setResetandoSenha(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(editingUser.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br'}/reset-password`,
-    });
-    setResetandoSenha(false);
-    if (error) {
-      alert(`Erro: ${error.message}`);
-    } else {
-      setToastMessage(`E-mail de redefinição enviado para ${editingUser.email} ✅`);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const res = await fetch('/api/team/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId: editingUser.id }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao redefinir senha.');
+
+      setToastMessage(
+        json.senhaTemp
+          ? `Senha redefinida: ${json.senhaTemp} (${json.aviso || 'repasse manualmente'})`
+          : `Nova senha enviada por e-mail para ${editingUser.email} ✅`
+      );
       setShowToast(true);
+    } catch (error: any) {
+      alert(`Erro: ${error.message}`);
+    } finally {
+      setResetandoSenha(false);
     }
   };
 

@@ -230,10 +230,16 @@ export default function DashboardPage() {
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);
       const sai = rawLancamentos.filter(l => l.tipo === 'saida').reduce((acc, l) => acc + l.valor, 0);
 
-      // Previsão de fechamento (todos os leads abertos, independente do filtro de data)
+      // Previsão de fechamento (leads abertos, independente do filtro de data — mas
+      // respeitando unidade/vendedor selecionados, senão o número não bate com o resto do dashboard)
       const probEtapa: Record<number, number> = { 0: 0.10, 1: 0.25, 2: 0.45, 3: 0.70 };
       const previsaoFechamento = rawLeads
-          .filter(l => l.status === 'aberto')
+          .filter(l => {
+              if (l.status !== 'aberto') return false;
+              if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
+              if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
+              return true;
+          })
           .reduce((acc, l) => acc + (Number(l.valor_total) || 0) * (probEtapa[Number(l.etapa)] || 0.10), 0);
 
       // Contratos vencendo em 30 dias (leads ganhos com contrato_fim próximo)

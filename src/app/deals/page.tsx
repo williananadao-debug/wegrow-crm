@@ -1588,6 +1588,25 @@ export default function DealsPage() {
         setAtividades(Array.isArray(lead.atividades) ? lead.atividades : []);
         setLeadUserId(lead.user_id || '');
         setMostrarDetalhes(!!(lead.cnpj || lead.contrato_inicio || lead.parcelas !== '1'));
+
+        // O lead guarda uma cópia dos dados do cliente (telefone/CNPJ/endereço/etc) tirada
+        // no momento em que foi criado ou salvo pela última vez. Se o cadastro do cliente foi
+        // editado depois na tela de Clientes, essa cópia fica desatualizada — busca o registro
+        // atual do cliente vinculado e sobrescreve o formulário com os dados mais recentes.
+        if (lead.client_id) {
+            supabase.from('clientes')
+                .select('telefone, cnpj, inscricao_estadual, endereco, cidade')
+                .eq('id', lead.client_id)
+                .single()
+                .then(({ data: clienteAtual }) => {
+                    if (!clienteAtual) return;
+                    if (clienteAtual.telefone) setNovoTelefone(clienteAtual.telefone);
+                    if (clienteAtual.cnpj) setNovoCnpj(clienteAtual.cnpj);
+                    if (clienteAtual.inscricao_estadual) setNovoIE(clienteAtual.inscricao_estadual);
+                    if (clienteAtual.endereco) setNovoEndereco(clienteAtual.endereco);
+                    if (clienteAtual.cidade) setNovaCidade(clienteAtual.cidade);
+                });
+        }
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');

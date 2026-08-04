@@ -223,12 +223,18 @@ export default function VisitasPage() {
       try {
         const ext = fotoFile.name.split('.').pop() || 'jpg';
         const path = `${perfil.empresa_id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from('visitas').upload(path, fotoFile, { upsert: true });
+        const { error: upErr } = await supabase.storage.from('visitas').upload(path, fotoFile, { upsert: true, contentType: fotoFile.type || 'image/jpeg' });
         if (!upErr) {
           const { data: urlData } = supabase.storage.from('visitas').getPublicUrl(path);
           foto_url = urlData.publicUrl;
+        } else {
+          console.error('[visitas] erro ao enviar foto:', upErr.message);
+          toast('⚠️ Visita salva, mas a foto não pôde ser enviada.');
         }
-      } catch { /* foto upload failure is non-critical */ }
+      } catch (err) {
+        console.error('[visitas] erro ao enviar foto:', err);
+        toast('⚠️ Visita salva, mas a foto não pôde ser enviada.');
+      }
       setUploadingFoto(false);
     }
 

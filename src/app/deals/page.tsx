@@ -1011,20 +1011,20 @@ export default function DealsPage() {
             <head>
                 <title>Contrato - ${lead.empresa}</title>
                 <style>
-                    @page { size: A4; margin: 12mm; }
-                    body { font-family: Arial, sans-serif; padding: 20px; color: #000; line-height: 1.35; font-size: 9.5px; }
-                    .header { text-align: center; margin-bottom: 12px; }
-                    .header img { max-height: 60px; margin-bottom: 6px; }
-                    .header h2 { font-size: 15px; font-weight: bold; margin: 6px 0; text-transform: uppercase; }
-                    .texto-base { text-align: justify; margin-bottom: 10px; line-height: 1.4; }
-                    .cliente-box { margin-bottom: 10px; line-height: 1.5; }
-                    .secao-titulo { font-weight: bold; margin-top: 12px; margin-bottom: 5px; font-size: 11px; text-transform: uppercase; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-                    th { background-color: #f0f0f0; font-size: 9px; text-align: center; border: 1px solid #000; padding: 5px; }
-                    .condicoes { font-size: 8.5px; margin-bottom: 10px; }
-                    .condicoes p { margin: 2px 0; }
-                    .assinaturas { margin-top: 36px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
-                    .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
+                    @page { size: A4; margin: 10mm; }
+                    body { font-family: Arial, sans-serif; padding: 14px; color: #000; line-height: 1.25; font-size: 9.5px; }
+                    .header { text-align: center; margin-bottom: 8px; }
+                    .header img { max-height: 46px; margin-bottom: 4px; }
+                    .header h2 { font-size: 14px; font-weight: bold; margin: 4px 0; text-transform: uppercase; }
+                    .texto-base { text-align: justify; margin-bottom: 7px; line-height: 1.3; }
+                    .cliente-box { margin-bottom: 7px; line-height: 1.4; }
+                    .secao-titulo { font-weight: bold; margin-top: 8px; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+                    th { background-color: #f0f0f0; font-size: 9px; text-align: center; border: 1px solid #000; padding: 4px; }
+                    .condicoes { font-size: 9.5px; margin-bottom: 7px; }
+                    .condicoes p { margin: 1.5px 0; }
+                    .assinaturas { margin-top: 16px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; font-size: 9.5px; }
+                    .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 4px; }
                     .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 180mm; z-index: -1; object-fit: cover; object-position: top; }
                     .pagina-tabela { page-break-inside: auto; }
                     .rodape-fixo { text-align: center; font-size: 8px; color: #999; padding-top: 6px; }

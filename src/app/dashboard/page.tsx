@@ -115,7 +115,7 @@ export default function DashboardPage() {
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawLeads.map(l => l.unidade).filter(Boolean))) as string[], [rawLeads]);
   const vendedoresDisponiveis = useMemo(() => rawPerfis.filter((p: any) => p.nome).sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')), [rawPerfis]);
 
-  const { ranking, statsComercial, previsaoFechamento, contratosVencendo, followupsHoje } = useMemo(() => {
+  const { ranking, statsComercial, previsaoFechamento, contratosVencendo, followupsHoje, followupsAtrasados } = useMemo(() => {
       const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
@@ -263,6 +263,7 @@ export default function DashboardPage() {
           previsaoFechamento: Math.round(previsaoFechamento),
           contratosVencendo,
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
+          followupsAtrasados: rawLeads.filter(l => l.followup_em && l.followup_em < getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
   }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, rawVisitas, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
@@ -297,6 +298,17 @@ export default function DashboardPage() {
 
   return (
     <main className="space-y-4 pb-4 animate-in fade-in duration-500">
+
+      {followupsAtrasados.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <Bell size={16} className="text-red-400 shrink-0 animate-pulse"/>
+          <p className="text-red-300 text-xs font-black uppercase tracking-wide flex-1">
+            {followupsAtrasados.length} follow-up{followupsAtrasados.length > 1 ? 's' : ''} atrasado{followupsAtrasados.length > 1 ? 's' : ''}:
+            <span className="text-white ml-2">{followupsAtrasados.slice(0, 3).map((l: any) => l.empresa).join(' · ')}{followupsAtrasados.length > 3 ? ` +${followupsAtrasados.length - 3}` : ''}</span>
+          </p>
+          <a href="/deals" className="text-[9px] font-black uppercase text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg hover:bg-red-500/20 transition-colors shrink-0">Ver no Funil →</a>
+        </div>
+      )}
 
       {followupsHoje.length > 0 && (
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">

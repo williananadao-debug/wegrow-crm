@@ -89,6 +89,7 @@ export default function ReportsPage() {
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
   const [rawClientes, setRawClientes] = useState<any[]>([]);
+  const [rawVisitas, setRawVisitas] = useState<any[]>([]);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState('leads');
@@ -115,10 +116,10 @@ export default function ReportsPage() {
       if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
       else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
 
-      const seisMesesAtras = getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1));
+      const inicioAno = getLocalYYYYMMDD(new Date(new Date().getFullYear(), 0, 1));
       const hoje = getLocalYYYYMMDD(new Date());
       let graficoQuery = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
-        .gte('created_at', seisMesesAtras + 'T00:00:00')
+        .gte('created_at', inicioAno + 'T00:00:00')
         .lte('created_at', hoje + 'T23:59:59')
         .eq('status', 'ganho')
         .limit(5000);
@@ -129,7 +130,15 @@ export default function ReportsPage() {
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
       if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);
 
-      const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes] = await Promise.all([
+      let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
+        .gte('created_at', dataInicio + 'T00:00:00')
+        .lte('created_at', dataFim + 'T23:59:59')
+        .limit(3000);
+      if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
+      if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.eq('unidade', perfil.unidade);
+      else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
+
+      const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes, visitasRes] = await Promise.all([
         leadsQuery,
         graficoQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
@@ -137,9 +146,10 @@ export default function ReportsPage() {
           ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
           : supabase.from('profiles').select('id, nome'),
         clientesQuery,
+        visitasQuery,
       ]);
 
-      setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []);
+      setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []); setRawVisitas(visitasRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
@@ -240,17 +250,23 @@ export default function ReportsPage() {
       }
       const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
 
-      const visitasBase = currentLeads.filter(l => l.tipo === 'visita');
-      const visitasConvertidas = visitasBase.filter(l => Number(l.etapa) > 0);
-      const visitasGanhas = visitasBase.filter(l => l.status === 'ganho');
+      const leadStatusById = rawLeads.reduce((acc: any, l) => { acc[l.id] = l.status; return acc; }, {});
 
-      const visitasPorVendedor = Object.values(currentLeads.filter(l => l.tipo === 'visita').reduce((acc: any, l) => {
-          const chave = l.user_id || l.vendedor_nome || 'sem_dono';
-          const nome = l.vendedor_nome || nomesMap[l.user_id] || 'Desconhecido';
+      const visitasBase = rawVisitas.filter(v => {
+          if (filtroVendedor !== 'Todos' && v.user_id !== filtroVendedor) return false;
+          if (!isGerente && filtroUnidade !== 'Todas' && v.unidade !== filtroUnidade) return false;
+          return true;
+      });
+      const visitasConvertidas = visitasBase.filter(v => v.lead_id);
+      const visitasGanhas = visitasBase.filter(v => v.lead_id && leadStatusById[v.lead_id] === 'ganho');
+
+      const visitasPorVendedor = Object.values(visitasBase.reduce((acc: any, v) => {
+          const chave = v.user_id || 'sem_dono';
+          const nome = nomesMap[v.user_id] || 'Desconhecido';
           if (!acc[chave]) acc[chave] = { nome, total: 0, convertidas: 0, ganhas: 0 };
           acc[chave].total++;
-          if (Number(l.etapa) > 0) acc[chave].convertidas++;
-          if (l.status === 'ganho') acc[chave].ganhas++;
+          if (v.lead_id) acc[chave].convertidas++;
+          if (v.lead_id && leadStatusById[v.lead_id] === 'ganho') acc[chave].ganhas++;
           return acc;
       }, {})).sort((a: any, b: any) => b.total - a.total) as { nome: string; total: number; convertidas: number; ganhas: number }[];
 
@@ -295,7 +311,7 @@ export default function ReportsPage() {
         : 0;
 
       return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral };
-  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, dataInicio, dataFim, filtroUnidade, filtroVendedor]);
+  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
 
   const graficoMensal = useMemo(() => {
     const nomesMapGraf = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
@@ -305,13 +321,13 @@ export default function ReportsPage() {
       return true;
     });
     const hoje = new Date();
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
-      const ano = d.getFullYear(); const mes = d.getMonth() + 1;
+    const anoAtual = hoje.getFullYear();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(anoAtual, i, 1);
+      const mesStr = String(i + 1).padStart(2, '0');
       const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
-      const mesStr = String(mes).padStart(2, '0');
-      const ganhos = filtrado.filter(l => l.created_at?.substring(0, 7) === `${ano}-${mesStr}`);
-      return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === 5 };
+      const ganhos = filtrado.filter(l => l.created_at?.substring(0, 7) === `${anoAtual}-${mesStr}`);
+      return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === hoje.getMonth() };
     });
   }, [rawLeadsGrafico, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);
 
@@ -501,25 +517,42 @@ export default function ReportsPage() {
       {graficoMensal.some(m => m.valor > 0) && (
         <div className="bg-[#0B1120] border border-white/5 rounded-[32px] p-6 shadow-2xl">
           <h3 className="text-white font-black uppercase italic flex items-center gap-2 mb-6">
-            <BarChart3 size={18} className="text-orange-400" /> Evolução de Faturamento — Últimos 6 Meses
+            <BarChart3 size={18} className="text-orange-400" /> Evolução de Faturamento — {new Date().getFullYear()}
           </h3>
-          <div className="flex items-end gap-3 h-40">
+          <div className="flex items-end h-40 gap-1.5 w-full pt-8">
             {(() => {
-              const maxVal = Math.max(...graficoMensal.map(m => m.valor), 1);
-              return graficoMensal.map((m, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] font-black text-slate-500">
-                    {m.valor > 0 ? `R$ ${(m.valor / 1000).toFixed(0)}k` : ''}
-                  </span>
-                  <div className="w-full flex items-end" style={{ height: '100px' }}>
+              const valores = graficoMensal.map(m => m.valor).filter(v => v > 0);
+              const maxVal = Math.max(...valores, 1);
+              const fechados = graficoMensal.filter(m => !m.isCurrent && m.valor > 0).map(m => m.valor);
+              const minVal = Math.min(...(fechados.length > 0 ? fechados : valores), maxVal);
+              const scaleBase = minVal * 0.75;
+              const scaleRange = Math.max(maxVal - scaleBase, 1);
+              return graficoMensal.map((m, i) => {
+                const anterior = i > 0 ? graficoMensal[i - 1].valor : 0;
+                const variacao = anterior > 0 ? ((m.valor - anterior) / anterior) * 100 : null;
+                const altura = m.valor > 0 ? Math.max(((m.valor - scaleBase) / scaleRange) * 100, 5) : 0;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full relative group">
+                    {m.valor > 0 && (
+                      <div className="absolute flex flex-col items-center gap-0.5" style={{ bottom: `calc(${altura}% + 6px)` }}>
+                        <span className="text-[9px] font-black text-white whitespace-nowrap">R$ {(m.valor / 1000).toFixed(0)}k</span>
+                        {variacao !== null && (
+                          <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                            {variacao >= 0 ? '+' : ''}{Math.round(variacao)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div
-                      className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.4)]' : 'bg-white/10 hover:bg-white/20'}`}
-                      style={{ height: `${Math.max((m.valor / maxVal) * 100, m.valor > 0 ? 4 : 0)}%` }}
-                    />
+                      className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`}
+                      style={{ height: `${altura}%` }}
+                    >
+                      {m.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/40" />}
+                    </div>
+                    <span className={`text-[8px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
                   </div>
-                  <span className={`text-[9px] font-black uppercase ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
-                </div>
-              ));
+                );
+              });
             })()}
           </div>
         </div>
@@ -604,7 +637,7 @@ export default function ReportsPage() {
                       <p className="text-[9px] text-slate-500 font-bold uppercase">Share: {share}%</p>
                     </div>
                   </div>
-                  <ProgressBar value={valorNum} max={maxNum} color={idx === 0 ? 'bg-blue-500' : 'bg-white/10'} />
+                  <ProgressBar value={valorNum} max={maxNum} color="bg-blue-500" />
                 </div>
               );
             });

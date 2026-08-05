@@ -199,17 +199,17 @@ export default function DashboardPage() {
       const deltaFat = fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : null;
       const deltaConv = convAnt > 0 ? Math.round(conversao - convAnt) : null;
 
-      // Evolução dos últimos 6 meses (independente de filtros)
+      // Evolução do ano corrente, mês a mês (independente de filtros)
       const refMes = new Date();
-      const evolucaoMensal = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date(refMes.getFullYear(), refMes.getMonth() - (5 - i), 1);
+      const evolucaoMensal = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(refMes.getFullYear(), i, 1);
         const ini = getLocalYYYYMMDD(d);
         const fim2 = getLocalYYYYMMDD(new Date(d.getFullYear(), d.getMonth() + 1, 0));
         const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
         const valor = rawLeads
           .filter(l => l.status === 'ganho' && l.created_at.substring(0, 10) >= ini && l.created_at.substring(0, 10) <= fim2)
           .reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
-        return { label, valor, isCurrent: i === 5 };
+        return { label, valor, isCurrent: i === refMes.getMonth() };
       });
 
       const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
@@ -439,22 +439,41 @@ export default function DashboardPage() {
 
             <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                 <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-                    <CalendarDays size={14} className="text-blue-400"/> Evolução Mensal — Últimos 6 Meses
+                    <CalendarDays size={14} className="text-blue-400"/> Evolução Mensal — {new Date().getFullYear()}
                 </h3>
-                <div className="flex items-end h-32 gap-2 w-full pt-4">
-                    {statsComercial.evolucaoMensal.map((m, i) => {
-                        const maxVal = Math.max(...statsComercial.evolucaoMensal.map(v => v.valor), 1);
-                        const height = (m.valor / maxVal) * 100;
-                        return (
-                            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full relative group">
-                                {m.valor > 0 && <div className="absolute -top-5 text-[9px] font-black text-white whitespace-nowrap">{formatCompact(m.valor)}</div>}
-                                <div className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`} style={{ height: m.valor > 0 ? `${Math.max(height, 5)}%` : '3px' }}>
-                                    {m.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/40"/>}
+                <div className="flex items-end h-40 gap-1.5 w-full pt-8">
+                    {(() => {
+                        const evolucaoMensal = statsComercial.evolucaoMensal;
+                        const valores = evolucaoMensal.map(m => m.valor).filter(v => v > 0);
+                        const maxVal = Math.max(...valores, 1);
+                        const fechados = evolucaoMensal.filter(m => !m.isCurrent && m.valor > 0).map(m => m.valor);
+                        const minVal = Math.min(...(fechados.length > 0 ? fechados : valores), maxVal);
+                        const scaleBase = minVal * 0.75;
+                        const scaleRange = Math.max(maxVal - scaleBase, 1);
+                        return evolucaoMensal.map((m, i) => {
+                            const anterior = i > 0 ? evolucaoMensal[i - 1].valor : 0;
+                            const variacao = anterior > 0 ? ((m.valor - anterior) / anterior) * 100 : null;
+                            const altura = m.valor > 0 ? Math.max(((m.valor - scaleBase) / scaleRange) * 100, 5) : 0;
+                            return (
+                                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full relative group">
+                                    {m.valor > 0 && (
+                                        <div className="absolute flex flex-col items-center gap-0.5" style={{ bottom: `calc(${altura}% + 6px)` }}>
+                                            <span className="text-[9px] font-black text-white whitespace-nowrap">{formatCompact(m.valor)}</span>
+                                            {variacao !== null && (
+                                                <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                                                    {variacao >= 0 ? '+' : ''}{Math.round(variacao)}%
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`} style={{ height: `${altura}%` }}>
+                                        {m.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/40"/>}
+                                    </div>
+                                    <span className={`text-[8px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
                                 </div>
-                                <span className={`text-[9px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
-                            </div>
-                        );
-                    })}
+                            );
+                        });
+                    })()}
                 </div>
             </div>
 

@@ -140,7 +140,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.moveDown(0.8);
 
       // ── INTRO ────────────────────────────────────────────────────
-      doc.fontSize(9).font('Helvetica').fillColor('#000');
+      doc.fontSize(8).font('Helvetica').fillColor('#000');
       const localEmissora = data.emissora_cidade
         ? `, na cidade de ${data.emissora_cidade}${data.emissora_estado ? ` - Estado de ${nomeEstado(data.emissora_estado)}` : ''}`
         : '';
@@ -186,7 +186,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.y = Math.max(doc.y, y3 + 14);
 
       doc.moveDown(0.6);
-      doc.font('Helvetica').fontSize(9).fillColor('#000')
+      doc.font('Helvetica').fontSize(8).fillColor('#000')
         .text('Visando a veiculação e divulgação da publicidade do CLIENTE acima, por meio da emissora de FM da EXECUTANTE, tudo conforme as condições a seguir indicadas.', { align: 'justify' });
       doc.moveDown(0.8);
 

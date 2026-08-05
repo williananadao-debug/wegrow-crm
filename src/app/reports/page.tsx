@@ -546,9 +546,7 @@ export default function ReportsPage() {
                     <div
                       className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`}
                       style={{ height: `${altura}%` }}
-                    >
-                      {m.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/40" />}
-                    </div>
+                    />
                     <span className={`text-[8px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
                   </div>
                 );

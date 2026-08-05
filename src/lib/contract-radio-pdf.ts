@@ -23,7 +23,17 @@ export type ContratoData = {
   valor_total: number;
   parcelas: string;
   vencimento: string;
+  vencimentos_datas?: string[];
+  forma_pagamento?: string;
   observacao?: string;
+};
+
+const FORMAS_PAGAMENTO: Record<string, string> = {
+  boleto: 'Boleto',
+  dinheiro: 'Dinheiro',
+  pix: 'PIX',
+  cartao: 'Cartão',
+  transferencia: 'Transferência',
 };
 
 function fmt(v: number) {
@@ -44,9 +54,12 @@ function somarMeses(dataIso: string, meses: number) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
-function fmtVencimentos(vencimento: string, parcelas: string) {
-  if (!vencimento) return fmtData('');
+function fmtVencimentos(vencimento: string, parcelas: string, vencimentosDatas?: string[]) {
   const qtd = Math.max(1, parseInt(parcelas, 10) || 1);
+  if (Array.isArray(vencimentosDatas) && vencimentosDatas.length === qtd) {
+    return vencimentosDatas.map(fmtData).join('     ');
+  }
+  if (!vencimento) return fmtData('');
   return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join('     ');
 }
 
@@ -285,7 +298,10 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
 
       doc.fontSize(9).fillColor('#000');
       linha('Parcela(s): ', data.parcelas || '1');
-      linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1'));
+      linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
+      if (data.forma_pagamento) {
+        linha('Forma de Pagamento: ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
+      }
       doc.moveDown(0.3);
       linha('Contato para envio da Fatura — WhatsApp / E-mail: ', data.telefone || '___________________________');
       linha('Praça de Pagamento: ', data.cidade || '___________________________');

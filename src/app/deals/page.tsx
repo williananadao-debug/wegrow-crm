@@ -6,7 +6,7 @@ import {
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle,
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw,
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock,
-  Mail, Send, Loader2, PenLine, Link, ExternalLink
+  Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CDL } from '@/lib/cdl-config';
@@ -60,6 +60,8 @@ type Lead = {
   inscricao_estadual?: string;
   parcelas?: string;
   vencimento?: string;
+  vencimentos_datas?: string[];
+  forma_pagamento?: string;
   atividades?: Atividade[];
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
@@ -125,10 +127,22 @@ const somarMeses = (dataIso: string, meses: number) => {
     return getLocalYYYYMMDD(dt);
 };
 
-const formatarVencimentos = (vencimento: string, parcelas: string | number) => {
-    if (!vencimento) return '';
+// Sugestão automática (1 vencimento por mês a partir do 1º) — ponto de partida editável,
+// não é mais a única fonte de verdade (ver vencimentos_datas no lead).
+const gerarVencimentosPadrao = (vencimento: string, parcelas: string | number): string[] => {
+    if (!vencimento) return [];
     const qtd = Math.max(1, parseInt(String(parcelas), 10) || 1);
-    return Array.from({ length: qtd }, (_, i) => formatarData(somarMeses(vencimento, i))).join(',&nbsp;&nbsp;&nbsp;&nbsp;');
+    return Array.from({ length: qtd }, (_, i) => somarMeses(vencimento, i));
+};
+
+const formatarVencimentosArray = (datas: string[]) => datas.map(formatarData).join(',&nbsp;&nbsp;&nbsp;&nbsp;');
+
+const FORMAS_PAGAMENTO: Record<string, string> = {
+    boleto: 'Boleto',
+    dinheiro: 'Dinheiro',
+    pix: 'PIX',
+    cartao: 'Cartão',
+    transferencia: 'Transferência',
 };
 
 const UF_NOMES: Record<string, string> = {
@@ -246,6 +260,8 @@ export default function DealsPage() {
   const [novoIE, setNovoIE] = useState('');
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
+  const [vencimentosDatas, setVencimentosDatas] = useState<string[]>([]);
+  const [formaPagamento, setFormaPagamento] = useState('');
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
   const [desconto, setDesconto] = useState(0);
   const [valorTotalOverride, setValorTotalOverride] = useState<number | null>(null);
@@ -334,7 +350,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -485,14 +501,33 @@ export default function DealsPage() {
       if (!vencimento && val) {
           const [year, month, day] = val.split('-');
           const start = new Date(Number(year), Number(month) - 1, Number(day));
-          start.setMonth(start.getMonth() + 1); 
+          start.setMonth(start.getMonth() + 1);
           const newY = start.getFullYear();
           const newM = String(start.getMonth() + 1).padStart(2, '0');
           const newD = String(start.getDate()).padStart(2, '0');
-          
-          setVencimento(`${newY}-${newM}-${newD}`);
+          const novoVencimento = `${newY}-${newM}-${newD}`;
+
+          setVencimento(novoVencimento);
+          setVencimentosDatas(gerarVencimentosPadrao(novoVencimento, parcelas));
       }
+  }, [vencimento, parcelas]);
+
+  // Muda a 1ª parcela ou a quantidade -> reconstrói a sugestão automática de vencimentos.
+  // Ajustes manuais feitos parcela a parcela (handleVencimentoParcela) só se perdem se
+  // o usuário mexer de novo aqui, o que já invalida a agenda antiga mesmo.
+  const handleVencimentoChange = useCallback((val: string) => {
+      setVencimento(val);
+      setVencimentosDatas(gerarVencimentosPadrao(val, parcelas));
+  }, [parcelas]);
+
+  const handleParcelasChange = useCallback((val: string) => {
+      setParcelas(val);
+      setVencimentosDatas(gerarVencimentosPadrao(vencimento, val));
   }, [vencimento]);
+
+  const handleVencimentoParcela = useCallback((idx: number, val: string) => {
+      setVencimentosDatas(prev => prev.map((d, i) => i === idx ? val : d));
+  }, []);
 
   const criarJobDeProducao = useCallback(async (lead: Lead) => {
     const resumoItens = lead.itens.map(i => `${i.quantidade}x ${i.servico}`).join(', ');
@@ -877,6 +912,11 @@ export default function DealsPage() {
       : '';
     const timbradoUrl = timbradoPorUnidade(unidadeData?.nome || '');
     const ultimaNota = Array.isArray(lead.notas) && lead.notas.length > 0 ? lead.notas[0].texto : '';
+    const qtdParcelasContrato = Math.max(1, parseInt(lead.parcelas || '1', 10) || 1);
+    const vencimentosEfetivos = Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length === qtdParcelasContrato
+      ? lead.vencimentos_datas
+      : gerarVencimentosPadrao(lead.vencimento || '', lead.parcelas || '1');
+    const formaPagamentoLabel = lead.forma_pagamento ? (FORMAS_PAGAMENTO[lead.forma_pagamento] || lead.forma_pagamento) : '';
 
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
@@ -993,7 +1033,8 @@ export default function DealsPage() {
                 <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : '___________________'}<br/>
+                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || '___________________'}<br/><br/>
                     <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || '___________________'}<br/>
                 </div>
 
@@ -1111,7 +1152,8 @@ export default function DealsPage() {
                 <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${lead.vencimento ? formatarVencimentos(lead.vencimento, lead.parcelas || '1') : '___________________'}<br/><br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : '___________________'}<br/>
+                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || '___________________'}<br/><br/>
                     <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || '___________________'}<br/>
                     <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
                 </div>
@@ -1178,6 +1220,8 @@ export default function DealsPage() {
           valor_total: total,
           parcelas,
           vencimento,
+          vencimentos_datas: vencimentosDatas,
+          forma_pagamento: formaPagamento,
           observacao: ultimaNota,
         },
       }),
@@ -1198,7 +1242,7 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, editingLeadId, leads, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, vencimentosDatas, formaPagamento, editingLeadId, leads, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1494,6 +1538,8 @@ export default function DealsPage() {
         inscricao_estadual: novoIE || null,
         parcelas: parcelas,
         vencimento: vencimento || null,
+        vencimentos_datas: vencimentosDatas.length ? vencimentosDatas : null,
+        forma_pagamento: formaPagamento || null,
         status_aprovacao: novoStatusAprovacao,
         user_id: isLideranca ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
@@ -1583,6 +1629,15 @@ export default function DealsPage() {
         setNovoIE(lead.inscricao_estadual || '');
         setParcelas(lead.parcelas || '1');
         setVencimento(lead.vencimento || '');
+        setFormaPagamento(lead.forma_pagamento || '');
+        {
+            const qtd = Math.max(1, parseInt(lead.parcelas || '1', 10) || 1);
+            setVencimentosDatas(
+                Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length === qtd
+                    ? lead.vencimentos_datas
+                    : gerarVencimentosPadrao(lead.vencimento || '', lead.parcelas || '1')
+            );
+        }
         setDesconto(lead.desconto || 0);
         setValorTotalOverride(null);
         setHistorico(Array.isArray(lead.notas) ? lead.notas : []);
@@ -1627,6 +1682,8 @@ export default function DealsPage() {
         setNovoIE('');
         setParcelas('1');
         setVencimento('');
+        setVencimentosDatas([]);
+        setFormaPagamento('');
         setDesconto(0);
         setValorTotalOverride(null);
         setHistorico([]);
@@ -2102,13 +2159,35 @@ export default function DealsPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Hash size={10}/> Qtd. Parcelas</label>
-                                    <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => setParcelas(e.target.value)} placeholder="Ex: 3" />
+                                    <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => handleParcelasChange(e.target.value)} placeholder="Ex: 3" />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> 1º Vencimento</label>
-                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => setVencimento(e.target.value)} />
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => handleVencimentoChange(e.target.value)} />
                                 </div>
                             </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Forma de Pagamento</label>
+                                <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
+                                    <option value="" className="bg-[#0B1120]">Selecione</option>
+                                    {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => (
+                                        <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {vencimentosDatas.length > 0 && (
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Vencimento de Cada Parcela</label>
+                                    <div className="grid grid-cols-2 gap-2 mt-1">
+                                        {vencimentosDatas.map((data, i) => (
+                                            <div key={i} className="flex items-center gap-2">
+                                                <span className="text-[9px] text-slate-500 font-bold w-16 shrink-0">Parc. {i + 1}</span>
+                                                <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold outline-none focus:border-[#22C55E]" value={data} onChange={e => handleVencimentoParcela(i, e.target.value)} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {novaDescricao && (
                                 <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-2xl">
                                     <label className="text-[10px] font-black uppercase text-blue-400 mb-2 flex items-center gap-1"><Info size={12}/> Briefing / Descrição (Portal)</label>

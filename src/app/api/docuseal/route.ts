@@ -84,6 +84,8 @@ export async function POST(req: Request) {
         valor_total: deal.valor_total || 0,
         parcelas: deal.parcelas || '',
         vencimento: deal.vencimento || '',
+        vencimentos_datas: Array.isArray(deal.vencimentos_datas) ? deal.vencimentos_datas : undefined,
+        forma_pagamento: deal.forma_pagamento || undefined,
         observacao: deal.observacao || '',
       });
       pdfBuffer = resultado.buffer;

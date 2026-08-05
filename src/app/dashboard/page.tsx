@@ -230,10 +230,12 @@ export default function DashboardPage() {
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);
       const sai = rawLancamentos.filter(l => l.tipo === 'saida').reduce((acc, l) => acc + l.valor, 0);
 
-      // Previsão de fechamento (leads abertos, independente do filtro de data — mas
-      // respeitando unidade/vendedor selecionados, senão o número não bate com o resto do dashboard)
+      // Previsão de fechamento = já ganho no período (fat, 100%) + pipeline ainda aberto,
+      // ponderado pela probabilidade da etapa. O pipeline aberto não é filtrado por data
+      // (leads abertos não têm "período de fechamento" ainda), mas respeita unidade/vendedor
+      // selecionados, senão o número não bate com o resto do dashboard.
       const probEtapa: Record<number, number> = { 0: 0.10, 1: 0.25, 2: 0.45, 3: 0.70 };
-      const previsaoFechamento = rawLeads
+      const previsaoFechamento = fat + rawLeads
           .filter(l => {
               if (l.status !== 'aberto') return false;
               if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
@@ -566,7 +568,7 @@ export default function DashboardPage() {
                     <p className="text-3xl font-black text-purple-400 tracking-tight">
                         R$ {previsaoFechamento.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
                     </p>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 mb-4">Estimativa baseada na probabilidade por etapa</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 mb-4">Já ganho no período + pipeline aberto por probabilidade</p>
                     <div className="space-y-1.5">
                         {[
                             { label: isCDL ? 'Novo Prospecto' : 'Novo Lead', pct: '10%', color: 'bg-slate-500' },

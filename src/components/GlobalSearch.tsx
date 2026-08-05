@@ -14,7 +14,10 @@ type Result = {
 };
 
 export default function GlobalSearch() {
-  const { perfil } = useAuth() || {};
+  const { perfil, user } = useAuth() || {};
+  const isDirector = perfil?.cargo === 'diretor';
+  const isGerente = perfil?.cargo === 'gerente';
+  const isOpec = user?.email === 'opec@wegrow.com.br';
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -49,11 +52,17 @@ export default function GlobalSearch() {
     if (!q.trim() || !perfil?.empresa_id) { setResults([]); return; }
     setLoading(true);
     try {
+      let leadsQuery = supabase.from('leads').select('id, empresa, status, valor_total, unidade')
+        .eq('empresa_id', perfil.empresa_id)
+        .ilike('empresa', `%${q}%`)
+        .limit(5);
+      if (!isDirector) {
+        if (isOpec) leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
+        else if (isGerente && perfil.unidade) leadsQuery = leadsQuery.eq('unidade', perfil.unidade);
+        else leadsQuery = leadsQuery.eq('user_id', user?.id);
+      }
       const [leadsRes, clientesRes] = await Promise.all([
-        supabase.from('leads').select('id, empresa, status, valor_total, unidade')
-          .eq('empresa_id', perfil.empresa_id)
-          .ilike('empresa', `%${q}%`)
-          .limit(5),
+        leadsQuery,
         supabase.from('clientes').select('id, nome_empresa, cidade, cnpj')
           .eq('empresa_id', perfil.empresa_id)
           .or(`nome_empresa.ilike.%${q}%,cnpj.ilike.%${q}%,cidade.ilike.%${q}%`)
@@ -73,7 +82,7 @@ export default function GlobalSearch() {
     } finally {
       setLoading(false);
     }
-  }, [perfil?.empresa_id]);
+  }, [perfil?.empresa_id, perfil?.unidade, isDirector, isGerente, isOpec, user?.id]);
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);

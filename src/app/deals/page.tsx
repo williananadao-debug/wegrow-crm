@@ -62,6 +62,7 @@ type Lead = {
   vencimento?: string;
   vencimentos_datas?: string[];
   forma_pagamento?: string;
+  criado_por?: string;
   atividades?: Atividade[];
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
@@ -197,6 +198,7 @@ export default function DealsPage() {
 
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
+  const isOpec = user?.email === 'opec@wegrow.com.br';
   const isLideranca = isDirector || isGerente;
   const isCDL = Boolean(empresa?.modulos?.cdl);
   const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;
@@ -350,13 +352,14 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
         if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
         if (!isDirector) {
-            if (isGerente && perfil?.unidade) q = q.eq('unidade', perfil.unidade);
+            if (isOpec) q = q.or(`user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
+            else if (isGerente && perfil?.unidade) q = q.eq('unidade', perfil.unidade);
             else q = q.eq('user_id', user?.id);
         }
         return q;
@@ -457,7 +460,7 @@ export default function DealsPage() {
     }
     
     setLoading(false);
-  }, [isDirector, isGerente, perfil?.unidade, perfil?.empresa_id, user?.id]);
+  }, [isDirector, isGerente, isOpec, perfil?.unidade, perfil?.empresa_id, user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -1541,8 +1544,8 @@ export default function DealsPage() {
         vencimentos_datas: vencimentosDatas.length ? vencimentosDatas : null,
         forma_pagamento: formaPagamento || null,
         status_aprovacao: novoStatusAprovacao,
-        user_id: isLideranca ? (leadUserId || null) : user.id,
-        ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0 }),
+        user_id: (isLideranca || isOpec) ? (leadUserId || null) : user.id,
+        ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0, criado_por: user.id }),
         client_id: finalClientId,
         empresa_id: perfil?.empresa_id
     };
@@ -2101,7 +2104,7 @@ export default function DealsPage() {
                         </select>
                     </div>
 
-                    {isLideranca && (
+                    {(isLideranca || isOpec) && (
                         <div className="bg-yellow-500/5 border border-yellow-500/20 p-4 rounded-2xl">
                             <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1"><User size={12}/> {isCDL ? 'Consultor Responsável (Distribuição)' : 'Vendedor Responsável (Distribuição)'}</label>
                             <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-yellow-500 cursor-pointer appearance-none" value={leadUserId} onChange={e => setLeadUserId(e.target.value)}>

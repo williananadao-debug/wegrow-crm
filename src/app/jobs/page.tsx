@@ -43,7 +43,7 @@ const getLocalYYYYMMDD = (date: Date) => {
 
 export default function JobsPage() {
   const auth = useAuth() || {}; const user = auth.user; const perfil = auth.perfil; const empresa = auth.empresa;
-  const isOpec = user?.email === 'opec@wegrow.com.br';
+  const isOpec = perfil?.cargo === 'opec';
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
   const isCDL = Boolean(empresa?.modulos?.cdl);

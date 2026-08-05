@@ -198,7 +198,7 @@ export default function DealsPage() {
 
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
-  const isOpec = user?.email === 'opec@wegrow.com.br';
+  const isOpec = perfil?.cargo === 'opec';
   const isLideranca = isDirector || isGerente;
   const isCDL = Boolean(empresa?.modulos?.cdl);
   const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;

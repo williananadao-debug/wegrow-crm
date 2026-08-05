@@ -21,7 +21,6 @@ export default function Navbar() {
   }
   
   const auth = useAuth() || {};
-  const user = auth.user;
   const perfil = auth.perfil;
   const empresa = auth.empresa;
   const signOut = auth.signOut || (() => {});
@@ -30,7 +29,7 @@ export default function Navbar() {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const isOpec = user?.email === 'opec@wegrow.com.br';
+  const isOpec = perfil?.cargo === 'opec';
   const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
   const modulos = empresa?.modulos || {};
@@ -104,7 +103,7 @@ export default function Navbar() {
               <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className="flex flex-col leading-none">
                 <span className="font-bold text-lg tracking-tighter uppercase italic">WEGROW</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || (isOpec ? 'Parceiro' : 'Membro')}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{isOpec ? 'Parceiro' : (perfil?.cargo || 'Membro')}</span>
               </div>
             </div>
             <button onClick={() => setIsMobileOpen(false)} className="text-slate-500 hover:text-white bg-white/5 p-2 rounded-full"><X size={18}/></button>
@@ -142,7 +141,7 @@ export default function Navbar() {
               <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 <span className="font-bold text-lg tracking-tighter uppercase italic leading-none">wegrow</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || (isOpec ? 'Parceiro' : 'Visitante')}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{isOpec ? 'Parceiro' : (perfil?.cargo || 'Visitante')}</span>
               </div>
             </div>
 

@@ -17,7 +17,7 @@ export default function GlobalSearch() {
   const { perfil, user } = useAuth() || {};
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
-  const isOpec = user?.email === 'opec@wegrow.com.br';
+  const isOpec = perfil?.cargo === 'opec';
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');

@@ -318,6 +318,7 @@ export default function TeamPage() {
                                 <option value="vendedor">Vendedor</option>
                                 <option value="gerente">Gerente</option>
                                 <option value="diretor">Diretor (Admin)</option>
+                                <option value="opec">Opec</option>
                             </select>
                         </div>
                         <div>

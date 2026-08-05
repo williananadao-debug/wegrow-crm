@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'Nome, e-mail e cargo são obrigatórios.' }, { status: 422 });
     }
 
-    const cargosValidos = ['vendedor', 'gerente', 'diretor'];
+    const cargosValidos = ['vendedor', 'gerente', 'diretor', 'opec'];
     if (!cargosValidos.includes(cargo)) {
         return NextResponse.json({ erro: 'Cargo inválido.' }, { status: 422 });
     }

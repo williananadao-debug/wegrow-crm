@@ -888,22 +888,22 @@ export default function DealsPage() {
 
     const itensHtml = listaItens.map(i => `
         <tr>
-            <td style="padding: 8px; border: 1px solid #000; font-size: 11px;">${i.servico}${(i as any).bonificacao ? ' <span style="color:#b45309;font-size:9px;font-weight:bold;text-transform:uppercase;">(Bonificação)</span>' : ''}</td>
-            <td style="padding: 8px; border: 1px solid #000; text-align: center; font-size: 11px;">${i.quantidade}</td>
-            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">${(i as any).bonificacao ? '<span style="color:#b45309;font-weight:bold;">BONIFICAÇÃO</span>' : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 5px; border: 1px solid #000; font-size: 9px;">${i.servico}${(i as any).bonificacao ? ' <span style="color:#b45309;font-size:8px;font-weight:bold;text-transform:uppercase;">(Bonificação)</span>' : ''}</td>
+            <td style="padding: 5px; border: 1px solid #000; text-align: center; font-size: 9px;">${i.quantidade}</td>
+            <td style="padding: 5px; border: 1px solid #000; text-align: right; font-size: 9px;">${(i as any).bonificacao ? '<span style="color:#b45309;font-weight:bold;">BONIFICAÇÃO</span>' : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
     `).join('');
     const subtotalItens = listaItens.reduce((s, i) => (i as any).bonificacao ? s : s + i.quantidade * i.precoUnitario, 0);
     const linhasDesconto = (lead.desconto || 0) > 0 ? `
         <tr>
-            <td style="padding: 8px; border: 1px solid #000; font-size: 11px; font-weight: bold;">Subtotal</td>
-            <td style="padding: 8px; border: 1px solid #000;"></td>
-            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px;">R$ ${subtotalItens.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 5px; border: 1px solid #000; font-size: 9px; font-weight: bold;">Subtotal</td>
+            <td style="padding: 5px; border: 1px solid #000;"></td>
+            <td style="padding: 5px; border: 1px solid #000; text-align: right; font-size: 9px;">R$ ${subtotalItens.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
         <tr>
-            <td style="padding: 8px; border: 1px solid #000; font-size: 11px; font-weight: bold;">Desconto</td>
-            <td style="padding: 8px; border: 1px solid #000;"></td>
-            <td style="padding: 8px; border: 1px solid #000; text-align: right; font-size: 11px; color: #cc0000;">- R$ ${(lead.desconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 5px; border: 1px solid #000; font-size: 9px; font-weight: bold;">Desconto</td>
+            <td style="padding: 5px; border: 1px solid #000;"></td>
+            <td style="padding: 5px; border: 1px solid #000; text-align: right; font-size: 9px; color: #cc0000;">- R$ ${(lead.desconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
     ` : '';
 
@@ -1011,22 +1011,23 @@ export default function DealsPage() {
             <head>
                 <title>Contrato - ${lead.empresa}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; padding: 40px; color: #000; line-height: 1.5; font-size: 12px; }
-                    .header { text-align: center; margin-bottom: 20px; }
-                    .header img { max-height: 80px; margin-bottom: 10px; }
-                    .header h2 { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
-                    .texto-base { text-align: justify; margin-bottom: 20px; line-height: 1.6; }
-                    .cliente-box { margin-bottom: 20px; line-height: 1.8; }
-                    .secao-titulo { font-weight: bold; margin-top: 25px; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-                    th { background-color: #f0f0f0; font-size: 11px; text-align: center; border: 1px solid #000; padding: 8px; }
-                    .condicoes { font-size: 11px; margin-bottom: 20px; }
-                    .condicoes p { margin: 4px 0; }
-                    .assinaturas { margin-top: 80px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
+                    @page { size: A4; margin: 12mm; }
+                    body { font-family: Arial, sans-serif; padding: 20px; color: #000; line-height: 1.35; font-size: 9.5px; }
+                    .header { text-align: center; margin-bottom: 12px; }
+                    .header img { max-height: 60px; margin-bottom: 6px; }
+                    .header h2 { font-size: 15px; font-weight: bold; margin: 6px 0; text-transform: uppercase; }
+                    .texto-base { text-align: justify; margin-bottom: 10px; line-height: 1.4; }
+                    .cliente-box { margin-bottom: 10px; line-height: 1.5; }
+                    .secao-titulo { font-weight: bold; margin-top: 12px; margin-bottom: 5px; font-size: 11px; text-transform: uppercase; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+                    th { background-color: #f0f0f0; font-size: 9px; text-align: center; border: 1px solid #000; padding: 5px; }
+                    .condicoes { font-size: 8.5px; margin-bottom: 10px; }
+                    .condicoes p { margin: 2px 0; }
+                    .assinaturas { margin-top: 36px; display: flex; justify-content: space-between; text-align: center; font-weight: bold; }
                     .assinaturas div { width: 40%; border-top: 1px solid #000; padding-top: 5px; }
                     .timbrado-bg { position: absolute; top: 0; left: 0; width: 100%; height: 180mm; z-index: -1; object-fit: cover; object-position: top; }
                     .pagina-tabela { page-break-inside: auto; }
-                    .rodape-fixo { text-align: center; font-size: 9px; color: #999; padding-top: 10px; }
+                    .rodape-fixo { text-align: center; font-size: 8px; color: #999; padding-top: 6px; }
                     @media print {
                         .btn-fechar { display: none !important; }
                         html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1066,7 +1067,7 @@ export default function DealsPage() {
                 </div>
 
                 <div class="secao-titulo">1. VEICULAÇÃO/CUSTO DA PUBLICIDADE</div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 11px; text-transform: uppercase;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; font-size: 9px; text-transform: uppercase;">
                     <div>INÍCIO DO CONTRATO: ${formatarData(lead.contrato_inicio || '')}</div>
                     <div>TÉRMINO DO CONTRATO: ${formatarData(lead.contrato_fim || '')}</div>
                 </div>
@@ -1083,8 +1084,8 @@ export default function DealsPage() {
                         ${itensHtml}
                         ${linhasDesconto}
                         <tr>
-                            <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">TOTAL</td>
-                            <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 8px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                            <td colspan="2" style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 5px; font-size: 9px;">TOTAL</td>
+                            <td style="font-weight: bold; text-align: right; border: 1px solid #000; padding: 5px; font-size: 9px;">R$ ${lead.valor_total?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -159,11 +159,11 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       // PDFKit entre uma linha de 2 colunas e a próxima) — evita a coluna da direita
       // "puxar" a linha seguinte e deixar um vão vazio à esquerda.
       const linha = (label: string, valor: string) => {
-        doc.font('Helvetica-Bold').fontSize(9).text(label, 50, doc.y, { continued: true })
+        doc.font('Helvetica-Bold').fontSize(8).text(label, 50, doc.y, { continued: true })
           .font('Helvetica').text(valor || '___________________________');
       };
 
-      doc.font('Helvetica-Bold').fontSize(9).text('CLIENTE: ', 50, doc.y);
+      doc.font('Helvetica-Bold').fontSize(8).text('CLIENTE: ', 50, doc.y);
       linha('Razão Social: ', data.cliente.toUpperCase());
       linha('Nome Fantasia: ', data.cliente.toUpperCase());
 

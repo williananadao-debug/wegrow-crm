@@ -1058,7 +1058,7 @@ export default function DealsPage() {
                     .header img { max-height: 50px; margin-bottom: 5px; }
                     .header h2 { font-size: 16px; font-weight: bold; margin: 5px 0; text-transform: uppercase; }
                     .texto-base { text-align: justify; margin-bottom: 8px; line-height: 1.35; font-size: 9.5px; }
-                    .cliente-box { margin-bottom: 8px; line-height: 1.45; }
+                    .cliente-box { margin-bottom: 8px; line-height: 1.45; font-size: 9.5px; }
                     .secao-titulo { font-weight: bold; margin-top: 8px; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
                     table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
                     th { background-color: #f0f0f0; font-size: 9px; text-align: center; border: 1px solid #000; padding: 4px; }

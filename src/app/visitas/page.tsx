@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
+import { useUnidades } from '@/lib/useUnidades';
 
 type Visita = {
   id: number;
@@ -57,6 +58,7 @@ export default function VisitasPage() {
   const user = auth.user;
   const perfil = auth.perfil as any;
   const router = useRouter();
+  const { unidades } = useUnidades(perfil?.empresa_id);
 
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [vendedores, setVendedores] = useState<Perfil[]>([]);
@@ -81,6 +83,7 @@ export default function VisitasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [empresa, setEmpresa] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [unidadeVisita, setUnidadeVisita] = useState('');
   const [cidade, setCidade] = useState('');
   const [cidadeDetectando, setCidadeDetectando] = useState(false);
   const [observacao, setObservacao] = useState('');
@@ -181,6 +184,7 @@ export default function VisitasPage() {
   function abrirModalNovaVisita() {
     setEmpresa('');
     setTelefone('');
+    setUnidadeVisita(perfil?.unidade || (unidades.length === 1 ? unidades[0].nome : ''));
     setCidade('');
     setObservacao('');
     setCoords(null);
@@ -250,7 +254,7 @@ export default function VisitasPage() {
       observacao: observacao || null,
       user_id: user?.id,
       empresa_id: perfil.empresa_id,
-      unidade: perfil?.unidade || null,
+      unidade: unidadeVisita || null,
       latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null,
       localizacao_url: mapsUrl,
@@ -645,6 +649,24 @@ export default function VisitasPage() {
                   onChange={e => setEmpresa(e.target.value)}
                 />
               </div>
+
+              {unidades.length > 1 && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block flex items-center gap-1.5">
+                    <Building2 size={12}/> Unidade / Filial
+                  </label>
+                  <select
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors cursor-pointer appearance-none"
+                    value={unidadeVisita}
+                    onChange={e => setUnidadeVisita(e.target.value)}
+                  >
+                    <option value="" className="bg-[#0B1120]">Selecione uma unidade</option>
+                    {unidades.map(u => (
+                      <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

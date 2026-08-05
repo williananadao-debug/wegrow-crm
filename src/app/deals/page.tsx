@@ -421,9 +421,13 @@ export default function DealsPage() {
 
     try {
         const anoAtual = new Date().getFullYear();
-        let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano').eq('ano', anoAtual);
+        let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano')
+            .eq('ano', anoAtual)
+            .eq('tipo', 'faturamento')
+            .is('produto', null)
+            .is('unidade', null);
         if (perfil?.empresa_id) metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
-        
+
         if (isDirector) {
             metaQuery = metaQuery.is('user_id', null);
         } else {

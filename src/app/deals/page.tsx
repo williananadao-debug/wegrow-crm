@@ -1743,9 +1743,11 @@ export default function DealsPage() {
   }
 
   const ganhosParaMeta = leadsAtivos.filter(l => l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0);
-  const metaValidaParaCalculo = valorMetaAlvo > 0 ? valorMetaAlvo : 1;
-  const percentMeta = Math.min((ganhosParaMeta / metaValidaParaCalculo) * 100, 100);
-  const labelMeta = (startMonth === endMonth) ? (isDirector ? 'Meta Mês (Global)' : 'Meta Mês') : (isDirector ? 'Meta Anual (Global)' : 'Meta Anual');
+  const temMetaCadastrada = valorMetaAlvo > 0;
+  const percentMeta = temMetaCadastrada ? Math.min((ganhosParaMeta / valorMetaAlvo) * 100, 100) : 0;
+  const labelMeta = temMetaCadastrada
+    ? (startMonth === endMonth) ? (isDirector ? 'Meta Mês (Global)' : 'Meta Mês') : (isDirector ? 'Meta Anual (Global)' : 'Meta Anual')
+    : 'Meta não cadastrada';
 
   const rankingServicos = leadsAtivos.filter(l => l && l.status === 'ganho').flatMap(l => Array.isArray(l.itens) ? l.itens : []).reduce((acc: any, item) => { acc[item.servico] = (acc[item.servico] || 0) + (item.precoUnitario * item.quantidade); return acc; }, {});
 

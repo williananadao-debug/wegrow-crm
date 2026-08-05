@@ -1012,12 +1012,12 @@ export default function DealsPage() {
                 <title>Contrato - ${lead.empresa}</title>
                 <style>
                     @page { size: A4; margin: 10mm; }
-                    body { font-family: Arial, sans-serif; padding: 14px; color: #000; line-height: 1.25; font-size: 9.5px; }
-                    .header { text-align: center; margin-bottom: 8px; }
-                    .header img { max-height: 46px; margin-bottom: 4px; }
-                    .header h2 { font-size: 14px; font-weight: bold; margin: 4px 0; text-transform: uppercase; }
-                    .texto-base { text-align: justify; margin-bottom: 7px; line-height: 1.3; }
-                    .cliente-box { margin-bottom: 7px; line-height: 1.4; }
+                    body { font-family: Arial, sans-serif; padding: 14px; color: #000; line-height: 1.3; font-size: 10.5px; }
+                    .header { text-align: center; margin-bottom: 10px; }
+                    .header img { max-height: 50px; margin-bottom: 5px; }
+                    .header h2 { font-size: 16px; font-weight: bold; margin: 5px 0; text-transform: uppercase; }
+                    .texto-base { text-align: justify; margin-bottom: 8px; line-height: 1.35; }
+                    .cliente-box { margin-bottom: 8px; line-height: 1.45; }
                     .secao-titulo { font-weight: bold; margin-top: 8px; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
                     table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
                     th { background-color: #f0f0f0; font-size: 9px; text-align: center; border: 1px solid #000; padding: 4px; }

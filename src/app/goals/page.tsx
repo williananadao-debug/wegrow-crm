@@ -36,7 +36,6 @@ export default function GoalsPage() {
   const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
 
   const [produtosMes, setProdutosMes] = useState<{ nome: string; qtd: number; valor: number; valorMesAnterior: number }[]>([]);
-  const [servicos, setServicos] = useState<{ id: string; nome: string }[]>([]);
   const [metasProduto, setMetasProduto] = useState<Record<string, number>>({});
   const [editandoMetaProduto, setEditandoMetaProduto] = useState<string | null>(null);
 
@@ -66,7 +65,7 @@ export default function GoalsPage() {
   }, [vendedores]);
 
   useEffect(() => {
-    if (perfil?.empresa_id) { fetchProdutosMes(); fetchServicos(); }
+    if (perfil?.empresa_id) { fetchProdutosMes(); }
   }, [perfil?.empresa_id, vendedorSelecionado]);
 
   useEffect(() => {
@@ -157,12 +156,6 @@ export default function GoalsPage() {
     })).sort((a, b) => b.perc - a.perc);
 
     setComparativo(rows);
-  }
-
-  async function fetchServicos() {
-    if (!perfil?.empresa_id) return;
-    const { data } = await supabase.from('servicos').select('id, nome').eq('empresa_id', perfil.empresa_id).eq('ativo', true).limit(50);
-    setServicos(data || []);
   }
 
   async function fetchProdutosMes() {

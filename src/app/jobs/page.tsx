@@ -43,7 +43,6 @@ const getLocalYYYYMMDD = (date: Date) => {
 
 export default function JobsPage() {
   const auth = useAuth() || {}; const user = auth.user; const perfil = auth.perfil; const empresa = auth.empresa;
-  const isOpec = perfil?.cargo === 'opec';
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
   const isCDL = Boolean(empresa?.modulos?.cdl);
@@ -68,13 +67,13 @@ export default function JobsPage() {
       setLoading(true);
       let query = supabase.from('jobs').select('*').order('created_at', { ascending: false }).limit(300);
       if (!mostrarFinalizados) query = query.neq('stage', 'entregue');
-      if (!isDirector && !isOpec) query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
+      if (!isDirector) query = query.or(`user_id.eq.${user?.id},vendedor_nome.ilike.%${perfil?.nome}%`);
       const { data } = await query;
       if (data) setRawJobs(data as any);
       setLoading(false);
     };
     if (user) fetchJobs();
-  }, [user, perfil, mostrarFinalizados, isDirector, isOpec]); 
+  }, [user, perfil, mostrarFinalizados, isDirector]);
 
   const unidadesDisponiveis = useMemo(() => Array.from(new Set(rawJobs.map(j => j.unidade).filter(Boolean))) as string[], [rawJobs]);
   const vendedoresDisponiveis = useMemo(() => Array.from(new Set(rawJobs.map(j => j.vendedor_nome).filter(Boolean))) as string[], [rawJobs]);
@@ -90,19 +89,18 @@ export default function JobsPage() {
   }), [rawJobs, filtroUnidade, filtroVendedor, dataInicio, dataFim]);
 
   const onDragEnd = useCallback(async (result: any) => {
-    if (isOpec) return;
     const { destination, draggableId } = result; if (!destination) return;
     const newStage = destination.droppableId; const id = parseInt(draggableId);
     setRawJobs(prev => prev.map(job => job.id === id ? { ...job, stage: newStage } : job));
     await supabase.from('jobs').update({ stage: newStage }).eq('id', id);
-  }, [isOpec]);
+  }, []);
 
   const handleFinalizar = useCallback(async (e: React.MouseEvent, id: number) => {
-      e.stopPropagation(); if(isOpec) return; 
+      e.stopPropagation();
       if(!confirm("Deseja finalizar a produção? O Job ficará disponível na API para o sistema OPEC importar.")) return;
       setRawJobs(prev => mostrarFinalizados ? prev.map(j => j.id === id ? { ...j, stage: 'entregue' } : j) : prev.filter(j => j.id !== id));
       await supabase.from('jobs').update({ stage: 'entregue' }).eq('id', id); alert("✅ Produção Finalizada!");
-  }, [mostrarFinalizados, isOpec]);
+  }, [mostrarFinalizados]);
 
   const abrirModal = useCallback((job?: Job) => {
       if (job) { setEditingJobId(job.id); setFormData({ ...job, deadline: job.deadline ? job.deadline.split('T')[0] : '', data_inicio: job.data_inicio ? job.data_inicio.split('T')[0] : '', data_fim: job.data_fim ? job.data_fim.split('T')[0] : '', hora_inicio: job.hora_inicio || '', hora_fim: job.hora_fim || '', vendedor_nome: job.vendedor_nome || '' }); } 
@@ -111,7 +109,7 @@ export default function JobsPage() {
   }, [filtroUnidade, isDirector, perfil?.nome]);
 
   const handleSave = async (e: React.FormEvent) => {
-      e.preventDefault(); if(isOpec) return; if (!formData.titulo) return alert("Título obrigatório");
+      e.preventDefault(); if (!formData.titulo) return alert("Título obrigatório");
       const payload = { ...formData, user_id: user?.id, empresa_id: perfil?.empresa_id, vendedor_nome: formData.vendedor_nome || perfil?.nome, ...(editingJobId ? {} : { stage: 'roteiro' }) };
       if (editingJobId) { const { error } = await supabase.from('jobs').update(payload).eq('id', editingJobId); if (!error) setRawJobs(prev => prev.map(j => j.id === editingJobId ? { ...j, ...payload } as Job : j)); } 
       else { const { data, error } = await supabase.from('jobs').insert([payload]).select(); if (!error && data) setRawJobs(prev => [data[0], ...prev]); }
@@ -119,10 +117,10 @@ export default function JobsPage() {
   };
 
   const handleDelete = useCallback(async (e: React.MouseEvent, id: number) => {
-      e.stopPropagation(); if(isOpec) return; if(!confirm("Tem certeza que deseja excluir?")) return;
+      e.stopPropagation(); if(!confirm("Tem certeza que deseja excluir?")) return;
       const { error } = await supabase.from('jobs').delete().eq('id', id);
       if(!error) { setRawJobs(prev => prev.filter(j => j.id !== id)); setIsModalOpen(false); }
-  }, [isOpec]);
+  }, []);
 
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -159,13 +157,11 @@ export default function JobsPage() {
               </div>
           </div>
           
-          {!isOpec && (
-              <div>
-                  <button onClick={() => abrirModal()} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-[0_5px_20px_rgba(37,99,235,0.2)] transition-all">
-                      <Plus size={16} strokeWidth={3} /> Novo Job
-                  </button>
-              </div>
-          )}
+          <div>
+              <button onClick={() => abrirModal()} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-[0_5px_20px_rgba(37,99,235,0.2)] transition-all">
+                  <Plus size={16} strokeWidth={3} /> Novo Job
+              </button>
+          </div>
       </div>
 
       {/* BANNER DE ALERTAS DE DEADLINE */}
@@ -226,7 +222,6 @@ export default function JobsPage() {
       <JobsKanban
         jobs={jobsFiltrados}
         onDragEnd={onDragEnd}
-        isOpec={isOpec}
         isDirector={isDirector}
         isCDL={isCDL}
         filtroUnidade={filtroUnidade}
@@ -245,10 +240,9 @@ export default function JobsPage() {
                         {editingJobId ? 'Painel OPEC / Produção' : 'Novo Job'}
                         {editingJobId && <span className="text-blue-500 bg-blue-500/10 px-2 py-1 rounded text-lg">#{formatId(editingJobId, 'JB')}</span>}
                         {formData.briefing?.match(/LD-\d+/)?.[0] && ( <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded text-sm flex items-center gap-1 ml-2 shadow-sm"><FileText size={14}/> {formData.briefing?.match(/LD-\d+/)?.[0]}</span> )}
-                        {isOpec && <span className="text-orange-500 text-[10px] border border-orange-500/30 bg-orange-500/10 px-2 py-1 ml-2 rounded font-black tracking-widest uppercase">Somente Leitura</span>}
                     </h2>
                     <div className="flex items-center gap-2">
-                        {editingJobId && !isOpec && ( <button type="button" onClick={(e) => handleDelete(e, editingJobId)} className="bg-red-500/10 p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-colors" title="Excluir Job"><Trash2 size={20}/></button> )}
+                        {editingJobId && ( <button type="button" onClick={(e) => handleDelete(e, editingJobId)} className="bg-red-500/10 p-2 rounded-full text-red-500 hover:bg-red-500 hover:text-white transition-colors" title="Excluir Job"><Trash2 size={20}/></button> )}
                         <button onClick={() => setIsModalOpen(false)} className="bg-white/5 p-2 rounded-full hover:bg-white/10 transition-colors"><X className="text-slate-500 hover:text-white" size={20}/></button>
                     </div>
                 </div>
@@ -259,26 +253,26 @@ export default function JobsPage() {
                             <div className="lg:col-span-4 space-y-6">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Título do Job (Referência)</label>
-                                    <input disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 uppercase disabled:opacity-70" placeholder="Ex: Spot 30s Dia das Mães" value={formData.titulo || ''} onChange={e => setFormData({...formData, titulo: e.target.value})} required />
+                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 uppercase disabled:opacity-70" placeholder="Ex: Spot 30s Dia das Mães" value={formData.titulo || ''} onChange={e => setFormData({...formData, titulo: e.target.value})} required />
                                 </div>
                                 <div className="bg-blue-500/5 border border-blue-500/20 p-5 rounded-2xl space-y-4">
                                     <h3 className="text-xs font-black text-blue-400 uppercase flex items-center gap-2"><CalendarDays size={14}/> Período do Contrato</h3>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Início</label><input disabled={isOpec} type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_inicio || ''} onChange={e => setFormData({...formData, data_inicio: e.target.value})} /></div>
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Início</label><input disabled={isOpec} type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_inicio || ''} onChange={e => setFormData({...formData, hora_inicio: e.target.value})} /></div>
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Fim</label><input disabled={isOpec} type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_fim || ''} onChange={e => setFormData({...formData, data_fim: e.target.value})} /></div>
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Fim</label><input disabled={isOpec} type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_fim || ''} onChange={e => setFormData({...formData, hora_fim: e.target.value})} /></div>
-                                        <div className="col-span-2"><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Nº PI (Opcional)</label><input disabled={isOpec} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.num_pi || ''} onChange={e => setFormData({...formData, num_pi: e.target.value})} placeholder="Ex: 089144" /></div>
+                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Início</label><input type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_inicio || ''} onChange={e => setFormData({...formData, data_inicio: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Início</label><input type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_inicio || ''} onChange={e => setFormData({...formData, hora_inicio: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Data Fim</label><input type="date" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.data_fim || ''} onChange={e => setFormData({...formData, data_fim: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Hora Fim</label><input type="time" className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.hora_fim || ''} onChange={e => setFormData({...formData, hora_fim: e.target.value})} /></div>
+                                        <div className="col-span-2"><label className="text-[10px] font-black uppercase text-slate-500 ml-2 block truncate">Nº PI (Opcional)</label><input className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 disabled:opacity-70" value={formData.num_pi || ''} onChange={e => setFormData({...formData, num_pi: e.target.value})} placeholder="Ex: 089144" /></div>
                                     </div>
                                 </div>
                                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl space-y-4">
-                                <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2">{isCDL ? 'Consultor Origem' : 'Vendedor Origem'}</label><input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector || isOpec} /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2">{isCDL ? 'Consultor Origem' : 'Vendedor Origem'}</label><input className="w-full bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-3 text-blue-400 text-sm font-black uppercase outline-none" value={formData.vendedor_nome || ''} onChange={e => setFormData({...formData, vendedor_nome: e.target.value})} disabled={!isDirector} /></div>
                                     <hr className="border-white/5" />
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 text-red-400">Deadline (Prazo)</label><input disabled={isOpec} type="date" className="w-full bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-3 py-3 text-xs font-bold outline-none focus:border-red-500 disabled:opacity-70" value={formData.deadline || ''} onChange={e => setFormData({...formData, deadline: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black uppercase text-slate-500 ml-2 text-red-400">Deadline (Prazo)</label><input type="date" className="w-full bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-3 py-3 text-xs font-bold outline-none focus:border-red-500 disabled:opacity-70" value={formData.deadline || ''} onChange={e => setFormData({...formData, deadline: e.target.value})} /></div>
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Prioridade</label>
-                                            <select disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 appearance-none disabled:opacity-70" value={formData.prioridade || 'media'} onChange={e => setFormData({...formData, prioridade: e.target.value as any})}>
+                                            <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-3 text-white text-xs font-bold outline-none focus:border-blue-500 appearance-none disabled:opacity-70" value={formData.prioridade || 'media'} onChange={e => setFormData({...formData, prioridade: e.target.value as any})}>
                                                 <option value="baixa" className="bg-[#0B1120]">Baixa</option>
                                                 <option value="media" className="bg-[#0B1120]">Média</option>
                                                 <option value="alta" className="bg-[#0B1120]">Alta Urgência</option>
@@ -300,9 +294,9 @@ export default function JobsPage() {
                                                             <td className="p-3 font-black text-white">{item.quantidade}x</td><td className="p-3 font-bold text-blue-400 uppercase">{item.servico}</td><td className="p-3 uppercase font-medium">{item.programa || 'ROTATIVO'}</td>
                                                             <td className="p-2">
                                                                 <div className="flex items-center gap-1">
-                                                                    <input type="time" disabled={isOpec} className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" value={item.horario_inicial || ''} onChange={(e) => { const novosItens = [...formData.itens_opec]; novosItens[i].horario_inicial = e.target.value; setFormData({...formData, itens_opec: novosItens}); }} />
+                                                                    <input type="time" className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" value={item.horario_inicial || ''} onChange={(e) => { const novosItens = [...formData.itens_opec]; novosItens[i].horario_inicial = e.target.value; setFormData({...formData, itens_opec: novosItens}); }} />
                                                                     <span className="text-slate-500 font-mono">às</span>
-                                                                    <input type="time" disabled={isOpec} className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" value={item.horario_final || ''} onChange={(e) => { const novosItens = [...formData.itens_opec]; novosItens[i].horario_final = e.target.value; setFormData({...formData, itens_opec: novosItens}); }} />
+                                                                    <input type="time" className="w-full bg-black/50 border border-white/10 rounded p-1.5 text-[10px] text-emerald-400 font-bold outline-none focus:border-emerald-500 disabled:opacity-70" value={item.horario_final || ''} onChange={(e) => { const novosItens = [...formData.itens_opec]; novosItens[i].horario_final = e.target.value; setFormData({...formData, itens_opec: novosItens}); }} />
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -314,7 +308,7 @@ export default function JobsPage() {
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Roteiro / Texto do Locutor / Briefing</label>
-                                    <textarea disabled={isOpec} className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[220px] resize-none custom-scrollbar leading-relaxed disabled:opacity-70" placeholder="Cole o roteiro ou orientações aqui..." value={formData.briefing || ''} onChange={e => setFormData({...formData, briefing: e.target.value})} />
+                                    <textarea className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[220px] resize-none custom-scrollbar leading-relaxed disabled:opacity-70" placeholder="Cole o roteiro ou orientações aqui..." value={formData.briefing || ''} onChange={e => setFormData({...formData, briefing: e.target.value})} />
                                 </div>
 
                                 {editingJobId && (
@@ -328,13 +322,11 @@ export default function JobsPage() {
                                     ) : (
                                         <p className="text-[10px] text-slate-500">Nenhum áudio enviado.</p>
                                     )}
-                                    {!isOpec && (
-                                        <label className="flex items-center gap-2 cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl px-4 py-2 transition-colors w-fit">
-                                            {uploadingAudio ? <Loader2 size={14} className="text-purple-400 animate-spin" /> : <Upload size={14} className="text-purple-400" />}
-                                            <span className="text-[10px] font-black text-purple-400 uppercase">{uploadingAudio ? 'Enviando...' : formData.audio_url ? 'Substituir Áudio' : 'Upload de Áudio'}</span>
-                                            <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} disabled={uploadingAudio} />
-                                        </label>
-                                    )}
+                                    <label className="flex items-center gap-2 cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl px-4 py-2 transition-colors w-fit">
+                                        {uploadingAudio ? <Loader2 size={14} className="text-purple-400 animate-spin" /> : <Upload size={14} className="text-purple-400" />}
+                                        <span className="text-[10px] font-black text-purple-400 uppercase">{uploadingAudio ? 'Enviando...' : formData.audio_url ? 'Substituir Áudio' : 'Upload de Áudio'}</span>
+                                        <input type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} disabled={uploadingAudio} />
+                                    </label>
                                 </div>
                                 )}
                             </div>
@@ -343,7 +335,7 @@ export default function JobsPage() {
                 </div>
                 
                 <div className="p-6 border-t border-white/10 bg-[#0F172A] flex-shrink-0 rounded-b-[32px] flex justify-end items-center">
-                    {isOpec ? ( <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white/10 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-white/20 transition-all">Fechar Visualização</button> ) : ( <button type="submit" form="jobForm" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">{editingJobId ? 'Salvar Edições' : 'Criar Job Manual'}</button> )}
+                    <button type="submit" form="jobForm" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">{editingJobId ? 'Salvar Edições' : 'Criar Job Manual'}</button>
                 </div>
             </div>
         </div>

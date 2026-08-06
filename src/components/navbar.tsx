@@ -29,7 +29,6 @@ export default function Navbar() {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const isOpec = perfil?.cargo === 'opec';
   const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
   const modulos = empresa?.modulos || {};
@@ -53,16 +52,9 @@ export default function Navbar() {
     return () => { ativo = false; };
   }, [opecHabilitado, empresa?.id]);
 
-  const mostrarOpec = isOpec || (opecHabilitado && temJobLiberado);
+  const mostrarOpec = opecHabilitado && temJobLiberado;
 
-  let menuItems: any[] = [];
-
-  if (isOpec) {
-    menuItems = [
-      { name: 'Produção', icon: <Briefcase size={20} />, href: '/jobs' }
-    ];
-  } else {
-    menuItems = [
+  const menuItems: any[] = [
       { name: 'Dashboard',  icon: <LayoutDashboard size={20} />, href: '/dashboard' },
       isDirector && mostrarIA ? { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' } : null,
       isDirector || isManager ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
@@ -73,8 +65,7 @@ export default function Navbar() {
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
       mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
-    ].filter(Boolean) as any[];
-  }
+  ].filter(Boolean) as any[];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
@@ -90,7 +81,7 @@ export default function Navbar() {
             <span className="text-lg font-black italic text-white tracking-tighter">WEGROW</span>
           </div>
         </div>
-        {!isOpec && <NotificationBell />}
+        <NotificationBell />
       </div>
 
       {isMobileOpen && (
@@ -103,7 +94,7 @@ export default function Navbar() {
               <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className="flex flex-col leading-none">
                 <span className="font-bold text-lg tracking-tighter uppercase italic">WEGROW</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{isOpec ? 'Parceiro' : (perfil?.cargo || 'Membro')}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || 'Membro'}</span>
               </div>
             </div>
             <button onClick={() => setIsMobileOpen(false)} className="text-slate-500 hover:text-white bg-white/5 p-2 rounded-full"><X size={18}/></button>
@@ -141,7 +132,7 @@ export default function Navbar() {
               <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 <span className="font-bold text-lg tracking-tighter uppercase italic leading-none">wegrow</span>
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{isOpec ? 'Parceiro' : (perfil?.cargo || 'Visitante')}</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || 'Visitante'}</span>
               </div>
             </div>
 

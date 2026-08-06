@@ -36,7 +36,7 @@ const STAGES = {
   aprovacao:{ title: 'OPEC / No Ar',         icon: <Radio size={14}/>,        color: 'border-[#22C55E]' },
 };
 
-const JobCard = React.memo(({ job, index, filtroUnidade, isDirector, abrirModal, handleFinalizar, isOpec, isCDL }: any) => {
+const JobCard = React.memo(({ job, index, filtroUnidade, isDirector, abrirModal, handleFinalizar, isCDL }: any) => {
   const leadRef = job.briefing?.match(/LD-\d+/)?.[0] || '';
   const isFinalizado = job.stage === 'entregue';
   const deadlineDiff = job.deadline && !isFinalizado
@@ -48,11 +48,11 @@ const JobCard = React.memo(({ job, index, filtroUnidade, isDirector, abrirModal,
     'bg-white/5 text-slate-400';
 
   return (
-    <Draggable draggableId={job.id.toString()} index={index} isDragDisabled={isOpec}>
+    <Draggable draggableId={job.id.toString()} index={index}>
       {(prov: any, snap: any) => (
         <div
           ref={prov.innerRef} {...prov.draggableProps} {...prov.dragHandleProps}
-          className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all ${isOpec ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} relative flex flex-col ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''} ${isFinalizado ? 'opacity-70 hover:opacity-100 grayscale hover:grayscale-0' : ''}`}
+          className={`bg-white/[0.03] p-4 rounded-xl border border-white/5 group hover:border-white/20 transition-all cursor-grab active:cursor-grabbing relative flex flex-col ${snap.isDragging ? 'rotate-2 shadow-2xl bg-[#0F172A] z-50' : ''} ${isFinalizado ? 'opacity-70 hover:opacity-100 grayscale hover:grayscale-0' : ''}`}
           onClick={() => abrirModal(job)}
         >
           <div className="flex justify-between items-start mb-2">
@@ -95,7 +95,7 @@ const JobCard = React.memo(({ job, index, filtroUnidade, isDirector, abrirModal,
             <div className="p-1 bg-white/5 rounded-full text-slate-500 group-hover:text-white transition-colors"><Edit2 size={10}/></div>
           </div>
 
-          {!isFinalizado && !isOpec && (
+          {!isFinalizado && (
             <button onClick={(e) => handleFinalizar(e, job.id)} className="w-full mt-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all opacity-0 group-hover:opacity-100 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E] hover:text-[#0F172A]">
               <ShieldCheck size={14}/> Finalizar e Liberar OPEC
             </button>
@@ -110,7 +110,6 @@ JobCard.displayName = 'JobCard';
 type JobsKanbanProps = {
   jobs: Job[];
   onDragEnd: (result: any) => void;
-  isOpec: boolean;
   isDirector: boolean;
   isCDL: boolean;
   filtroUnidade: string;
@@ -121,7 +120,7 @@ type JobsKanbanProps = {
 };
 
 export default function JobsKanban({
-  jobs, onDragEnd, isOpec, isDirector, isCDL,
+  jobs, onDragEnd, isDirector, isCDL,
   filtroUnidade, filtroVendedor, mostrarFinalizados,
   abrirModal, handleFinalizar,
 }: JobsKanbanProps) {
@@ -135,7 +134,7 @@ export default function JobsKanban({
         {Object.entries(VISIBLE_STAGES).map(([key, stage]) => {
           const stageJobs = jobs.filter(j => j.stage === key);
           return (
-            <Droppable key={key} droppableId={key} isDropDisabled={isOpec}>
+            <Droppable key={key} droppableId={key}>
               {(provided: any) => (
                 <div
                   ref={provided.innerRef} {...provided.droppableProps}
@@ -152,7 +151,7 @@ export default function JobsKanban({
                         key={job.id} job={job} index={index}
                         filtroUnidade={filtroUnidade} filtroVendedor={filtroVendedor}
                         isDirector={isDirector} abrirModal={abrirModal}
-                        handleFinalizar={handleFinalizar} isOpec={isOpec} isCDL={isCDL}
+                        handleFinalizar={handleFinalizar} isCDL={isCDL}
                       />
                     ))}
                     {provided.placeholder}

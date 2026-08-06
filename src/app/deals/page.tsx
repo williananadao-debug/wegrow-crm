@@ -860,7 +860,7 @@ export default function DealsPage() {
             </head>
             <body>
                 <div class="header">
-                    <div class="logo">WEGROW</div>
+                    <div class="logo">${(empresa?.nome || 'Proposta Comercial').toUpperCase()}</div>
                     <div>
                         Proposta Comercial<br>
                         ${dataHoje}
@@ -901,7 +901,7 @@ export default function DealsPage() {
         </html>
     `);
     janela.document.close();
-  }, [itensTemporarios, desconto, novaEmpresa]);
+  }, [itensTemporarios, desconto, novaEmpresa, empresa]);
 
   const imprimirContrato = useCallback((e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();

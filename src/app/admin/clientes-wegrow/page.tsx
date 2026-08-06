@@ -456,7 +456,7 @@ export default function ClientesWeGrowPage() {
                       {portais.length === 0 && <p className="text-slate-500 text-xs text-center py-4">Nenhum portal criado ainda.</p>}
                       {portais.map(p => (
                         <div key={p.id} className="flex items-center gap-3 bg-white/[0.03] border border-white/5 rounded-xl p-3">
-                          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[#0B1120] font-black text-xs flex-shrink-0" style={{ background: p.cor_primaria }}>W</div>
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[#0B1120] font-black text-xs flex-shrink-0" style={{ background: p.cor_primaria }}>{p.nome_portal?.[0]?.toUpperCase() || 'P'}</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-white text-xs font-black truncate">{p.nome_portal}</p>
                             <p className="text-slate-500 text-[10px] font-mono">/p/{p.slug}</p>

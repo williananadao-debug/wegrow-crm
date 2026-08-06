@@ -119,6 +119,7 @@ export default function CustomersPage() {
   const [newUnit, setNewUnit] = useState({ nome: '', cidade: '', estado: '' });
 
   const [isSearchingCnpj, setIsSearchingCnpj] = useState(false);
+  const [tipoPessoa, setTipoPessoa] = useState<'juridica' | 'fisica'>('juridica');
   const [formData, setFormData] = useState({
     nome_empresa: '', telefone: '', email: '', cnpj: '',
     inscricao_estadual: '', cep: '', endereco: '', numero: '',
@@ -183,7 +184,7 @@ export default function CustomersPage() {
       const map = new Map<string, { id: number; nome_empresa: string; status: string }>();
       all.forEach(c => {
         const digits = (c.cnpj || '').replace(/\D/g, '');
-        if (digits.length === 14 && !map.has(digits)) map.set(digits, { id: c.id, nome_empresa: c.nome_empresa, status: c.status });
+        if ((digits.length === 14 || digits.length === 11) && !map.has(digits)) map.set(digits, { id: c.id, nome_empresa: c.nome_empresa, status: c.status });
       });
       cnpjIndexRef.current = map;
       setVerificandoCnpjExistente(false);
@@ -236,6 +237,23 @@ export default function CustomersPage() {
   };
 
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (tipoPessoa === 'fisica') {
+      let v = e.target.value.replace(/\D/g, '').substring(0, 11);
+      let masked = v;
+      if (v.length > 9) masked = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+      else if (v.length > 6) masked = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+      else if (v.length > 3) masked = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+      setFormData({ ...formData, cnpj: masked });
+
+      if (v.length === 11) {
+        const match = cnpjIndexRef.current.get(v);
+        setCnpjDuplicado(match && match.id !== editingId ? match : null);
+      } else {
+        setCnpjDuplicado(null);
+      }
+      return;
+    }
+
     let v = e.target.value.replace(/\D/g, '').substring(0, 14);
     let masked = v;
     if (v.length > 12) masked = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
@@ -250,6 +268,12 @@ export default function CustomersPage() {
     } else {
       setCnpjDuplicado(null);
     }
+  };
+
+  const trocarTipoPessoa = (tipo: 'juridica' | 'fisica') => {
+    setTipoPessoa(tipo);
+    setFormData(prev => ({ ...prev, cnpj: '' }));
+    setCnpjDuplicado(null);
   };
 
   const abrirClienteExistente = async (id: number, reativar: boolean) => {
@@ -270,6 +294,18 @@ export default function CustomersPage() {
       return r === parseInt(x[len]);
     };
     return calc(s, 12) && calc(s, 13);
+  };
+
+  const validarCPF = (cpf: string) => {
+    const s = cpf.replace(/\D/g, '');
+    if (s.length !== 11 || /^(\d)\1+$/.test(s)) return false;
+    const calc = (len: number) => {
+      let sum = 0;
+      for (let i = 0; i < len; i++) sum += parseInt(s[i]) * (len + 1 - i);
+      const r = (sum * 10) % 11;
+      return (r === 10 ? 0 : r) === parseInt(s[len]);
+    };
+    return calc(9) && calc(10);
   };
 
   // MOTOR DE ANÁLISE DE RISCO
@@ -398,6 +434,7 @@ export default function CustomersPage() {
     setCnpjDuplicado(null);
     if (cliente) {
       setEditingId(cliente.id);
+      setTipoPessoa((cliente.cnpj || '').replace(/\D/g, '').length === 11 ? 'fisica' : 'juridica');
       setFormData({
         nome_empresa: cliente.nome_empresa, telefone: cliente.telefone || '', email: cliente.email || '',
         cnpj: cliente.cnpj || '', inscricao_estadual: cliente.inscricao_estadual || '', cep: cliente.cep || '',
@@ -413,6 +450,7 @@ export default function CustomersPage() {
       fetchHistorico(cliente.id); fetchUnidades(cliente.id); setActiveTab('dados');
     } else {
       setEditingId(null);
+      setTipoPessoa('juridica');
       setFormData({
         nome_empresa: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '',
         cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || ''),
@@ -430,11 +468,16 @@ export default function CustomersPage() {
     if (!formData.nome_empresa) return alert("Nome é obrigatório");
     if (formData.segmento === 'Outro' && !segmentoCustom.trim()) return alert("Informe qual é o segmento");
     const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
-    if (cnpjDigits.length > 0 && cnpjDigits.length < 14) return alert("CNPJ incompleto. Verifique o número digitado.");
-    if (cnpjDigits.length === 14 && !validarCNPJ(formData.cnpj || '')) return alert("CNPJ inválido. Verifique os dígitos verificadores.");
-    if (!editingId && cnpjDigits.length === 14) {
+    const docLen = tipoPessoa === 'fisica' ? 11 : 14;
+    const docNome = tipoPessoa === 'fisica' ? 'CPF' : 'CNPJ';
+    if (cnpjDigits.length > 0 && cnpjDigits.length < docLen) return alert(`${docNome} incompleto. Verifique o número digitado.`);
+    if (cnpjDigits.length === docLen) {
+      const valido = tipoPessoa === 'fisica' ? validarCPF(formData.cnpj || '') : validarCNPJ(formData.cnpj || '');
+      if (!valido) return alert(`${docNome} inválido. Verifique os dígitos verificadores.`);
+    }
+    if (!editingId && cnpjDigits.length === docLen) {
       const existente = cnpjIndexRef.current.get(cnpjDigits);
-      if (existente) return alert(`Esse CNPJ já está cadastrado para "${existente.nome_empresa}". Abra o cadastro existente em vez de criar um novo.`);
+      if (existente) return alert(`Esse ${docNome} já está cadastrado para "${existente.nome_empresa}". Abra o cadastro existente em vez de criar um novo.`);
     }
 
     const payload = {
@@ -453,14 +496,14 @@ export default function CustomersPage() {
       if (editingId) {
         const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
         if (error) throw error;
-        if (cnpjDigits.length === 14) cnpjIndexRef.current.set(cnpjDigits, { id: editingId, nome_empresa: formData.nome_empresa, status: formData.status });
+        if (cnpjDigits.length === docLen) cnpjIndexRef.current.set(cnpjDigits, { id: editingId, nome_empresa: formData.nome_empresa, status: formData.status });
         resetAndFetch();
       } else {
         const { data, error } = await supabase.from('clientes').insert([payload]).select();
         if (error) throw error;
         if (data) {
             setEditingId(data[0].id);
-            if (cnpjDigits.length === 14) cnpjIndexRef.current.set(cnpjDigits, { id: data[0].id, nome_empresa: formData.nome_empresa, status: formData.status });
+            if (cnpjDigits.length === docLen) cnpjIndexRef.current.set(cnpjDigits, { id: data[0].id, nome_empresa: formData.nome_empresa, status: formData.status });
             resetAndFetch();
             alert(isCDL ? "Associado salvo com sucesso!" : "Cliente salvo com sucesso!");
         }
@@ -779,32 +822,46 @@ export default function CustomersPage() {
                     
                     {/* BUSCA CNPJ CLEAN COM CAIXA DE RISCO */}
                     <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-4">
-                        <h3 className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-2"><Zap size={14} /> Busca Inteligente</h3>
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                            <h3 className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-2"><Zap size={14} /> Busca Inteligente</h3>
+                            <div className="flex bg-[#0B1120] border border-white/10 rounded-xl p-1 gap-1">
+                                <button type="button" onClick={() => trocarTipoPessoa('juridica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'juridica' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
+                                    Pessoa Jurídica
+                                </button>
+                                <button type="button" onClick={() => trocarTipoPessoa('fisica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'fisica' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
+                                    Pessoa Física
+                                </button>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                             <div className="flex-1">
-                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">CNPJ</label>
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">{tipoPessoa === 'fisica' ? 'CPF' : 'CNPJ'}</label>
                                 <div className="relative">
-                                    <input 
-                                        className="w-full bg-[#0B1120] border border-white/10 rounded-xl pl-4 pr-12 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 transition-all" 
-                                        value={formData.cnpj} 
-                                        onChange={handleCnpjChange} 
-                                        placeholder="00.000.000/0000-00" 
+                                    <input
+                                        className="w-full bg-[#0B1120] border border-white/10 rounded-xl pl-4 pr-12 py-3 text-white text-sm font-bold outline-none focus:border-blue-500 transition-all"
+                                        value={formData.cnpj}
+                                        onChange={handleCnpjChange}
+                                        placeholder={tipoPessoa === 'fisica' ? '000.000.000-00' : '00.000.000/0000-00'}
                                     />
-                                    <button 
-                                        type="button" 
-                                        onClick={buscarDadosCNPJ} 
-                                        disabled={isSearchingCnpj} 
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 p-2 rounded-lg transition-all flex items-center justify-center"
-                                        title="Buscar Dados"
-                                    >
-                                        {isSearchingCnpj ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                    </button>
+                                    {tipoPessoa === 'juridica' && (
+                                        <button
+                                            type="button"
+                                            onClick={buscarDadosCNPJ}
+                                            disabled={isSearchingCnpj}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 p-2 rounded-lg transition-all flex items-center justify-center"
+                                            title="Buscar Dados"
+                                        >
+                                            {isSearchingCnpj ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                        </button>
+                                    )}
                                 </div>
-                                {verificandoCnpjExistente && <p className="text-[9px] text-slate-600 font-bold uppercase mt-1 ml-2">Carregando base de CNPJs para checagem de duplicados...</p>}
+                                {verificandoCnpjExistente && <p className="text-[9px] text-slate-600 font-bold uppercase mt-1 ml-2">Carregando base para checagem de duplicados...</p>}
                             </div>
-                            
+
                             {/* CAIXA DE ALERTA DE RISCO */}
-                            {formData.status_risco !== 'em_analise' ? (
+                            {tipoPessoa === 'fisica' ? (
+                                <p className="text-[10px] text-slate-500 font-bold ml-2">Pessoa física não tem busca automática de dados nem análise de risco por CNPJ.</p>
+                            ) : formData.status_risco !== 'em_analise' ? (
                                 <div className="bg-[#0B1120] border border-white/5 p-3 rounded-xl flex items-center gap-3">
                                     <ShieldAlert size={20} className={formData.status_risco === 'aprovado' ? 'text-green-500' : formData.status_risco === 'reprovado' ? 'text-red-500' : 'text-yellow-500'}/>
                                     <div>
@@ -823,7 +880,7 @@ export default function CustomersPage() {
                         {cnpjDuplicado && (
                             <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border ${cnpjDuplicado.status === 'inativo' ? 'bg-orange-500/10 border-orange-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
                                 <p className={`text-xs font-bold ${cnpjDuplicado.status === 'inativo' ? 'text-orange-300' : 'text-red-300'}`}>
-                                    ⚠️ Esse CNPJ já está cadastrado para <strong>{cnpjDuplicado.nome_empresa}</strong>
+                                    ⚠️ Esse {tipoPessoa === 'fisica' ? 'CPF' : 'CNPJ'} já está cadastrado para <strong>{cnpjDuplicado.nome_empresa}</strong>
                                     {cnpjDuplicado.status === 'inativo' ? ' (inativo).' : ' (ativo).'}
                                 </p>
                                 <div className="flex gap-2 flex-shrink-0">
@@ -1076,7 +1133,7 @@ export default function CustomersPage() {
                     <th className="text-left py-2 px-3">#</th>
                     <th className="text-left py-2 px-3">Nome</th>
                     <th className="text-left py-2 px-3">Telefone</th>
-                    <th className="text-left py-2 px-3">CNPJ</th>
+                    <th className="text-left py-2 px-3">CNPJ/CPF</th>
                     <th className="text-left py-2 px-3">Cidade</th>
                     <th className="text-left py-2 px-3">E-mail</th>
                   </tr>

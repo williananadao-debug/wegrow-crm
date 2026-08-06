@@ -185,6 +185,7 @@ const validarCNPJ = (cnpj: string) => {
   return calc(s, 12) && calc(s, 13);
 };
 
+const rotuloDocumento = (doc: string) => (doc || '').replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ';
 
 export default function DealsPage() {
   const auth = useAuth() || {};
@@ -986,19 +987,19 @@ export default function DealsPage() {
                 </div>
 
                 <div class="texto-base">
-                    Pelo presente instrumento, a empresa abaixo qualificada solicita sua filiação à <strong>${CDL.nomeCompleto} — ${CDL.nome}</strong>, CNPJ: ${dadosEmissora.cnpj || '___________________'}, com sede à ${dadosEmissora.endereco || '___________________'}, comprometendo-se a cumprir o Estatuto Social e as deliberações da entidade.
+                    Pelo presente instrumento, a empresa abaixo qualificada solicita sua filiação à <strong>${CDL.nomeCompleto} — ${CDL.nome}</strong>, CNPJ: ${dadosEmissora.cnpj || ''}, com sede à ${dadosEmissora.endereco || ''}, comprometendo-se a cumprir o Estatuto Social e as deliberações da entidade.
                 </div>
 
                 <div class="secao-titulo">1. DADOS DO ASSOCIADO</div>
                 <div class="cliente-box">
                     <strong>Razão Social / Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
                     <div style="display: flex; gap: 40px;">
-                        <div><strong>CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
-                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
+                        <div><strong>${rotuloDocumento(lead.cnpj || '')}:</strong> ${lead.cnpj || ''}</div>
+                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || ''}</div>
                     </div>
                     <div style="display: flex; gap: 40px;">
-                        <div><strong>Telefone / WhatsApp:</strong> ${lead.telefone || '___________________________'}</div>
-                        <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
+                        <div><strong>Telefone / WhatsApp:</strong> ${lead.telefone || ''}</div>
+                        <div><strong>Município:</strong> ${lead.cidade || ''}</div>
                     </div>
                 </div>
 
@@ -1039,10 +1040,10 @@ export default function DealsPage() {
 
                 <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
-                    <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : '___________________'}<br/>
-                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || '___________________'}<br/><br/>
-                    <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || '___________________'}<br/>
+                    <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/>
+                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
+                    <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || ''}<br/>
                 </div>
 
                 <div class="assinaturas">
@@ -1100,13 +1101,13 @@ export default function DealsPage() {
                     <strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/>
                     <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
                     <div style="display: flex; gap: 40px;">
-                        <div><strong>Inscrição CNPJ:</strong> ${lead.cnpj || '_________________________________'}</div>
-                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || '_________________________________'}</div>
+                        <div><strong>${rotuloDocumento(lead.cnpj || '')}:</strong> ${lead.cnpj || ''}</div>
+                        <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || ''}</div>
                     </div>
-                    <div><strong>Endereço:</strong> ${lead.endereco || '_________________________________'}</div>
+                    <div><strong>Endereço:</strong> ${lead.endereco || ''}</div>
                     <div style="display: flex; gap: 40px;">
-                        <div><strong>Fone:</strong> ${lead.telefone || '___________________________'}</div>
-                        <div><strong>Município:</strong> ${lead.cidade || '___________________________'}</div>
+                        <div><strong>Fone:</strong> ${lead.telefone || ''}</div>
+                        <div><strong>Município:</strong> ${lead.cidade || ''}</div>
                     </div>
                 </div>
 
@@ -1158,11 +1159,11 @@ export default function DealsPage() {
 
                 <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
-                    <strong>Parcela(s):</strong> ${lead.parcelas || '___________________'}<br/>
-                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : '___________________'}<br/>
-                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || '___________________'}<br/><br/>
-                    <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || '___________________'}<br/>
-                    <strong>Praça de Pagamento:</strong> ${lead.cidade || '___________________'}
+                    <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/>
+                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
+                    <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || ''}<br/>
+                    <strong>Praça de Pagamento:</strong> ${lead.cidade || ''}
                 </div>
 
                 <div class="assinaturas">

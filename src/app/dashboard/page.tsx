@@ -443,18 +443,16 @@ export default function DashboardPage() {
                             const isHoje = d.dataIso === hojeIso;
                             return (
                                 <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
-                                    {d.valor > 0 && (
-                                        <div
-                                            className={`absolute left-1/2 text-[10px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-orange-500'}`}
-                                            style={{ bottom: `calc(${height}% + 6px)`, willChange: 'transform', transform: 'translateX(-50%) translateZ(0)' }}
-                                        >
-                                            {formatCompact(d.valor)}
-                                        </div>
-                                    )}
                                     <div
-                                        className={`w-full rounded-t-sm ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`}
+                                        className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`}
                                         style={{ height: d.valor > 0 ? `${height}%` : '4px' }}
-                                    />
+                                    >
+                                        {d.valor > 0 && (
+                                            <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-orange-500'}`}>
+                                                {formatCompact(d.valor)}
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className={`text-[9px] text-center font-bold mt-1 ${isHoje ? 'text-[#22C55E]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                                 </div>
                             );

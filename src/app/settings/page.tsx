@@ -26,6 +26,16 @@ type ServicoConfig = {
   historico_precos?: HistoricoPreco[];
 };
 
+const CATEGORIAS_PADRAO = [
+  'Comercial Gravado',
+  'Feito ao Vivo',
+  'Blitz',
+  'Patrocínio',
+  'Impacto Jornalístico',
+  'Digital',
+  'Podcast',
+];
+
 export default function SettingsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
@@ -40,6 +50,7 @@ export default function SettingsPage() {
   const [savingOpec, setSavingOpec] = useState(false);
   const [feedbackOpec, setFeedbackOpec] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
+  const categoriasDisponiveis = Array.from(new Set([...CATEGORIAS_PADRAO, ...servicos.map(s => s.tipo).filter(Boolean)]));
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -323,22 +334,15 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="col-span-4 md:col-span-2 relative">
-                        <input 
-                            list={`categorias-list-${servico.id}`}
+                        <select
                             value={servico.tipo}
                             onChange={(e) => atualizarServico(servico.id, 'tipo', e.target.value)}
-                            className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none rounded-lg px-2 py-2.5 border border-white/5 focus:border-blue-500 transition-colors"
-                            placeholder="Categoria..."
-                        />
-                        <datalist id={`categorias-list-${servico.id}`}>
-                            <option value="Comercial Gravado" />
-                            <option value="Feito ao Vivo" />
-                            <option value="Blitz" />
-                            <option value="Patrocínio" />
-                            <option value="Impacto Jornalístico" /> {/* 👈 ADICIONADO NA LISTA */}
-                            <option value="Digital" />
-                            <option value="Podcast" />
-                        </datalist>
+                            className="w-full bg-white/5 text-slate-300 text-[10px] font-bold uppercase outline-none rounded-lg px-2 py-2.5 border border-white/5 focus:border-blue-500 transition-colors cursor-pointer appearance-none"
+                        >
+                            {categoriasDisponiveis.map(cat => (
+                              <option key={cat} value={cat} className="bg-[#0B1120]">{cat}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="col-span-2 md:col-span-1 flex justify-end gap-1">

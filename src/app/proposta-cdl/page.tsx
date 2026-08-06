@@ -94,6 +94,8 @@ const DESCONTO = PRECO_CHEIO - PRECO_PARCEIRO;
 
 export default function PropostaCDL() {
   const [expandido, setExpandido] = useState<number | null>(null);
+  const dataValidade = new Date();
+  dataValidade.setDate(dataValidade.getDate() + 30);
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-white overflow-x-hidden">
@@ -109,7 +111,7 @@ export default function PropostaCDL() {
         <div className="text-center mb-16">
           <div className="flex items-center justify-center gap-5 mb-8">
             <div className="flex items-center gap-2">
-              <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-xl">W</div>
+              <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
               <span className="text-2xl font-black italic tracking-tighter text-white">WEGROW</span>
             </div>
             <div className="text-slate-600 text-2xl font-thin">×</div>
@@ -309,7 +311,7 @@ export default function PropostaCDL() {
         </div>
 
         <p className="text-center text-slate-600 text-[10px] uppercase tracking-widest font-bold">
-          WeGrow CRM · Proposta válida por 30 dias · Abril 2026
+          WeGrow CRM · Proposta válida até {dataValidade.toLocaleDateString('pt-BR')}
         </p>
 
       </div>

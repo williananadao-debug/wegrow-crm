@@ -7,7 +7,7 @@ import {
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight,
   Check, MessageCircle, PenLine, Wallet, ChevronDown,
-  Loader2, Send
+  Loader2, Send, Factory, Building2
 } from 'lucide-react';
 
 const STATS = [
@@ -346,10 +346,10 @@ export default function LandingPage() {
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { icon: <Radio size={16} />, label: 'Veículos de mídia' },
-                { icon: <Briefcase size={16} />, label: 'Agências' },
-                { icon: <Users size={16} />, label: 'Equipes comerciais' },
-                { icon: <Zap size={16} />, label: 'Qualquer segmento' },
+                { icon: <Factory size={16} />, label: 'Indústria' },
+                { icon: <Building2 size={16} />, label: 'Comércio & Atacado' },
+                { icon: <Briefcase size={16} />, label: 'Serviços & Agências' },
+                { icon: <Radio size={16} />, label: 'Mídia & Broadcasting' },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
                   <span className="text-[#22C55E]">{item.icon}</span>

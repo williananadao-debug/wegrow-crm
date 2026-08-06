@@ -6,7 +6,8 @@ import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight,
-  Check, MessageCircle, PenLine, Wallet, ChevronDown
+  Check, MessageCircle, PenLine, Wallet, ChevronDown,
+  Loader2, Send
 } from 'lucide-react';
 
 const STATS = [
@@ -177,12 +178,40 @@ const FEATURES = [
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [faqAberta, setFaqAberta] = useState<number | null>(0);
+  const [leadForm, setLeadForm] = useState({ nome: '', empresa: '', telefone: '', email: '' });
+  const [enviandoLead, setEnviandoLead] = useState(false);
+  const [leadEnviado, setLeadEnviado] = useState(false);
+  const [erroLead, setErroLead] = useState('');
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handler);
     return () => window.removeEventListener('scroll', handler);
   }, []);
+
+  const atualizarLead = (campo: keyof typeof leadForm, valor: string) => {
+    setLeadForm(prev => ({ ...prev, [campo]: valor }));
+  };
+
+  const enviarLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadForm.nome || !leadForm.empresa || !leadForm.telefone) return;
+    setEnviandoLead(true);
+    setErroLead('');
+    try {
+      const res = await fetch('/api/site/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadForm),
+      });
+      if (!res.ok) throw new Error();
+      setLeadEnviado(true);
+    } catch {
+      setErroLead('Não foi possível enviar. Tente de novo ou chame no WhatsApp.');
+    } finally {
+      setEnviandoLead(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-[#22C55E]/30 overflow-x-hidden">
@@ -580,25 +609,77 @@ export default function LandingPage() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="py-32 px-6">
-        <div className="max-w-4xl mx-auto relative">
-          <div className="bg-[#22C55E] rounded-[50px] p-12 md:p-20 text-center overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.25)]">
-            <div className="relative z-10">
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0F172A]/60 mb-4">Pronto para começar?</div>
-              <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] uppercase italic tracking-tighter mb-6 leading-tight">
-                Escale sua operação<br />comercial agora.
-              </h2>
-              <p className="text-[#0F172A]/70 font-medium mb-10 max-w-xl mx-auto">
-                Agende uma demonstração e veja como o WeGrow se adapta ao seu negócio em menos de 30 minutos.
-              </p>
-              <a
-                href="https://wa.me/5547997022381"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 bg-[#0F172A] text-white px-12 py-5 rounded-2xl font-black uppercase text-sm tracking-[0.15em] hover:scale-105 transition-all shadow-xl"
-              >
-                Falar com consultor <ArrowRight size={18} />
-              </a>
+      <section className="py-32 px-6" id="contato">
+        <div className="max-w-5xl mx-auto relative">
+          <div className="bg-[#22C55E] rounded-[50px] p-8 md:p-16 overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.25)] relative">
+            <div className="relative z-10 grid md:grid-cols-2 gap-10 md:gap-14 items-center">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0F172A]/60 mb-4">Pronto para começar?</div>
+                <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] uppercase italic tracking-tighter mb-6 leading-tight">
+                  Escale sua operação<br />comercial agora.
+                </h2>
+                <p className="text-[#0F172A]/70 font-medium mb-8 max-w-md">
+                  Deixe seus dados que a gente te chama, ou fale agora direto pelo WhatsApp.
+                </p>
+                <a
+                  href="https://wa.me/5547997022381"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 bg-[#0F172A] text-white px-8 py-4 rounded-2xl font-black uppercase text-sm tracking-[0.15em] hover:scale-105 transition-all shadow-xl"
+                >
+                  Chamar no WhatsApp <ArrowRight size={18} />
+                </a>
+              </div>
+
+              <div className="bg-[#0B1120] rounded-[32px] p-6 md:p-8 border border-black/10 shadow-2xl">
+                {leadEnviado ? (
+                  <div className="text-center py-10">
+                    <CheckCircle className="text-[#22C55E] mx-auto mb-4" size={40} />
+                    <p className="text-white font-black uppercase italic text-lg mb-2">Recebemos seu contato!</p>
+                    <p className="text-slate-400 text-sm">Vamos te chamar em breve pelo WhatsApp ou e-mail.</p>
+                  </div>
+                ) : (
+                  <form onSubmit={enviarLead} className="space-y-3">
+                    <input
+                      required
+                      value={leadForm.nome}
+                      onChange={(e) => atualizarLead('nome', e.target.value)}
+                      placeholder="Seu nome"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
+                    />
+                    <input
+                      required
+                      value={leadForm.empresa}
+                      onChange={(e) => atualizarLead('empresa', e.target.value)}
+                      placeholder="Sua empresa"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
+                    />
+                    <input
+                      required
+                      value={leadForm.telefone}
+                      onChange={(e) => atualizarLead('telefone', e.target.value)}
+                      placeholder="WhatsApp"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
+                    />
+                    <input
+                      type="email"
+                      value={leadForm.email}
+                      onChange={(e) => atualizarLead('email', e.target.value)}
+                      placeholder="E-mail (opcional)"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
+                    />
+                    {erroLead && <p className="text-red-400 text-xs font-bold">{erroLead}</p>}
+                    <button
+                      type="submit"
+                      disabled={enviandoLead}
+                      className="w-full bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] py-4 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                    >
+                      {enviandoLead ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                      Quero uma demonstração
+                    </button>
+                  </form>
+                )}
+              </div>
             </div>
             <Zap className="absolute top-[-60px] left-[-60px] text-[#0F172A]/10" size={320} />
             <TrendingUp className="absolute bottom-[-40px] right-[-40px] text-[#0F172A]/10" size={280} />

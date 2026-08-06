@@ -435,19 +435,28 @@ export default function DashboardPage() {
                     <BarChart3 size={14} className="text-orange-500"/> {isCDL ? 'Filiações por Dia' : 'Vendas por Dia'}
                 </h3>
                 <div className="flex items-end h-40 gap-1 overflow-x-auto pb-1 custom-scrollbar w-full pt-4">
-                    {statsComercial.vendasPorDia.map((d, i) => {
+                    {(() => {
+                        const hojeIso = new Date().toISOString().substring(0, 10);
                         const maxVal = Math.max(...statsComercial.vendasPorDia.map(v => v.valor), 1);
-                        const height = (d.valor / maxVal) * 100;
-                        return (
-                            <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
-                                {d.valor > 0 && ( <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-500 text-[10px] font-black tracking-tighter whitespace-nowrap z-10">{formatCompact(d.valor)}</div> )}
-                                <div className={`w-full rounded-t-sm transition-all duration-700 relative ${d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`} style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}>
-                                    {d.valor > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
+                        return statsComercial.vendasPorDia.map((d, i) => {
+                            const height = (d.valor / maxVal) * 100;
+                            const isHoje = d.dataIso === hojeIso;
+                            return (
+                                <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                                    {d.valor > 0 && (
+                                        <div className={`absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-orange-500'}`}>
+                                            {formatCompact(d.valor)}
+                                        </div>
+                                    )}
+                                    <div
+                                        className={`w-full rounded-t-sm transition-all duration-700 ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`}
+                                        style={{ height: d.valor > 0 ? `${Math.max(height, 5)}%` : '4px' }}
+                                    />
+                                    <span className={`text-[9px] text-center font-bold mt-1 ${isHoje ? 'text-[#22C55E]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                                 </div>
-                                <span className={`text-[9px] text-center font-bold mt-1 ${d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
-                            </div>
-                        )
-                    })}
+                            );
+                        });
+                    })()}
                 </div>
             </div>
 

@@ -163,15 +163,17 @@ const FEATURES = [
     icon: <Cpu size={24} />,
     color: 'text-sky-400 bg-sky-400/10',
     title: 'Integração OPEC',
-    desc: 'Jobs aprovados em produção exportam automaticamente para o sistema de broadcast com toda a grade de veiculação.',
+    desc: 'Job aprovado exporta automaticamente para o sistema de broadcast com toda a grade de veiculação. Exclusivo do módulo Broadcasting.',
     span: 2,
+    modulo: 'Broadcasting',
   },
   {
     icon: <Briefcase size={24} />,
     color: 'text-amber-400 bg-amber-400/10',
     title: 'Kanban de Produção',
-    desc: 'Da criação do roteiro à entrega: Roteiro → Gravação → Edição → No Ar. PI, briefing e mídias contratadas em um lugar só.',
+    desc: 'Acompanhe cada job da criação à entrega em etapas customizáveis — roteiro, gravação, edição, aprovação. Exclusivo do módulo Broadcasting.',
     span: 1,
+    modulo: 'Broadcasting',
   },
 ];
 
@@ -301,8 +303,11 @@ export default function LandingPage() {
           <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-4">
             Nascido dentro de uma operação de verdade.
           </h2>
-          <p className="text-slate-400 text-sm md:text-base font-medium max-w-xl mx-auto mb-14">
-            O WeGrow roda todos os dias na rotina comercial e de produção da Demais FM — 3 emissoras, uma operação só.
+          <p className="text-slate-400 text-sm md:text-base font-medium max-w-xl mx-auto mb-3">
+            O core do WeGrow (funil, clientes, metas, relatórios) serve qualquer PME. Ele nasceu e roda todo dia dentro de uma operação real — hoje, a Demais FM.
+          </p>
+          <p className="text-slate-500 text-xs font-medium max-w-xl mx-auto mb-14">
+            Broadcasting foi só o primeiro segmento validado — o produto não é feito só pra rádio.
           </p>
 
           <div className="group relative inline-flex flex-col items-center">
@@ -321,7 +326,7 @@ export default function LandingPage() {
 
             <div className="mt-6">
               <p className="text-white font-black uppercase italic tracking-tight text-sm">Demais FM</p>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">104,7 · 107,9 · 101,1</p>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Case Broadcasting · 3 emissoras</p>
             </div>
           </div>
         </div>
@@ -392,17 +397,25 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Funcionalidades</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
-              Tudo que sua operação precisa
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
+              O core serve qualquer negócio
             </h2>
+            <p className="text-slate-400 text-sm font-medium max-w-xl mx-auto">
+              Funil, clientes, metas e relatórios funcionam pra qualquer segmento. Os itens marcados como módulo são complementos que só aparecem pra quem precisa deles.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {FEATURES.map((f, i) => (
               <div
                 key={i}
-                className={`bg-white/[0.04] border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] hover:border-white/20 transition-all group ${f.span === 2 ? 'md:col-span-2' : ''}`}
+                className={`relative bg-white/[0.04] border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] hover:border-white/20 transition-all group ${f.span === 2 ? 'md:col-span-2' : ''}`}
               >
+                {f.modulo && (
+                  <span className="absolute top-6 right-6 text-[9px] font-black uppercase tracking-widest text-slate-500 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
+                    Módulo {f.modulo}
+                  </span>
+                )}
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${f.color}`}>
                   {f.icon}
                 </div>
@@ -447,7 +460,7 @@ export default function LandingPage() {
                   { icon: <CheckCircle size={16} />, text: 'Kanban visual drag & drop' },
                   { icon: <CheckCircle size={16} />, text: 'Aprovação de desconto' },
                   { icon: <CheckCircle size={16} />, text: 'Envio de proposta por e-mail' },
-                  { icon: <CheckCircle size={16} />, text: 'Export automático OPEC' },
+                  { icon: <CheckCircle size={16} />, text: 'Job direto na fila de produção' },
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-2 text-xs text-slate-400 font-medium">
                     <span className="text-[#22C55E]">{item.icon}</span>

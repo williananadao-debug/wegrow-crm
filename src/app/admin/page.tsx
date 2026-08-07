@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Building2, Plus, Edit2, X, Save, Loader2, Users, Package,
   ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
-  BarChart2, TrendingUp, Clock, Activity
+  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
@@ -15,7 +15,7 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 type Empresa = {
   id: string; nome: string; cnpj?: string; plano: string;
   status: string; modulos: Record<string, boolean>; created_at: string;
-  total_usuarios?: number;
+  total_usuarios?: number; logo_url?: string | null;
 };
 type Unidade = {
   id: string; nome: string; razao_social?: string;
@@ -55,6 +55,8 @@ export default function AdminPage() {
   const [editPlano, setEditPlano] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editModulos, setEditModulos] = useState<Record<string, boolean>>({});
+  const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Form nova unidade
   const [novaUnidadeNome, setNovaUnidadeNome] = useState('');
@@ -99,6 +101,7 @@ export default function AdminPage() {
     setEditPlano(e.plano);
     setEditStatus(e.status);
     setEditModulos({ ...e.modulos });
+    setEditLogoUrl(e.logo_url || null);
     setMetrics(null);
 
     const [resUnidades, resMetrics] = await Promise.all([
@@ -125,6 +128,31 @@ export default function AdminPage() {
     });
     await carregarEmpresas();
     setSaving(false);
+  };
+
+  const uploadLogo = async (file: File) => {
+    if (!empresaSelecionada) return;
+    setUploadingLogo(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const ext = file.name.split('.').pop() || 'png';
+      const res = await fetch('/api/admin/empresas/logo', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ empresaId: empresaSelecionada.id, imagemBase64: base64, extensao: ext }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.erro || 'Erro ao subir logo.'); return; }
+      setEditLogoUrl(json.logoUrl);
+      await carregarEmpresas();
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const criarEmpresa = async (e: React.FormEvent) => {
@@ -272,6 +300,21 @@ export default function AdminPage() {
                 <div className="mb-5">
                   <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Nome da Empresa</label>
                   <input value={editNome} onChange={e => setEditNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+                </div>
+
+                <div className="mb-5">
+                  <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Logo (aparece no menu lateral do cliente)</label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {editLogoUrl ? <img src={editLogoUrl} alt="Logo" className="w-full h-full object-contain"/> : <ImageIcon size={18} className="text-slate-600"/>}
+                    </div>
+                    <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black uppercase text-slate-400 hover:text-white cursor-pointer transition-all">
+                      {uploadingLogo ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
+                      {uploadingLogo ? 'Enviando...' : 'Subir logo'}
+                      <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}/>
+                    </label>
+                  </div>
+                  <p className="text-[9px] text-slate-600 mt-1.5">Sem logo, o menu mostra um quadrado com a inicial do nome.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-5">

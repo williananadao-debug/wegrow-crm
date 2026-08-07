@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       plano: emp?.plano || 'essencial',
       status: emp?.status || 'trial',
       modulos: emp?.modulos || {},
+      logo_url: emp?.logo_url || null,
       created_at: emp?.created_at || null,
       total_usuarios: t.total,
       configurado: !!emp,

@@ -11,6 +11,23 @@ import {
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
 
+// Logo real da empresa quando configurado (Admin → Logo); senão cai no quadrado
+// verde com a inicial do nome, igual sempre foi.
+function MarcaEmpresa({ logoUrl, inicial, size }: { logoUrl?: string | null; inicial: string; size: number }) {
+  if (logoUrl) {
+    return (
+      <div className="bg-white rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0" style={{ width: size, height: size }}>
+        <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
+      </div>
+    );
+  }
+  return (
+    <div className="bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] flex-shrink-0" style={{ width: size, height: size, fontSize: size * 0.45 }}>
+      {inicial}
+    </div>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   
@@ -108,7 +125,7 @@ export default function Navbar() {
             <Menu size={26} />
           </button>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-lg flex-shrink-0">{inicialMarca}</div>
+            <MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={32} />
             <span className="text-lg font-black italic text-white tracking-tighter truncate">{nomeMarca.toUpperCase()}</span>
           </div>
         </div>
@@ -122,7 +139,7 @@ export default function Navbar() {
       <aside className={`fixed top-0 left-0 bottom-0 w-[280px] bg-[#0B1120] border-r border-white/10 z-[80] md:hidden transition-transform duration-300 flex flex-col py-6 px-6 shadow-2xl ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-3 text-white min-w-0">
-              <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl flex-shrink-0">{inicialMarca}</div>
+              <MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={40} />
               <div className="flex flex-col leading-none min-w-0">
                 <span className="font-bold text-lg tracking-tighter uppercase italic truncate">{nomeMarca}</span>
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || 'Membro'}</span>
@@ -202,7 +219,7 @@ export default function Navbar() {
         {/* 👇 AQUI FOI REMOVIDA A "JAULA" (overflow-hidden) 👇 */}
         <div className={`flex flex-col h-full ${isCollapsed ? 'px-4' : 'px-6'} py-6 relative`}>
             <div className={`flex items-center gap-3 mb-10 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
-              <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">{inicialMarca}</div>
+              <div className="min-w-[40px]"><MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={40} /></div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 <span className="font-bold text-lg tracking-tighter uppercase italic leading-none truncate">{nomeMarca}</span>
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || 'Visitante'}</span>

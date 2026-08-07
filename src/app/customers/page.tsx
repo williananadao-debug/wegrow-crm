@@ -6,7 +6,7 @@ import {
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle,
   Brain, Download
 } from 'lucide-react';
-import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon } from '@/components/nexus-shared';
+import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon, NexusThumb } from '@/components/nexus-shared';
 import { SkeletonRow } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -1277,8 +1277,8 @@ export default function CustomersPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                             {nexusItensFiltrados.map(item => (
                                 <button key={item.id} type="button" onClick={() => setNexusDetalhe(item)} className="bg-white/[0.02] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden text-left transition-all">
-                                    <div className={`h-16 flex items-center justify-center ${NEXUS_CAT_BG[item.categoria]}`}>
-                                        <NexusIcon categoria={item.categoria} size={22} />
+                                    <div className={`h-16 flex items-center justify-center overflow-hidden ${NEXUS_CAT_BG[item.categoria]}`}>
+                                        <NexusThumb categoria={item.categoria} arquivoUrl={item.arquivo_url} titulo={item.titulo} size={22} />
                                     </div>
                                     <div className="p-2">
                                         <p className="text-[10px] font-bold text-white truncate">{item.titulo}</p>
@@ -1299,8 +1299,8 @@ export default function CustomersPage() {
       {nexusDetalhe && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1001] flex items-center justify-center p-4" onClick={() => setNexusDetalhe(null)}>
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className={`h-32 flex items-center justify-center relative ${NEXUS_CAT_BG[nexusDetalhe.categoria]}`}>
-              <NexusIcon categoria={nexusDetalhe.categoria} size={36} />
+            <div className={`h-32 flex items-center justify-center relative overflow-hidden ${NEXUS_CAT_BG[nexusDetalhe.categoria]}`}>
+              <NexusThumb categoria={nexusDetalhe.categoria} arquivoUrl={nexusDetalhe.arquivo_url} titulo={nexusDetalhe.titulo} size={36} />
               <button onClick={() => setNexusDetalhe(null)} className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white rounded-full p-1.5"><X size={14}/></button>
             </div>
             <div className="p-5 space-y-3">

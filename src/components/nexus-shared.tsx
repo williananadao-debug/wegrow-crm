@@ -30,3 +30,12 @@ export function NexusIcon({ categoria, size = 20 }: { categoria: NexusCategoria;
   if (categoria === 'layout3d') return <Box size={size} />;
   return <Wrench size={size} />;
 }
+
+// Fotos mostram a miniatura real do arquivo; as outras categorias (documento/layout/
+// manutenção) não têm como gerar preview de PDF/etc. no cliente, então caem no ícone.
+export function NexusThumb({ categoria, arquivoUrl, titulo, size = 20 }: { categoria: NexusCategoria; arquivoUrl: string; titulo?: string; size?: number }) {
+  if (categoria === 'foto') {
+    return <img src={arquivoUrl} alt={titulo || ''} className="w-full h-full object-cover" />;
+  }
+  return <NexusIcon categoria={categoria} size={size} />;
+}

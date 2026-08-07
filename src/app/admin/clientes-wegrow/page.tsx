@@ -16,7 +16,9 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 const MODULO_LABELS: Record<string, string> = {
   cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp', nexus: 'Nexus',
 };
-const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp', 'nexus'] as const;
+// "crm" é o macro-toggle do produto de pipeline/vendas inteiro. Ausente no JSON conta
+// como ligado (empresas criadas antes disso existir não podem perder o menu no deploy).
+const CRM_SUBMODULOS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp'] as const;
 
 type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
 type Billing = { empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; whatsapp: string | null; contato: string | null; observacao: string | null; };
@@ -167,9 +169,10 @@ export default function ClientesWeGrowPage() {
   };
 
   // Módulos
-  const toggleModulo = async (modulo: string) => {
+  const toggleModulo = async (modulo: string, valorExplicito?: boolean) => {
     if (!editando) return;
-    const novo = { ...modulosEdit, [modulo]: !modulosEdit[modulo] };
+    const valor = valorExplicito !== undefined ? valorExplicito : !modulosEdit[modulo];
+    const novo = { ...modulosEdit, [modulo]: valor };
     setModulosEdit(novo); setSavingModulos(true);
     await fetch('/api/admin/empresas', {
       method: 'PATCH',
@@ -426,22 +429,43 @@ export default function ClientesWeGrowPage() {
 
               {/* MÓDULOS */}
               {abaAtiva === 'modulos' && (
-                <div className="space-y-3">
+                <div className="space-y-5">
                   <div className="flex items-center justify-between">
                     <p className="text-slate-400 text-xs">Clique para ativar ou desativar. Salva em tempo real.</p>
                     {savingModulos && <Loader2 size={14} className="animate-spin text-slate-500"/>}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MODULOS_TOGGLEAVEIS.map(mod => {
-                      const ativo = Boolean(modulosEdit[mod]);
+
+                  <div>
+                    {(() => {
+                      const crmAtivo = modulosEdit.crm !== false;
                       return (
-                        <button key={mod} type="button" onClick={() => toggleModulo(mod)}
-                          className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${ativo ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
-                          <Package size={12}/> {MODULO_LABELS[mod]}
-                          {ativo && <CheckCircle2 size={12} className="ml-auto"/>}
+                        <button type="button" onClick={() => toggleModulo('crm', !crmAtivo)}
+                          className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${crmAtivo ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                          <Package size={12}/> CRM
+                          {crmAtivo && <CheckCircle2 size={12} className="ml-auto"/>}
                         </button>
                       );
-                    })}
+                    })()}
+                    <div className={`grid grid-cols-2 gap-2 mt-2 ml-2 pl-3 border-l border-white/10 transition-opacity ${modulosEdit.crm === false ? 'opacity-40 pointer-events-none' : ''}`}>
+                      {CRM_SUBMODULOS.map(mod => {
+                        const ativo = Boolean(modulosEdit[mod]);
+                        return (
+                          <button key={mod} type="button" onClick={() => toggleModulo(mod)}
+                            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${ativo ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                            <Package size={12}/> {MODULO_LABELS[mod]}
+                            {ativo && <CheckCircle2 size={12} className="ml-auto"/>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <button type="button" onClick={() => toggleModulo('nexus')}
+                      className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.nexus) ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                      <Package size={12}/> Nexus
+                      {Boolean(modulosEdit.nexus) && <CheckCircle2 size={12} className="ml-auto"/>}
+                    </button>
                   </div>
                 </div>
               )}

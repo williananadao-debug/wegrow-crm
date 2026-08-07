@@ -24,7 +24,10 @@ type Unidade = {
 
 const PLANOS = ['essencial', 'pro', 'enterprise'];
 const STATUS_OPTS = ['trial', 'ativa', 'suspensa'];
-const MODULOS_DISPONIVEIS = ['opec', 'ia', 'financeiro', 'whatsapp', 'assinatura', 'nexus'];
+// "crm" é o macro-toggle: liga/desliga o produto inteiro de pipeline/vendas de uma vez.
+// Ausente no JSON (empresas criadas antes disso existir) conta como ligado — só desliga
+// se alguém marcar explicitamente crm:false, senão o deploy apagaria o menu de quem já usa.
+const CRM_SUBMODULOS = ['opec', 'ia', 'financeiro', 'whatsapp', 'assinatura'];
 
 const COR_STATUS: Record<string, string> = {
   ativa: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -286,20 +289,42 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 mb-3 block">Módulos Ativos</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MODULOS_DISPONIVEIS.map(mod => (
-                      <button
-                        key={mod}
-                        type="button"
-                        onClick={() => setEditModulos(prev => ({ ...prev, [mod]: !prev[mod] }))}
-                        className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos[mod] ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                      >
-                        {mod}
-                        {editModulos[mod] ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                      </button>
-                    ))}
+                <div className="space-y-5">
+                  <label className="text-[10px] font-black uppercase text-slate-500 block">Módulos Ativos</label>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setEditModulos(prev => ({ ...prev, crm: prev.crm !== false ? false : true }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.crm !== false ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                    >
+                      CRM
+                      {editModulos.crm !== false ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    </button>
+                    <div className={`grid grid-cols-2 gap-2 mt-2 ml-2 pl-3 border-l border-white/10 transition-opacity ${editModulos.crm === false ? 'opacity-40 pointer-events-none' : ''}`}>
+                      {CRM_SUBMODULOS.map(mod => (
+                        <button
+                          key={mod}
+                          type="button"
+                          onClick={() => setEditModulos(prev => ({ ...prev, [mod]: !prev[mod] }))}
+                          className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos[mod] ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                        >
+                          {mod}
+                          {editModulos[mod] ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setEditModulos(prev => ({ ...prev, nexus: !prev.nexus }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.nexus ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                    >
+                      Nexus
+                      {editModulos.nexus ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    </button>
                   </div>
                 </div>
 

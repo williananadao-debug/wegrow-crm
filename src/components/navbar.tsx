@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, FolderSearch
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +28,9 @@ export default function Navbar() {
   // MENU NASCE FECHADO POR PADRÃO
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  // Grupos do menu (CRM / Nexus) nascem abertos — fecha só quem clica explicitamente.
+  const [gruposFechados, setGruposFechados] = useState<Record<string, boolean>>({});
+  const toggleGrupo = (key: string) => setGruposFechados(prev => ({ ...prev, [key]: !prev[key] }));
 
   const isDirector = perfil?.cargo === 'diretor';
   const isManager = perfil?.cargo === 'gerente';
@@ -38,6 +41,14 @@ export default function Navbar() {
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
   const mostrarNexus = Boolean(modulos.nexus);
+  // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
+  // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
+  const mostrarCRM = modulos.crm !== false;
+
+  // Marca no menu é por tenant, não fixa "WeGrow" — cada empresa vê o próprio nome aqui,
+  // WeGrow é só o fornecedor por trás.
+  const nomeMarca = empresa?.nome || 'WeGrow';
+  const inicialMarca = nomeMarca.charAt(0).toUpperCase();
 
   // O menu "Produção" só aparece quando existe algum job em andamento no Kanban visível
   // (roteiro/gravação/edição/aprovação). Jobs de contrato assinado pulam direto pra
@@ -55,19 +66,37 @@ export default function Navbar() {
 
   const mostrarOpec = opecHabilitado && temJobLiberado;
 
-  const menuItems: any[] = [
+  // Menu vira dois grupos macro (CRM / Nexus) — "Clientes" fica fora dos dois, é a base
+  // compartilhada entre ambos (o Nexus pendura os arquivos no mesmo cadastro de cliente).
+  const crmItems: any[] = [
       { name: 'Dashboard',  icon: <LayoutDashboard size={20} />, href: '/dashboard' },
       isDirector && mostrarIA ? { name: 'Estratégia', icon: <Rocket size={20} />, href: '/dashboard/premises' } : null,
-      isDirector || isManager ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
+      (isDirector || isManager) ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
       { name: 'Metas',      icon: <Target size={20} />,          href: '/goals' },
       { name: isCDL ? 'Prospecção' : 'Vendas', icon: <Zap size={20} />, href: '/deals' },
-      mostrarOpec           ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
-      { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' },
+      mostrarOpec ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
-      mostrarNexus           ? { name: 'Nexus',      icon: <FolderSearch size={20} />, href: '/nexus' }  : null,
-      mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
-      isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
+      mostrarFinanceiro ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
+      (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];
+
+  const nexusItems: any[] = [
+      { name: 'Nexus', icon: <Brain size={20} />, href: '/nexus' },
+  ];
+
+  const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
+
+  const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
+      mostrarCRM   ? { key: 'crm',   label: 'CRM',   icon: <LayoutGrid size={16} />, items: crmItems }   : null,
+      mostrarNexus ? { key: 'nexus', label: 'Nexus', icon: <Brain size={16} />,      items: nexusItems } : null,
+  ].filter(Boolean) as any[];
+
+  // Usado só no rail colapsado (ícone-only) — ali não cabe cabeçalho de grupo, então achata tudo.
+  const flatItems: any[] = [
+      ...(mostrarCRM ? crmItems : []),
+      clientesItem,
+      ...(mostrarNexus ? nexusItems : []),
+  ];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
@@ -78,9 +107,9 @@ export default function Navbar() {
           <button onClick={() => setIsMobileOpen(true)} className="p-1 text-slate-400 hover:text-white transition-colors">
             <Menu size={26} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-lg">W</div>
-            <span className="text-lg font-black italic text-white tracking-tighter">WEGROW</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-lg flex-shrink-0">{inicialMarca}</div>
+            <span className="text-lg font-black italic text-white tracking-tighter truncate">{nomeMarca.toUpperCase()}</span>
           </div>
         </div>
         <NotificationBell />
@@ -92,22 +121,64 @@ export default function Navbar() {
       
       <aside className={`fixed top-0 left-0 bottom-0 w-[280px] bg-[#0B1120] border-r border-white/10 z-[80] md:hidden transition-transform duration-300 flex flex-col py-6 px-6 shadow-2xl ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-3 text-white">
-              <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
-              <div className="flex flex-col leading-none">
-                <span className="font-bold text-lg tracking-tighter uppercase italic">WEGROW</span>
+            <div className="flex items-center gap-3 text-white min-w-0">
+              <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl flex-shrink-0">{inicialMarca}</div>
+              <div className="flex flex-col leading-none min-w-0">
+                <span className="font-bold text-lg tracking-tighter uppercase italic truncate">{nomeMarca}</span>
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{perfil?.cargo || 'Membro'}</span>
               </div>
             </div>
             <button onClick={() => setIsMobileOpen(false)} className="text-slate-500 hover:text-white bg-white/5 p-2 rounded-full"><X size={18}/></button>
         </div>
 
-        <nav className="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => (
-            <Link key={item.name} href={item.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              {item.icon} {item.name}
-            </Link>
-          ))}
+        <nav className="flex flex-col gap-1 flex-1 overflow-y-auto custom-scrollbar">
+          {mostrarCRM && (() => {
+            const g = grupos.find(x => x.key === 'crm')!;
+            const aberto = gruposFechados.crm !== true;
+            return (
+              <div className="mb-1">
+                <button onClick={() => toggleGrupo('crm')} className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                  <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} CRM</span>
+                  <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                </button>
+                {aberto && (
+                  <div className="flex flex-col gap-1 pl-3 ml-5 border-l border-white/10 mt-1">
+                    {crmItems.map((item: any) => (
+                      <Link key={item.name} href={item.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                        {item.icon} {item.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            {clientesItem.icon} {clientesItem.name}
+          </Link>
+
+          {mostrarNexus && (() => {
+            const g = grupos.find(x => x.key === 'nexus')!;
+            const aberto = gruposFechados.nexus !== true;
+            return (
+              <div className="mb-1">
+                <button onClick={() => toggleGrupo('nexus')} className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                  <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} Nexus</span>
+                  <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                </button>
+                {aberto && (
+                  <div className="flex flex-col gap-1 pl-3 ml-5 border-l border-white/10 mt-1">
+                    {nexusItems.map((item: any) => (
+                      <Link key={item.name} href={item.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                        {item.icon} {item.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
             {isDirector && (
@@ -131,25 +202,75 @@ export default function Navbar() {
         {/* 👇 AQUI FOI REMOVIDA A "JAULA" (overflow-hidden) 👇 */}
         <div className={`flex flex-col h-full ${isCollapsed ? 'px-4' : 'px-6'} py-6 relative`}>
             <div className={`flex items-center gap-3 mb-10 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
-              <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">W</div>
+              <div className="w-10 h-10 min-w-[40px] bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl">{inicialMarca}</div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                <span className="font-bold text-lg tracking-tighter uppercase italic leading-none">wegrow</span>
+                <span className="font-bold text-lg tracking-tighter uppercase italic leading-none truncate">{nomeMarca}</span>
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">{perfil?.cargo || 'Visitante'}</span>
               </div>
             </div>
 
             <nav className="flex flex-col gap-2 flex-1">
-              {menuItems.map((item) => (
-                <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
-                  <div className="min-w-[20px]">{item.icon}</div>
-                  <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>{item.name}</span>
-                  {isCollapsed && (
-                      <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
-                          {item.name}
+              {isCollapsed ? (
+                flatItems.map((item) => (
+                  <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                    <div className="min-w-[20px]">{item.icon}</div>
+                    <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
+                      {item.name}
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <>
+                  {mostrarCRM && (() => {
+                    const g = grupos.find(x => x.key === 'crm')!;
+                    const aberto = gruposFechados.crm !== true;
+                    return (
+                      <div className="mb-1">
+                        <button onClick={() => toggleGrupo('crm')} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                          <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} CRM</span>
+                          <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                        </button>
+                        {aberto && (
+                          <div className="flex flex-col gap-1 pl-2 ml-3 border-l border-white/10 mt-1">
+                            {crmItems.map((item: any) => (
+                              <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-semibold ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                                <div className="min-w-[18px]">{item.icon}</div> {item.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                  )}
-                </Link>
-              ))}
+                    );
+                  })()}
+
+                  <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                    <div className="min-w-[20px]">{clientesItem.icon}</div>
+                    <span className="text-sm font-semibold">{clientesItem.name}</span>
+                  </Link>
+
+                  {mostrarNexus && (() => {
+                    const g = grupos.find(x => x.key === 'nexus')!;
+                    const aberto = gruposFechados.nexus !== true;
+                    return (
+                      <div className="mb-1">
+                        <button onClick={() => toggleGrupo('nexus')} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                          <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} Nexus</span>
+                          <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                        </button>
+                        {aberto && (
+                          <div className="flex flex-col gap-1 pl-2 ml-3 border-l border-white/10 mt-1">
+                            {nexusItems.map((item: any) => (
+                              <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-semibold ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                                <div className="min-w-[18px]">{item.icon}</div> {item.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
             </nav>
 
             <div className="pt-4 border-t border-white/5 space-y-2 mt-2">

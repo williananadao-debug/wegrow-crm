@@ -4,7 +4,7 @@ import {
   Users, Search, Plus, Trash2,
   Phone, FileText, X, History, CheckCircle2, XCircle,
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle,
-  FolderSearch, Download
+  Brain, Download
 } from 'lucide-react';
 import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon } from '@/components/nexus-shared';
 import { SkeletonRow } from '@/components/Skeleton';
@@ -906,7 +906,7 @@ export default function CustomersPage() {
                    <button onClick={() => setActiveTab('unidades')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'unidades' ? 'border-purple-500 text-purple-500' : 'border-transparent text-slate-500 hover:text-white'}`}><Building2 size={14}/> Filiais ({unidades.length})</button>
                    <button onClick={() => setActiveTab('historico')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'historico' ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-500 hover:text-white'}`}><History size={14}/> Histórico</button>
                    {temNexus && (
-                   <button onClick={() => setActiveTab('nexus')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'nexus' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-slate-500 hover:text-white'}`}><FolderSearch size={14}/> Nexus {nexusItens.length > 0 ? `(${nexusItens.length})` : ''}</button>
+                   <button onClick={() => setActiveTab('nexus')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'nexus' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-slate-500 hover:text-white'}`}><Brain size={14}/> Nexus {nexusItens.length > 0 ? `(${nexusItens.length})` : ''}</button>
                    )}
                    </>
                )}
@@ -1270,7 +1270,7 @@ export default function CustomersPage() {
 
                     {nexusItensFiltrados.length === 0 ? (
                         <div className="text-center py-10 opacity-50">
-                            <FolderSearch size={32} className="mx-auto mb-2 text-slate-600"/>
+                            <Brain size={32} className="mx-auto mb-2 text-slate-600"/>
                             <p className="text-xs font-bold text-slate-500 uppercase">{nexusItens.length === 0 ? 'Nada no Nexus ainda.' : 'Nada encontrado.'}</p>
                         </div>
                     ) : (

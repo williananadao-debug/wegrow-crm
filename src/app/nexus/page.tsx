@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FolderSearch, Search, X, Loader2, Download, Trash2, ArrowRight } from 'lucide-react';
+import { Brain, Search, X, Loader2, Download, Trash2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon } from '@/components/nexus-shared';
@@ -62,7 +62,7 @@ export default function NexusPage() {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
-          <FolderSearch size={32} className="text-slate-600 mx-auto mb-3"/>
+          <Brain size={32} className="text-slate-600 mx-auto mb-3"/>
           <p className="text-slate-400 font-bold text-sm">O módulo Nexus não está ativo pra sua empresa ainda.</p>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function NexusPage() {
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6">
         <h1 className="text-4xl font-black tracking-tighter uppercase italic text-indigo-400 flex items-center gap-3">
-          <FolderSearch size={32}/> Nexus
+          <Brain size={32}/> Nexus
         </h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Fotos, documentos, layouts e manutenções — em todos os clientes</p>
       </header>
@@ -103,7 +103,7 @@ export default function NexusPage() {
         <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-slate-600"/></div>
       ) : filtrados.length === 0 ? (
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-16 text-center">
-          <FolderSearch size={32} className="text-slate-600 mx-auto mb-3"/>
+          <Brain size={32} className="text-slate-600 mx-auto mb-3"/>
           <p className="text-slate-400 font-bold text-sm">{itens.length === 0 ? 'Nada no Nexus ainda.' : 'Nada encontrado pra essa busca.'}</p>
         </div>
       ) : (

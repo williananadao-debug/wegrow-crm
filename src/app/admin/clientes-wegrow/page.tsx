@@ -14,9 +14,9 @@ import {
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
 const MODULO_LABELS: Record<string, string> = {
-  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp',
+  cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp', nexus: 'Nexus',
 };
-const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp'] as const;
+const MODULOS_TOGGLEAVEIS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp', 'nexus'] as const;
 
 type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
 type Billing = { empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; whatsapp: string | null; contato: string | null; observacao: string | null; };

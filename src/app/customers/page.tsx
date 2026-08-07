@@ -173,6 +173,7 @@ export default function CustomersPage() {
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDirector = perfil?.cargo === 'diretor';
   const isCDL = Boolean(empresa?.modulos?.cdl);
+  const temNexus = Boolean(empresa?.modulos?.nexus);
 
   useEffect(() => {
     async function fetchSellers() {
@@ -551,7 +552,7 @@ export default function CustomersPage() {
       });
       setSegmentoCustom(cliente.segmento && !SEGMENTOS.includes(cliente.segmento) ? cliente.segmento : '');
       setTags((cliente as any).tags || []);
-      fetchHistorico(cliente.id); fetchUnidades(cliente.id); fetchNexus(cliente.id); resetNexusForm(); setActiveTab('dados');
+      fetchHistorico(cliente.id); fetchUnidades(cliente.id); if (temNexus) fetchNexus(cliente.id); resetNexusForm(); setActiveTab('dados');
     } else {
       setEditingId(null);
       setTipoPessoa('juridica');
@@ -914,7 +915,9 @@ export default function CustomersPage() {
                    <>
                    <button onClick={() => setActiveTab('unidades')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'unidades' ? 'border-purple-500 text-purple-500' : 'border-transparent text-slate-500 hover:text-white'}`}><Building2 size={14}/> Filiais ({unidades.length})</button>
                    <button onClick={() => setActiveTab('historico')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'historico' ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-500 hover:text-white'}`}><History size={14}/> Histórico</button>
+                   {temNexus && (
                    <button onClick={() => setActiveTab('nexus')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'nexus' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-slate-500 hover:text-white'}`}><FolderSearch size={14}/> Nexus {nexusItens.length > 0 ? `(${nexusItens.length})` : ''}</button>
+                   )}
                    </>
                )}
             </div>

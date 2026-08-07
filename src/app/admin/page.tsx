@@ -64,6 +64,9 @@ export default function AdminPage() {
   const [showNovaEmpresa, setShowNovaEmpresa] = useState(false);
   const [novaEmpresaNome, setNovaEmpresaNome] = useState('');
   const [novaEmpresaCnpj, setNovaEmpresaCnpj] = useState('');
+  const [novaEmpresaDiretorNome, setNovaEmpresaDiretorNome] = useState('');
+  const [novaEmpresaDiretorEmail, setNovaEmpresaDiretorEmail] = useState('');
+  const [novaEmpresaFeedback, setNovaEmpresaFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -124,12 +127,20 @@ export default function AdminPage() {
   const criarEmpresa = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await fetch('/api/admin/empresas', {
+    setNovaEmpresaFeedback(null);
+    const res = await fetch('/api/admin/empresas', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ nome: novaEmpresaNome, cnpj: novaEmpresaCnpj }),
+      body: JSON.stringify({ nome: novaEmpresaNome, cnpj: novaEmpresaCnpj, diretorNome: novaEmpresaDiretorNome, diretorEmail: novaEmpresaDiretorEmail }),
     });
-    setNovaEmpresaNome(''); setNovaEmpresaCnpj(''); setShowNovaEmpresa(false);
+    const json = await res.json();
+    if (!res.ok) {
+      setNovaEmpresaFeedback({ tipo: 'erro', msg: json.erro || 'Erro ao criar empresa.' });
+      setSaving(false);
+      return;
+    }
+    setNovaEmpresaFeedback({ tipo: 'sucesso', msg: `Empresa criada! Login: ${json.diretorEmail} · Senha temporária: ${json.senhaTemp}` });
+    setNovaEmpresaNome(''); setNovaEmpresaCnpj(''); setNovaEmpresaDiretorNome(''); setNovaEmpresaDiretorEmail('');
     await carregarEmpresas();
     setSaving(false);
   };
@@ -398,11 +409,21 @@ export default function AdminPage() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm">
             <div className="flex justify-between items-center mb-5">
               <h3 className="font-black uppercase text-sm">Nova Empresa</h3>
-              <button onClick={() => setShowNovaEmpresa(false)} className="text-slate-500 hover:text-white"><X size={16}/></button>
+              <button onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); }} className="text-slate-500 hover:text-white"><X size={16}/></button>
             </div>
             <form onSubmit={criarEmpresa} className="space-y-3">
               <input required placeholder="Nome da empresa *" value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
               <input placeholder="CNPJ" value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+              <div className="border-t border-white/10 pt-3 mt-1">
+                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Primeiro diretor (obrigatório — sem isso a empresa fica invisível)</p>
+                <input required placeholder="Nome do diretor *" value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] mb-3"/>
+                <input required type="email" placeholder="E-mail do diretor *" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+              </div>
+              {novaEmpresaFeedback && (
+                <div className={`text-xs font-bold p-3 rounded-xl ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
+                  {novaEmpresaFeedback.msg}
+                </div>
+              )}
               <button type="submit" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
                 {saving ? 'Criando...' : 'Criar Empresa'}
               </button>

@@ -49,7 +49,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const { unidades } = useUnidades(perfil?.empresa_id);
   const hoje = new Date().toISOString().substring(0, 10);
 
-  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar'>('alertas');
+  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar' | 'dre'>('alertas');
   const [leads, setLeads] = useState<LeadFinance[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState<string | null>(null);
@@ -151,6 +151,74 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setDespesas(prev => prev.filter(d => d.id !== id));
     setSalvando(null);
   };
+
+  // --- DRE + Fluxo de Caixa ---
+  const [receitas, setReceitas] = useState<{ valor: number; data_vencimento: string; status: string }[]>([]);
+  const [anoDRE, setAnoDRE] = useState(() => new Date().getFullYear());
+
+  useEffect(() => {
+    if (perfil?.empresa_id) carregarReceitas();
+  }, [perfil?.empresa_id]);
+
+  const carregarReceitas = async () => {
+    const { data } = await supabase
+      .from('lancamentos')
+      .select('valor, data_vencimento, status')
+      .eq('empresa_id', perfil?.empresa_id)
+      .eq('tipo', 'entrada');
+    setReceitas(data || []);
+  };
+
+  const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  const dreMensal = useMemo(() => {
+    return MESES_LABEL.map((label, i) => {
+      const chave = `${anoDRE}-${String(i + 1).padStart(2, '0')}`;
+      const receita = receitas.filter(r => r.data_vencimento?.substring(0, 7) === chave).reduce((s, r) => s + (Number(r.valor) || 0), 0);
+      const despesa = despesas.filter(d => d.data_vencimento?.substring(0, 7) === chave).reduce((s, d) => s + (Number(d.valor) || 0), 0);
+      return { label, receita, despesa, resultado: receita - despesa };
+    });
+  }, [receitas, despesas, anoDRE]);
+
+  const dreAno = useMemo(() => {
+    const receita = dreMensal.reduce((s, m) => s + m.receita, 0);
+    const despesa = dreMensal.reduce((s, m) => s + m.despesa, 0);
+    return { receita, despesa, resultado: receita - despesa, margem: receita > 0 ? ((receita - despesa) / receita) * 100 : 0 };
+  }, [dreMensal]);
+
+  // Fluxo de caixa projetado — próximos 6 meses: entradas ainda não pagas com
+  // vencimento no mês + despesas já lançadas no mês + despesas recorrentes que
+  // ainda não têm um lançamento criado naquele mês específico (projeta o mesmo
+  // valor pra frente, já que recorrência não gera linha nova sozinha ainda).
+  const fluxoProjetado = useMemo(() => {
+    const hojeD = new Date();
+    const despesasRecorrentes = despesas.filter(d => d.recorrente);
+    const meses: { chave: string; label: string; entradas: number; saidas: number; saldo: number; acumulado: number }[] = [];
+    let acumulado = 0;
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(hojeD.getFullYear(), hojeD.getMonth() + i, 1);
+      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+
+      const entradasMes = receitas
+        .filter(r => r.status !== 'pago' && r.data_vencimento?.substring(0, 7) === chave)
+        .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+
+      const despesasLancadasMes = despesas.filter(dd => dd.data_vencimento?.substring(0, 7) === chave);
+      const saidasLancadas = despesasLancadasMes.reduce((s, dd) => s + (Number(dd.valor) || 0), 0);
+
+      const titulosJaLancados = new Set(despesasLancadasMes.map(dd => dd.titulo));
+      const recorrentesProjetadas = despesasRecorrentes
+        .filter(dd => !titulosJaLancados.has(dd.titulo))
+        .reduce((s, dd) => s + (Number(dd.valor) || 0), 0);
+
+      const saidasMes = saidasLancadas + recorrentesProjetadas;
+      const saldo = entradasMes - saidasMes;
+      acumulado += saldo;
+      meses.push({ chave, label, entradas: entradasMes, saidas: saidasMes, saldo, acumulado });
+    }
+    return meses;
+  }, [receitas, despesas]);
 
   const carregarLeads = async () => {
     setLoading(true);
@@ -346,6 +414,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : 'Inadimplência', AlertTriangle],
           ['conciliacao', 'Conciliação', CheckCircle2],
           ['contas_pagar', 'Contas a Pagar', Wallet],
+          ['dre', 'DRE & Fluxo de Caixa', TrendingUp],
         ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
@@ -611,7 +680,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             )}
           </div>
         </>
-      ) : (
+      ) : aba === 'contas_pagar' ? (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div className="flex items-center gap-3 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
@@ -739,6 +808,93 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               </div>
             </div>
           )}
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <h3 className="font-black uppercase text-sm text-slate-300">Resultado do ano</h3>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setAnoDRE(a => a - 1)} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center font-black">‹</button>
+              <span className="text-white font-black text-sm w-14 text-center">{anoDRE}</span>
+              <button onClick={() => setAnoDRE(a => a + 1)} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center font-black">›</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita</p>
+              <h2 className="text-2xl font-black text-[#22C55E] mt-1">R$ {dreAno.receita.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Despesa</p>
+              <h2 className="text-2xl font-black text-red-400 mt-1">R$ {dreAno.despesa.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className={`${dreAno.resultado >= 0 ? 'bg-[#22C55E]/5 border-[#22C55E]/20' : 'bg-red-500/5 border-red-500/20'} border p-5 rounded-2xl`}>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Resultado</p>
+              <h2 className={`text-2xl font-black mt-1 ${dreAno.resultado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {dreAno.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Margem</p>
+              <h2 className="text-2xl font-black text-white mt-1">{dreAno.margem.toFixed(0)}%</h2>
+            </div>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 mb-6">
+            <h3 className="font-black uppercase text-sm text-slate-300 mb-5">Receita × Despesa por mês</h3>
+            <div className="flex items-end gap-2 h-40 border-b border-white/5">
+              {dreMensal.map(m => {
+                const maxVal = Math.max(...dreMensal.map(x => Math.max(x.receita, x.despesa)), 1);
+                return (
+                  <div key={m.label} className="flex-1 flex flex-col items-center justify-end h-full gap-0.5">
+                    <div className="w-full flex items-end justify-center gap-0.5 h-full">
+                      <div className="flex-1 bg-[#22C55E] rounded-t-sm" style={{ height: `${Math.max((m.receita / maxVal) * 100, m.receita > 0 ? 3 : 0)}%` }} title={`Receita: R$ ${m.receita.toLocaleString('pt-BR')}`} />
+                      <div className="flex-1 bg-red-500/70 rounded-t-sm" style={{ height: `${Math.max((m.despesa / maxVal) * 100, m.despesa > 0 ? 3 : 0)}%` }} title={`Despesa: R$ ${m.despesa.toLocaleString('pt-BR')}`} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 mt-1.5">
+              {dreMensal.map(m => (
+                <span key={m.label} className="flex-1 text-center text-[9px] font-black text-slate-500 uppercase">{m.label}</span>
+              ))}
+            </div>
+            <div className="flex items-center gap-4 mt-4">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-[#22C55E] inline-block"/> Receita</span>
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/70 inline-block"/> Despesa</span>
+            </div>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+            <div className="p-5 border-b border-white/5">
+              <h3 className="font-black uppercase text-sm text-slate-300">Fluxo de Caixa Projetado</h3>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Próximos 6 meses · entradas/despesas pendentes + recorrências</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="text-left p-3 text-slate-500 font-black uppercase text-[9px]">Mês</th>
+                    <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Entradas</th>
+                    <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saídas</th>
+                    <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saldo do Mês</th>
+                    <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Acumulado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {fluxoProjetado.map(m => (
+                    <tr key={m.chave}>
+                      <td className="p-3 font-black text-white uppercase">{m.label}</td>
+                      <td className="p-3 text-right text-[#22C55E] font-bold">R$ {m.entradas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                      <td className="p-3 text-right text-red-400 font-bold">R$ {m.saidas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                      <td className={`p-3 text-right font-black ${m.saldo >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {m.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                      <td className={`p-3 text-right font-black ${m.acumulado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {m.acumulado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
       {/* Modal de Cobrança Asaas */}

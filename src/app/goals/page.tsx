@@ -476,9 +476,10 @@ export default function GoalsPage() {
                 <input 
                   type="number" 
                   className="bg-transparent text-2xl font-black text-white text-right outline-none w-40" 
-                  value={metaAno} 
+                  value={metaAno}
                   onChange={(e) => setMetaAno(Number(e.target.value))}
                   onBlur={(e) => handleUpdateMeta(null, Number(e.target.value))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   disabled={!isDirector}
                 />
               </div>
@@ -554,8 +555,9 @@ export default function GoalsPage() {
                         <input 
                           type="number" 
                           className="bg-transparent text-lg font-black text-white outline-none py-1 w-full" 
-                          defaultValue={mMeta} 
+                          defaultValue={mMeta}
                           onBlur={(e) => handleUpdateMeta(mes, Number(e.target.value))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                           disabled={!isDirector}
                         />
                       </div>
@@ -601,6 +603,7 @@ export default function GoalsPage() {
                     value={metaAnoUnidade}
                     onChange={(e) => setMetaAnoUnidade(Number(e.target.value))}
                     onBlur={(e) => handleUpdateMetaUnidade(null, Number(e.target.value))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     disabled={!isDirector}
                   />
                 </div>
@@ -659,6 +662,7 @@ export default function GoalsPage() {
                           className="bg-transparent text-lg font-black text-white outline-none py-1 w-full"
                           defaultValue={mMeta}
                           onBlur={(e) => handleUpdateMetaUnidade(mes, Number(e.target.value))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                           disabled={!isDirector}
                         />
                       </div>

@@ -1162,6 +1162,7 @@ export default function DealsPage() {
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
                     <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/>
+                    ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(lead.valor_total / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
                     <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
                     <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || ''}<br/>
                     <strong>Praça de Pagamento:</strong> ${lead.cidade || ''}

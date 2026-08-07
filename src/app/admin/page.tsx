@@ -146,10 +146,12 @@ export default function AdminPage() {
         headers: headers(),
         body: JSON.stringify({ empresaId: empresaSelecionada.id, imagemBase64: base64, extensao: ext }),
       });
-      const json = await res.json();
-      if (!res.ok) { alert(json.erro || 'Erro ao subir logo.'); return; }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(json.erro || `Erro ao subir logo (HTTP ${res.status}).`); return; }
       setEditLogoUrl(json.logoUrl);
       await carregarEmpresas();
+    } catch (err: any) {
+      alert('Erro ao subir logo: ' + (err?.message || 'erro desconhecido.'));
     } finally {
       setUploadingLogo(false);
     }

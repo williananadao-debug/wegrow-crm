@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
 import Topbar from '@/components/topbar';
+import { isPublicPage } from '@/lib/publicPages';
 
 const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 const GlobalSearch = dynamic(() => import('@/components/GlobalSearch'), { ssr: false });
@@ -15,11 +16,8 @@ interface LayoutWrapperProps {
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
-  
-  // 👇 AQUI ESTÁ A MÁGICA! Adicionamos o '/' (Site) na Lista VIP 👇
-  const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/portal' || pathname.startsWith('/solicitar') || pathname.startsWith('/portal-cdl') || pathname.startsWith('/proposta-cdl') || pathname.startsWith('/carteirinha') || pathname.startsWith('/p/');
 
-  if (isPublicPage) {
+  if (isPublicPage(pathname)) {
     return <>{children}</>;
   }
 

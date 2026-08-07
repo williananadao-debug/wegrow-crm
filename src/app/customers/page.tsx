@@ -4,8 +4,9 @@ import {
   Users, Search, Plus, Trash2,
   Phone, FileText, X, History, CheckCircle2, XCircle,
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle,
-  FolderSearch, Image as ImageIcon, Box, Wrench, Download
+  FolderSearch, Download
 } from 'lucide-react';
+import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon } from '@/components/nexus-shared';
 import { SkeletonRow } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -79,33 +80,6 @@ type Unit = { id: string; nome: string; cidade: string; estado?: string; };
 type Vendedor = { id: string; nome: string; };
 type VendaHistorico = { id: number; created_at: string; valor_total: number; status: string; etapa: number; itens: any[]; notas: any[]; unidade?: string; user_id?: string; };
 
-type NexusCategoria = 'foto' | 'documento' | 'layout3d' | 'manutencao';
-type NexusArquivo = {
-  id: number; client_id: number; categoria: NexusCategoria; titulo: string; tags: string[];
-  arquivo_url: string; arquivo_path: string; responsavel_nome?: string | null; user_id?: string | null; created_at: string;
-};
-
-const NEXUS_CATS: { key: 'todos' | NexusCategoria; label: string }[] = [
-  { key: 'todos', label: 'Todos' },
-  { key: 'foto', label: 'Fotos' },
-  { key: 'documento', label: 'Documentos' },
-  { key: 'layout3d', label: 'Layouts 3D' },
-  { key: 'manutencao', label: 'Manutenções' },
-];
-const NEXUS_CAT_LABEL: Record<NexusCategoria, string> = { foto: 'Foto', documento: 'Documento', layout3d: 'Layout 3D', manutencao: 'Manutenção' };
-const NEXUS_CAT_BG: Record<NexusCategoria, string> = {
-  foto: 'bg-sky-500/10 text-sky-400',
-  documento: 'bg-amber-500/10 text-amber-400',
-  layout3d: 'bg-indigo-500/10 text-indigo-400',
-  manutencao: 'bg-orange-500/10 text-orange-400',
-};
-
-function NexusIcon({ categoria, size = 20 }: { categoria: NexusCategoria; size?: number }) {
-  if (categoria === 'foto') return <ImageIcon size={size} />;
-  if (categoria === 'documento') return <FileText size={size} />;
-  if (categoria === 'layout3d') return <Box size={size} />;
-  return <Wrench size={size} />;
-}
 
 const ITEMS_PER_PAGE = 20;
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
@@ -567,6 +541,22 @@ export default function CustomersPage() {
     }
     setIsModalOpen(true);
   };
+
+  // Deep-link vindo da busca global do Nexus (/nexus?abrirCliente=X&aba=nexus)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get('abrirCliente');
+    if (!idParam) return;
+    (async () => {
+      const { data } = await supabase.from('clientes').select('*').eq('id', idParam).single();
+      if (data) {
+        handleOpenModal(data as Cliente);
+        if (params.get('aba') === 'nexus') setActiveTab('nexus');
+      }
+      window.history.replaceState({}, '', '/customers');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();

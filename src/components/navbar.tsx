@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound
+  Rocket, BarChart3, Menu, X, UsersRound, FolderSearch
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +37,7 @@ export default function Navbar() {
   const mostrarFinanceiro = Boolean(modulos.financeiro);
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
+  const mostrarNexus = Boolean(modulos.nexus);
 
   // O menu "Produção" só aparece quando existe algum job em andamento no Kanban visível
   // (roteiro/gravação/edição/aprovação). Jobs de contrato assinado pulam direto pra
@@ -63,6 +64,7 @@ export default function Navbar() {
       mostrarOpec           ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
       { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' },
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
+      mostrarNexus           ? { name: 'Nexus',      icon: <FolderSearch size={20} />, href: '/nexus' }  : null,
       mostrarFinanceiro     ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       isDirector || isManager ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];

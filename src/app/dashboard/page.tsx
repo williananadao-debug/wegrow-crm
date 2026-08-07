@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   TrendingUp, Users, DollarSign,
   BarChart3, Calendar, Loader2,
@@ -19,11 +20,23 @@ const getLocalYYYYMMDD = (date: Date) => {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil;
   const empresa = auth.empresa;
   const isCDL = Boolean(empresa?.modulos?.cdl);
+
+  // Dashboard é o destino padrão pós-login, mas é uma página do macro CRM — empresa
+  // com CRM desligado (ex: só usa Nexus) não pode cair aqui, senão vê a tela cheia de
+  // pipeline mesmo sem esse módulo ativo. Manda pro primeiro lugar que ela realmente tem.
+  useEffect(() => {
+    if ((auth as any).loading || !empresa) return;
+    const mostrarCRM = empresa?.modulos?.crm !== false;
+    if (mostrarCRM) return;
+    if (empresa?.modulos?.nexus) { router.replace('/nexus'); return; }
+    router.replace('/customers');
+  }, [(auth as any).loading, empresa, router]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false); // Status para o refresh automático

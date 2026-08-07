@@ -11,6 +11,15 @@ type Result = {
   nome: string;
   sub?: string;
   badge?: string;
+  codigo?: string;
+};
+
+const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
+
+// Reconhece "42", "0042", "LD-42", "LD0042", "#42" como busca por código do lead
+const extrairCodigoLead = (q: string): number | null => {
+  const m = q.trim().match(/^(?:ld-?|#)?0*(\d+)$/i);
+  return m ? parseInt(m[1], 10) : null;
 };
 
 export default function GlobalSearch() {
@@ -52,10 +61,13 @@ export default function GlobalSearch() {
     if (!q.trim() || !perfil?.empresa_id) { setResults([]); return; }
     setLoading(true);
     try {
+      const codigoLead = extrairCodigoLead(q);
       let leadsQuery = supabase.from('leads').select('id, empresa, status, valor_total, unidade')
         .eq('empresa_id', perfil.empresa_id)
-        .ilike('empresa', `%${q}%`)
         .limit(5);
+      leadsQuery = codigoLead !== null
+        ? leadsQuery.or(`empresa.ilike.%${q}%,id.eq.${codigoLead}`)
+        : leadsQuery.ilike('empresa', `%${q}%`);
       if (!isDirector) {
         if (isOpec) leadsQuery = leadsQuery.or(`user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
         else if (isGerente && perfil.unidade) leadsQuery = leadsQuery.eq('unidade', perfil.unidade);
@@ -72,6 +84,7 @@ export default function GlobalSearch() {
         id: l.id, tipo: 'lead' as const, nome: l.empresa || 'Lead s/ nome',
         sub: `R$ ${(Number(l.valor_total) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} · ${l.unidade || '—'}`,
         badge: l.status,
+        codigo: formatId(l.id, 'LD'),
       }));
       const clienteRows: Result[] = (clientesRes.data || []).map(c => ({
         id: c.id, tipo: 'cliente' as const, nome: c.nome_empresa || 'Cliente s/ nome',
@@ -110,7 +123,7 @@ export default function GlobalSearch() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Buscar leads, clientes, cidades..."
+            placeholder="Buscar leads, clientes, cidades, código (LD-0042)..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKey}
@@ -134,7 +147,10 @@ export default function GlobalSearch() {
                     {r.tipo === 'lead' ? <Zap size={14}/> : <Building2 size={14}/>}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-bold text-sm truncate">{r.nome}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white font-bold text-sm truncate">{r.nome}</p>
+                      {r.codigo && <span className="text-[9px] font-black text-slate-500 bg-white/5 px-1.5 py-0.5 rounded flex-shrink-0">{r.codigo}</span>}
+                    </div>
                     {r.sub && <p className="text-slate-500 text-[10px] font-bold uppercase truncate">{r.sub}</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

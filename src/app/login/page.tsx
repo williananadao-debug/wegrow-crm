@@ -17,10 +17,16 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    // Autofill no mobile às vezes preenche o input sem disparar o onChange do React,
+    // deixando o state desatualizado. Lê direto do form no submit para não depender disso.
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const emailValue = (formData.get('email') as string) || email;
+    const passwordValue = (formData.get('password') as string) || password;
+
     try {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: emailValue,
+          password: passwordValue,
         });
         if (error) throw error;
         router.push('/dashboard');
@@ -52,8 +58,10 @@ export default function LoginPage() {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">E-mail Corporativo</label>
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
-              <input 
-                type="email" 
+              <input
+                type="email"
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"

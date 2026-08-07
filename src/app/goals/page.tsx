@@ -69,8 +69,16 @@ export default function GoalsPage() {
   }, [perfil?.empresa_id, vendedorSelecionado]);
 
   useEffect(() => {
-    if (unidades.length > 0 && !unidadeSelecionadaMeta) setUnidadeSelecionadaMeta(unidades[0].nome);
+    if (unidades.length === 0 || unidadeSelecionadaMeta) return;
+    const salva = localStorage.getItem('wegrow_unidade_meta_selecionada');
+    const aindaExiste = salva && unidades.some(u => u.nome === salva);
+    setUnidadeSelecionadaMeta(aindaExiste ? salva! : unidades[0].nome);
   }, [unidades]);
+
+  const selecionarUnidadeMeta = (nome: string) => {
+    setUnidadeSelecionadaMeta(nome);
+    localStorage.setItem('wegrow_unidade_meta_selecionada', nome);
+  };
 
   useEffect(() => {
     if (perfil?.empresa_id && unidadeSelecionadaMeta) fetchMetasERealizadoUnidade();
@@ -603,7 +611,7 @@ export default function GoalsPage() {
           {/* Seletor de Unidade */}
           <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar mb-6">
             {unidades.map(u => (
-              <button key={u.id} onClick={() => setUnidadeSelecionadaMeta(u.nome)} className={`px-5 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex-shrink-0 ${unidadeSelecionadaMeta === u.nome ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}>
+              <button key={u.id} onClick={() => selecionarUnidadeMeta(u.nome)} className={`px-5 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex-shrink-0 ${unidadeSelecionadaMeta === u.nome ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}>
                 {u.nome}
               </button>
             ))}

@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Users, Search, Plus, Trash2,
   Phone, FileText, X, History, CheckCircle2, XCircle,
-  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle
+  Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle,
+  FolderSearch, Image as ImageIcon, Box, Wrench, Download
 } from 'lucide-react';
 import { SkeletonRow } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
@@ -78,6 +79,34 @@ type Unit = { id: string; nome: string; cidade: string; estado?: string; };
 type Vendedor = { id: string; nome: string; };
 type VendaHistorico = { id: number; created_at: string; valor_total: number; status: string; etapa: number; itens: any[]; notas: any[]; unidade?: string; user_id?: string; };
 
+type NexusCategoria = 'foto' | 'documento' | 'layout3d' | 'manutencao';
+type NexusArquivo = {
+  id: number; client_id: number; categoria: NexusCategoria; titulo: string; tags: string[];
+  arquivo_url: string; arquivo_path: string; responsavel_nome?: string | null; user_id?: string | null; created_at: string;
+};
+
+const NEXUS_CATS: { key: 'todos' | NexusCategoria; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'foto', label: 'Fotos' },
+  { key: 'documento', label: 'Documentos' },
+  { key: 'layout3d', label: 'Layouts 3D' },
+  { key: 'manutencao', label: 'Manutenções' },
+];
+const NEXUS_CAT_LABEL: Record<NexusCategoria, string> = { foto: 'Foto', documento: 'Documento', layout3d: 'Layout 3D', manutencao: 'Manutenção' };
+const NEXUS_CAT_BG: Record<NexusCategoria, string> = {
+  foto: 'bg-sky-500/10 text-sky-400',
+  documento: 'bg-amber-500/10 text-amber-400',
+  layout3d: 'bg-indigo-500/10 text-indigo-400',
+  manutencao: 'bg-orange-500/10 text-orange-400',
+};
+
+function NexusIcon({ categoria, size = 20 }: { categoria: NexusCategoria; size?: number }) {
+  if (categoria === 'foto') return <ImageIcon size={size} />;
+  if (categoria === 'documento') return <FileText size={size} />;
+  if (categoria === 'layout3d') return <Box size={size} />;
+  return <Wrench size={size} />;
+}
+
 const ITEMS_PER_PAGE = 20;
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
 
@@ -112,7 +141,7 @@ export default function CustomersPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'dados' | 'unidades' | 'historico'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'unidades' | 'historico' | 'nexus'>('dados');
   
   const [historicoVendas, setHistoricoVendas] = useState<VendaHistorico[]>([]);
   const [unidades, setUnidades] = useState<Unit[]>([]);
@@ -234,6 +263,81 @@ export default function CustomersPage() {
   const fetchUnidades = async (clientId: number) => {
     const { data } = await supabase.from('units').select('*').eq('customer_id', clientId);
     if (data) setUnidades(data);
+  };
+
+  // --- Nexus: memória pesquisável de arquivos por cliente ---
+  const [nexusItens, setNexusItens] = useState<NexusArquivo[]>([]);
+  const [nexusQuery, setNexusQuery] = useState('');
+  const [nexusCat, setNexusCat] = useState<'todos' | NexusCategoria>('todos');
+  const [nexusFormOpen, setNexusFormOpen] = useState(false);
+  const [nexusCategoria, setNexusCategoria] = useState<NexusCategoria>('foto');
+  const [nexusTitulo, setNexusTitulo] = useState('');
+  const [nexusTagsInput, setNexusTagsInput] = useState('');
+  const [nexusFile, setNexusFile] = useState<File | null>(null);
+  const [nexusUploading, setNexusUploading] = useState(false);
+  const [nexusError, setNexusError] = useState('');
+  const [nexusDetalhe, setNexusDetalhe] = useState<NexusArquivo | null>(null);
+
+  const fetchNexus = async (clientId: number) => {
+    const { data } = await supabase.from('nexus_arquivos').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
+    if (data) setNexusItens(data as any);
+  };
+
+  const resetNexusForm = () => {
+    setNexusFormOpen(false); setNexusCategoria('foto'); setNexusTitulo(''); setNexusTagsInput('');
+    setNexusFile(null); setNexusError(''); setNexusQuery(''); setNexusCat('todos');
+  };
+
+  const nexusItensFiltrados = nexusItens.filter(item => {
+    if (nexusCat !== 'todos' && item.categoria !== nexusCat) return false;
+    if (!nexusQuery.trim()) return true;
+    const q = nexusQuery.trim().toLowerCase();
+    const hay = (item.titulo + ' ' + item.tags.join(' ')).toLowerCase();
+    return hay.includes(q);
+  });
+
+  const handleUploadNexus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nexusFile || !nexusTitulo.trim() || !editingId || !perfil?.empresa_id) return;
+    setNexusUploading(true);
+    setNexusError('');
+    try {
+      const ext = nexusFile.name.split('.').pop() || 'bin';
+      const path = `${perfil.empresa_id}/${editingId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('nexus').upload(path, nexusFile, { upsert: false, contentType: nexusFile.type || undefined });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('nexus').getPublicUrl(path);
+      const tags = nexusTagsInput.split(',').map(t => t.trim()).filter(Boolean);
+      const payload = {
+        empresa_id: perfil.empresa_id,
+        client_id: editingId,
+        categoria: nexusCategoria,
+        titulo: nexusTitulo.trim(),
+        tags,
+        arquivo_url: urlData.publicUrl,
+        arquivo_path: path,
+        responsavel_nome: perfil?.nome || null,
+        user_id: user?.id,
+      };
+      const { data, error } = await supabase.from('nexus_arquivos').insert([payload]).select();
+      if (error) throw error;
+      if (data) setNexusItens(prev => [data[0] as NexusArquivo, ...prev]);
+      setNexusTitulo(''); setNexusTagsInput(''); setNexusFile(null); setNexusFormOpen(false);
+    } catch (err: any) {
+      setNexusError(err?.message || 'Erro ao enviar arquivo.');
+    } finally {
+      setNexusUploading(false);
+    }
+  };
+
+  const handleDeleteNexus = async (item: NexusArquivo) => {
+    if (!confirm(`Excluir "${item.titulo}"? Essa ação não pode ser desfeita.`)) return;
+    await supabase.storage.from('nexus').remove([item.arquivo_path]);
+    const { error } = await supabase.from('nexus_arquivos').delete().eq('id', item.id);
+    if (!error) {
+      setNexusItens(prev => prev.filter(i => i.id !== item.id));
+      setNexusDetalhe(null);
+    }
   };
 
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -447,7 +551,7 @@ export default function CustomersPage() {
       });
       setSegmentoCustom(cliente.segmento && !SEGMENTOS.includes(cliente.segmento) ? cliente.segmento : '');
       setTags((cliente as any).tags || []);
-      fetchHistorico(cliente.id); fetchUnidades(cliente.id); setActiveTab('dados');
+      fetchHistorico(cliente.id); fetchUnidades(cliente.id); fetchNexus(cliente.id); resetNexusForm(); setActiveTab('dados');
     } else {
       setEditingId(null);
       setTipoPessoa('juridica');
@@ -458,7 +562,7 @@ export default function CustomersPage() {
       });
       setSegmentoCustom('');
       setTags([]);
-      setHistoricoVendas([]); setUnidades([]); setActiveTab('dados');
+      setHistoricoVendas([]); setUnidades([]); setNexusItens([]); resetNexusForm(); setActiveTab('dados');
     }
     setIsModalOpen(true);
   };
@@ -810,6 +914,7 @@ export default function CustomersPage() {
                    <>
                    <button onClick={() => setActiveTab('unidades')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'unidades' ? 'border-purple-500 text-purple-500' : 'border-transparent text-slate-500 hover:text-white'}`}><Building2 size={14}/> Filiais ({unidades.length})</button>
                    <button onClick={() => setActiveTab('historico')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'historico' ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-500 hover:text-white'}`}><History size={14}/> Histórico</button>
+                   <button onClick={() => setActiveTab('nexus')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'nexus' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-slate-500 hover:text-white'}`}><FolderSearch size={14}/> Nexus {nexusItens.length > 0 ? `(${nexusItens.length})` : ''}</button>
                    </>
                )}
             </div>
@@ -1110,6 +1215,131 @@ export default function CustomersPage() {
                     )}
                 </div>
                 )}
+
+                {activeTab === 'nexus' && (
+                <div className="space-y-4 pb-2">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">Fotos, documentos, layouts e manutenções deste cliente — pesquisável, pra quem não vive de pipeline consultar depois.</p>
+
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-2 bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-indigo-400 transition-all">
+                            <Search size={14} className="text-slate-500 flex-shrink-0"/>
+                            <input
+                                value={nexusQuery}
+                                onChange={e => setNexusQuery(e.target.value)}
+                                placeholder="Buscar por equipamento, peça, tag..."
+                                className="flex-1 bg-transparent outline-none text-white text-xs"
+                            />
+                        </div>
+                        <button type="button" onClick={() => setNexusFormOpen(v => !v)} className="bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 flex-shrink-0">
+                            <Plus size={14}/> Adicionar
+                        </button>
+                    </div>
+
+                    <div className="flex gap-1.5 flex-wrap">
+                        {NEXUS_CATS.map(c => (
+                            <button key={c.key} type="button" onClick={() => setNexusCat(c.key)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${nexusCat === c.key ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300' : 'bg-white/[0.02] border-white/10 text-slate-500 hover:text-white'}`}>
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {nexusFormOpen && (
+                        <form onSubmit={handleUploadNexus} className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Categoria</label>
+                                    <select value={nexusCategoria} onChange={e => setNexusCategoria(e.target.value as NexusCategoria)} className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-indigo-400">
+                                        <option value="foto">Foto</option>
+                                        <option value="documento">Documento</option>
+                                        <option value="layout3d">Layout 3D</option>
+                                        <option value="manutencao">Manutenção</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Arquivo</label>
+                                    <input type="file" onChange={e => setNexusFile(e.target.files?.[0] || null)} required className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-2 py-2 text-slate-400 text-[10px] outline-none" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Título</label>
+                                <input value={nexusTitulo} onChange={e => setNexusTitulo(e.target.value)} required placeholder="Ex: Filtro de Mangas — vista frontal" className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-indigo-400" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Tags (separadas por vírgula)</label>
+                                <input value={nexusTagsInput} onChange={e => setNexusTagsInput(e.target.value)} placeholder="filtro de mangas, exaustão" className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-indigo-400" />
+                            </div>
+                            {nexusError && <p className="text-[10px] text-red-400 font-bold">{nexusError}</p>}
+                            <button type="submit" disabled={nexusUploading} className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-black uppercase text-[10px] py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all">
+                                {nexusUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>} {nexusUploading ? 'Enviando...' : 'Salvar no Nexus'}
+                            </button>
+                        </form>
+                    )}
+
+                    {nexusItensFiltrados.length === 0 ? (
+                        <div className="text-center py-10 opacity-50">
+                            <FolderSearch size={32} className="mx-auto mb-2 text-slate-600"/>
+                            <p className="text-xs font-bold text-slate-500 uppercase">{nexusItens.length === 0 ? 'Nada no Nexus ainda.' : 'Nada encontrado.'}</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                            {nexusItensFiltrados.map(item => (
+                                <button key={item.id} type="button" onClick={() => setNexusDetalhe(item)} className="bg-white/[0.02] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden text-left transition-all">
+                                    <div className={`h-16 flex items-center justify-center ${NEXUS_CAT_BG[item.categoria]}`}>
+                                        <NexusIcon categoria={item.categoria} size={22} />
+                                    </div>
+                                    <div className="p-2">
+                                        <p className="text-[10px] font-bold text-white truncate">{item.titulo}</p>
+                                        <p className="text-[8px] text-slate-500 mt-0.5">{new Date(item.created_at).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETALHE NEXUS */}
+      {nexusDetalhe && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1001] flex items-center justify-center p-4" onClick={() => setNexusDetalhe(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className={`h-32 flex items-center justify-center relative ${NEXUS_CAT_BG[nexusDetalhe.categoria]}`}>
+              <NexusIcon categoria={nexusDetalhe.categoria} size={36} />
+              <button onClick={() => setNexusDetalhe(null)} className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white rounded-full p-1.5"><X size={14}/></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">{NEXUS_CAT_LABEL[nexusDetalhe.categoria]}</p>
+                <p className="text-white font-black text-sm mt-0.5">{nexusDetalhe.titulo}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/5 rounded-lg p-2">
+                  <p className="text-[8px] font-black uppercase text-slate-500">Adicionado em</p>
+                  <p className="text-[11px] text-slate-300 font-bold">{new Date(nexusDetalhe.created_at).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-2">
+                  <p className="text-[8px] font-black uppercase text-slate-500">Responsável</p>
+                  <p className="text-[11px] text-slate-300 font-bold truncate">{nexusDetalhe.responsavel_nome || '—'}</p>
+                </div>
+              </div>
+              {nexusDetalhe.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {nexusDetalhe.tags.map((t, i) => <span key={i} className="text-[9px] font-bold bg-white/5 text-slate-400 px-2 py-1 rounded-md">{t}</span>)}
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <a href={nexusDetalhe.arquivo_url} target="_blank" rel="noopener noreferrer" className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all">
+                  <Download size={13}/> Abrir arquivo
+                </a>
+                {(isDirector || nexusDetalhe.user_id === user?.id) && (
+                  <button onClick={() => handleDeleteNexus(nexusDetalhe)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 rounded-xl transition-all">
+                    <Trash2 size={14}/>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

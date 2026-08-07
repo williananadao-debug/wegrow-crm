@@ -4,7 +4,8 @@ import { CDL } from '@/lib/cdl-config';
 import {
   Plus, TrendingUp, AlertTriangle, FileText, Barcode,
   DollarSign, CheckCircle2, Clock, Filter, Loader2, X, RefreshCw,
-  MessageCircle, Bell, History, QrCode, Copy, ExternalLink, Zap
+  MessageCircle, Bell, History, QrCode, Copy, ExternalLink, Zap,
+  Wallet, Trash2, Repeat
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +13,19 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
 
 type Atividade = { id: number; tipo: string; descricao: string; created_at: string; };
+type Despesa = {
+  id: number;
+  titulo: string;
+  valor: number;
+  categoria: string;
+  status: 'pendente' | 'pago';
+  data_vencimento: string;
+  data_pagamento: string | null;
+  unidade: string | null;
+  recorrente: boolean;
+};
+
+const CATEGORIAS_DESPESA = ['Fornecedor', 'Aluguel', 'Salário', 'Imposto', 'Marketing', 'Software', 'Outro'];
 type LeadFinance = {
   id: string;
   empresa: string;
@@ -31,9 +45,11 @@ type LeadFinance = {
 function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
+  const user = auth.user;
   const { unidades } = useUnidades(perfil?.empresa_id);
+  const hoje = new Date().toISOString().substring(0, 10);
 
-  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao'>('alertas');
+  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar'>('alertas');
   const [leads, setLeads] = useState<LeadFinance[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState<string | null>(null);
@@ -49,6 +65,92 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   useEffect(() => {
     if (perfil?.empresa_id) carregarLeads();
   }, [perfil?.empresa_id]);
+
+  // --- Contas a Pagar ---
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [loadingDespesas, setLoadingDespesas] = useState(true);
+  const [mesDespesas, setMesDespesas] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [formDespesaAberto, setFormDespesaAberto] = useState(false);
+  const [novaDespesa, setNovaDespesa] = useState({
+    titulo: '', valor: '', categoria: CATEGORIAS_DESPESA[0], data_vencimento: '', unidade: '', recorrente: false,
+  });
+  const [salvandoDespesa, setSalvandoDespesa] = useState(false);
+
+  useEffect(() => {
+    if (perfil?.empresa_id) carregarDespesas();
+  }, [perfil?.empresa_id]);
+
+  const carregarDespesas = async () => {
+    setLoadingDespesas(true);
+    const { data } = await supabase
+      .from('lancamentos')
+      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente')
+      .eq('empresa_id', perfil?.empresa_id)
+      .eq('tipo', 'saida')
+      .order('data_vencimento', { ascending: true });
+    setDespesas((data || []) as Despesa[]);
+    setLoadingDespesas(false);
+  };
+
+  const despesasDoMes = useMemo(
+    () => despesas
+      .filter(d => d.data_vencimento?.substring(0, 7) === mesDespesas)
+      .filter(d => !filtroUnidade || d.unidade === filtroUnidade),
+    [despesas, mesDespesas, filtroUnidade]
+  );
+  const totalDespesasMes = despesasDoMes.reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalDespesasPagas = despesasDoMes.filter(d => d.status === 'pago').reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalDespesasPendentes = totalDespesasMes - totalDespesasPagas;
+
+  const criarDespesa = async () => {
+    if (!novaDespesa.titulo.trim() || !novaDespesa.valor || !novaDespesa.data_vencimento) {
+      return alert('Preencha título, valor e data de vencimento.');
+    }
+    setSalvandoDespesa(true);
+    const payload = {
+      titulo: novaDespesa.titulo.trim(),
+      valor: Number(novaDespesa.valor),
+      tipo: 'saida',
+      categoria: novaDespesa.categoria,
+      status: 'pendente',
+      data_vencimento: novaDespesa.data_vencimento,
+      unidade: novaDespesa.unidade || null,
+      recorrente: novaDespesa.recorrente,
+      user_id: user?.id,
+      empresa_id: perfil?.empresa_id,
+    };
+    const { error } = await supabase.from('lancamentos').insert([payload]);
+    setSalvandoDespesa(false);
+    if (error) return alert('Erro ao salvar despesa: ' + error.message);
+    setFormDespesaAberto(false);
+    setNovaDespesa({ titulo: '', valor: '', categoria: CATEGORIAS_DESPESA[0], data_vencimento: '', unidade: '', recorrente: false });
+    carregarDespesas();
+  };
+
+  const marcarDespesaPaga = async (id: number) => {
+    setSalvando(String(id));
+    await supabase.from('lancamentos').update({ status: 'pago', data_pagamento: hoje }).eq('id', id);
+    setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pago', data_pagamento: hoje } : d));
+    setSalvando(null);
+  };
+
+  const estornarDespesaPaga = async (id: number) => {
+    setSalvando(String(id));
+    await supabase.from('lancamentos').update({ status: 'pendente', data_pagamento: null }).eq('id', id);
+    setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pendente', data_pagamento: null } : d));
+    setSalvando(null);
+  };
+
+  const excluirDespesa = async (id: number) => {
+    if (!confirm('Excluir esta despesa?')) return;
+    setSalvando(String(id));
+    await supabase.from('lancamentos').delete().eq('id', id);
+    setDespesas(prev => prev.filter(d => d.id !== id));
+    setSalvando(null);
+  };
 
   const carregarLeads = async () => {
     setLoading(true);
@@ -80,8 +182,6 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setLeads(leads as LeadFinance[]);
     setLoading(false);
   };
-
-  const hoje = new Date().toISOString().substring(0, 10);
 
   const inadimplentes = useMemo(() => {
     return leads
@@ -245,6 +345,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           ['alertas', isCDL ? `Vencendo em Breve (${vencendoBreve.length})` : 'Vencendo em Breve', Bell],
           ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : 'Inadimplência', AlertTriangle],
           ['conciliacao', 'Conciliação', CheckCircle2],
+          ['contas_pagar', 'Contas a Pagar', Wallet],
         ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
@@ -425,7 +526,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             )}
           </div>
         </>
-      ) : (
+      ) : aba === 'conciliacao' ? (
         <>
           <div className="flex items-center gap-3 mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
             <Clock size={14} className="text-slate-500"/>
@@ -509,6 +610,135 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               </div>
             )}
           </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+              <Clock size={14} className="text-slate-500"/>
+              <input
+                type="month"
+                value={mesDespesas}
+                onChange={e => setMesDespesas(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none"
+              />
+            </div>
+            <button onClick={() => setFormDespesaAberto(true)} className="bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <Plus size={14}/> Nova Despesa
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total do mês</p>
+              <h2 className="text-2xl font-black text-white mt-1">R$ {totalDespesasMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pendente</p>
+              <h2 className="text-2xl font-black text-red-400 mt-1">R$ {totalDespesasPendentes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pago</p>
+              <h2 className="text-2xl font-black text-[#22C55E] mt-1">R$ {totalDespesasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+            <div className="p-5 border-b border-white/5">
+              <h3 className="font-black uppercase text-sm text-slate-300">Despesas — {new Date(mesDespesas + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+            </div>
+            {loadingDespesas ? (
+              <div className="p-10 text-center"><Loader2 className="animate-spin text-slate-600 mx-auto" size={28}/></div>
+            ) : despesasDoMes.length === 0 ? (
+              <div className="p-10 text-center">
+                <Wallet size={32} className="text-slate-600 mx-auto mb-2"/>
+                <p className="text-slate-500 text-sm font-bold">Nenhuma despesa neste mês.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {despesasDoMes.map(d => (
+                  <div key={d.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-black text-white uppercase truncate">{d.titulo}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{d.categoria}</span>
+                        {d.unidade && <span className="text-[9px] text-slate-500">{d.unidade}</span>}
+                        <span className="text-[9px] text-slate-600">Vence: {new Date(d.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        {d.recorrente && <span className="text-[9px] font-black text-blue-400 flex items-center gap-0.5"><Repeat size={9}/> Recorrente</span>}
+                        {d.data_pagamento && (
+                          <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
+                            Pago em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-black text-white">R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                      {d.status === 'pago' ? (
+                        <button onClick={() => estornarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
+                        </button>
+                      ) : (
+                        <button onClick={() => marcarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Paga
+                        </button>
+                      )}
+                      <button onClick={() => excluirDespesa(d.id)} className="text-slate-600 hover:text-red-400 p-1.5"><Trash2 size={14}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {formDespesaAberto && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setFormDespesaAberto(false)}>
+              <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-black text-white uppercase italic text-lg">Nova Despesa</h3>
+                  <button onClick={() => setFormDespesaAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18}/></button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Título / Fornecedor</label>
+                    <input value={novaDespesa.titulo} onChange={e => setNovaDespesa(p => ({ ...p, titulo: e.target.value }))} placeholder="Ex: Aluguel sede" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Valor</label>
+                      <input type="number" value={novaDespesa.valor} onChange={e => setNovaDespesa(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Vencimento</label>
+                      <input type="date" value={novaDespesa.data_vencimento} onChange={e => setNovaDespesa(p => ({ ...p, data_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Categoria</label>
+                      <select value={novaDespesa.categoria} onChange={e => setNovaDespesa(p => ({ ...p, categoria: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1">
+                        {CATEGORIAS_DESPESA.map(c => <option key={c} value={c} className="bg-[#0B1120]">{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Unidade</label>
+                      <select value={novaDespesa.unidade} onChange={e => setNovaDespesa(p => ({ ...p, unidade: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1">
+                        <option value="">Geral</option>
+                        {unidades.map(u => <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mt-1">
+                    <input type="checkbox" checked={novaDespesa.recorrente} onChange={e => setNovaDespesa(p => ({ ...p, recorrente: e.target.checked }))} className="accent-[#22C55E]" />
+                    Despesa recorrente (todo mês)
+                  </label>
+                  <button onClick={criarDespesa} disabled={salvandoDespesa} className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-2 disabled:opacity-60">
+                    {salvandoDespesa ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Salvar Despesa
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
       {/* Modal de Cobrança Asaas */}

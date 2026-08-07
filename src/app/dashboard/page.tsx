@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonDashboard } from '@/components/Skeleton';
 
-type RankingItem = { id: string; nome: string; total: number; count: number; visitas: number; };
+type RankingItem = { id: string; nome: string; total: number; count: number; vendas: number; visitas: number; };
 
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
@@ -131,8 +131,8 @@ export default function DashboardPage() {
       const rankObj = leadsFiltrados.reduce((acc: any, lead) => {
          const chave = lead.user_id || 'sem_dono';
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
-         if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0 };
-         if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
+         if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0, vendas: 0 };
+         if (lead.status === 'ganho') { acc[chave].total += (Number(lead.valor_total) || 0); acc[chave].vendas += 1; }
          acc[chave].count += 1;
          return acc;
       }, {});
@@ -510,7 +510,7 @@ export default function DashboardPage() {
                             <div key={r.id} onClick={() => handleSellerClick(r.id)} className={`flex items-center justify-between p-2 rounded-xl border cursor-pointer transition-all group ${vendedorSelecionado === r.id ? 'bg-orange-500/10 border-orange-500' : 'bg-white/5 border-white/5 hover:border-orange-500/50'}`}>
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${index === 0 ? 'bg-orange-500 text-[#0B1120]' : 'bg-blue-600 text-white'}`}>{index + 1}º</div>
-                                    <div><p className="font-black uppercase text-xs text-white">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} Vendas · {r.visitas} Visitas</p></div>
+                                    <div><p className="font-black uppercase text-xs text-white">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} Leads · {r.vendas} Vendas · {r.visitas} Visitas</p></div>
                                 </div>
                                 <p className={`text-sm font-black ${vendedorSelecionado === r.id ? 'text-orange-500' : 'text-slate-300'}`}>R$ {r.total.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</p>
                             </div>

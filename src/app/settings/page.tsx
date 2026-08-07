@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2 } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -26,6 +26,23 @@ type ServicoConfig = {
   historico_precos?: HistoricoPreco[];
 };
 
+type NfseConfig = {
+  municipalServiceCode: string;
+  municipalServiceName: string;
+  retainIss: boolean;
+  iss: number;
+  pis: number;
+  cofins: number;
+  csll: number;
+  inss: number;
+  ir: number;
+};
+
+const NFSE_CONFIG_VAZIA: NfseConfig = {
+  municipalServiceCode: '', municipalServiceName: '', retainIss: false,
+  iss: 0, pis: 0, cofins: 0, csll: 0, inss: 0, ir: 0,
+};
+
 const CATEGORIAS_PADRAO = [
   'Comercial Gravado',
   'Feito ao Vivo',
@@ -49,6 +66,9 @@ export default function SettingsPage() {
   const [unidadesOpec, setUnidadesOpec] = useState<OpecUnitConfig[]>([]);
   const [savingOpec, setSavingOpec] = useState(false);
   const [feedbackOpec, setFeedbackOpec] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [nfseConfig, setNfseConfig] = useState<NfseConfig>(NFSE_CONFIG_VAZIA);
+  const [savingNfse, setSavingNfse] = useState(false);
+  const [feedbackNfse, setFeedbackNfse] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
   const categoriasDisponiveis = Array.from(new Set([...CATEGORIAS_PADRAO, ...servicos.map(s => s.tipo).filter(Boolean)]));
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +90,8 @@ export default function SettingsPage() {
 
   const carregarDados = async () => {
     setLoading(true);
-    const { data: emp } = await supabase.from('empresas').select('modulos').eq('id', perfil?.empresa_id).single();
+    const { data: emp } = await supabase.from('empresas').select('modulos, nfse_config').eq('id', perfil?.empresa_id).single();
+    if (emp?.nfse_config) setNfseConfig({ ...NFSE_CONFIG_VAZIA, ...emp.nfse_config });
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
@@ -222,6 +243,21 @@ export default function SettingsPage() {
     } finally {
       setSavingOpec(false);
       setTimeout(() => setFeedbackOpec(null), 4000);
+    }
+  };
+
+  const salvarNfseConfig = async () => {
+    setSavingNfse(true);
+    setFeedbackNfse(null);
+    try {
+      const { error } = await supabase.from('empresas').update({ nfse_config: nfseConfig }).eq('id', perfil?.empresa_id);
+      if (error) throw error;
+      setFeedbackNfse({ type: 'success', msg: 'Configuração de NFS-e salva com sucesso!' });
+    } catch (err: any) {
+      setFeedbackNfse({ type: 'error', msg: 'Erro: ' + (err.message || 'Verifique o console') });
+    } finally {
+      setSavingNfse(false);
+      setTimeout(() => setFeedbackNfse(null), 4000);
     }
   };
 
@@ -467,6 +503,77 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      <div className="max-w-6xl bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl relative mt-6">
+        <div className="flex items-center gap-3 text-slate-300 border-b border-white/5 pb-6 mb-6">
+          <FileText size={18} className="text-blue-500" />
+          <div>
+            <h2 className="font-bold text-sm uppercase tracking-wide">Emissão de Nota Fiscal (NFS-e)</h2>
+            <p className="text-slate-500 text-[10px] font-medium mt-0.5">Confirme os valores com seu contador antes de emitir a primeira nota — código de serviço e alíquotas erradas têm implicação fiscal real.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Código do Serviço Municipal</label>
+            <input
+              value={nfseConfig.municipalServiceCode}
+              onChange={e => setNfseConfig(c => ({ ...c, municipalServiceCode: e.target.value }))}
+              placeholder="Ex: 107 (varia por município)"
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Nome do Serviço Municipal</label>
+            <input
+              value={nfseConfig.municipalServiceName}
+              onChange={e => setNfseConfig(c => ({ ...c, municipalServiceName: e.target.value }))}
+              placeholder="Ex: Veiculação de publicidade"
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mb-5">
+          <input type="checkbox" checked={nfseConfig.retainIss} onChange={e => setNfseConfig(c => ({ ...c, retainIss: e.target.checked }))} className="accent-[#22C55E]" />
+          Reter ISS na fonte
+        </label>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+          {([
+            ['iss', 'ISS %'], ['pis', 'PIS %'], ['cofins', 'COFINS %'],
+            ['csll', 'CSLL %'], ['inss', 'INSS %'], ['ir', 'IR %'],
+          ] as const).map(([campo, label]) => (
+            <div key={campo}>
+              <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">{label}</label>
+              <input
+                type="number"
+                step="0.01"
+                value={nfseConfig[campo]}
+                onChange={e => setNfseConfig(c => ({ ...c, [campo]: Number(e.target.value) }))}
+                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          {feedbackNfse && (
+            <div className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl ${feedbackNfse.type === 'success' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-400'}`}>
+              {feedbackNfse.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+              {feedbackNfse.msg}
+            </div>
+          )}
+          <button
+            onClick={salvarNfseConfig}
+            disabled={savingNfse}
+            className="w-full md:w-auto md:ml-auto bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {savingNfse ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
+            {savingNfse ? 'Salvando...' : 'Salvar Config NFS-e'}
+          </button>
+        </div>
+      </div>
 
       {histModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4">

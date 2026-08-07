@@ -392,6 +392,51 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  // --- Emissão manual de NFS-e ---
+  const [nfseLead, setNfseLead] = useState<LeadFinance | null>(null);
+  const [nfsePaymentId, setNfsePaymentId] = useState<string | null>(null);
+  const [nfseCpfCnpj, setNfseCpfCnpj] = useState('');
+  const [nfseLoading, setNfseLoading] = useState(false);
+  const [nfseErro, setNfseErro] = useState<string | null>(null);
+  const [nfseResultado, setNfseResultado] = useState<any>(null);
+
+  const abrirNfse = (lead: LeadFinance, paymentId?: string) => {
+    setNfseLead(lead);
+    setNfsePaymentId(paymentId || null);
+    setNfseCpfCnpj(lead.cnpj || '');
+    setNfseErro(null);
+    setNfseResultado(null);
+  };
+
+  const emitirNfse = async () => {
+    if (!nfseLead) return;
+    setNfseLoading(true);
+    setNfseErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/nfse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          empresaId: perfil?.empresa_id,
+          nome: nfseLead.empresa,
+          cpfCnpj: nfseCpfCnpj,
+          valor: nfseLead.valor_total,
+          dataEfetiva: new Date().toISOString().substring(0, 10),
+          asaasPaymentId: nfsePaymentId || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao emitir nota fiscal.');
+      setNfseResultado(json);
+    } catch (e: any) {
+      setNfseErro(e.message);
+    } finally {
+      setNfseLoading(false);
+    }
+  };
+
   const filtrosAtivos = filtroUnidade || filtroDias !== '0';
 
   return (
@@ -501,6 +546,9 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                       )}
                       <button onClick={() => abrirCobranca(l)} className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                         <Zap size={10}/> Cobrar
+                      </button>
+                      <button onClick={() => abrirNfse(l)} className="bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <FileText size={10}/> NFS-e
                       </button>
                     </div>
                   </div>
@@ -1028,8 +1076,82 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
 
                 <p className="text-center text-[10px] text-slate-600">Quando o cliente pagar, o sistema atualiza automaticamente via webhook.</p>
 
+                <button
+                  onClick={() => { if (cobrancaLead) abrirNfse(cobrancaLead, cobrancaResultado.paymentId); setCobrancaLead(null); }}
+                  className="w-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+                >
+                  <FileText size={14}/> Emitir NFS-e desta cobrança
+                </button>
+
                 <button onClick={() => { setCobrancaResultado(null); }} className="w-full text-slate-500 hover:text-white text-xs font-bold uppercase py-2 transition-colors">
                   Gerar outra cobrança
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Modal de Emissão de NFS-e */}
+      {nfseLead && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setNfseLead(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg">Emitir NFS-e</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{nfseLead.empresa}</p>
+              </div>
+              <button onClick={() => setNfseLead(null)} className="text-slate-500 hover:text-white p-1"><X size={18}/></button>
+            </div>
+
+            {!nfseResultado ? (
+              <div className="space-y-4">
+                <div className="bg-black/30 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold uppercase">Valor</span>
+                  <span className="text-white font-black text-lg">R$ {(nfseLead.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>
+                  <input
+                    type="text"
+                    value={nfseCpfCnpj}
+                    onChange={e => setNfseCpfCnpj(e.target.value)}
+                    placeholder="00.000.000/0001-00"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                  />
+                </div>
+
+                {nfseErro && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{nfseErro}</div>
+                )}
+
+                <p className="text-center text-[10px] text-slate-600">Usa o código de serviço e as alíquotas configurados em Configurações → Emissão de Nota Fiscal.</p>
+
+                <button
+                  onClick={emitirNfse}
+                  disabled={nfseLoading || !nfseCpfCnpj}
+                  className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {nfseLoading ? <Loader2 size={16} className="animate-spin"/> : <FileText size={16}/>}
+                  {nfseLoading ? 'Emitindo...' : 'Emitir NFS-e'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-2xl p-4 text-center">
+                  <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                  <p className="text-white font-black text-sm uppercase">Nota fiscal emitida!</p>
+                  <p className="text-slate-400 text-xs mt-1">{nfseResultado.statusDescription || nfseResultado.status}</p>
+                </div>
+
+                {nfseResultado.pdfUrl && (
+                  <a href={nfseResultado.pdfUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                    <ExternalLink size={14}/> Ver PDF da nota
+                  </a>
+                )}
+
+                <button onClick={() => { setNfseResultado(null); }} className="w-full text-slate-500 hover:text-white text-xs font-bold uppercase py-2 transition-colors">
+                  Emitir outra nota
                 </button>
               </div>
             )}

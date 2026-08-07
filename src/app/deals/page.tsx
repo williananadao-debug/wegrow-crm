@@ -136,7 +136,7 @@ const gerarVencimentosPadrao = (vencimento: string, parcelas: string | number): 
     return Array.from({ length: qtd }, (_, i) => somarMeses(vencimento, i));
 };
 
-const formatarVencimentosArray = (datas: string[]) => datas.map(formatarData).join(',&nbsp;&nbsp;&nbsp;&nbsp;');
+const formatarVencimentosArray = (datas: string[]) => datas.map(formatarData).join(',&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
 
 const FORMAS_PAGAMENTO: Record<string, string> = {
     boleto: 'Boleto',

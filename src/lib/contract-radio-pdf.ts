@@ -57,10 +57,10 @@ function somarMeses(dataIso: string, meses: number) {
 function fmtVencimentos(vencimento: string, parcelas: string, vencimentosDatas?: string[]) {
   const qtd = Math.max(1, parseInt(parcelas, 10) || 1);
   if (Array.isArray(vencimentosDatas) && vencimentosDatas.length === qtd) {
-    return vencimentosDatas.map(fmtData).join('     ');
+    return vencimentosDatas.map(fmtData).join(',          ');
   }
   if (!vencimento) return fmtData('');
-  return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join('     ');
+  return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join(',          ');
 }
 
 const UF_NOMES: Record<string, string> = {

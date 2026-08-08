@@ -16,6 +16,7 @@ type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; preco
 type VendaPulse = {
   id: number; empresa: string; valor_total: number; created_at: string; forma_pagamento?: string | null;
   cnpj?: string | null; nfse_invoice_id?: string | null; nfse_pdf_url?: string | null; user_id?: string | null;
+  status: string; itens?: { servico: string; quantidade: number; precoUnitario: number }[];
 };
 
 type RankingItem = { id: string; nome: string; count: number; total: number };
@@ -88,7 +89,7 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id')
+      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens')
       .eq('empresa_id', perfil.empresa_id)
       .eq('tipo', 'Pulse')
       .gte('created_at', inicioMes.toISOString())
@@ -126,10 +127,13 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
   const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
   const produtosEstoqueBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= 5);
 
+  const pedidosFechados = vendas.filter(v => v.status === 'ganho');
+  const orcamentosAbertos = vendas.filter(v => v.status === 'orcamento');
+
   const hojeStr = new Date().toDateString();
-  const vendasHoje = vendas.filter(v => new Date(v.created_at).toDateString() === hojeStr);
+  const vendasHoje = pedidosFechados.filter(v => new Date(v.created_at).toDateString() === hojeStr);
   const faturamentoHoje = vendasHoje.reduce((acc, v) => acc + (v.valor_total || 0), 0);
-  const faturamentoMes = vendas.reduce((acc, v) => acc + (v.valor_total || 0), 0);
+  const faturamentoMes = pedidosFechados.reduce((acc, v) => acc + (v.valor_total || 0), 0);
 
   // Vendas por dia (mês corrente) — mesmo padrão visual do Dashboard do CRM: rótulo do
   // valor é FILHO da barra com offset fixo (-top-5), não irmão posicionado por bottom:calc(),
@@ -141,7 +145,7 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
     for (let d = new Date(inicio); d <= hoje; d.setDate(d.getDate() + 1)) {
       dias.push({ dia: String(d.getDate()).padStart(2, '0'), valor: 0, dataIso: getLocalYYYYMMDD(d) });
     }
-    vendas.forEach(v => {
+    pedidosFechados.forEach(v => {
       const iso = v.created_at.substring(0, 10);
       const slot = dias.find(d => d.dataIso === iso);
       if (slot) slot.valor += (Number(v.valor_total) || 0);
@@ -152,7 +156,7 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
   // Ranking por vendedor — mesmo formato do Dashboard (lista com badge de posição).
   const ranking: RankingItem[] = (() => {
     const acc: Record<string, RankingItem> = {};
-    vendas.forEach(v => {
+    pedidosFechados.forEach(v => {
       const chave = v.user_id || 'sem_dono';
       if (!acc[chave]) acc[chave] = { id: chave, nome: usersMap[chave] || 'Sem vendedor', count: 0, total: 0 };
       acc[chave].count += 1;
@@ -195,7 +199,10 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
     setNovoTelefone(''); setNovoCnpj(''); setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
   };
 
-  const finalizarVenda = async () => {
+  // "orcamento" só registra (sem baixar estoque nem gerar financeiro) — vira pedido de
+  // verdade só quando alguém clicar "Converter em Pedido" no Painel. "pedido" já fecha
+  // tudo na hora, como sempre foi.
+  const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);
     if (!clienteSelecionado && clienteQuery.trim().length < 2) { setErro('Selecione ou digite o nome do cliente.'); return; }
     if (carrinho.length === 0) { setErro('Adicione pelo menos um item.'); return; }
@@ -223,8 +230,8 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
         valor_total: total,
         desconto,
         itens: itensPayload,
-        status: 'ganho',
-        etapa: 4,
+        status: modo === 'pedido' ? 'ganho' : 'orcamento',
+        etapa: modo === 'pedido' ? 4 : 0,
         tipo: 'Pulse',
         unidade: unidadeSel || null,
         forma_pagamento: formaPagamento,
@@ -237,35 +244,66 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
       }]).select().single();
       if (erroLead) throw erroLead;
 
-      await Promise.all([
-        supabase.from('lancamentos').insert([{
-          titulo: `VENDA RÁPIDA: ${nomeCliente} (${unidadeSel || 'Geral'}) - OS: ${formatId(leadData.id)}`,
-          valor: total, tipo: 'entrada', categoria: 'vendas', status: 'pendente',
-          data_vencimento: new Date().toISOString().split('T')[0],
-          user_id: user?.id, empresa_id: perfil?.empresa_id,
-        }]),
-        ...carrinho.filter(i => i.estoqueMax !== null).map(i =>
-          supabase.from('servicos').update({ estoque: Math.max(0, (i.estoqueMax as number) - i.quantidade) }).eq('id', i.servicoId)
-        ),
-      ]);
+      if (modo === 'pedido') {
+        await Promise.all([
+          supabase.from('lancamentos').insert([{
+            titulo: `VENDA RÁPIDA: ${nomeCliente} (${unidadeSel || 'Geral'}) - OS: ${formatId(leadData.id)}`,
+            valor: total, tipo: 'entrada', categoria: 'vendas', status: 'pendente',
+            data_vencimento: new Date().toISOString().split('T')[0],
+            user_id: user?.id, empresa_id: perfil?.empresa_id,
+          }]),
+          ...carrinho.filter(i => i.estoqueMax !== null).map(i =>
+            supabase.from('servicos').update({ estoque: Math.max(0, (i.estoqueMax as number) - i.quantidade) }).eq('id', i.servicoId)
+          ),
+        ]);
 
-      setServicos(prev => prev.map(s => {
-        const item = carrinho.find(i => i.servicoId === s.id);
-        return item && s.estoque !== null && s.estoque !== undefined ? { ...s, estoque: Math.max(0, s.estoque - item.quantidade) } : s;
-      }));
+        setServicos(prev => prev.map(s => {
+          const item = carrinho.find(i => i.servicoId === s.id);
+          return item && s.estoque !== null && s.estoque !== undefined ? { ...s, estoque: Math.max(0, s.estoque - item.quantidade) } : s;
+        }));
+      }
 
-      setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload });
+      setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload, status: modo === 'pedido' ? 'ganho' : 'orcamento' });
       fetchVendas();
     } catch (err: any) {
-      setErro(err?.message || 'Erro ao salvar a venda.');
+      setErro(err?.message || 'Erro ao salvar.');
     } finally {
       setSalvando(false);
     }
   };
 
+  const converterEmPedido = async (orc: VendaPulse) => {
+    const { error } = await supabase.from('leads').update({ status: 'ganho', etapa: 4 }).eq('id', orc.id);
+    if (error) { alert('Erro ao converter: ' + error.message); return; }
+
+    const itens = orc.itens || [];
+    await Promise.all([
+      supabase.from('lancamentos').insert([{
+        titulo: `VENDA RÁPIDA: ${orc.empresa} - OS: ${formatId(orc.id)}`,
+        valor: orc.valor_total, tipo: 'entrada', categoria: 'vendas', status: 'pendente',
+        data_vencimento: new Date().toISOString().split('T')[0],
+        user_id: user?.id, empresa_id: perfil?.empresa_id,
+      }]),
+      ...itens.map(item => {
+        const s = servicos.find(x => x.nome === item.servico);
+        if (!s || s.estoque === null || s.estoque === undefined) return Promise.resolve();
+        return supabase.from('servicos').update({ estoque: Math.max(0, s.estoque - item.quantidade) }).eq('id', s.id);
+      }),
+    ]);
+
+    setServicos(prev => prev.map(s => {
+      const item = itens.find(i => i.servico === s.nome);
+      return item && s.estoque !== null && s.estoque !== undefined ? { ...s, estoque: Math.max(0, s.estoque - item.quantidade) } : s;
+    }));
+
+    fetchVendas();
+  };
+
   const imprimirRecibo = (venda?: any, itensOverride?: any[]) => {
     const alvo = venda || vendaConcluida;
     if (!alvo) return;
+    const ehOrcamento = alvo.status === 'orcamento';
+    const rotulo = ehOrcamento ? 'Orçamento' : 'Recibo';
     const itens = itensOverride || alvo.itens || [];
     const unidadeInfo = unidades.find(u => u.nome === unidadeSel);
     const janela = window.open('', '', 'width=420,height=600');
@@ -274,17 +312,18 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
       `<tr><td style="padding:4px 0">${i.quantidade}x ${i.servico}</td><td style="text-align:right;padding:4px 0">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>`
     ).join('');
     janela.document.write(`
-      <html><head><title>Recibo ${formatId(alvo.id)}</title></head>
+      <html><head><title>${rotulo} ${formatId(alvo.id)}</title></head>
       <body style="font-family:monospace;font-size:12px;padding:16px;max-width:360px;margin:0 auto;">
         <h2 style="text-align:center;margin:0 0 4px;">${unidadeInfo?.razao_social || unidadeInfo?.nome || ''}</h2>
         ${unidadeInfo?.cnpj ? `<p style="text-align:center;margin:0 0 12px;">CNPJ ${unidadeInfo.cnpj}</p>` : ''}
         <hr/>
-        <p><b>Recibo:</b> ${formatId(alvo.id)}<br/><b>Cliente:</b> ${alvo.empresa}<br/><b>Data:</b> ${new Date(alvo.created_at || Date.now()).toLocaleString('pt-BR')}</p>
+        <p><b>${rotulo}:</b> ${formatId(alvo.id)}<br/><b>Cliente:</b> ${alvo.empresa}<br/><b>Data:</b> ${new Date(alvo.created_at || Date.now()).toLocaleString('pt-BR')}</p>
         <hr/>
         <table style="width:100%;border-collapse:collapse;">${linhas}</table>
         <hr/>
         <h3>TOTAL: R$ ${alvo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
         <p>Pagamento: ${FORMAS_PAGAMENTO[alvo.forma_pagamento || formaPagamento] || alvo.forma_pagamento || ''}</p>
+        ${ehOrcamento ? '<p style="text-align:center;margin-top:12px;font-style:italic;">Orçamento sem validade fiscal — sujeito a confirmação.</p>' : ''}
         <script>window.onload = function(){ window.print(); }</script>
       </body></html>
     `);
@@ -334,16 +373,18 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
   };
 
   if (vendaConcluida) {
+    const ehOrcamento = vendaConcluida.status === 'orcamento';
     return (
       <div className="p-4 md:p-8 pb-20 text-white flex items-center justify-center min-h-[70vh]">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center">
-          <CheckCircle2 size={40} className="text-[#22C55E] mx-auto mb-3" />
-          <p className="text-white font-black text-lg uppercase">Venda registrada!</p>
+          <CheckCircle2 size={40} className={`mx-auto mb-3 ${ehOrcamento ? 'text-purple-400' : 'text-[#22C55E]'}`} />
+          <p className="text-white font-black text-lg uppercase">{ehOrcamento ? 'Orçamento salvo!' : 'Venda registrada!'}</p>
           <p className="text-slate-400 text-sm mt-1">{formatId(vendaConcluida.id)} · {vendaConcluida.empresa}</p>
-          <p className="text-3xl font-black text-[#22C55E] mt-4">R$ {vendaConcluida.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className={`text-3xl font-black mt-4 ${ehOrcamento ? 'text-purple-400' : 'text-[#22C55E]'}`}>R$ {vendaConcluida.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          {ehOrcamento && <p className="text-slate-500 text-[10px] mt-2">Sem efeito no estoque/financeiro ainda — converte em pedido no Painel quando o cliente aprovar.</p>}
           <div className="flex gap-2 mt-6">
             <button onClick={() => imprimirRecibo()} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-              <Printer size={14} /> Recibo
+              <Printer size={14} /> {ehOrcamento ? 'Orçamento' : 'Recibo'}
             </button>
             <button onClick={resetar} className="flex-1 bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Plus size={14} /> Nova venda
@@ -453,20 +494,50 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
             )}
           </div>
 
+          {orcamentosAbertos.length > 0 && (
+            <div className="bg-[#0F172A] border border-purple-500/20 rounded-3xl overflow-hidden mb-6">
+              <div className="p-5 border-b border-white/5">
+                <h3 className="font-black uppercase text-sm text-purple-400 flex items-center gap-2"><FileText size={14} /> Orçamentos em aberto ({orcamentosAbertos.length})</h3>
+              </div>
+              <div className="divide-y divide-white/5">
+                {orcamentosAbertos.map(v => (
+                  <div key={v.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-black text-white uppercase truncate">{v.empresa}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[9px] text-slate-600 font-mono">{formatId(v.id)}</span>
+                        <span className="text-[9px] text-slate-500">{new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <span className="font-black text-white">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <button onClick={() => imprimirRecibo(v)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <Printer size={10} /> Orçamento
+                      </button>
+                      <button onClick={() => converterEmPedido(v)} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Converter em Pedido
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
             <div className="p-5 border-b border-white/5">
-              <h3 className="font-black uppercase text-sm text-slate-300">Vendas do mês ({vendas.length})</h3>
+              <h3 className="font-black uppercase text-sm text-slate-300">Vendas do mês ({pedidosFechados.length})</h3>
             </div>
             {loadingVendas ? (
               <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-            ) : vendas.length === 0 ? (
+            ) : pedidosFechados.length === 0 ? (
               <div className="p-10 text-center">
                 <ShoppingBag size={28} className="text-slate-600 mx-auto mb-2" />
                 <p className="text-slate-500 text-sm font-bold">Nenhuma venda pelo Pulse ainda esse mês.</p>
               </div>
             ) : (
               <div className="divide-y divide-white/5">
-                {vendas.map(v => (
+                {pedidosFechados.map(v => (
                   <div key={v.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
                     <div className="min-w-0">
                       <p className="font-black text-white uppercase truncate">{v.empresa}</p>
@@ -682,10 +753,15 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
             </div>
           )}
 
-          <button onClick={finalizarVenda} disabled={salvando} className="w-full bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-sm py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
-            {salvando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-            {salvando ? 'Salvando...' : 'Fechar venda'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => finalizarVenda('orcamento')} disabled={salvando} className="flex-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 disabled:opacity-50 text-purple-400 font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+              <FileText size={16} /> Orçamento
+            </button>
+            <button onClick={() => finalizarVenda('pedido')} disabled={salvando} className="flex-1 bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+              {salvando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+              {salvando ? 'Salvando...' : 'Fechar venda'}
+            </button>
+          </div>
         </div>
       </div>
       )}

@@ -24,6 +24,7 @@ type ServicoConfig = {
   tipo: string;
   unidade: string;
   historico_precos?: HistoricoPreco[];
+  estoque?: number | null;
 };
 
 type NfseConfig = {
@@ -55,6 +56,8 @@ const CATEGORIAS_PADRAO = [
 
 export default function SettingsPage() {
   const auth = useAuth() || {};
+  const empresa = auth.empresa;
+  const temVendaRapida = Boolean(empresa?.modulos?.venda_rapida);
   const user = auth.user;
   const perfil = auth.perfil;
   const { unidades } = useUnidades(perfil?.empresa_id);
@@ -105,6 +108,7 @@ export default function SettingsPage() {
         tipo: item.tipo || 'Comercial Gravado',
         unidade: item.unidade || '',
         historico_precos: item.historico_precos || [],
+        estoque: item.estoque ?? null,
       }));
       setServicos(formatados);
     } else {
@@ -128,7 +132,8 @@ export default function SettingsPage() {
                 preco: s.preco,
                 tipo: s.tipo,
                 unidade: s.unidade,
-                empresa_id: perfil?.empresa_id 
+                estoque: s.estoque ?? null,
+                empresa_id: perfil?.empresa_id
             }));
             promises.push(supabase.from('servicos').insert(payload));
         }
@@ -143,6 +148,7 @@ export default function SettingsPage() {
                     preco: s.preco,
                     tipo: s.tipo,
                     unidade: s.unidade,
+                    estoque: s.estoque ?? null,
                     historico_precos: historicoAtualizado,
                 }).eq('id', parseInt(s.id))
             );
@@ -169,7 +175,8 @@ export default function SettingsPage() {
       nome: 'Novo Serviço',
       preco: 0,
       tipo: 'Comercial Gravado',
-      unidade: '' 
+      unidade: '',
+      estoque: null,
     };
     setServicos([...servicos, novo]);
   };
@@ -391,6 +398,20 @@ export default function SettingsPage() {
                             <Trash2 size={16} />
                         </button>
                     </div>
+
+                    {temVendaRapida && (
+                        <div className="col-span-12 flex items-center gap-2 pl-0 md:pl-11 -mt-1">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Estoque</span>
+                            <input
+                                type="number"
+                                value={servico.estoque ?? ''}
+                                onChange={(e) => atualizarServico(servico.id, 'estoque', e.target.value === '' ? null : Number(e.target.value))}
+                                className="w-24 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E]"
+                                placeholder="não controla"
+                            />
+                            <span className="text-[9px] text-slate-600">deixe em branco pra não controlar estoque desse item</span>
+                        </div>
+                    )}
                 </div>
             ))}
             </div>

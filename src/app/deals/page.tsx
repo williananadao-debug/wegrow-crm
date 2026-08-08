@@ -25,7 +25,7 @@ const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false })
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; };
 type Historico = { id: number; texto: string; created_at: string; };
 type Atividade = { id: number; tipo: 'etapa' | 'nota' | 'followup'; descricao: string; created_at: string; };
-type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; };
+type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; };
 
 type Lead = { 
   id: number; 

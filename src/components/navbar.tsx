@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, ShoppingCart
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -58,6 +58,7 @@ export default function Navbar() {
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
   const mostrarNexus = Boolean(modulos.nexus);
+  const mostrarVendaRapida = Boolean(modulos.venda_rapida);
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
   const mostrarCRM = modulos.crm !== false;
@@ -101,11 +102,16 @@ export default function Navbar() {
       { name: 'Nexus', icon: <Brain size={20} />, href: '/nexus' },
   ];
 
+  const vendaRapidaItems: any[] = [
+      { name: 'Venda Rápida', icon: <ShoppingCart size={20} />, href: '/venda-rapida' },
+  ];
+
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
-      mostrarCRM   ? { key: 'crm',   label: 'CRM',   icon: <LayoutGrid size={16} />, items: crmItems }   : null,
-      mostrarNexus ? { key: 'nexus', label: 'Nexus', icon: <Brain size={16} />,      items: nexusItems } : null,
+      mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,
+      mostrarNexus       ? { key: 'nexus', label: 'Nexus',         icon: <Brain size={16} />,        items: nexusItems }      : null,
+      mostrarVendaRapida ? { key: 'venda_rapida', label: 'Venda Rápida', icon: <ShoppingCart size={16} />, items: vendaRapidaItems } : null,
   ].filter(Boolean) as any[];
 
   // Usado só no rail colapsado (ícone-only) — ali não cabe cabeçalho de grupo, então achata tudo.
@@ -113,6 +119,7 @@ export default function Navbar() {
       ...(mostrarCRM ? crmItems : []),
       clientesItem,
       ...(mostrarNexus ? nexusItems : []),
+      ...(mostrarVendaRapida ? vendaRapidaItems : []),
   ];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -187,6 +194,28 @@ export default function Navbar() {
                 {aberto && (
                   <div className="flex flex-col gap-1 pl-3 ml-5 border-l border-white/10 mt-1">
                     {nexusItems.map((item: any) => (
+                      <Link key={item.name} href={item.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                        {item.icon} {item.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {mostrarVendaRapida && (() => {
+            const g = grupos.find(x => x.key === 'venda_rapida')!;
+            const aberto = gruposFechados.venda_rapida !== true;
+            return (
+              <div className="mb-1">
+                <button onClick={() => toggleGrupo('venda_rapida')} className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                  <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} Venda Rápida</span>
+                  <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                </button>
+                {aberto && (
+                  <div className="flex flex-col gap-1 pl-3 ml-5 border-l border-white/10 mt-1">
+                    {vendaRapidaItems.map((item: any) => (
                       <Link key={item.name} href={item.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                         {item.icon} {item.name}
                       </Link>
@@ -277,6 +306,28 @@ export default function Navbar() {
                         {aberto && (
                           <div className="flex flex-col gap-1 pl-2 ml-3 border-l border-white/10 mt-1">
                             {nexusItems.map((item: any) => (
+                              <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-semibold ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                                <div className="min-w-[18px]">{item.icon}</div> {item.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {mostrarVendaRapida && (() => {
+                    const g = grupos.find(x => x.key === 'venda_rapida')!;
+                    const aberto = gruposFechados.venda_rapida !== true;
+                    return (
+                      <div className="mb-1">
+                        <button onClick={() => toggleGrupo('venda_rapida')} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl text-slate-300 hover:text-white hover:bg-white/5 transition-all">
+                          <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">{g.icon} Venda Rápida</span>
+                          <ChevronDown size={14} className={`transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                        </button>
+                        {aberto && (
+                          <div className="flex flex-col gap-1 pl-2 ml-3 border-l border-white/10 mt-1">
+                            {vendaRapidaItems.map((item: any) => (
                               <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-semibold ${pathname === item.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                                 <div className="min-w-[18px]">{item.icon}</div> {item.name}
                               </Link>

@@ -25,6 +25,7 @@ type ServicoConfig = {
   unidade: string;
   historico_precos?: HistoricoPreco[];
   estoque?: number | null;
+  imagem_url?: string | null;
 };
 
 type NfseConfig = {
@@ -57,7 +58,7 @@ const CATEGORIAS_PADRAO = [
 export default function SettingsPage() {
   const auth = useAuth() || {};
   const empresa = auth.empresa;
-  const temVendaRapida = Boolean(empresa?.modulos?.venda_rapida);
+  const temPulse = Boolean(empresa?.modulos?.pulse);
   const user = auth.user;
   const perfil = auth.perfil;
   const { unidades } = useUnidades(perfil?.empresa_id);
@@ -109,6 +110,7 @@ export default function SettingsPage() {
         unidade: item.unidade || '',
         historico_precos: item.historico_precos || [],
         estoque: item.estoque ?? null,
+        imagem_url: item.imagem_url ?? null,
       }));
       setServicos(formatados);
     } else {
@@ -191,6 +193,27 @@ export default function SettingsPage() {
 
   const atualizarServico = (id: string, campo: keyof ServicoConfig, valor: any) => {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, [campo]: valor } : s));
+  };
+
+  const [enviandoImagemId, setEnviandoImagemId] = useState<string | null>(null);
+
+  const uploadImagemProduto = async (id: string, file: File) => {
+    if (id.startsWith('temp-')) { alert('Salve o produto antes de subir a foto.'); return; }
+    setEnviandoImagemId(id);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${perfil?.empresa_id}/${id}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('produtos').getPublicUrl(path);
+      const { error: updErr } = await supabase.from('servicos').update({ imagem_url: urlData.publicUrl }).eq('id', parseInt(id));
+      if (updErr) throw updErr;
+      atualizarServico(id, 'imagem_url', urlData.publicUrl);
+    } catch (err: any) {
+      alert('Erro ao subir foto: ' + (err?.message || 'tente novamente'));
+    } finally {
+      setEnviandoImagemId(null);
+    }
   };
 
   const importarCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,9 +360,22 @@ export default function SettingsPage() {
                 <div key={servico.id} className="grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 group hover:border-white/10 transition-all hover:bg-white/[0.04]">
                     
                     <div className="col-span-2 md:col-span-1 flex justify-center md:justify-start pl-0 md:pl-2">
-                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                            {getIconeCategoria(servico.tipo)}
-                        </div>
+                        {temPulse && !servico.id.startsWith('temp-') ? (
+                            <label className="relative w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden cursor-pointer group/img" title="Subir foto do produto">
+                                {enviandoImagemId === servico.id ? (
+                                    <Loader2 size={14} className="animate-spin text-slate-400" />
+                                ) : servico.imagem_url ? (
+                                    <img src={servico.imagem_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    getIconeCategoria(servico.tipo)
+                                )}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImagemProduto(servico.id, f); }} />
+                            </label>
+                        ) : (
+                            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden">
+                                {servico.imagem_url ? <img src={servico.imagem_url} alt="" className="w-full h-full object-cover" /> : getIconeCategoria(servico.tipo)}
+                            </div>
+                        )}
                     </div>
                     
                     <div className="col-span-10 md:col-span-3">
@@ -399,16 +435,29 @@ export default function SettingsPage() {
                         </button>
                     </div>
 
-                    {temVendaRapida && (
+                    {temPulse && (
                         <div className="col-span-12 flex items-center gap-2 pl-0 md:pl-11 -mt-1">
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Estoque</span>
+                            <button
+                                type="button"
+                                onClick={() => atualizarServico(servico.id, 'estoque', Math.max(0, (servico.estoque ?? 0) - 1))}
+                                className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-300 text-xs font-black"
+                            >−</button>
                             <input
                                 type="number"
                                 value={servico.estoque ?? ''}
                                 onChange={(e) => atualizarServico(servico.id, 'estoque', e.target.value === '' ? null : Number(e.target.value))}
-                                className="w-24 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E]"
+                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= 5 ? 'border-red-500/40' : 'border-white/5'}`}
                                 placeholder="não controla"
                             />
+                            <button
+                                type="button"
+                                onClick={() => atualizarServico(servico.id, 'estoque', (servico.estoque ?? 0) + 1)}
+                                className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-300 text-xs font-black"
+                            >+</button>
+                            {servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= 5 && (
+                                <span className="text-[9px] font-black text-red-400 uppercase">estoque baixo</span>
+                            )}
                             <span className="text-[9px] text-slate-600">deixe em branco pra não controlar estoque desse item</span>
                         </div>
                     )}

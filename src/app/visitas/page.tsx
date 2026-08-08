@@ -53,10 +53,14 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+type ClienteRota = { id: number; nome_empresa: string; endereco?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; telefone?: string; };
+
 export default function VisitasPage() {
   const auth = useAuth() || {};
   const user = auth.user;
   const perfil = auth.perfil as any;
+  const empresa = auth.empresa;
+  const temPulse = Boolean(empresa?.modulos?.pulse);
   const router = useRouter();
   const { unidades } = useUnidades(perfil?.empresa_id);
 
@@ -81,7 +85,7 @@ export default function VisitasPage() {
 
   // Modal de nova visita
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [empresa, setEmpresa] = useState('');
+  const [empresaVisita, setEmpresaVisita] = useState('');
   const [telefone, setTelefone] = useState('');
   const [unidadeVisita, setUnidadeVisita] = useState('');
   const [cidade, setCidade] = useState('');
@@ -102,6 +106,79 @@ export default function VisitasPage() {
 
   // Modal de detalhe da visita (dados completos + foto)
   const [visitaDetalhe, setVisitaDetalhe] = useState<Visita | null>(null);
+
+  // Rota do Dia (Pulse) — planeja a sequência de clientes a visitar hoje e abre no Google Maps
+  const [isRotaModalOpen, setIsRotaModalOpen] = useState(false);
+  const [buscaClienteRota, setBuscaClienteRota] = useState('');
+  const [resultadosClienteRota, setResultadosClienteRota] = useState<ClienteRota[]>([]);
+  const [buscandoClienteRota, setBuscandoClienteRota] = useState(false);
+  const [paradasRota, setParadasRota] = useState<ClienteRota[]>([]);
+
+  const chaveRotaHoje = () => `wegrow_rota_${perfil?.empresa_id}_${user?.id}_${getLocalYYYYMMDD(new Date())}`;
+
+  useEffect(() => {
+    if (!perfil?.empresa_id || !user?.id) return;
+    try {
+      const salvo = localStorage.getItem(chaveRotaHoje());
+      if (salvo) setParadasRota(JSON.parse(salvo));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfil?.empresa_id, user?.id]);
+
+  useEffect(() => {
+    if (!perfil?.empresa_id || !user?.id) return;
+    try { localStorage.setItem(chaveRotaHoje(), JSON.stringify(paradasRota)); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paradasRota]);
+
+  useEffect(() => {
+    if (buscaClienteRota.trim().length < 2) { setResultadosClienteRota([]); return; }
+    setBuscandoClienteRota(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('clientes')
+        .select('id, nome_empresa, endereco, numero, bairro, cidade, estado, telefone')
+        .eq('status', 'ativo')
+        .eq('empresa_id', perfil?.empresa_id)
+        .ilike('nome_empresa', `%${buscaClienteRota.trim()}%`)
+        .order('nome_empresa').limit(10);
+      setResultadosClienteRota((data as ClienteRota[]) || []);
+      setBuscandoClienteRota(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscaClienteRota, perfil?.empresa_id]);
+
+  const adicionarParada = (c: ClienteRota) => {
+    if (paradasRota.some(p => p.id === c.id)) return;
+    setParadasRota(prev => [...prev, c]);
+    setBuscaClienteRota('');
+    setResultadosClienteRota([]);
+  };
+
+  const removerParada = (id: number) => setParadasRota(prev => prev.filter(p => p.id !== id));
+
+  const moverParada = (index: number, delta: number) => {
+    setParadasRota(prev => {
+      const novo = [...prev];
+      const alvo = index + delta;
+      if (alvo < 0 || alvo >= novo.length) return prev;
+      [novo[index], novo[alvo]] = [novo[alvo], novo[index]];
+      return novo;
+    });
+  };
+
+  const enderecoParada = (c: ClienteRota) => {
+    const partes = [c.endereco && c.numero ? `${c.endereco}, ${c.numero}` : c.endereco, c.bairro, c.cidade, c.estado].filter(Boolean);
+    return partes.length > 0 ? partes.join(', ') : c.nome_empresa;
+  };
+
+  const abrirRotaNoMaps = () => {
+    if (paradasRota.length === 0) return;
+    const enderecos = paradasRota.map(c => encodeURIComponent(enderecoParada(c)));
+    const destino = enderecos[enderecos.length - 1];
+    const waypoints = enderecos.slice(0, -1).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destino}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
+    window.open(url, '_blank');
+  };
 
   // Relatório Estratégico IA (analisa observações das visitas filtradas)
   const [relatorioIAOpen, setRelatorioIAOpen] = useState(false);
@@ -182,7 +259,7 @@ export default function VisitasPage() {
   }
 
   function abrirModalNovaVisita() {
-    setEmpresa('');
+    setEmpresaVisita('');
     setTelefone('');
     setUnidadeVisita(perfil?.unidade || (unidades.length === 1 ? unidades[0].nome : ''));
     setCidade('');
@@ -214,7 +291,7 @@ export default function VisitasPage() {
   }
 
   async function salvarVisita() {
-    if (!empresa.trim()) return;
+    if (!empresaVisita.trim()) return;
     if (!perfil?.empresa_id) {
       setSaveError('Perfil não carregado. Recarregue a página.');
       return;
@@ -248,7 +325,7 @@ export default function VisitasPage() {
 
     const mapsUrl = coords ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}` : null;
     const payload = {
-      empresa: empresa.trim(),
+      empresa: empresaVisita.trim(),
       telefone: telefone || null,
       cidade: cidade || null,
       observacao: observacao || null,
@@ -406,6 +483,14 @@ export default function VisitasPage() {
         </div>
 
         <div className="flex gap-2">
+          {temPulse && (
+            <button
+              onClick={() => setIsRotaModalOpen(true)}
+              className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+            >
+              <Navigation size={14} /> Rota do Dia {paradasRota.length > 0 ? `(${paradasRota.length})` : ''}
+            </button>
+          )}
           <button
             onClick={gerarRelatorioIA}
             disabled={visitasFiltradas.length === 0}
@@ -645,8 +730,8 @@ export default function VisitasPage() {
                   autoFocus
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
                   placeholder="Ex: João Silva, Loja ABC..."
-                  value={empresa}
-                  onChange={e => setEmpresa(e.target.value)}
+                  value={empresaVisita}
+                  onChange={e => setEmpresaVisita(e.target.value)}
                 />
               </div>
 
@@ -743,7 +828,7 @@ export default function VisitasPage() {
               </button>
               <button
                 onClick={salvarVisita}
-                disabled={!empresa.trim() || saving}
+                disabled={!empresaVisita.trim() || saving}
                 className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all flex items-center justify-center gap-2"
               >
                 {saving ? <Loader2 size={14} className="animate-spin"/> : <MapPin size={14}/>}
@@ -1022,6 +1107,79 @@ export default function VisitasPage() {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRotaModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4" onClick={() => setIsRotaModalOpen(false)}>
+          <div className="bg-[#0B1120] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-white/10 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
+                  <Navigation size={18} className="text-amber-400" /> Rota do Dia
+                </h2>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Monta a sequência de paradas e abre no Google Maps</p>
+              </div>
+              <button onClick={() => setIsRotaModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="relative">
+                <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-amber-500">
+                  <Search size={14} className="text-slate-500 flex-shrink-0" />
+                  <input value={buscaClienteRota} onChange={e => setBuscaClienteRota(e.target.value)} placeholder="Buscar cliente pra adicionar na rota..." className="flex-1 bg-transparent outline-none text-white text-sm" />
+                  {buscandoClienteRota && <Loader2 size={14} className="animate-spin text-slate-500" />}
+                </div>
+                {resultadosClienteRota.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-[#0F172A] border border-white/10 rounded-xl overflow-hidden max-h-52 overflow-y-auto shadow-2xl">
+                    {resultadosClienteRota.map(c => (
+                      <button key={c.id} onClick={() => adicionarParada(c)} className="w-full text-left px-4 py-2.5 hover:bg-white/5 border-b border-white/5 last:border-0">
+                        <p className="text-white text-sm font-bold">{c.nome_empresa}</p>
+                        <p className="text-slate-500 text-xs truncate">{enderecoParada(c)}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {paradasRota.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <Navigation size={28} className="mx-auto mb-2 text-slate-600" />
+                  <p className="text-xs font-bold text-slate-500 uppercase">Nenhuma parada adicionada ainda.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {paradasRota.map((c, i) => (
+                    <div key={c.id} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                      <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-black flex-shrink-0">{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-bold truncate">{c.nome_empresa}</p>
+                        <p className="text-slate-500 text-[10px] truncate">{enderecoParada(c)}</p>
+                      </div>
+                      <button onClick={() => moverParada(i, -1)} disabled={i === 0} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↑</button>
+                      <button onClick={() => moverParada(i, 1)} disabled={i === paradasRota.length - 1} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↓</button>
+                      <button onClick={() => removerParada(c.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-white/10 flex-shrink-0 space-y-2">
+              <button
+                onClick={abrirRotaNoMaps}
+                disabled={paradasRota.length === 0}
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-[#0B1120] font-black uppercase text-xs py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all"
+              >
+                <Navigation size={14} /> Abrir rota no Google Maps
+              </button>
+              {paradasRota.length > 0 && (
+                <button onClick={() => setParadasRota([])} className="w-full text-slate-500 hover:text-red-400 text-[10px] font-bold uppercase py-1 transition-colors">
+                  Limpar rota do dia
+                </button>
               )}
             </div>
           </div>

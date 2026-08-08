@@ -15,7 +15,7 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 
 const MODULO_LABELS: Record<string, string> = {
   cdl: 'CDL', opec: 'Opec', ia: 'IA', financeiro: 'Financeiro', whatsapp: 'WhatsApp', nexus: 'Nexus',
-  venda_rapida: 'Venda Rápida',
+  pulse: 'Pulse',
 };
 // "crm" é o macro-toggle do produto de pipeline/vendas inteiro. Ausente no JSON conta
 // como ligado (empresas criadas antes disso existir não podem perder o menu no deploy).
@@ -470,10 +470,10 @@ export default function ClientesWeGrowPage() {
                   </div>
 
                   <div>
-                    <button type="button" onClick={() => toggleModulo('venda_rapida')}
-                      className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.venda_rapida) ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
-                      <Package size={12}/> Venda Rápida
-                      {Boolean(modulosEdit.venda_rapida) && <CheckCircle2 size={12} className="ml-auto"/>}
+                    <button type="button" onClick={() => toggleModulo('pulse')}
+                      className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.pulse) ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                      <Package size={12}/> Pulse
+                      {Boolean(modulosEdit.pulse) && <CheckCircle2 size={12} className="ml-auto"/>}
                     </button>
                   </div>
                 </div>

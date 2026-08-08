@@ -375,11 +375,11 @@ export default function AdminPage() {
                   <div>
                     <button
                       type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, venda_rapida: !prev.venda_rapida }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.venda_rapida ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                      onClick={() => setEditModulos(prev => ({ ...prev, pulse: !prev.pulse }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.pulse ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
                     >
-                      Venda Rápida
-                      {editModulos.venda_rapida ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                      Pulse
+                      {editModulos.pulse ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
                     </button>
                   </div>
                 </div>

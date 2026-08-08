@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, Activity, AlertTriangle, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type ClienteOpcao = {
@@ -8,7 +8,7 @@ type ClienteOpcao = {
   inscricao_estadual?: string; email?: string; cidade?: string; endereco?: string;
 };
 
-type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; };
+type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; imagem_url?: string | null; };
 
 type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; };
 
@@ -18,7 +18,7 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
 
 const formatId = (id: number) => `LD-${String(id).padStart(4, '0')}`;
 
-export default function VendaRapida({ perfil, user, unidades, isLideranca, usersMap }: {
+export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }: {
   perfil: any; user: any; unidades: { id: string; nome: string; razao_social?: string; cnpj?: string; endereco?: string; cidade?: string; estado?: string; }[];
   isLideranca: boolean; usersMap: Record<string, string>;
 }) {
@@ -142,7 +142,7 @@ export default function VendaRapida({ perfil, user, unidades, isLideranca, users
         itens: itensPayload,
         status: 'ganho',
         etapa: 4,
-        tipo: 'Venda Rápida',
+        tipo: 'Pulse',
         unidade: unidadeSel || null,
         forma_pagamento: formaPagamento,
         parcelas: '1',
@@ -231,7 +231,7 @@ export default function VendaRapida({ perfil, user, unidades, isLideranca, users
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6">
         <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
-          <ShoppingCart size={32} /> Venda Rápida
+          <Activity size={32} /> Pulse
         </h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Monte o pedido e feche na hora — sem funil</p>
       </header>
@@ -287,12 +287,17 @@ export default function VendaRapida({ perfil, user, unidades, isLideranca, users
                 {servicosFiltrados.map(s => {
                   const semEstoque = s.estoque !== null && s.estoque !== undefined && s.estoque <= 0;
                   return (
-                    <button key={s.id} disabled={semEstoque} onClick={() => adicionarItem(s)} className={`text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-xl p-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed`}>
-                      <p className="text-white text-xs font-bold truncate">{s.nome}</p>
-                      <p className="text-[#22C55E] text-sm font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                      {s.estoque !== null && s.estoque !== undefined && (
-                        <p className={`text-[9px] font-bold mt-0.5 ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</p>
-                      )}
+                    <button key={s.id} disabled={semEstoque} onClick={() => adicionarItem(s)} className={`text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden transition-all disabled:opacity-40 disabled:cursor-not-allowed`}>
+                      <div className="h-16 bg-white/5 flex items-center justify-center overflow-hidden">
+                        {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={20} className="text-slate-600" />}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="text-white text-xs font-bold truncate">{s.nome}</p>
+                        <p className="text-[#22C55E] text-sm font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        {s.estoque !== null && s.estoque !== undefined && (
+                          <p className={`text-[9px] font-bold mt-0.5 ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</p>
+                        )}
+                      </div>
                     </button>
                   );
                 })}

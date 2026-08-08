@@ -425,6 +425,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           valor: nfseLead.valor_total,
           dataEfetiva: new Date().toISOString().substring(0, 10),
           asaasPaymentId: nfsePaymentId || undefined,
+          leadId: nfseLead.id,
         }),
       });
       const json = await res.json();

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     let body: any;
     try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-    const { empresaId, nome, cpfCnpj, valor, dataEfetiva, descricaoServico, asaasPaymentId } = body;
+    const { empresaId, nome, cpfCnpj, valor, dataEfetiva, descricaoServico, asaasPaymentId, leadId } = body;
     if (!empresaId || !nome || !cpfCnpj || !valor || !dataEfetiva) {
         return NextResponse.json({ erro: 'Campos obrigatórios: empresaId, nome, cpfCnpj, valor, dataEfetiva.' }, { status: 422 });
     }
@@ -93,6 +93,14 @@ export async function POST(request: Request) {
                 ir: Number(cfg.ir) || 0,
             },
         });
+
+        if (leadId) {
+            await supabaseAdmin.from('leads').update({
+                nfse_invoice_id: invoice.id,
+                nfse_pdf_url: invoice.pdfUrl || null,
+                nfse_emitida_em: new Date().toISOString(),
+            }).eq('id', leadId);
+        }
 
         return NextResponse.json({
             ok: true,

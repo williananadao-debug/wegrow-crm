@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
@@ -15,10 +14,6 @@ const STATS = [
   { value: '40%', label: 'redução de inadimplência' },
   { value: '100%', label: 'adaptável ao seu negócio' },
   { value: '2min', label: 'para criar uma proposta' },
-];
-
-const CLIENTES = [
-  { nome: 'Demais FM', logo: '/logo-demais.png', segmento: 'Broadcasting' },
 ];
 
 const STEPS = [
@@ -294,39 +289,6 @@ export default function LandingPage() {
               <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
                 <div className="text-3xl font-black text-[#22C55E]">{s.value}</div>
                 <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* PROVA SOCIAL — CLIENTES */}
-      <section className="py-16 px-6 border-y border-white/5 bg-white/[0.015]">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Clientes</div>
-          <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-4">
-            Já em operação real.
-          </h2>
-          <p className="text-slate-400 text-sm md:text-base font-medium max-w-xl mx-auto mb-10">
-            O core do WeGrow (funil, clientes, metas, relatórios) atende qualquer segmento — não é feito pra um mercado só.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            {CLIENTES.map((c) => (
-              <div key={c.nome} className="group flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 hover:border-white/20 transition-all">
-                <div className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <Image
-                    src={c.logo}
-                    alt={c.nome}
-                    width={60}
-                    height={60}
-                    className="w-full h-full object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
-                  />
-                </div>
-                <div className="text-left">
-                  <p className="text-white font-black text-xs uppercase italic">{c.nome}</p>
-                  <p className="text-slate-500 text-[9px] font-bold uppercase tracking-widest mt-0.5">{c.segmento}</p>
-                </div>
               </div>
             ))}
           </div>

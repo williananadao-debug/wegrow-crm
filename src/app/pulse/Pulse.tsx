@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, Activity, AlertTriangle, Package, LayoutGrid, ShoppingBag, Boxes, Navigation, FileText, ExternalLink } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, Activity, AlertTriangle, Package, LayoutGrid, ShoppingBag, Boxes, Navigation, FileText, ExternalLink, BarChart3, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type ClienteOpcao = {
@@ -15,14 +15,25 @@ type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; preco
 
 type VendaPulse = {
   id: number; empresa: string; valor_total: number; created_at: string; forma_pagamento?: string | null;
-  cnpj?: string | null; nfse_invoice_id?: string | null; nfse_pdf_url?: string | null;
+  cnpj?: string | null; nfse_invoice_id?: string | null; nfse_pdf_url?: string | null; user_id?: string | null;
 };
+
+type RankingItem = { id: string; nome: string; count: number; total: number };
 
 const FORMAS_PAGAMENTO: Record<string, string> = {
   dinheiro: 'Dinheiro', pix: 'PIX', cartao: 'Cartão', boleto: 'Boleto', transferencia: 'Transferência',
 };
 
 const formatId = (id: number) => `LD-${String(id).padStart(4, '0')}`;
+
+const getLocalYYYYMMDD = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const formatCompact = (num: number) => num >= 1000 ? (num / 1000).toFixed(1).replace('.0', '') + 'k' : (num % 1 === 0 ? num.toString() : num.toFixed(2));
 
 export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }: {
   perfil: any; user: any; unidades: { id: string; nome: string; razao_social?: string; cnpj?: string; endereco?: string; cidade?: string; estado?: string; }[];
@@ -77,7 +88,7 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url')
+      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id')
       .eq('empresa_id', perfil.empresa_id)
       .eq('tipo', 'Pulse')
       .gte('created_at', inicioMes.toISOString())
@@ -119,6 +130,36 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
   const vendasHoje = vendas.filter(v => new Date(v.created_at).toDateString() === hojeStr);
   const faturamentoHoje = vendasHoje.reduce((acc, v) => acc + (v.valor_total || 0), 0);
   const faturamentoMes = vendas.reduce((acc, v) => acc + (v.valor_total || 0), 0);
+
+  // Vendas por dia (mês corrente) — mesmo padrão visual do Dashboard do CRM: rótulo do
+  // valor é FILHO da barra com offset fixo (-top-5), não irmão posicionado por bottom:calc(),
+  // que tem um bug de renderização no Chromium com texto pequeno em negrito.
+  const vendasPorDia = (() => {
+    const inicio = new Date(); inicio.setDate(1); inicio.setHours(0, 0, 0, 0);
+    const hoje = new Date();
+    const dias: { dia: string; valor: number; dataIso: string }[] = [];
+    for (let d = new Date(inicio); d <= hoje; d.setDate(d.getDate() + 1)) {
+      dias.push({ dia: String(d.getDate()).padStart(2, '0'), valor: 0, dataIso: getLocalYYYYMMDD(d) });
+    }
+    vendas.forEach(v => {
+      const iso = v.created_at.substring(0, 10);
+      const slot = dias.find(d => d.dataIso === iso);
+      if (slot) slot.valor += (Number(v.valor_total) || 0);
+    });
+    return dias;
+  })();
+
+  // Ranking por vendedor — mesmo formato do Dashboard (lista com badge de posição).
+  const ranking: RankingItem[] = (() => {
+    const acc: Record<string, RankingItem> = {};
+    vendas.forEach(v => {
+      const chave = v.user_id || 'sem_dono';
+      if (!acc[chave]) acc[chave] = { id: chave, nome: usersMap[chave] || 'Sem vendedor', count: 0, total: 0 };
+      acc[chave].count += 1;
+      acc[chave].total += (Number(v.valor_total) || 0);
+    });
+    return Object.values(acc).sort((a, b) => b.total - a.total);
+  })();
 
   const adicionarItem = (s: ServicoConfig) => {
     setCarrinho(prev => {
@@ -358,6 +399,58 @@ export default function Pulse({ perfil, user, unidades, isLideranca, usersMap }:
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Estoque baixo</p>
               <p className={`text-2xl font-black mt-1 ${produtosEstoqueBaixo.length > 0 ? 'text-red-400' : 'text-white'}`}>{produtosEstoqueBaixo.length}</p>
             </button>
+          </div>
+
+          <div className={`grid grid-cols-1 ${ranking.length > 1 ? 'lg:grid-cols-3' : ''} gap-4 mb-6`}>
+            <div className={`bg-[#0F172A] border border-white/10 rounded-2xl p-4 ${ranking.length > 1 ? 'lg:col-span-2' : ''}`}>
+              <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                <BarChart3 size={14} className="text-amber-500" /> Vendas por Dia
+              </h3>
+              <div className="flex items-end h-36 gap-1 overflow-x-auto pb-1 w-full pt-4">
+                {(() => {
+                  const hojeIso = getLocalYYYYMMDD(new Date());
+                  const maxVal = Math.max(...vendasPorDia.map(v => v.valor), 1);
+                  return vendasPorDia.map((d, i) => {
+                    const height = d.valor > 0 ? Math.max((d.valor / maxVal) * 100, 5) : 0;
+                    const isHoje = d.dataIso === hojeIso;
+                    return (
+                      <div key={i} className="flex-1 min-w-[24px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                        <div
+                          className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white/5'}`}
+                          style={{ height: d.valor > 0 ? `${height}%` : '4px' }}
+                        >
+                          {d.valor > 0 && (
+                            <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-amber-500'}`}>
+                              {formatCompact(d.valor)}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-[8px] text-center font-bold mt-1 ${isHoje ? 'text-[#22C55E]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {ranking.length > 1 && (
+              <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+                <h3 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-white mb-3">
+                  <Users size={14} className="text-amber-500" /> Ranking
+                </h3>
+                <div className="space-y-2 overflow-y-auto max-h-[176px] pr-1">
+                  {ranking.map((r, index) => (
+                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl border border-white/5 bg-white/5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center font-black text-[10px] ${index === 0 ? 'bg-amber-500 text-[#0B1120]' : 'bg-blue-600 text-white'}`}>{index + 1}º</div>
+                        <div className="min-w-0"><p className="font-black uppercase text-[10px] text-white truncate">{r.nome}</p><p className="text-[9px] text-slate-500 font-bold">{r.count} vendas</p></div>
+                      </div>
+                      <p className="text-xs font-black text-slate-300 flex-shrink-0">R$ {r.total.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">

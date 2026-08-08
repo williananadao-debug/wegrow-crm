@@ -7,11 +7,15 @@ import {
   Calendar, Search, Camera, Image as ImageIcon,
   Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
+import { geocodificarParadas, type ParadaGeo } from '@/lib/geocode';
+
+const RotaMapa = dynamic(() => import('@/components/RotaMapa'), { ssr: false });
 
 type Visita = {
   id: number;
@@ -179,6 +183,21 @@ export default function VisitasPage() {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${destino}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
     window.open(url, '_blank');
   };
+
+  // Preview do trajeto dentro do sistema (Leaflet + OpenStreetMap, sem API paga) — só pra
+  // visualizar a ordem das paradas antes de sair. A navegação com voz continua sendo o
+  // Google Maps mesmo, isso nenhum mapa embutido em página substitui.
+  const [paradasGeo, setParadasGeo] = useState<ParadaGeo[]>([]);
+  useEffect(() => {
+    if (!isRotaModalOpen || paradasRota.length === 0) { setParadasGeo([]); return; }
+    const base: ParadaGeo[] = paradasRota.map(p => {
+      const existente = paradasGeo.find(g => g.id === p.id);
+      return { id: p.id, nome: p.nome_empresa, endereco: enderecoParada(p), lat: existente?.lat, lng: existente?.lng };
+    });
+    setParadasGeo(base);
+    geocodificarParadas(base, setParadasGeo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRotaModalOpen, paradasRota]);
 
   // Relatório Estratégico IA (analisa observações das visitas filtradas)
   const [relatorioIAOpen, setRelatorioIAOpen] = useState(false);
@@ -1164,6 +1183,14 @@ export default function VisitasPage() {
                       <button onClick={() => removerParada(c.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {paradasRota.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Prévia do trajeto</p>
+                  <RotaMapa paradas={paradasGeo} />
+                  <p className="text-[9px] text-slate-600 mt-1.5">Linha reta entre as paradas, só pra visualizar — a rota de verdade (com trânsito e ruas) abre no Google Maps abaixo.</p>
                 </div>
               )}
             </div>

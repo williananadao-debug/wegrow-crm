@@ -1,10 +1,15 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
+
+type Movimentacao = {
+  id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
+  nf_numero: string | null; nf_chave_acesso: string | null; created_at: string;
+};
 
 export default function PulseEstoquePage() {
   const { authLoading, temPulse, user, perfil } = usePulseAccess();
@@ -12,6 +17,10 @@ export default function PulseEstoquePage() {
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
   const [notaModalAberto, setNotaModalAberto] = useState(false);
+
+  const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
+  const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
   const fetchServicos = async () => {
     setLoadingServicos(true);
@@ -23,11 +32,21 @@ export default function PulseEstoquePage() {
   useEffect(() => { fetchServicos(); }, []);
 
   const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
+  const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
+  const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= 5);
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const novo = Math.max(0, (s.estoque || 0) + delta);
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
+  };
+
+  const abrirHistorico = async (s: ServicoConfig) => {
+    setHistoricoServico(s);
+    setCarregandoHistorico(true);
+    const { data } = await supabase.from('estoque_movimentacoes').select('*').eq('servico_id', s.id).order('created_at', { ascending: false });
+    setMovimentacoes((data || []) as Movimentacao[]);
+    setCarregandoHistorico(false);
   };
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -57,6 +76,21 @@ export default function PulseEstoquePage() {
         </button>
       </header>
 
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Package size={10} /> Produtos</p>
+          <p className="text-2xl font-black text-white mt-1">{produtosComEstoque.length}</p>
+        </div>
+        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Wallet size={10} /> Valor em estoque</p>
+          <p className="text-2xl font-black text-[#22C55E] mt-1">R$ {valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+        </div>
+        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Estoque baixo</p>
+          <p className={`text-2xl font-black mt-1 ${produtosBaixo.length > 0 ? 'text-red-400' : 'text-white'}`}>{produtosBaixo.length}</p>
+        </div>
+      </div>
+
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
         <div className="p-5 border-b border-white/5">
           <h3 className="font-black uppercase text-sm text-slate-300">Produtos com controle de estoque ({produtosComEstoque.length})</h3>
@@ -73,6 +107,7 @@ export default function PulseEstoquePage() {
           <div className="divide-y divide-white/5">
             {[...produtosComEstoque].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(s => {
               const baixo = (s.estoque as number) <= 5;
+              const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
               return (
                 <div key={s.id} className="flex items-center gap-3 p-4">
                   <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -80,8 +115,13 @@ export default function PulseEstoquePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-bold text-sm truncate">{s.nome}</p>
-                    <p className="text-slate-500 text-[10px]">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      <p className="text-slate-500 text-[10px]">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{s.unidade ? ` /${s.unidade}` : ''}</p>
+                      {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{s.tipo}</span>}
+                      <span className="text-[9px] text-slate-600">· R$ {valorEmEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em estoque</span>
+                    </div>
                   </div>
+                  <button onClick={() => abrirHistorico(s)} title="Histórico de entradas" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-purple-400 flex-shrink-0"><History size={13} /></button>
                   <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
                   <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
                   <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
@@ -92,6 +132,41 @@ export default function PulseEstoquePage() {
           </div>
         )}
       </div>
+
+      {historicoServico && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setHistoricoServico(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><History size={18} className="text-purple-400" /> Histórico de entradas</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{historicoServico.nome}</p>
+              </div>
+              <button onClick={() => setHistoricoServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            {carregandoHistorico ? (
+              <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
+            ) : movimentacoes.length === 0 ? (
+              <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma entrada por nota fiscal registrada ainda pra esse produto.</p>
+            ) : (
+              <div className="space-y-2">
+                {movimentacoes.map(m => (
+                  <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#22C55E] font-black text-sm">+{m.quantidade}</span>
+                      <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                      {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
+                      {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
+                      {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <NotaFiscalModal
         aberto={notaModalAberto}

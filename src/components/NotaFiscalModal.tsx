@@ -114,16 +114,28 @@ export default function NotaFiscalModal({
       const itensValidos = itens.filter(i => i.servicoId !== 'ignorar');
 
       for (const item of itensValidos) {
+        let servicoId: number;
         if (item.servicoId === 'novo') {
-          await supabase.from('servicos').insert([{
+          const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
             nome: item.descricao, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: 'un',
             estoque: item.quantidade, empresa_id: empresaId,
-          }]);
-        } else {
+          }]).select('id').single();
+          if (erroCriar || !criado) throw new Error(erroCriar?.message || 'Erro ao criar produto novo.');
+          servicoId = criado.id;
+        } else if (typeof item.servicoId === 'number') {
+          servicoId = item.servicoId;
           const atual = servicos.find(s => s.id === item.servicoId);
           const novoEstoque = (atual?.estoque || 0) + item.quantidade;
           await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', item.servicoId);
+        } else {
+          continue;
         }
+
+        await supabase.from('estoque_movimentacoes').insert([{
+          empresa_id: empresaId, servico_id: servicoId, quantidade: item.quantidade, valor_unitario: item.valor_unitario,
+          fornecedor: fornecedor || null, nf_numero: numero || null, nf_serie: serie || null,
+          nf_chave_acesso: chaveAcesso || null, user_id: userId,
+        }]);
       }
 
       const { error: erroLancamento } = await supabase.from('lancamentos').insert([{

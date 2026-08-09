@@ -303,7 +303,6 @@ export default function DealsPage() {
 
   const [filtroVendedor, setFiltroVendedor] = useState<string>('todos');
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
-  const [filtroProduto, setFiltroProduto] = useState<string>('todos');
   const [filtroAtrasados, setFiltroAtrasados] = useState(false);
   const [filtroSemAssinatura, setFiltroSemAssinatura] = useState(false);
   const [proximaAcaoModal, setProximaAcaoModal] = useState<{leadId: number; etapa: number; status: string} | null>(null);
@@ -1721,10 +1720,6 @@ export default function DealsPage() {
       return leads.filter(l => {
           if (filtroVendedor !== 'todos' && l.user_id !== filtroVendedor) return false;
           if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
-          if (filtroProduto !== 'todos') {
-              const itens = Array.isArray(l.itens) ? l.itens : [];
-              if (!itens.some((i: any) => i.servico === filtroProduto)) return false;
-          }
           if (filtroAtrasados && !(l.followup_em && l.followup_em < hojeStr && l.status !== 'ganho' && l.status !== 'perdido')) return false;
           if (filtroSemAssinatura && !(l.status === 'ganho' && !l.docuseal_assinado && !l.contrato_manual_url)) return false;
           const dataLead = l.created_at?.substring(0, 10);
@@ -1732,7 +1727,7 @@ export default function DealsPage() {
           if (dataFim && dataLead && dataLead > dataFim) return false;
           return true;
       });
-  }, [leads, filtroVendedor, filtroUnidade, filtroProduto, filtroAtrasados, filtroSemAssinatura, dataInicio, dataFim]);
+  }, [leads, filtroVendedor, filtroUnidade, filtroAtrasados, filtroSemAssinatura, dataInicio, dataFim]);
 
   const totalAberto = useMemo(() => leadsAtivos.filter(l => l && l.status === 'aberto').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
   const totalGanhos = useMemo(() => leadsAtivos.filter(l => l && l.status === 'ganho').reduce((acc, curr) => acc + (curr.valor_total || 0), 0), [leadsAtivos]);
@@ -1833,13 +1828,6 @@ export default function DealsPage() {
                   </select>
               )}
 
-              <select value={filtroProduto} onChange={e => setFiltroProduto(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
-                <option value="todos" className="bg-[#0F172A]">Todos Produtos</option>
-                {listaServicos.map(s => (
-                  <option key={s.id} value={s.nome} className="bg-[#0F172A]">{s.nome}</option>
-                ))}
-              </select>
-
               <button onClick={() => setFiltroAtrasados(v => !v)} title="Follow-up atrasado" className={`flex items-center gap-1.5 px-3 border-l border-white/10 h-full shrink-0 text-[10px] font-bold uppercase transition-colors ${filtroAtrasados ? 'bg-red-500/10 text-red-400' : 'text-slate-400 hover:text-white'}`}>
                 <AlertTriangle size={12} /> Atrasados
               </button>
@@ -1849,8 +1837,8 @@ export default function DealsPage() {
               </button>
             </div>
 
-            {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroProduto !== 'todos' || filtroAtrasados || filtroSemAssinatura || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
-                <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroProduto('todos'); setFiltroAtrasados(false); setFiltroSemAssinatura(false); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg shrink-0">
+            {(filtroVendedor !== 'todos' || filtroUnidade !== 'todas' || filtroAtrasados || filtroSemAssinatura || dataInicio !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) || dataFim !== getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))) && (
+                <button onClick={() => { setFiltroVendedor('todos'); setFiltroUnidade('todas'); setFiltroAtrasados(false); setFiltroSemAssinatura(false); const hoje = new Date(); setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1))); setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))); }} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-xl transition-colors text-[10px] font-bold uppercase px-3 h-10 flex items-center justify-center gap-1 shadow-lg shrink-0">
                     <X size={12}/> Limpar
                 </button>
             )}

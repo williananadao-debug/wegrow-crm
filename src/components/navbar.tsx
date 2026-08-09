@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -59,6 +59,7 @@ export default function Navbar() {
   const opecHabilitado = Boolean(modulos.opec);
   const mostrarNexus = Boolean(modulos.nexus);
   const mostrarPulse = Boolean(modulos.pulse);
+  const mostrarThor = Boolean(modulos.thor);
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
   const mostrarCRM = modulos.crm !== false;
@@ -109,6 +110,7 @@ export default function Navbar() {
   ];
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
+  const thorItem = { name: 'THOR', icon: <Bot size={20} />, href: '/thor' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
       mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,
@@ -122,6 +124,7 @@ export default function Navbar() {
       clientesItem,
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
+      ...(mostrarThor ? [thorItem] : []),
   ];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -227,6 +230,12 @@ export default function Navbar() {
               </div>
             );
           })()}
+
+          {mostrarThor && (
+            <Link href={thorItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === thorItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {thorItem.icon} {thorItem.name}
+            </Link>
+          )}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
             {isDirector && (
@@ -339,6 +348,13 @@ export default function Navbar() {
                       </div>
                     );
                   })()}
+
+                  {mostrarThor && (
+                    <Link href={thorItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === thorItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{thorItem.icon}</div>
+                      <span className="text-sm font-semibold">{thorItem.name}</span>
+                    </Link>
+                  )}
                 </>
               )}
             </nav>

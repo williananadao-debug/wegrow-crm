@@ -35,6 +35,11 @@ export default function NotaFiscalModal({
   const [etapa, setEtapa] = useState<'foto' | 'lendo' | 'revisao'>('foto');
   const [imagem, setImagem] = useState<string | null>(null);
   const [fornecedor, setFornecedor] = useState('');
+  const [cnpjFornecedor, setCnpjFornecedor] = useState('');
+  const [numero, setNumero] = useState('');
+  const [serie, setSerie] = useState('');
+  const [chaveAcesso, setChaveAcesso] = useState('');
+  const [dataEmissao, setDataEmissao] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [dataVencimento, setDataVencimento] = useState(() => new Date().toISOString().substring(0, 10));
   const [itens, setItens] = useState<ItemNota[]>([]);
@@ -42,7 +47,8 @@ export default function NotaFiscalModal({
   const [salvando, setSalvando] = useState(false);
 
   const reset = () => {
-    setEtapa('foto'); setImagem(null); setFornecedor(''); setValorTotal('');
+    setEtapa('foto'); setImagem(null); setFornecedor(''); setCnpjFornecedor('');
+    setNumero(''); setSerie(''); setChaveAcesso(''); setDataEmissao(''); setValorTotal('');
     setDataVencimento(new Date().toISOString().substring(0, 10));
     setItens([]); setErro(null);
   };
@@ -79,6 +85,11 @@ export default function NotaFiscalModal({
       const totalCalculado = itensLidos.reduce((acc, i) => acc + i.quantidade * i.valor_unitario, 0);
 
       setFornecedor(json.fornecedor || '');
+      setCnpjFornecedor(json.cnpjFornecedor || '');
+      setNumero(json.numero || '');
+      setSerie(json.serie || '');
+      setChaveAcesso(json.chaveAcesso || '');
+      setDataEmissao(json.dataEmissao || '');
       setValorTotal(String(json.valor_total ?? (totalCalculado || '')));
       setItens(itensLidos);
       setEtapa('revisao');
@@ -119,6 +130,8 @@ export default function NotaFiscalModal({
         titulo: fornecedor ? `Nota Fiscal - ${fornecedor}` : 'Nota Fiscal - Entrada de estoque',
         valor: Number(valorTotal), tipo: 'saida', categoria: 'Fornecedor', status: 'pendente',
         data_vencimento: dataVencimento, user_id: userId, empresa_id: empresaId,
+        nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
+        nf_data_emissao: dataEmissao || null, nf_fornecedor_cnpj: cnpjFornecedor || null,
       }]);
       if (erroLancamento) throw new Error(erroLancamento.message);
 
@@ -183,13 +196,38 @@ export default function NotaFiscalModal({
                 <input value={fornecedor} onChange={e => setFornecedor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
-                <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CNPJ do fornecedor</label>
+                <input value={cnpjFornecedor} onChange={e => setCnpjFornecedor(e.target.value)} placeholder="Só números" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Número</label>
+                <input value={numero} onChange={e => setNumero(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Série</label>
+                <input value={serie} onChange={e => setSerie(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Emissão</label>
+                <input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor total da nota (vai pra Contas a Pagar)</label>
-              <input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Chave de acesso (44 dígitos)</label>
+              <input value={chaveAcesso} onChange={e => setChaveAcesso(e.target.value.replace(/\D/g, ''))} maxLength={44} placeholder="Deixe em branco se não conseguir conferir" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-xs font-mono tracking-tight outline-none focus:border-purple-500" />
+              {chaveAcesso && chaveAcesso.length !== 44 && <p className="text-amber-400 text-[10px] font-bold mt-1">{chaveAcesso.length}/44 dígitos — confira, pode estar incompleta</p>}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento (Contas a Pagar)</label>
+                <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor total da nota</label>
+                <input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
             </div>
 
             <div className="space-y-2">

@@ -7,6 +7,11 @@ const SYSTEM_PROMPT = `Você lê fotos de notas fiscais de fornecedores (compra 
 Responda SOMENTE com um objeto JSON válido, sem markdown, sem texto adicional, no formato:
 {
   "fornecedor": "nome do fornecedor/emitente, ou null se não conseguir ler",
+  "cnpj_fornecedor": "CNPJ do emitente só com dígitos (14 números), ou null",
+  "numero": "número da nota fiscal (campo 'Nº' ou 'Número'), ou null",
+  "serie": "série da nota fiscal (campo 'Série'), ou null",
+  "chave_acesso": "chave de acesso da NF-e: 44 dígitos seguidos, sem espaço nem traço, geralmente perto do código de barras ou no topo do DANFE. Null se não conseguir ler os 44 dígitos com certeza.",
+  "data_emissao": "data de emissão no formato AAAA-MM-DD, ou null",
   "valor_total": número (valor total da nota, ou null se não conseguir ler),
   "itens": [
     { "descricao": "nome do produto exatamente como está na nota", "quantidade": número, "valor_unitario": número }
@@ -16,7 +21,8 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, sem texto adicional, 
 Regras:
 - quantidade e valor_unitario devem ser números (não string, sem "R$", usar ponto decimal)
 - Se não conseguir ler algum item claramente, não o inclua
-- itens pode ser um array vazio se não conseguir identificar nenhum item`;
+- itens pode ser um array vazio se não conseguir identificar nenhum item
+- chave_acesso: só preencha se conseguir ler os 44 dígitos com confiança. Se estiver borrado/cortado, retorne null — não invente dígitos`;
 
 export async function POST(req: NextRequest) {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -89,8 +95,16 @@ export async function POST(req: NextRequest) {
           }))
       : [];
 
+    const somenteDigitos = (v: any) => typeof v === 'string' ? v.replace(/\D/g, '') : null;
+    const chaveAcesso = somenteDigitos(extraido.chave_acesso);
+
     return NextResponse.json({
       fornecedor: extraido.fornecedor || null,
+      cnpjFornecedor: somenteDigitos(extraido.cnpj_fornecedor) || null,
+      numero: extraido.numero ? String(extraido.numero) : null,
+      serie: extraido.serie ? String(extraido.serie) : null,
+      chaveAcesso: chaveAcesso && chaveAcesso.length === 44 ? chaveAcesso : null,
+      dataEmissao: extraido.data_emissao || null,
       valor_total: typeof extraido.valor_total === 'number' ? extraido.valor_total : null,
       itens,
     });

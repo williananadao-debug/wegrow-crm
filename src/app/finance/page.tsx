@@ -23,6 +23,8 @@ type Despesa = {
   data_pagamento: string | null;
   unidade: string | null;
   recorrente: boolean;
+  nf_numero: string | null;
+  nf_chave_acesso: string | null;
 };
 
 const CATEGORIAS_DESPESA = ['Fornecedor', 'Aluguel', 'Salário', 'Imposto', 'Marketing', 'Software', 'Outro'];
@@ -87,7 +89,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setLoadingDespesas(true);
     const { data } = await supabase
       .from('lancamentos')
-      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente')
+      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente, nf_numero, nf_chave_acesso')
       .eq('empresa_id', perfil?.empresa_id)
       .eq('tipo', 'saida')
       .order('data_vencimento', { ascending: true });
@@ -783,6 +785,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         {d.unidade && <span className="text-[9px] text-slate-500">{d.unidade}</span>}
                         <span className="text-[9px] text-slate-600">Vence: {new Date(d.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                         {d.recorrente && <span className="text-[9px] font-black text-blue-400 flex items-center gap-0.5"><Repeat size={9}/> Recorrente</span>}
+                        {d.nf_numero && <span title={d.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {d.nf_numero}</span>}
                         {d.data_pagamento && (
                           <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
                             Pago em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}

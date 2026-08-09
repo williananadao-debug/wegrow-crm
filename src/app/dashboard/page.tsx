@@ -183,8 +183,7 @@ export default function DashboardPage() {
       const visitasConvertidas = visitasFiltradas.filter((v: any) => v.lead_id).length;
       const visitasGanhas = visitasFiltradas.filter((v: any) => v.lead_id && leadsPorId.get(v.lead_id)?.status === 'ganho').length;
 
-      const totalFinal = ganhos + perdidos;
-      const conversao = totalFinal > 0 ? (ganhos / totalFinal) * 100 : 0;
+      const conversao = leadsFiltrados.length > 0 ? (ganhos / leadsFiltrados.length) * 100 : 0;
       const semVisita = leadsFiltrados.length - comVisita;
 
       // Período anterior para comparativo (mesmo comprimento, imediatamente antes).
@@ -207,8 +206,7 @@ export default function DashboardPage() {
       });
       const fatAnt = leadsAnt.filter(l => l.status === 'ganho').reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
       const gAnt = leadsAnt.filter(l => l.status === 'ganho').length;
-      const pAnt = leadsAnt.filter(l => l.status === 'perdido').length;
-      const convAnt = (gAnt + pAnt) > 0 ? (gAnt / (gAnt + pAnt)) * 100 : 0;
+      const convAnt = leadsAnt.length > 0 ? (gAnt / leadsAnt.length) * 100 : 0;
       const deltaFat = fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : null;
       const deltaConv = convAnt > 0 ? Math.round(conversao - convAnt) : null;
 

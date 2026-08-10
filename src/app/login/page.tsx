@@ -46,7 +46,7 @@ export default function LoginPage() {
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#22C55E] to-transparent opacity-50"></div>
 
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">Wegrow CRM</h1>
+          <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
              Acesso Restrito
           </p>

@@ -197,8 +197,8 @@ const FEATURES = [
   {
     icon: <Cpu size={24} />,
     color: 'text-sky-400 bg-sky-400/10',
-    title: 'Integração OPEC',
-    desc: 'Job aprovado exporta automaticamente para o sistema de broadcast com toda a grade de veiculação. Exclusivo do módulo Broadcasting.',
+    title: 'Integração com seus sistemas',
+    desc: 'Job aprovado exporta sozinho pro sistema do seu setor — hoje já plugado no OPEC, do mercado de rádio — e a API pública conecta com qualquer outro sistema que sua empresa já usa.',
     span: 2,
     modulo: 'Broadcasting',
   },

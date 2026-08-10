@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Radio, Send, Sparkles, CheckCircle2, ExternalLink, Trash2 } from 'lucide-react';
+import { Loader2, Radio, Send, Sparkles, CheckCircle2, ExternalLink, Trash2, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 type Mensagem = { role: 'user' | 'assistant'; content: string; propostas?: PropostaResposta[] | null; empresa?: string | null };
 type ItemProposta = { produto: string; especificacao?: string; emissora?: string; quantidade: number; valor_unitario: number };
 type PropostaResposta = { titulo: string; corpo: string; itens?: ItemProposta[]; valor_total?: number };
+type ClienteInfo = { id: number; nome_empresa: string; telefone?: string | null; cidade?: string | null; cnpj?: string | null };
 
 const SUGESTOES = [
   'Quero montar uma proposta pra um cliente novo',
@@ -29,9 +30,30 @@ export default function MaxPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [criandoLead, setCriandoLead] = useState<number | null>(null);
   const [leadsCriados, setLeadsCriados] = useState<Record<string, number>>({});
+  const [telefonesCliente, setTelefonesCliente] = useState<Record<number, string>>({});
+  const [clientesExistentes, setClientesExistentes] = useState<ClienteInfo[]>([]);
+  const [confirmacao, setConfirmacao] = useState<Record<string, { sugerido: ClienteInfo | null; escolha: number | 'novo' | null }>>({});
   const fimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fimRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensagens, enviando]);
+
+  useEffect(() => {
+    if (!perfil?.empresa_id) return;
+    supabase.from('clientes').select('id, nome_empresa, telefone, cidade, cnpj').eq('empresa_id', perfil.empresa_id)
+      .then(({ data }) => { if (data) setClientesExistentes(data); });
+  }, [perfil?.empresa_id]);
+
+  // Mesmo padrão de casamento por nome usado no NotaFiscalModal — evita duplicar cadastro
+  // de cliente quando o nome vem escrito ligeiramente diferente entre conversas.
+  const normalizarNome = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+  const acharClienteParecido = (nome: string) => {
+    const alvo = normalizarNome(nome);
+    if (!alvo) return null;
+    const exato = clientesExistentes.find(c => normalizarNome(c.nome_empresa) === alvo);
+    if (exato) return exato;
+    const parcial = clientesExistentes.find(c => normalizarNome(c.nome_empresa).includes(alvo) || alvo.includes(normalizarNome(c.nome_empresa)));
+    return parcial || null;
+  };
 
   const enviar = async (texto?: string) => {
     const conteudo = (texto ?? input).trim();
@@ -72,13 +94,41 @@ export default function MaxPage() {
     }));
   };
 
+  // 1º clique: só levanta o candidato e mostra o card de validação — não cria nada ainda.
+  const iniciarConfirmacaoCliente = (msgIndex: number, propIndex: number) => {
+    const msg = mensagens[msgIndex];
+    const nomeEmpresa = msg.empresa || '';
+    const sugerido = acharClienteParecido(nomeEmpresa);
+    const chave = `${msgIndex}-${propIndex}`;
+    setConfirmacao(prev => ({ ...prev, [chave]: { sugerido, escolha: sugerido ? sugerido.id : 'novo' } }));
+  };
+
   const criarLead = async (msgIndex: number, propIndex: number) => {
     const msg = mensagens[msgIndex];
     const prop = msg.propostas?.[propIndex];
     if (!prop) return;
     const chave = `${msgIndex}-${propIndex}`;
+    const escolha = confirmacao[chave]?.escolha;
     setCriandoLead(msgIndex * 100 + propIndex);
     try {
+      const nomeEmpresa = msg.empresa || 'Lead do Max';
+      let clientId: number | null = null;
+      let nomeParaLead = nomeEmpresa;
+
+      if (typeof escolha === 'number') {
+        const escolhido = clientesExistentes.find(c => c.id === escolha);
+        clientId = escolha;
+        nomeParaLead = escolhido?.nome_empresa || nomeEmpresa;
+      } else {
+        const { data: novoCliente, error: erroCliente } = await supabase.from('clientes').insert([{
+          nome_empresa: nomeEmpresa, status: 'ativo', status_risco: 'em_analise', empresa_id: perfil?.empresa_id,
+        }]).select('id, nome_empresa').single();
+        if (!erroCliente && novoCliente) {
+          clientId = novoCliente.id;
+          setClientesExistentes(prev => [...prev, novoCliente]);
+        }
+      }
+
       const itensPayload = (prop.itens || []).map(i => ({
         servico: i.especificacao ? `${i.produto} — ${i.especificacao}${i.emissora ? ` (${i.emissora})` : ''}` : i.produto,
         quantidade: i.quantidade,
@@ -87,7 +137,8 @@ export default function MaxPage() {
       const valorTotal = itensPayload.reduce((acc, i) => acc + i.quantidade * i.precoUnitario, 0);
 
       const { data: leadData, error } = await supabase.from('leads').insert([{
-        empresa: msg.empresa || 'Lead do Max',
+        empresa: nomeParaLead,
+        client_id: clientId,
         itens: itensPayload,
         valor_total: valorTotal,
         status: 'aberto',
@@ -107,6 +158,14 @@ export default function MaxPage() {
     } finally {
       setCriandoLead(null);
     }
+  };
+
+  const enviarPropostaWhatsapp = (msgIndex: number, prop: PropostaResposta, empresaNome?: string | null) => {
+    const telefone = (telefonesCliente[msgIndex] || '').replace(/\D/g, '');
+    if (!telefone) return;
+    const saudacao = `Olá${empresaNome ? `, time da ${empresaNome}` : ''}! Segue a proposta ${prop.titulo}:\n\n`;
+    const mensagem = saudacao + prop.corpo;
+    window.open(`https://wa.me/55${telefone.replace(/^55/, '')}?text=${encodeURIComponent(mensagem)}`, '_blank');
   };
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -154,6 +213,15 @@ export default function MaxPage() {
 
               {m.propostas && m.propostas.length > 0 && (
                 <div className="mt-4 space-y-3">
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">WhatsApp do cliente (pra enviar a proposta)</label>
+                    <input
+                      type="tel" placeholder="47999999999"
+                      value={telefonesCliente[mi] || ''}
+                      onChange={e => setTelefonesCliente(prev => ({ ...prev, [mi]: e.target.value }))}
+                      className="w-full mt-1 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none focus:border-rose-500"
+                    />
+                  </div>
                   {m.propostas.map((p, pi) => {
                     const chave = `${mi}-${pi}`;
                     const leadId = leadsCriados[chave];
@@ -175,19 +243,61 @@ export default function MaxPage() {
                             ))}
                           </div>
                         )}
-                        <div className="flex items-center justify-between border-t border-white/5 pt-2.5">
+                        <div className="flex items-center justify-between border-t border-white/5 pt-2.5 gap-2 flex-wrap">
                           <span className="text-white font-black text-sm">R$ {(p.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                          {leadId ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button onClick={() => enviarPropostaWhatsapp(mi, p, m.empresa)} disabled={!(telefonesCliente[mi] || '').trim()} className="bg-green-600/20 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed border border-green-500/30 text-green-400 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                              <MessageCircle size={11} /> Enviar WhatsApp
+                            </button>
+                            {!leadId && !confirmacao[chave] && (
+                              <button onClick={() => iniciarConfirmacaoCliente(mi, pi)} className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                <Sparkles size={11} /> Criar lead com esta proposta
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {leadId && (
+                          <div className="mt-3 pt-3 border-t border-white/5 flex justify-end">
                             <Link href="/deals" className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#22C55E]">
                               <CheckCircle2 size={11} /> Lead criado <ExternalLink size={10} />
                             </Link>
-                          ) : (
-                            <button onClick={() => criarLead(mi, pi)} disabled={criandoLead === mi * 100 + pi} className="bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                              {criandoLead === mi * 100 + pi ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                              Criar lead com esta proposta
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
+
+                        {!leadId && confirmacao[chave] && (
+                          <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirme o cliente antes de criar o lead</p>
+                            {confirmacao[chave].sugerido ? (
+                              <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3">
+                                <p className="text-amber-300 text-xs font-bold">Achamos um cliente parecido no cadastro:</p>
+                                <p className="text-white text-sm font-black mt-1">{confirmacao[chave].sugerido!.nome_empresa}</p>
+                                <p className="text-slate-400 text-[10px] mt-0.5">
+                                  {confirmacao[chave].sugerido!.telefone || 'sem telefone'} · {confirmacao[chave].sugerido!.cidade || 'sem cidade'}{confirmacao[chave].sugerido!.cnpj ? ` · ${confirmacao[chave].sugerido!.cnpj}` : ''}
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 text-[11px]">Nenhum cliente parecido encontrado no cadastro — vai criar um novo com o nome "{m.empresa}".</p>
+                            )}
+                            <select
+                              value={String(confirmacao[chave].escolha ?? 'novo')}
+                              onChange={e => setConfirmacao(prev => ({ ...prev, [chave]: { ...prev[chave], escolha: e.target.value === 'novo' ? 'novo' : Number(e.target.value) } }))}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-rose-500"
+                            >
+                              <option value="novo" className="bg-[#0B1120]">+ Criar cliente novo "{m.empresa}"</option>
+                              {clientesExistentes.map(c => (
+                                <option key={c.id} value={c.id} className="bg-[#0B1120]">Usar cliente existente: {c.nome_empresa}</option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <button onClick={() => setConfirmacao(prev => { const cp = { ...prev }; delete cp[chave]; return cp; })} className="flex-1 text-slate-500 hover:text-white text-[10px] font-bold uppercase tracking-widest py-2">Cancelar</button>
+                              <button onClick={() => criarLead(mi, pi)} disabled={criandoLead === mi * 100 + pi} className="flex-1 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5">
+                                {criandoLead === mi * 100 + pi ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                                Confirmar e criar lead
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

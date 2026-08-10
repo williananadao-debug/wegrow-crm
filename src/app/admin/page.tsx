@@ -393,6 +393,17 @@ export default function AdminPage() {
                       {editModulos.thor ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
                     </button>
                   </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setEditModulos(prev => ({ ...prev, max: !prev.max }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.max ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                    >
+                      Max
+                      {editModulos.max ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-white/5">

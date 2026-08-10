@@ -484,6 +484,14 @@ export default function ClientesWeGrowPage() {
                       {Boolean(modulosEdit.thor) && <CheckCircle2 size={12} className="ml-auto"/>}
                     </button>
                   </div>
+
+                  <div>
+                    <button type="button" onClick={() => toggleModulo('max')}
+                      className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.max) ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                      <Package size={12}/> Max
+                      {Boolean(modulosEdit.max) && <CheckCircle2 size={12} className="ml-auto"/>}
+                    </button>
+                  </div>
                 </div>
               )}
 

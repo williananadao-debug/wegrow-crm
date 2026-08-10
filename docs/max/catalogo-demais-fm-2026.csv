@@ -1,0 +1,109 @@
+nome,preco,tipo,unidade
+"Comercial Gravado 07 segundos (Rotativo 06h-20h)",19.40,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 07 segundos (Rotativo 06h-20h)",19.40,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 07 segundos (Rotativo 06h-20h)",9.70,Comercial Gravado,"DEMAIS FM 101,1"
+"Comercial Gravado 10 segundos (Rotativo 06h-20h)",31.90,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 10 segundos (Rotativo 06h-20h)",31.90,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 10 segundos (Rotativo 06h-20h)",15.95,Comercial Gravado,"DEMAIS FM 101,1"
+"Comercial Gravado 15 segundos (Rotativo 06h-20h)",44.60,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 15 segundos (Rotativo 06h-20h)",44.60,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 15 segundos (Rotativo 06h-20h)",21.95,Comercial Gravado,"DEMAIS FM 101,1"
+"Comercial Gravado 30 segundos (Rotativo 06h-20h)",63.80,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 30 segundos (Rotativo 06h-20h)",63.80,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 30 segundos (Rotativo 06h-20h)",31.35,Comercial Gravado,"DEMAIS FM 101,1"
+"Comercial Gravado 45 segundos (Rotativo 06h-20h)",82.50,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 45 segundos (Rotativo 06h-20h)",82.50,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 45 segundos (Rotativo 06h-20h)",40.25,Comercial Gravado,"DEMAIS FM 101,1"
+"Comercial Gravado 01 minuto (Rotativo 06h-20h)",95.70,Comercial Gravado,"DEMAIS FM 104,7"
+"Comercial Gravado 01 minuto (Rotativo 06h-20h)",95.70,Comercial Gravado,"DEMAIS FM 107,9"
+"Comercial Gravado 01 minuto (Rotativo 06h-20h)",46.60,Comercial Gravado,"DEMAIS FM 101,1"
+"Jingle - Produção (veiculação = valor do spot equivalente)",500.00,Comercial Gravado,
+"Nota de Falecimento (mesmo preço de spot 30s)",63.80,Comercial Gravado,"DEMAIS FM 104,7"
+"Nota de Falecimento (mesmo preço de spot 30s)",63.80,Comercial Gravado,"DEMAIS FM 107,9"
+"Nota de Falecimento (mesmo preço de spot 30s)",31.35,Comercial Gravado,"DEMAIS FM 101,1"
+"Testemunhal (feito pelo comunicador no estúdio)",117.15,Feito ao Vivo,"DEMAIS FM 104,7"
+"Testemunhal (feito pelo comunicador no estúdio)",117.15,Feito ao Vivo,"DEMAIS FM 107,9"
+"Testemunhal (feito pelo comunicador no estúdio)",70.55,Feito ao Vivo,"DEMAIS FM 101,1"
+"Flash ao Vivo 2 min (feito pelo cliente)",322.30,Feito ao Vivo,"DEMAIS FM 104,7"
+"Flash ao Vivo 2 min (feito pelo cliente)",322.30,Feito ao Vivo,"DEMAIS FM 107,9"
+"Flash ao Vivo 2 min (feito pelo cliente)",234.30,Feito ao Vivo,"DEMAIS FM 101,1"
+"Blitz Demais FM (5 flashes + 30 chamadas + estrutura móvel)",3990.00,Blitz,"DEMAIS FM 104,7"
+"Blitz Demais FM (5 flashes + 30 chamadas + estrutura móvel)",3990.00,Blitz,"DEMAIS FM 107,9"
+"Blitz Demais FM (5 flashes + 30 chamadas + estrutura móvel)",2420.00,Blitz,"DEMAIS FM 101,1"
+"Blitz - Vídeo editado pós evento (drone + sonora)",600.00,Blitz,
+"Evento e Cobertura de Festa (70 chamadas + 5 flashes + estrutura)",7300.00,Eventos,"DEMAIS FM 104,7"
+"Evento e Cobertura de Festa (70 chamadas + 5 flashes + estrutura)",7300.00,Eventos,"DEMAIS FM 107,9"
+"Evento e Cobertura de Festa (70 chamadas + 5 flashes + estrutura)",3700.00,Eventos,"DEMAIS FM 101,1"
+"Patrocinador de Evento - Plano Ouro (70 inserções, 15 dias antes)",1100.00,Eventos,
+"Patrocinador de Evento - Plano Prata (30 inserções, semana da festa)",600.00,Eventos,
+"Patrocinador de Evento - Plano Bronze (15 inserções, semana da festa)",300.00,Eventos,
+"Previsão do Tempo - 02 citações de 10s",1417.00,Patrocínio,
+"Previsão do Tempo - 04 citações de 10s",2025.00,Patrocínio,
+"Previsão do Tempo - 06 citações de 10s",2432.00,Patrocínio,
+"Hora Certa - 02 citações de 10s",1088.00,Patrocínio,"DEMAIS FM 104,7"
+"Hora Certa - 02 citações de 10s",1088.00,Patrocínio,"DEMAIS FM 107,9"
+"Hora Certa - 02 citações de 10s",930.00,Patrocínio,"DEMAIS FM 101,1"
+"Hora Certa - 03 citações de 10s",1417.00,Patrocínio,"DEMAIS FM 104,7"
+"Hora Certa - 03 citações de 10s",1417.00,Patrocínio,"DEMAIS FM 107,9"
+"Hora Certa - 03 citações de 10s",1269.00,Patrocínio,"DEMAIS FM 101,1"
+"Informativo Demais News abre e fecha - 04 citações de 5s (10h-12h-15h-18h, cota única)",2500.00,Patrocínio,"DEMAIS FM 104,7"
+"Informativo Demais News abre e fecha - 04 citações de 5s (10h-12h-15h-18h, cota única)",2500.00,Patrocínio,"DEMAIS FM 107,9"
+"Informativo Demais News abre e fecha - 04 citações de 5s (10h-12h-15h-18h, cota única)",2125.00,Patrocínio,"DEMAIS FM 101,1"
+"Informativo Demais News abre e fecha - 02 citações de 5s (09h/14h ou 11h/17h, disponível 2 cotas)",1700.00,Patrocínio,"DEMAIS FM 104,7"
+"Informativo Demais News abre e fecha - 02 citações de 5s (09h/14h ou 11h/17h, disponível 2 cotas)",1700.00,Patrocínio,"DEMAIS FM 107,9"
+"Informativo Demais News abre e fecha - 02 citações de 5s (09h/14h ou 11h/17h, disponível 2 cotas)",1445.00,Patrocínio,"DEMAIS FM 101,1"
+"Horóscopo - 04 citações de 10s (08:20h e 09h)",1220.00,Patrocínio,
+"Temperatura - 02 citações de 10s",1088.00,Patrocínio,"DEMAIS FM 104,7"
+"Temperatura - 02 citações de 10s",1088.00,Patrocínio,"DEMAIS FM 107,9"
+"Temperatura - 02 citações de 10s",930.00,Patrocínio,"DEMAIS FM 101,1"
+"Temperatura - 03 citações de 10s",1417.00,Patrocínio,"DEMAIS FM 104,7"
+"Temperatura - 03 citações de 10s",1417.00,Patrocínio,"DEMAIS FM 107,9"
+"Temperatura - 03 citações de 10s",1269.00,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio Jornal Demais News - 2 citações em rede (3 cotas)",2500.00,Impacto Jornalístico,
+"Patrocínio Jornal + 2ª edição 16h - 6 citações locais (3 cotas)",2250.00,Impacto Jornalístico,
+"Matéria Jornalística Escrita - Portal Demais News",500.00,Impacto Jornalístico,
+"Matéria Jornalística em Vídeo (redes/YouTube/site)",800.00,Impacto Jornalístico,
+"Publicidade Editorial (entrevista ao vivo + Bate Papo Legal Demais)",1000.00,Impacto Jornalístico,
+"Notas e Avisos - 02 citações de 10s (3 cotas)",850.00,Impacto Jornalístico,"DEMAIS FM 101,1"
+"Patrocínio Programa 10 É Bom Demais (3 cotas)",3034.90,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio Programa 10 É Bom Demais (3 cotas)",3034.90,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio Programa 10 É Bom Demais (3 cotas)",1692.90,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio A Tarde É Demais / Virou Sucesso / Misturadão (cota única)",3034.90,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio A Tarde É Demais / Virou Sucesso / Misturadão (cota única)",3034.90,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio A Tarde É Demais / Virou Sucesso / Misturadão (cota única)",1692.90,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio Manhã Demais (cota única)",3492.00,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio Manhã Demais (cota única)",3492.00,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio Manhã Demais (cota única)",1945.80,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio Madrugando / Acorda Aí / Pode Pedir (cota única)",2684.00,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio Madrugando / Acorda Aí / Pode Pedir (cota única)",2684.00,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio Madrugando / Acorda Aí / Pode Pedir (cota única)",1329.90,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio Frequência Dance / Espaço Regionalista / Domingo Especial",1186.40,Patrocínio,
+"Patrocínio Canções e Emoções (cota única)",2184.80,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio Canções e Emoções (cota única)",2184.80,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio Canções e Emoções (cota única)",1083.60,Patrocínio,"DEMAIS FM 101,1"
+"Patrocínio Pra Dançar Demais (cota única)",1852.00,Patrocínio,"DEMAIS FM 104,7"
+"Patrocínio Pra Dançar Demais (cota única)",1852.00,Patrocínio,"DEMAIS FM 107,9"
+"Patrocínio Pra Dançar Demais (cota única)",919.40,Patrocínio,"DEMAIS FM 101,1"
+"Vídeo no Feed (Facebook & Instagram)",500.00,Digital,
+"Vídeo no Feed com Drone (Facebook & Instagram)",800.00,Digital,
+"Banner no Feed (Facebook & Instagram)",260.00,Digital,
+"Cobertura Digital de Evento - Pacote 2h de Presença",1300.00,Digital,
+"Banner App Demais FM (5 banners 1200x800px - 30 dias)",300.00,Digital,"DEMAIS FM 104,7"
+"Banner App Demais FM (5 banners 1200x800px - 30 dias)",300.00,Digital,"DEMAIS FM 107,9"
+"Banner App Demais FM (5 banners 1200x800px - 30 dias)",300.00,Digital,"DEMAIS FM 101,1"
+"Banner Site Demais News - Principal Topo 970x150 (30 dias)",1000.00,Digital,
+"Banner Site Demais News - Meio 970x150 (30 dias)",750.00,Digital,
+"Banner Site Demais News - Quadrado Lateral 245x245 (30 dias)",300.00,Digital,
+"Banner Site Demais News - Retângulo Pequeno 340x52 (30 dias)",250.00,Digital,
+"Apresentador Demais FM + Locação de Sala (até 2h)",2500.00,Podcast,"DEMAIS FM 104,7"
+"Apresentador Demais FM + Locação de Sala (até 2h)",2500.00,Podcast,"DEMAIS FM 107,9"
+"Apresentador Demais FM + Locação de Sala (até 2h)",2000.00,Podcast,"DEMAIS FM 101,1"
+"Locação de Sala e Equipamentos para Podcast",1500.00,Podcast,"DEMAIS FM 104,7"
+"Locação de Sala e Equipamentos para Podcast",1500.00,Podcast,"DEMAIS FM 107,9"
+"Locação de Sala e Equipamentos para Podcast",1200.00,Podcast,"DEMAIS FM 101,1"
+"Podmais - Marca Patrocinadora (04 testemunhais + 35 citações + banners + TV)",1000.00,Podcast,"DEMAIS FM 104,7"
+"Podmais - Marca Patrocinadora (04 testemunhais + 35 citações + banners + TV)",1000.00,Podcast,"DEMAIS FM 107,9"
+"Podmais - Marca Patrocinadora (04 testemunhais + 35 citações + banners + TV)",750.00,Podcast,"DEMAIS FM 101,1"
+"Podmais - Apoio (marca na TV + 35 menções + legenda, até 6 cotas)",500.00,Podcast,"DEMAIS FM 104,7"
+"Podmais - Apoio (marca na TV + 35 menções + legenda, até 6 cotas)",500.00,Podcast,"DEMAIS FM 107,9"
+"Podmais - Apoio (marca na TV + 35 menções + legenda, até 6 cotas)",350.00,Podcast,"DEMAIS FM 101,1"

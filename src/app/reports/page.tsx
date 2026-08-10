@@ -102,20 +102,39 @@ export default function ReportsPage() {
 
   useEffect(() => { if (user) fetchReportData(); }, [user, perfil]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (user && rawLeads.length > 0) fetchReportData(); }, [dataInicio, dataFim]);
+  useEffect(() => { if (user && rawLeads.length > 0) fetchDadosDoPeriodo(); }, [dataInicio, dataFim]);
 
+  // Leads e visitas dependem do filtro de data (dataInicio/dataFim) — precisam recarregar
+  // toda vez que o período muda.
+  function buildLeadsQuery() {
+    let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
+      .gte('created_at', dataInicio + 'T00:00:00')
+      .lte('created_at', dataFim + 'T23:59:59')
+      .order('created_at', { ascending: false })
+      .limit(3000);
+    if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
+    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
+    else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
+    return leadsQuery;
+  }
+
+  function buildVisitasQuery() {
+    let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
+      .gte('created_at', dataInicio + 'T00:00:00')
+      .lte('created_at', dataFim + 'T23:59:59')
+      .limit(3000);
+    if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
+    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.eq('unidade', perfil.unidade);
+    else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
+    return visitasQuery;
+  }
+
+  // premissas, profiles, clientes e o gráfico do ano NÃO dependem do filtro de data —
+  // antes recarregavam tudo de novo a cada troca de período (até 2000 clientes, 5000 leads
+  // do ano, sem necessidade). Agora só buscam uma vez, no mount.
   async function fetchReportData() {
     setLoading(true);
     try {
-      let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
-        .gte('created_at', dataInicio + 'T00:00:00')
-        .lte('created_at', dataFim + 'T23:59:59')
-        .order('created_at', { ascending: false })
-        .limit(3000);
-      if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
-      if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
-      else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
-
       const inicioAno = getLocalYYYYMMDD(new Date(new Date().getFullYear(), 0, 1));
       const hoje = getLocalYYYYMMDD(new Date());
       let graficoQuery = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
@@ -130,27 +149,27 @@ export default function ReportsPage() {
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
       if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);
 
-      let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
-        .gte('created_at', dataInicio + 'T00:00:00')
-        .lte('created_at', dataFim + 'T23:59:59')
-        .limit(3000);
-      if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
-      if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.eq('unidade', perfil.unidade);
-      else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
-
       const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes, visitasRes] = await Promise.all([
-        leadsQuery,
+        buildLeadsQuery(),
         graficoQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         perfil?.empresa_id
           ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
           : supabase.from('profiles').select('id, nome'),
         clientesQuery,
-        visitasQuery,
+        buildVisitasQuery(),
       ]);
 
       setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []); setRawVisitas(visitasRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
+  }
+
+  async function fetchDadosDoPeriodo() {
+    setLoading(true);
+    try {
+      const [leadsRes, visitasRes] = await Promise.all([buildLeadsQuery(), buildVisitasQuery()]);
+      setRawLeads(leadsRes.data || []); setRawVisitas(visitasRes.data || []);
+    } catch (error) { console.error("Erro ao buscar dados do período:", error); } finally { setLoading(false); }
   }
 
   const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {

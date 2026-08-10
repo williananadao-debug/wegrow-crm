@@ -6,7 +6,7 @@ import {
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight,
   Check, MessageCircle, PenLine, Wallet, ChevronDown,
-  Loader2, Send, Factory, Building2
+  Loader2, Send, Factory, Building2, Brain, Activity, Bot, LayoutGrid, Link2
 } from 'lucide-react';
 
 const STATS = [
@@ -116,10 +116,46 @@ const FAQ = [
   },
 ];
 
+const PRODUTOS = [
+  {
+    nome: 'CRM',
+    tagline: 'A base de todo mundo',
+    desc: 'Funil visual, propostas, contratos com assinatura eletrônica e metas por vendedor. O motor de vendas que toda empresa usa, do jeito que seu processo já funciona.',
+    icon: <LayoutGrid size={22} />,
+    cor: 'text-[#22C55E] bg-[#22C55E]/10',
+    borda: 'border-[#22C55E]/20',
+  },
+  {
+    nome: 'Nexus',
+    tagline: 'Pra quem não vive de funil',
+    desc: 'Memória de cliente pesquisável: fotos, documentos, layouts e histórico de manutenção. Pra times que atendem por telefone e WhatsApp, sem etapa de pipeline.',
+    icon: <Brain size={22} />,
+    cor: 'text-indigo-400 bg-indigo-400/10',
+    borda: 'border-indigo-500/20',
+  },
+  {
+    nome: 'Pulse',
+    tagline: 'Venda rápida, com estoque',
+    desc: 'Pedido chegou, fecha na hora. Catálogo com foto, controle de estoque, entrada de mercadoria lendo a nota fiscal por IA e rota do dia pro time de campo.',
+    icon: <Activity size={22} />,
+    cor: 'text-amber-400 bg-amber-400/10',
+    borda: 'border-amber-500/20',
+  },
+  {
+    nome: 'THOR',
+    tagline: 'Sua IA de vendas',
+    desc: 'Assistente que gera sozinha lista de clientes pra resgatar e lê nota fiscal de fornecedor por foto — tudo num chat, sem sair do sistema.',
+    icon: <Bot size={22} />,
+    cor: 'text-purple-400 bg-purple-400/10',
+    borda: 'border-purple-500/20',
+  },
+];
+
 const ADDONS = [
   { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', cor: 'text-green-400 bg-green-400/10' },
   { icon: <PenLine size={16}/>, label: 'Assinatura Digital', cor: 'text-blue-400 bg-blue-400/10' },
   { icon: <Wallet size={16}/>, label: 'Módulo Financeiro', cor: 'text-yellow-400 bg-yellow-400/10' },
+  { icon: <Link2 size={16}/>, label: 'Integração com seus sistemas', cor: 'text-cyan-400 bg-cyan-400/10' },
 ];
 
 const FEATURES = [
@@ -225,6 +261,7 @@ export default function LandingPage() {
             <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
           </div>
           <div className="hidden lg:flex items-center gap-8">
+            <a href="#produtos" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Produtos</a>
             <a href="#funcionalidades" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Funcionalidades</a>
             <a href="#precos" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Preços</a>
             <a href="#duvidas" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Dúvidas</a>
@@ -289,6 +326,34 @@ export default function LandingPage() {
               <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
                 <div className="text-3xl font-black text-[#22C55E]">{s.value}</div>
                 <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mt-1">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRODUCT SUITE */}
+      <section className="py-24 px-6" id="produtos">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Um ecossistema, não um CRM só</div>
+            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
+              Quatro produtos. Um login.
+            </h2>
+            <p className="text-slate-400 text-sm font-medium max-w-2xl mx-auto">
+              Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Ative só o que faz sentido pro seu time, e integre com os sistemas que você já usa (ERP, financeiro, WhatsApp, o que for) via API.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {PRODUTOS.map((p) => (
+              <div key={p.nome} className={`bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${p.borda}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${p.cor}`}>
+                  {p.icon}
+                </div>
+                <h3 className="text-xl font-black text-white uppercase italic mb-1">{p.nome}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{p.tagline}</p>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>

@@ -155,6 +155,14 @@ export default function PulseNovaVendaPage() {
             data_vencimento: new Date().toISOString().split('T')[0],
             user_id: user?.id, empresa_id: perfil?.empresa_id,
           }]),
+          // Venda fechada direto no Pulse não passa pelo check-in manual de /visitas — sem isso,
+          // ranking e relatórios de visita zeravam pra quem vende só por aqui.
+          supabase.from('visitas').insert([{
+            empresa: nomeCliente, telefone: clienteSelecionado?.telefone || novoTelefone || null,
+            observacao: `Venda Pulse — OS ${formatId(leadData.id)}`,
+            user_id: vendedorId || user?.id, empresa_id: perfil?.empresa_id, unidade: unidadeSel || null,
+            lead_id: leadData.id,
+          }]),
           ...carrinho.filter(i => i.estoqueMax !== null).map(i =>
             supabase.from('servicos').update({ estoque: Math.max(0, (i.estoqueMax as number) - i.quantidade) }).eq('id', i.servicoId)
           ),

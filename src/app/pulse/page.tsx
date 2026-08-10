@@ -84,6 +84,13 @@ export default function PulsePainelPage() {
         data_vencimento: new Date().toISOString().split('T')[0],
         user_id: user?.id, empresa_id: perfil?.empresa_id,
       }]),
+      // Mesmo motivo do nova-venda: orçamento virando pedido é venda fechada, mas nunca passou
+      // por /visitas — sem isso o lead ganho fica sem visita associada.
+      supabase.from('visitas').insert([{
+        empresa: orc.empresa, observacao: `Venda Pulse — OS ${formatId(orc.id)}`,
+        user_id: orc.user_id || user?.id, empresa_id: perfil?.empresa_id, unidade: perfil?.unidade || null,
+        lead_id: orc.id,
+      }]),
       ...itens.map(item => {
         const s = servicos.find(x => x.nome === item.servico);
         if (!s || s.estoque === null || s.estoque === undefined) return Promise.resolve();

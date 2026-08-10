@@ -322,7 +322,7 @@ export default function MaxPage() {
 
       <div className="flex-shrink-0 flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-2xl p-2">
         {mensagens.length > 0 && (
-          <button onClick={() => { setMensagens([]); setErro(null); setLeadsCriados({}); }} title="Nova conversa" className="p-2.5 text-slate-400 hover:text-rose-400 hover:bg-white/5 rounded-xl transition-colors flex-shrink-0">
+          <button onClick={() => { setMensagens([]); setErro(null); setLeadsCriados({}); setConfirmacao({}); setTelefonesCliente({}); }} title="Nova conversa" className="p-2.5 text-slate-400 hover:text-rose-400 hover:bg-white/5 rounded-xl transition-colors flex-shrink-0">
             <Trash2 size={18} />
           </button>
         )}

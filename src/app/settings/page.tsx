@@ -216,13 +216,28 @@ export default function SettingsPage() {
     }
   };
 
+  // Split respeitando campos entre aspas (senão um valor como "104,7" quebra a coluna ao meio).
+  const parseLinhaCSV = (linha: string): string[] => {
+    const campos: string[] = [];
+    let atual = '';
+    let dentroAspas = false;
+    for (let i = 0; i < linha.length; i++) {
+      const c = linha[i];
+      if (c === '"') { dentroAspas = !dentroAspas; }
+      else if (c === ',' && !dentroAspas) { campos.push(atual.trim()); atual = ''; }
+      else { atual += c; }
+    }
+    campos.push(atual.trim());
+    return campos;
+  };
+
   const importarCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const linhas = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+      const linhas = text.trim().split('\n').map(parseLinhaCSV);
       if (linhas.length < 2) return;
       const headers = linhas[0].map(h => h.toLowerCase());
       const iNome = headers.indexOf('nome');

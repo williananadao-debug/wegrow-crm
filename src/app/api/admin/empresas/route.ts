@@ -121,9 +121,9 @@ export async function POST(request: Request) {
     const { Resend } = await import('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'WeGrow <onboarding@resend.dev>',
       to: [diretorEmail],
-      subject: 'Seu acesso ao WeGrow CRM',
+      subject: 'Seu acesso ao WeGrow',
       html: `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -133,12 +133,12 @@ export async function POST(request: Request) {
     <tr><td align="center">
       <table width="520" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;max-width:100%">
         <tr><td style="background:#22c55e;padding:24px 32px">
-          <span style="font-size:22px;font-weight:900;font-style:italic;color:#0f172a;letter-spacing:-1px">WEGROW CRM</span>
+          <span style="font-size:22px;font-weight:900;font-style:italic;color:#0f172a;letter-spacing:-1px">WEGROW</span>
         </td></tr>
         <tr><td style="padding:32px">
           <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#fff">Olá, ${diretorNome}!</p>
           <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6">
-            A empresa <strong style="color:#fff">${nome}</strong> foi criada no WeGrow CRM e você é o diretor responsável.
+            A empresa <strong style="color:#fff">${nome}</strong> foi criada no WeGrow e você é o diretor responsável.
             Use os dados abaixo para acessar o sistema agora mesmo.
           </p>
 
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
           </p>
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #1e293b">
-          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow CRM · Este e-mail é confidencial</p>
+          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow · Este e-mail é confidencial</p>
         </td></tr>
       </table>
     </td></tr>

@@ -29,14 +29,14 @@ async function enviarConfirmacao(email: string, nome: string) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            from: 'WeGrow CRM <contato@wegrow.app.br>',
+            from: 'WeGrow <contato@wegrow.app.br>',
             to: [email],
             subject: '✅ Recebemos seu contato',
             html: `
                 <div style="font-family:sans-serif;background:#0B1120;color:#fff;padding:40px;border-radius:16px;max-width:500px;margin:0 auto">
                     <h1 style="color:#22C55E;font-size:24px;margin-bottom:8px">Recebemos seu contato!</h1>
-                    <p style="color:#94a3b8;margin-bottom:0">Olá <strong style="color:#fff">${nome}</strong>, obrigado pelo interesse no WeGrow CRM. Nosso time vai te chamar em breve pelo WhatsApp ou e-mail informado.</p>
-                    <p style="color:#475569;font-size:11px;margin-top:32px">WeGrow CRM · wegrow.app.br</p>
+                    <p style="color:#94a3b8;margin-bottom:0">Olá <strong style="color:#fff">${nome}</strong>, obrigado pelo interesse no WeGrow. Nosso time vai te chamar em breve pelo WhatsApp ou e-mail informado.</p>
+                    <p style="color:#475569;font-size:11px;margin-top:32px">WeGrow · wegrow.app.br</p>
                 </div>
             `,
         }),
@@ -51,7 +51,7 @@ async function enviarAlerta(para: string, lead: { nome: string; empresa: string;
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            from: 'WeGrow CRM <contato@wegrow.app.br>',
+            from: 'WeGrow <contato@wegrow.app.br>',
             to: [para],
             subject: `🔔 Novo lead pelo site — ${lead.empresa}`,
             html: `

@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "WeGrow CRM",
+  title: "WeGrow",
   description: "Gestão Comercial e Produção",
   manifest: "/manifest.json",
   icons: {

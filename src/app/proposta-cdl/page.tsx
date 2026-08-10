@@ -311,7 +311,7 @@ export default function PropostaCDL() {
         </div>
 
         <p className="text-center text-slate-600 text-[10px] uppercase tracking-widest font-bold">
-          WeGrow CRM · Proposta válida até {dataValidade.toLocaleDateString('pt-BR')}
+          WeGrow · Proposta válida até {dataValidade.toLocaleDateString('pt-BR')}
         </p>
 
       </div>

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
         <!-- FOOTER -->
         <tr><td style="padding:20px 32px;border-top:1px solid #1e293b">
-          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow CRM · Relatório gerado automaticamente · Confidencial</p>
+          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow · Relatório gerado automaticamente · Confidencial</p>
         </td></tr>
 
       </table>
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
   try {
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'WeGrow <onboarding@resend.dev>',
       to: [email],
       subject: `Relatório de Metas — ${periodo || ''}`,
       html,

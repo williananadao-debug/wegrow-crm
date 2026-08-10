@@ -241,7 +241,7 @@ export default function PortalCliente() {
               {loading ? 'Enviando...' : <><Send size={18}/> Solicitar Proposta</>}
             </button>
             <p className="text-center text-slate-600 text-[9px] uppercase font-bold tracking-widest mt-6 flex items-center justify-center gap-1">
-               <Sparkles size={10}/> Powered by WeGrow CRM
+               <Sparkles size={10}/> Powered by WeGrow
             </p>
           </form>
         </div>

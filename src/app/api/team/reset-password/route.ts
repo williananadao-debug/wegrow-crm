@@ -78,9 +78,9 @@ export async function POST(request: Request) {
 
         try {
             const { error: sendError } = await resend.emails.send({
-                from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
+                from: process.env.RESEND_FROM_EMAIL || 'WeGrow <onboarding@resend.dev>',
                 to: [email],
-                subject: 'Sua senha foi redefinida — WeGrow CRM',
+                subject: 'Sua senha foi redefinida — WeGrow',
                 html: `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -90,12 +90,12 @@ export async function POST(request: Request) {
     <tr><td align="center">
       <table width="520" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;max-width:100%">
         <tr><td style="background:#22c55e;padding:24px 32px">
-          <span style="font-size:22px;font-weight:900;font-style:italic;color:#0f172a;letter-spacing:-1px">WEGROW CRM</span>
+          <span style="font-size:22px;font-weight:900;font-style:italic;color:#0f172a;letter-spacing:-1px">WEGROW</span>
         </td></tr>
         <tr><td style="padding:32px">
           <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#fff">Olá, ${perfilAlvo?.nome || ''}!</p>
           <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6">
-            Sua senha de acesso ao WeGrow CRM foi redefinida por um administrador. Use os dados abaixo pra entrar.
+            Sua senha de acesso ao WeGrow foi redefinida por um administrador. Use os dados abaixo pra entrar.
           </p>
 
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b1120;border-radius:12px;border:1px solid #1e293b;margin-bottom:24px">
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
           </p>
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #1e293b">
-          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow CRM · Este e-mail é confidencial</p>
+          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow · Este e-mail é confidencial</p>
         </td></tr>
       </table>
     </td></tr>

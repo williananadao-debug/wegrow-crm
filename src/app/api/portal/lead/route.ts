@@ -45,7 +45,7 @@ async function enviarEmailConfirmacao(email: string, empresa: string, leadId: nu
                         <p style="color:#fff;font-size:20px;font-weight:900;margin:0">#${String(leadId).padStart(6, '0')}</p>
                     </div>
                     <a href="${statusUrl}" style="display:inline-block;background:#22C55E;color:#0F172A;padding:14px 28px;border-radius:12px;font-weight:900;text-decoration:none;font-size:14px;text-transform:uppercase;letter-spacing:0.05em">Acompanhar Status</a>
-                    <p style="color:#475569;font-size:11px;margin-top:32px">WeGrow CRM · Portal do Anunciante</p>
+                    <p style="color:#475569;font-size:11px;margin-top:32px">WeGrow · Portal do Anunciante</p>
                 </div>
             `,
         }),
@@ -74,7 +74,7 @@ async function enviarAlertaTime(para: string, lead: any, leadId: number) {
                         ${lead.descricao ? `<tr><td style="color:#64748b;font-size:11px;text-transform:uppercase;padding:8px 0 2px">Mensagem</td></tr><tr><td style="color:#cbd5e1;font-size:13px;padding:0 0 8px">${lead.descricao}</td></tr>` : ''}
                     </table>
                     <a href="${baseUrl}/deals" style="display:inline-block;background:#f97316;color:#fff;padding:12px 24px;border-radius:10px;font-weight:900;text-decoration:none;font-size:13px;text-transform:uppercase;letter-spacing:0.05em">Ver no CRM</a>
-                    <p style="color:#475569;font-size:11px;margin-top:24px">Protocolo #${String(leadId).padStart(6, '0')} · WeGrow CRM</p>
+                    <p style="color:#475569;font-size:11px;margin-top:24px">Protocolo #${String(leadId).padStart(6, '0')} · WeGrow</p>
                 </div>
             `,
         }),

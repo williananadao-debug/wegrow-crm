@@ -112,7 +112,7 @@ export default function ResetPasswordPage() {
             <Lock size={24} className="text-[#22C55E]"/>
           </div>
           <h1 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-1">Criar nova senha</h1>
-          <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">WeGrow CRM</p>
+          <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">WeGrow</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

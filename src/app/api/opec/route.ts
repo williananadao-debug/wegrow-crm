@@ -118,7 +118,7 @@ export async function GET(request: Request) {
                 // 👇 NOVIDADE: Identificação de quem é o dono do dado 👇
                 origem: {
                     codigo_emissora: job.empresa_id || null,
-                    sistema_gerador: "WeGrow CRM",
+                    sistema_gerador: "WeGrow",
                     ambiente: "producao"
                 },
                 producao: {

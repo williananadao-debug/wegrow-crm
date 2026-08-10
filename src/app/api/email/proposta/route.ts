@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
         <!-- FOOTER -->
         <tr><td style="padding:20px 32px;border-top:1px solid #1e293b">
-          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow CRM · Demais FM · Esta proposta é confidencial</p>
+          <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow · Esta proposta é confidencial</p>
         </td></tr>
 
       </table>
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
   try {
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'WeGrow CRM <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'WeGrow <onboarding@resend.dev>',
       to: [email],
       replyTo: reply_to || undefined,
       subject: `Proposta Comercial — ${empresa}`,

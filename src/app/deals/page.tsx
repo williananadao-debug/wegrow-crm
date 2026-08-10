@@ -67,6 +67,8 @@ type Lead = {
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
+  docuseal_consultor_sign_url?: string;
+  docuseal_consultor_assinado?: boolean;
   docuseal_arquivos?: { nome: string; path: string }[];
   contrato_manual_url?: string;
   contrato_manual_em?: string;
@@ -354,7 +356,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1248,12 +1250,35 @@ export default function DealsPage() {
         await supabase.from('leads').update({
           docuseal_submission_id: j.submission_id,
           docuseal_sign_url: j.sign_url,
+          docuseal_consultor_sign_url: j.consultor_sign_url,
+          docuseal_consultor_assinado: false,
         }).eq('id', editingLeadId);
         await fetchData();
       }
     }
     setDocuSending(false);
   }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, vencimentosDatas, formaPagamento, editingLeadId, leads, supabase, fetchData]);
+
+  // Precisa persistir — senão fechar o modal antes de mandar o link pro cliente faz o
+  // progresso "consultor já assinou" sumir e a tela volta pro formulário inicial.
+  const confirmarConsultorAssinou = useCallback(async () => {
+    setDocuConsultorAssinou(true);
+    if (editingLeadId) {
+      await supabase.from('leads').update({ docuseal_consultor_assinado: true }).eq('id', editingLeadId);
+      await fetchData();
+    }
+  }, [editingLeadId, supabase, fetchData]);
+
+  const reenviarDocuseal = useCallback(async () => {
+    setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false);
+    if (editingLeadId) {
+      await supabase.from('leads').update({
+        docuseal_submission_id: null, docuseal_sign_url: null,
+        docuseal_consultor_sign_url: null, docuseal_consultor_assinado: false,
+      }).eq('id', editingLeadId);
+      await fetchData();
+    }
+  }, [editingLeadId, supabase, fetchData]);
 
   const enviarContratoManual = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1704,8 +1729,8 @@ export default function DealsPage() {
     }
     setShowDocuseal(Boolean(lead?.docuseal_sign_url));
     setDocuLink(lead?.docuseal_sign_url || null);
-    setDocuConsultorLink(null);
-    setDocuConsultorAssinou(false);
+    setDocuConsultorLink(lead?.docuseal_consultor_sign_url || null);
+    setDocuConsultorAssinou(Boolean(lead?.docuseal_consultor_assinado));
     setDocuErro('');
     setShowUploadManual(false);
     setUploadManualErro('');
@@ -1944,10 +1969,10 @@ export default function DealsPage() {
                           <ExternalLink size={14}/>
                         </a>
                       </div>
-                      <button type="button" onClick={() => setDocuConsultorAssinou(true)} className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-orange-600/20 border border-orange-500/30 text-orange-300 hover:bg-orange-600/30 transition-colors">
+                      <button type="button" onClick={confirmarConsultorAssinou} className="w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-orange-600/20 border border-orange-500/30 text-orange-300 hover:bg-orange-600/30 transition-colors">
                         Já assinei — liberar link do cliente
                       </button>
-                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
+                      <button type="button" onClick={reenviarDocuseal} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
                     </div>
                   ) : docuConsultorLink ? (
                     <div className="space-y-3">
@@ -1971,7 +1996,7 @@ export default function DealsPage() {
                           </a>
                         )}
                       </div>
-                      <button type="button" onClick={() => { setDocuLink(null); setDocuConsultorLink(null); setDocuConsultorAssinou(false); }} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
+                      <button type="button" onClick={reenviarDocuseal} className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">Reenviar</button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

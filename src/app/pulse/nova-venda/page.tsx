@@ -163,9 +163,17 @@ export default function PulseNovaVendaPage() {
             user_id: vendedorId || user?.id, empresa_id: perfil?.empresa_id, unidade: unidadeSel || null,
             lead_id: leadData.id,
           }]),
-          ...carrinho.filter(i => i.estoqueMax !== null).map(i =>
-            supabase.from('servicos').update({ estoque: Math.max(0, (i.estoqueMax as number) - i.quantidade) }).eq('id', i.servicoId)
-          ),
+          ...carrinho.filter(i => i.estoqueMax !== null).flatMap(i => {
+            const novo = Math.max(0, (i.estoqueMax as number) - i.quantidade);
+            const deltaReal = novo - (i.estoqueMax as number);
+            return [
+              supabase.from('servicos').update({ estoque: novo }).eq('id', i.servicoId),
+              supabase.from('estoque_movimentacoes').insert([{
+                empresa_id: perfil?.empresa_id, servico_id: i.servicoId, quantidade: deltaReal,
+                tipo: 'venda', observacao: `Venda Pulse — OS ${formatId(leadData.id)}`, user_id: user?.id,
+              }]),
+            ];
+          }),
         ]);
         setServicos(prev => prev.map(s => {
           const item = carrinho.find(i => i.servicoId === s.id);

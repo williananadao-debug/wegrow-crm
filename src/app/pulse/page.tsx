@@ -97,10 +97,18 @@ export default function PulsePainelPage() {
         user_id: orc.user_id || user?.id, empresa_id: perfil?.empresa_id, unidade: perfil?.unidade || null,
         lead_id: orc.id,
       }]),
-      ...itens.map(item => {
+      ...itens.flatMap(item => {
         const s = servicos.find(x => x.nome === item.servico);
-        if (!s || s.estoque === null || s.estoque === undefined) return Promise.resolve();
-        return supabase.from('servicos').update({ estoque: Math.max(0, s.estoque - item.quantidade) }).eq('id', s.id);
+        if (!s || s.estoque === null || s.estoque === undefined) return [];
+        const novo = Math.max(0, s.estoque - item.quantidade);
+        const deltaReal = novo - s.estoque;
+        return [
+          supabase.from('servicos').update({ estoque: novo }).eq('id', s.id),
+          supabase.from('estoque_movimentacoes').insert([{
+            empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: deltaReal,
+            tipo: 'venda', observacao: `Venda Pulse — OS ${formatId(orc.id)}`, user_id: user?.id,
+          }]),
+        ];
       }),
     ]);
     fetchVendas(); fetchServicos();
@@ -130,10 +138,16 @@ export default function PulsePainelPage() {
           data_vencimento: new Date().toISOString().split('T')[0],
           user_id: user?.id, empresa_id: perfil?.empresa_id,
         }]),
-        ...itens.map(item => {
+        ...itens.flatMap(item => {
           const s = servicos.find(x => x.nome === item.servico);
-          if (!s || s.estoque === null || s.estoque === undefined) return Promise.resolve();
-          return supabase.from('servicos').update({ estoque: (s.estoque || 0) + item.quantidade }).eq('id', s.id);
+          if (!s || s.estoque === null || s.estoque === undefined) return [];
+          return [
+            supabase.from('servicos').update({ estoque: (s.estoque || 0) + item.quantidade }).eq('id', s.id),
+            supabase.from('estoque_movimentacoes').insert([{
+              empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: item.quantidade,
+              tipo: 'estorno', observacao: estornoMotivo.trim() || `Estorno — OS ${formatId(estornoVenda.id)}`, user_id: user?.id,
+            }]),
+          ];
         }),
       ]);
 

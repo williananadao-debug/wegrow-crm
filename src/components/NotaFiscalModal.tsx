@@ -134,7 +134,7 @@ export default function NotaFiscalModal({
         await supabase.from('estoque_movimentacoes').insert([{
           empresa_id: empresaId, servico_id: servicoId, quantidade: item.quantidade, valor_unitario: item.valor_unitario,
           fornecedor: fornecedor || null, nf_numero: numero || null, nf_serie: serie || null,
-          nf_chave_acesso: chaveAcesso || null, user_id: userId,
+          nf_chave_acesso: chaveAcesso || null, user_id: userId, tipo: 'entrada_nf',
         }]);
       }
 

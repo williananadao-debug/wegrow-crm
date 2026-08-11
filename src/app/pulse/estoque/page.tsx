@@ -9,6 +9,14 @@ import NotaFiscalModal from '@/components/NotaFiscalModal';
 type Movimentacao = {
   id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
   nf_numero: string | null; nf_chave_acesso: string | null; created_at: string;
+  tipo: string; observacao: string | null;
+};
+
+const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
+  entrada_nf: { label: 'Nota Fiscal', cor: 'text-purple-400 bg-purple-500/10' },
+  ajuste: { label: 'Ajuste manual', cor: 'text-blue-400 bg-blue-500/10' },
+  venda: { label: 'Venda', cor: 'text-[#22C55E] bg-[#22C55E]/10' },
+  estorno: { label: 'Estorno', cor: 'text-red-400 bg-red-500/10' },
 };
 
 export default function PulseEstoquePage() {
@@ -36,9 +44,17 @@ export default function PulseEstoquePage() {
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= 5);
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
-    const novo = Math.max(0, (s.estoque || 0) + delta);
+    const atual = s.estoque || 0;
+    const novo = Math.max(0, atual + delta);
+    const deltaReal = novo - atual;
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
+    if (deltaReal !== 0) {
+      await supabase.from('estoque_movimentacoes').insert([{
+        empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: deltaReal,
+        tipo: 'ajuste', user_id: user?.id,
+      }]);
+    }
   };
 
   const abrirHistorico = async (s: ServicoConfig) => {
@@ -146,22 +162,28 @@ export default function PulseEstoquePage() {
             {carregandoHistorico ? (
               <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
             ) : movimentacoes.length === 0 ? (
-              <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma entrada por nota fiscal registrada ainda pra esse produto.</p>
+              <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma movimentação registrada ainda pra esse produto.</p>
             ) : (
               <div className="space-y-2">
-                {movimentacoes.map(m => (
-                  <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#22C55E] font-black text-sm">+{m.quantidade}</span>
-                      <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                {movimentacoes.map(m => {
+                  const info = TIPO_LABEL[m.tipo] || { label: m.tipo, cor: 'text-slate-400 bg-white/5' };
+                  const positivo = m.quantidade >= 0;
+                  return (
+                    <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
+                      <div className="flex items-center justify-between">
+                        <span className={`font-black text-sm ${positivo ? 'text-[#22C55E]' : 'text-red-400'}`}>{positivo ? '+' : ''}{m.quantidade}</span>
+                        <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${info.cor}`}>{info.label}</span>
+                        {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
+                        {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
+                        {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
+                        {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                      {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
-                      {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
-                      {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

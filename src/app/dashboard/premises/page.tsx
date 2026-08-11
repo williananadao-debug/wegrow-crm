@@ -3,8 +3,16 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   Target, Users, MapPin, Calendar, CheckCircle2, Play, AlertCircle,
-  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck, Map, Search, X, BarChart3
+  Sparkles, Clock, TrendingUp, Zap, RefreshCcw, User, ShieldCheck, Map, Search, X, BarChart3,
+  Navigation, SkipForward
 } from 'lucide-react';
+
+function getLocalYYYYMMDD(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
@@ -15,7 +23,7 @@ export default function PremisesPage() {
   const [premissas, setPremissas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'ai' | 'manual' | 'unidade'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'manual' | 'unidade' | 'rotas'>('ai');
 
   // Estados da IA
   const [selectedVendedor, setSelectedVendedor] = useState('');
@@ -39,6 +47,11 @@ export default function PremisesPage() {
   // 👇 AQUI FICAM OS MAPEAMENTOS QUE VÊM DO BANCO DE DADOS 👇
   const [mapeamentosSalvos, setMapeamentosSalvos] = useState<any[]>([]);
 
+  // Estados da aba Rotas — geração da Rota do Dia inteligente + acompanhamento ao vivo
+  const [dataRota, setDataRota] = useState(() => getLocalYYYYMMDD(new Date()));
+  const [limiteRota, setLimiteRota] = useState(6);
+  const [rotasHoje, setRotasHoje] = useState<{ id: number; vendedor_id: string; vendedor_nome: string; total: number; visitadas: number; puladas: number }[]>([]);
+
   const [rawLeadsIA, setRawLeadsIA] = useState<any[]>([]);
 
   const [previewModal, setPreviewModal] = useState(false);
@@ -61,6 +74,21 @@ export default function PremisesPage() {
     }
   }, [user, isDirector, perfil?.empresa_id]);
 
+  // Rotas de hoje — carrega e escuta em tempo real (mesmo padrão de canal do NotificationBell)
+  // pra liderança acompanhar o progresso de todos os vendedores conforme as visitas acontecem.
+  useEffect(() => {
+    if (!isDirector || !perfil?.empresa_id) return;
+    fetchRotasHoje();
+    const channel = supabase
+      .channel('rotas-dia-central-estrategia')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rotas_dia_paradas', filter: `empresa_id=eq.${perfil.empresa_id}` }, () => {
+        fetchRotasHoje();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirector, perfil?.empresa_id, dataRota, vendedores]);
+
   const fetchCidadesIBGE = async () => {
     try {
       const response = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/SC/municipios');
@@ -79,6 +107,49 @@ export default function PremisesPage() {
         .eq('empresa_id', perfil?.empresa_id)
         .neq('cargo', 'diretor');
     setVendedores(data || []);
+  };
+
+  const fetchRotasHoje = async () => {
+    if (!perfil?.empresa_id) return;
+    const { data } = await supabase
+      .from('rotas_dia')
+      .select('id, vendedor_id, rotas_dia_paradas(status)')
+      .eq('empresa_id', perfil.empresa_id)
+      .eq('data', dataRota);
+    const nomesMap: Record<string, string> = {};
+    vendedores.forEach(v => { nomesMap[v.id] = v.nome; });
+    setRotasHoje((data || []).map((r: any) => {
+      const paradas = r.rotas_dia_paradas || [];
+      return {
+        id: r.id,
+        vendedor_id: r.vendedor_id,
+        vendedor_nome: nomesMap[r.vendedor_id] || 'Vendedor',
+        total: paradas.length,
+        visitadas: paradas.filter((p: any) => p.status === 'visitada').length,
+        puladas: paradas.filter((p: any) => p.status === 'pulada').length,
+      };
+    }));
+  };
+
+  const gerarRota = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVendedor) { alert('⚠️ Selecione o vendedor.'); return; }
+    if (!perfil?.empresa_id || !user?.id) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('gerar_rota_dia_ia', {
+        p_vendedor_id: selectedVendedor,
+        p_data: dataRota,
+        p_empresa_id: perfil.empresa_id,
+        p_criado_por: user.id,
+        p_limite: limiteRota,
+      });
+      if (error) throw error;
+      setToastMessage(`🗺️ Rota gerada! ${data || 0} parada(s) nova(s).`);
+      setShowToast(true);
+      fetchRotasHoje();
+    } catch (err: any) { alert('Erro ao gerar rota: ' + err.message); }
+    setLoading(false);
   };
 
   const fetchLeadsIA = async () => {
@@ -308,8 +379,12 @@ export default function PremisesPage() {
                     <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Manual</span>
                 </button>
                 <button onClick={() => setActiveTab('unidade')} className={`flex-1 py-3 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all overflow-hidden ${activeTab === 'unidade' ? 'bg-[#22C55E] text-[#0F172A] shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
-                    <Map size={14}/> 
+                    <Map size={14}/>
                     <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Unidades</span>
+                </button>
+                <button onClick={() => setActiveTab('rotas')} className={`flex-1 py-3 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all overflow-hidden ${activeTab === 'rotas' ? 'bg-amber-500 text-[#0F172A] shadow-lg' : 'text-slate-500 hover:bg-white/5'}`}>
+                    <Navigation size={14}/>
+                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tighter w-full text-center truncate">Rotas</span>
                 </button>
             </div>
 
@@ -502,6 +577,69 @@ export default function PremisesPage() {
                         </div>
                       </div>
                     )}
+                </div>
+              )}
+
+              {/* ABA ROTAS — Rota do Dia inteligente pro vendedor, com acompanhamento ao vivo */}
+              {activeTab === 'rotas' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <form onSubmit={gerarRota} className="space-y-6">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Vendedor</label>
+                      <select className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-amber-500" value={selectedVendedor} onChange={e => setSelectedVendedor(e.target.value)} required>
+                        <option value="" className="bg-[#0B1120]">Selecione o vendedor...</option>
+                        {vendedores.map(v => <option key={v.id} value={v.id} className="bg-[#0B1120]">{v.nome}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block flex items-center gap-1"><Calendar size={12}/> Data</label>
+                        <input type="date" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-amber-500" value={dataRota} onChange={e => setDataRota(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-2 block">Qtd. Paradas</label>
+                        <input type="number" min="1" max="20" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-4 text-white text-sm font-bold outline-none focus:border-amber-500" value={limiteRota} onChange={e => setLimiteRota(Number(e.target.value))} />
+                      </div>
+                    </div>
+
+                    <p className="text-slate-500 text-[10px] leading-relaxed px-2">
+                      Escolhe entre os clientes do próprio vendedor priorizando quem está há mais tempo sem visita, contrato vencendo ou crédito reprovado, e concentra numa única cidade pra reduzir deslocamento. Gerar de novo só completa a rota — nunca apaga o progresso já registrado.
+                    </p>
+
+                    <button type="submit" disabled={loading} className="w-full bg-amber-500 text-[#0F172A] py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-amber-900/30 flex items-center justify-center gap-3 hover:scale-[1.02] transition-all">
+                      {loading ? <Clock className="animate-spin" size={18}/> : <><Navigation size={18}/> Gerar Rota Inteligente</>}
+                    </button>
+                  </form>
+
+                  {rotasHoje.length > 0 && (
+                    <div className="pt-4 border-t border-white/5">
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-3 block flex justify-between items-center">
+                        <span>Rotas de {dataRota === getLocalYYYYMMDD(new Date()) ? 'Hoje' : dataRota}</span>
+                        <span className="flex items-center gap-1 text-[#22C55E] normal-case tracking-normal font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse"/> ao vivo
+                        </span>
+                      </label>
+                      <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                        {rotasHoje.map(r => (
+                          <div key={r.id} className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <p className="text-white text-sm font-bold">{r.vendedor_nome}</p>
+                              <span className="text-[10px] font-black text-amber-400">{r.visitadas}/{r.total} visitadas</span>
+                            </div>
+                            <div className="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#22C55E] transition-all" style={{ width: `${r.total > 0 ? (r.visitadas / r.total) * 100 : 0}%` }} />
+                            </div>
+                            {r.puladas > 0 && (
+                              <p className="text-orange-400 text-[9px] font-bold uppercase mt-1.5 flex items-center gap-1">
+                                <SkipForward size={10}/> {r.puladas} pulada{r.puladas > 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

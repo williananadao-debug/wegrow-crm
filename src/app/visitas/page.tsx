@@ -5,7 +5,8 @@ import {
   ArrowLeft, Loader2,
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Image as ImageIcon,
-  Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2
+  Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2,
+  SkipForward, Route
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +32,7 @@ type Visita = {
   localizacao_url?: string;
   lead_id?: number | null;
   foto_url?: string | null;
+  cliente_id?: number | null;
   created_at: string;
 };
 
@@ -58,6 +60,17 @@ function formatTime(iso: string) {
 }
 
 type ClienteRota = { id: number; nome_empresa: string; endereco?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; telefone?: string; };
+
+type ParadaRota = {
+  id: number; // rotas_dia_paradas.id
+  cliente_id: number;
+  ordem: number;
+  status: 'pendente' | 'visitada' | 'pulada';
+  score?: number;
+  motivo?: string;
+  nome_empresa: string;
+  endereco?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; telefone?: string;
+};
 
 export default function VisitasPage() {
   const auth = useAuth() || {};
@@ -108,6 +121,7 @@ export default function VisitasPage() {
   const [buscandoClienteVisita, setBuscandoClienteVisita] = useState(false);
   const [mostrarSugestoesVisita, setMostrarSugestoesVisita] = useState(false);
   const [clienteVisitaSelecionado, setClienteVisitaSelecionado] = useState<string | null>(null);
+  const [clienteVisitaSelecionadoId, setClienteVisitaSelecionadoId] = useState<number | null>(null);
 
   // Modal criar lead a partir de visita
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
@@ -117,29 +131,80 @@ export default function VisitasPage() {
   // Modal de detalhe da visita (dados completos + foto)
   const [visitaDetalhe, setVisitaDetalhe] = useState<Visita | null>(null);
 
-  // Rota do Dia (Pulse) — planeja a sequência de clientes a visitar hoje e abre no Google Maps
+  // Rota do Dia (Pulse) — o diretor/gerente monta a rota inteligente (gerar_rota_dia_ia) e o
+  // vendedor acompanha aqui; progresso salvo no banco (rotas_dia / rotas_dia_paradas), não
+  // mais em localStorage, pra sobreviver a troca de aparelho e a liderança acompanhar ao vivo.
   const [isRotaModalOpen, setIsRotaModalOpen] = useState(false);
   const [buscaClienteRota, setBuscaClienteRota] = useState('');
   const [resultadosClienteRota, setResultadosClienteRota] = useState<ClienteRota[]>([]);
   const [buscandoClienteRota, setBuscandoClienteRota] = useState(false);
-  const [paradasRota, setParadasRota] = useState<ClienteRota[]>([]);
+  const [paradasRota, setParadasRota] = useState<ParadaRota[]>([]);
+  const [rotaDiaId, setRotaDiaId] = useState<number | null>(null);
+  const [carregandoRota, setCarregandoRota] = useState(false);
 
-  const chaveRotaHoje = () => `wegrow_rota_${perfil?.empresa_id}_${user?.id}_${getLocalYYYYMMDD(new Date())}`;
-
-  useEffect(() => {
+  const carregarRotaHoje = useCallback(async () => {
     if (!perfil?.empresa_id || !user?.id) return;
-    try {
-      const salvo = localStorage.getItem(chaveRotaHoje());
-      if (salvo) setParadasRota(JSON.parse(salvo));
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCarregandoRota(true);
+    const hoje = getLocalYYYYMMDD(new Date());
+    const { data: rota } = await supabase.from('rotas_dia')
+      .select('id')
+      .eq('empresa_id', perfil.empresa_id)
+      .eq('vendedor_id', user.id)
+      .eq('data', hoje)
+      .maybeSingle();
+    if (!rota) { setRotaDiaId(null); setParadasRota([]); setCarregandoRota(false); return; }
+    setRotaDiaId(rota.id);
+    const { data: paradas } = await supabase.from('rotas_dia_paradas')
+      .select('id, cliente_id, ordem, status, score, motivo, clientes(nome_empresa, endereco, numero, bairro, cidade, estado, telefone)')
+      .eq('rota_id', rota.id)
+      .order('ordem');
+    setParadasRota(((paradas as any[]) || []).map(p => ({
+      id: p.id, cliente_id: p.cliente_id, ordem: p.ordem, status: p.status, score: p.score, motivo: p.motivo,
+      nome_empresa: p.clientes?.nome_empresa || 'Cliente removido', endereco: p.clientes?.endereco, numero: p.clientes?.numero,
+      bairro: p.clientes?.bairro, cidade: p.clientes?.cidade, estado: p.clientes?.estado, telefone: p.clientes?.telefone,
+    })));
+    setCarregandoRota(false);
   }, [perfil?.empresa_id, user?.id]);
 
+  function abrirRotaDoDia() {
+    setIsRotaModalOpen(true);
+    carregarRotaHoje();
+  }
+
+  // Carrega o resumo da rota assim que a página abre, pro contador no botão do header já
+  // vir certo antes do vendedor clicar em "Rota do Dia"
+  useEffect(() => { carregarRotaHoje(); }, [carregarRotaHoje]);
+
+  // Progresso ao vivo — se o diretor gerar/completar a rota ou outra aba marcar uma parada,
+  // essa tela recarrega sozinha (mesmo padrão de canal usado em NotificationBell).
   useEffect(() => {
-    if (!perfil?.empresa_id || !user?.id) return;
-    try { localStorage.setItem(chaveRotaHoje(), JSON.stringify(paradasRota)); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paradasRota]);
+    if (!isRotaModalOpen || !user?.id) return;
+    const channel = supabase
+      .channel(`rota-dia-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rotas_dia_paradas', filter: `vendedor_id=eq.${user.id}` }, () => {
+        carregarRotaHoje();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isRotaModalOpen, user?.id, carregarRotaHoje]);
+
+  async function garantirRotaHoje(): Promise<number | null> {
+    if (rotaDiaId) return rotaDiaId;
+    if (!perfil?.empresa_id || !user?.id) return null;
+    const hoje = getLocalYYYYMMDD(new Date());
+    const { data: nova, error } = await supabase.from('rotas_dia')
+      .insert([{ empresa_id: perfil.empresa_id, vendedor_id: user.id, data: hoje, criado_por: user.id }])
+      .select('id').single();
+    if (error || !nova) {
+      // Corrida com outra aba/o diretor gerando ao mesmo tempo — a rota já existe, só busca o id
+      const { data: existente } = await supabase.from('rotas_dia')
+        .select('id').eq('empresa_id', perfil.empresa_id).eq('vendedor_id', user.id).eq('data', hoje).maybeSingle();
+      if (existente) { setRotaDiaId(existente.id); return existente.id; }
+      return null;
+    }
+    setRotaDiaId(nova.id);
+    return nova.id;
+  }
 
   useEffect(() => {
     if (buscaClienteRota.trim().length < 2) { setResultadosClienteRota([]); return; }
@@ -181,39 +246,64 @@ export default function VisitasPage() {
   function selecionarClienteVisita(c: ClienteRota) {
     setEmpresaVisita(c.nome_empresa);
     setClienteVisitaSelecionado(c.nome_empresa);
+    setClienteVisitaSelecionadoId(c.id);
     if (c.telefone) setTelefone(c.telefone);
     if (c.cidade) setCidade(c.cidade);
     setSugestoesClienteVisita([]);
     setMostrarSugestoesVisita(false);
   }
 
-  const adicionarParada = (c: ClienteRota) => {
-    if (paradasRota.some(p => p.id === c.id)) return;
-    setParadasRota(prev => [...prev, c]);
+  const adicionarParada = async (c: ClienteRota) => {
+    if (paradasRota.some(p => p.cliente_id === c.id)) return;
     setBuscaClienteRota('');
     setResultadosClienteRota([]);
+    const rid = await garantirRotaHoje();
+    if (!rid || !perfil?.empresa_id || !user?.id) return;
+    const ordem = paradasRota.length > 0 ? Math.max(...paradasRota.map(p => p.ordem)) + 1 : 1;
+    const { data, error } = await supabase.from('rotas_dia_paradas')
+      .insert([{ rota_id: rid, empresa_id: perfil.empresa_id, vendedor_id: user.id, cliente_id: c.id, ordem, status: 'pendente' }])
+      .select('id').single();
+    if (!error && data) {
+      setParadasRota(prev => [...prev, {
+        id: data.id, cliente_id: c.id, ordem, status: 'pendente',
+        nome_empresa: c.nome_empresa, endereco: c.endereco, numero: c.numero, bairro: c.bairro, cidade: c.cidade, estado: c.estado, telefone: c.telefone,
+      }]);
+    }
   };
 
-  const removerParada = (id: number) => setParadasRota(prev => prev.filter(p => p.id !== id));
-
-  const moverParada = (index: number, delta: number) => {
-    setParadasRota(prev => {
-      const novo = [...prev];
-      const alvo = index + delta;
-      if (alvo < 0 || alvo >= novo.length) return prev;
-      [novo[index], novo[alvo]] = [novo[alvo], novo[index]];
-      return novo;
-    });
+  const removerParada = async (paradaId: number) => {
+    setParadasRota(prev => prev.filter(p => p.id !== paradaId));
+    await supabase.from('rotas_dia_paradas').delete().eq('id', paradaId);
   };
 
-  const enderecoParada = (c: ClienteRota) => {
+  const marcarStatusParada = async (paradaId: number, status: ParadaRota['status']) => {
+    setParadasRota(prev => prev.map(p => p.id === paradaId ? { ...p, status } : p));
+    await supabase.from('rotas_dia_paradas').update({ status }).eq('id', paradaId);
+  };
+
+  const moverParada = async (index: number, delta: number) => {
+    const alvo = index + delta;
+    if (alvo < 0 || alvo >= paradasRota.length) return;
+    const a = paradasRota[index], b = paradasRota[alvo];
+    const novo = [...paradasRota];
+    [novo[index], novo[alvo]] = [novo[alvo], novo[index]];
+    setParadasRota(novo);
+    await Promise.all([
+      supabase.from('rotas_dia_paradas').update({ ordem: b.ordem }).eq('id', a.id),
+      supabase.from('rotas_dia_paradas').update({ ordem: a.ordem }).eq('id', b.id),
+    ]);
+  };
+
+  const enderecoParada = (c: { endereco?: string; numero?: string; bairro?: string; cidade?: string; estado?: string; nome_empresa: string }) => {
     const partes = [c.endereco && c.numero ? `${c.endereco}, ${c.numero}` : c.endereco, c.bairro, c.cidade, c.estado].filter(Boolean);
     return partes.length > 0 ? partes.join(', ') : c.nome_empresa;
   };
 
   const abrirRotaNoMaps = () => {
-    if (paradasRota.length === 0) return;
-    const enderecos = paradasRota.map(c => encodeURIComponent(enderecoParada(c)));
+    const pendentes = paradasRota.filter(p => p.status === 'pendente');
+    const alvo = pendentes.length > 0 ? pendentes : paradasRota;
+    if (alvo.length === 0) return;
+    const enderecos = alvo.map(c => encodeURIComponent(enderecoParada(c)));
     const destino = enderecos[enderecos.length - 1];
     const waypoints = enderecos.slice(0, -1).join('|');
     const url = `https://www.google.com/maps/dir/?api=1&destination=${destino}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
@@ -234,6 +324,40 @@ export default function VisitasPage() {
     geocodificarParadas(base, setParadasGeo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRotaModalOpen, paradasRota]);
+
+  // Reordena as paradas pela proximidade real (nearest-neighbor sobre lat/lng já geocodificado
+  // pro preview) — aproximação em plano (Math.hypot) é suficiente pra distâncias dentro de uma
+  // cidade, não precisa de haversine pra esse caso de uso.
+  function ordenarParadasPorProximidade() {
+    const comCoord = paradasGeo.filter(g => g.lat !== undefined && g.lng !== undefined);
+    if (comCoord.length < 2) return;
+    const restante = [...comCoord];
+    const ordenado: ParadaGeo[] = [restante.shift()!];
+    while (restante.length > 0) {
+      const atual = ordenado[ordenado.length - 1];
+      let melhorIdx = 0, melhorDist = Infinity;
+      restante.forEach((p, i) => {
+        const d = Math.hypot(p.lat! - atual.lat!, p.lng! - atual.lng!);
+        if (d < melhorDist) { melhorDist = d; melhorIdx = i; }
+      });
+      ordenado.push(restante.splice(melhorIdx, 1)[0]);
+    }
+    const idsOrdenados = ordenado.map(g => g.id);
+    const semCoord = paradasRota.filter(p => !idsOrdenados.includes(p.id));
+    const novaOrdem = [
+      ...idsOrdenados.map(id => paradasRota.find(p => p.id === id)!).filter(Boolean),
+      ...semCoord,
+    ];
+    setParadasRota(novaOrdem);
+    novaOrdem.forEach((p, i) => { supabase.from('rotas_dia_paradas').update({ ordem: i + 1 }).eq('id', p.id).then(() => {}); });
+  }
+
+  // Remove só as paradas pendentes/puladas — as já visitadas ficam como histórico do dia
+  const limparRotaHoje = async () => {
+    const idsRemover = paradasRota.filter(p => p.status !== 'visitada').map(p => p.id);
+    setParadasRota(prev => prev.filter(p => p.status === 'visitada'));
+    if (idsRemover.length > 0) await supabase.from('rotas_dia_paradas').delete().in('id', idsRemover);
+  };
 
   // Relatório Estratégico IA (analisa observações das visitas filtradas)
   const [relatorioIAOpen, setRelatorioIAOpen] = useState(false);
@@ -327,6 +451,7 @@ export default function VisitasPage() {
     setSugestoesClienteVisita([]);
     setMostrarSugestoesVisita(false);
     setClienteVisitaSelecionado(null);
+    setClienteVisitaSelecionadoId(null);
     setIsModalOpen(true);
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -381,6 +506,12 @@ export default function VisitasPage() {
       setUploadingFoto(false);
     }
 
+    // Só amarra ao cliente real se o texto do campo ainda é exatamente o nome que veio da
+    // sugestão selecionada — se o vendedor editou depois, volta a ser genérico (sem cliente_id).
+    const cliente_id = (clienteVisitaSelecionadoId && empresaVisita.trim() === clienteVisitaSelecionado)
+      ? clienteVisitaSelecionadoId
+      : null;
+
     const mapsUrl = coords ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}` : null;
     const payload = {
       empresa: empresaVisita.trim(),
@@ -395,11 +526,32 @@ export default function VisitasPage() {
       localizacao_url: mapsUrl,
       lead_id: null,
       foto_url,
+      cliente_id,
     };
     try {
       const { data, error } = await supabase.from('visitas').insert([payload]).select();
       if (error) throw error;
       if (data) setVisitas(prev => [data[0] as Visita, ...prev]);
+
+      // Vínculo automático com a Rota do Dia: se esse cliente é uma parada pendente hoje,
+      // marca como visitada — o vendedor não precisa fazer nada além de registrar a visita.
+      if (data && cliente_id) {
+        const hoje = getLocalYYYYMMDD(new Date());
+        const { data: rotaHoje } = await supabase.from('rotas_dia')
+          .select('id')
+          .eq('empresa_id', perfil.empresa_id)
+          .eq('vendedor_id', user?.id)
+          .eq('data', hoje)
+          .maybeSingle();
+        if (rotaHoje) {
+          await supabase.from('rotas_dia_paradas')
+            .update({ status: 'visitada', visita_id: data[0].id })
+            .eq('rota_id', rotaHoje.id)
+            .eq('cliente_id', cliente_id)
+            .eq('status', 'pendente');
+        }
+      }
+
       setIsModalOpen(false);
       toast('Visita registrada! 📍');
     } catch (err: any) {
@@ -544,7 +696,7 @@ export default function VisitasPage() {
         <div className="flex gap-2">
           {temPulse && (
             <button
-              onClick={() => setIsRotaModalOpen(true)}
+              onClick={abrirRotaDoDia}
               className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
             >
               <Navigation size={14} /> Rota do Dia {paradasRota.length > 0 ? `(${paradasRota.length})` : ''}
@@ -791,7 +943,7 @@ export default function VisitasPage() {
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
                     placeholder="Ex: João Silva, Loja ABC..."
                     value={empresaVisita}
-                    onChange={e => { setEmpresaVisita(e.target.value); setClienteVisitaSelecionado(null); }}
+                    onChange={e => { setEmpresaVisita(e.target.value); setClienteVisitaSelecionado(null); setClienteVisitaSelecionadoId(null); }}
                     onFocus={() => { if (sugestoesClienteVisita.length > 0) setMostrarSugestoesVisita(true); }}
                     onBlur={() => setTimeout(() => setMostrarSugestoesVisita(false), 150)}
                   />
@@ -1202,7 +1354,9 @@ export default function VisitasPage() {
                 <h2 className="text-lg font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
                   <Navigation size={18} className="text-amber-400" /> Rota do Dia
                 </h2>
-                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Monta a sequência de paradas e abre no Google Maps</p>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">
+                  {rotaDiaId ? 'Gerada pela liderança — acompanhe e ajuste aqui' : 'Nenhuma rota gerada ainda — busque clientes pra montar a sua'}
+                </p>
               </div>
               <button onClick={() => setIsRotaModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
             </div>
@@ -1226,31 +1380,85 @@ export default function VisitasPage() {
                 )}
               </div>
 
-              {paradasRota.length === 0 ? (
+              {paradasRota.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                    <span>Progresso do dia</span>
+                    <span className="text-amber-400">{paradasRota.filter(p => p.status === 'visitada').length}/{paradasRota.length} visitadas</span>
+                  </div>
+                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#22C55E] transition-all"
+                      style={{ width: `${(paradasRota.filter(p => p.status === 'visitada').length / paradasRota.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {carregandoRota ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 size={24} className="animate-spin text-amber-400" />
+                </div>
+              ) : paradasRota.length === 0 ? (
                 <div className="text-center py-10 opacity-50">
                   <Navigation size={28} className="mx-auto mb-2 text-slate-600" />
                   <p className="text-xs font-bold text-slate-500 uppercase">Nenhuma parada adicionada ainda.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {paradasRota.map((c, i) => (
-                    <div key={c.id} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                      <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-black flex-shrink-0">{i + 1}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-bold truncate">{c.nome_empresa}</p>
-                        <p className="text-slate-500 text-[10px] truncate">{enderecoParada(c)}</p>
+                  {paradasRota.map((c, i) => {
+                    const statusCfg = c.status === 'visitada'
+                      ? { label: 'Visitada', color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10 border-[#22C55E]/30', icon: <CheckCircle2 size={9} /> }
+                      : c.status === 'pulada'
+                      ? { label: 'Pulada', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', icon: <SkipForward size={9} /> }
+                      : { label: 'Pendente', color: 'text-slate-400', bg: 'bg-white/5 border-white/10', icon: <Clock size={9} /> };
+                    return (
+                      <div key={c.id} className={`flex items-start gap-2 border rounded-xl p-3 ${
+                        c.status === 'visitada' ? 'bg-[#22C55E]/5 border-[#22C55E]/10' : c.status === 'pulada' ? 'bg-orange-500/5 border-orange-500/10 opacity-70' : 'bg-white/[0.02] border-white/5'
+                      }`}>
+                        <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">{i + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-white text-sm font-bold truncate">{c.nome_empresa}</p>
+                            <span className={`border px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${statusCfg.bg} ${statusCfg.color}`}>
+                              {statusCfg.icon} {statusCfg.label}
+                            </span>
+                          </div>
+                          <p className="text-slate-500 text-[10px] truncate">{enderecoParada(c)}</p>
+                          {c.motivo && <p className="text-slate-600 text-[9px] italic mt-0.5 truncate">{c.motivo}</p>}
+                        </div>
+                        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                          <div className="flex gap-1">
+                            <button onClick={() => moverParada(i, -1)} disabled={i === 0} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↑</button>
+                            <button onClick={() => moverParada(i, 1)} disabled={i === paradasRota.length - 1} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↓</button>
+                          </div>
+                          <div className="flex gap-1">
+                            {c.status !== 'visitada' && (
+                              <button onClick={() => marcarStatusParada(c.id, 'visitada')} title="Marcar como visitada" className="w-6 h-6 flex items-center justify-center bg-[#22C55E]/10 hover:bg-[#22C55E]/20 rounded text-[#22C55E]"><CheckCircle2 size={12}/></button>
+                            )}
+                            {c.status === 'pendente' && (
+                              <button onClick={() => marcarStatusParada(c.id, 'pulada')} title="Pular por hoje" className="w-6 h-6 flex items-center justify-center bg-orange-500/10 hover:bg-orange-500/20 rounded text-orange-400"><SkipForward size={12}/></button>
+                            )}
+                            {c.status !== 'pendente' && (
+                              <button onClick={() => marcarStatusParada(c.id, 'pendente')} title="Reabrir parada" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-400"><X size={12}/></button>
+                            )}
+                            <button onClick={() => removerParada(c.id)} title="Remover da rota" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-red-500/20 rounded text-slate-600 hover:text-red-400"><Trash2 size={12} /></button>
+                          </div>
+                        </div>
                       </div>
-                      <button onClick={() => moverParada(i, -1)} disabled={i === 0} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↑</button>
-                      <button onClick={() => moverParada(i, 1)} disabled={i === paradasRota.length - 1} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded text-slate-300">↓</button>
-                      <button onClick={() => removerParada(c.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               {paradasRota.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Prévia do trajeto</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Prévia do trajeto</p>
+                    <button onClick={ordenarParadasPorProximidade} className="flex items-center gap-1 text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors">
+                      <Route size={10} /> Ordenar por proximidade
+                    </button>
+                  </div>
                   <RotaMapa paradas={paradasGeo} />
                   <p className="text-[9px] text-slate-600 mt-1.5">Linha reta entre as paradas, só pra visualizar — a rota de verdade (com trânsito e ruas) abre no Google Maps abaixo.</p>
                 </div>
@@ -1266,8 +1474,8 @@ export default function VisitasPage() {
                 <Navigation size={14} /> Abrir rota no Google Maps
               </button>
               {paradasRota.length > 0 && (
-                <button onClick={() => setParadasRota([])} className="w-full text-slate-500 hover:text-red-400 text-[10px] font-bold uppercase py-1 transition-colors">
-                  Limpar rota do dia
+                <button onClick={limparRotaHoje} className="w-full text-slate-500 hover:text-red-400 text-[10px] font-bold uppercase py-1 transition-colors">
+                  Limpar paradas pendentes
                 </button>
               )}
             </div>

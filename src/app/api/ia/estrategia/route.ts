@@ -221,7 +221,10 @@ Selecione os ${limite} melhores candidatos e para cada um monte um pacote de pro
         empresa: s.nome || candidato?.nome || 'Lead IA',
         status: 'aberto',
         etapa: 0,
-        user_id: vendedor_id || candidato?.user_id_original || criado_por,
+        // Amarra: o vendedor que já atende/vendeu pra esse cliente tem prioridade sobre
+        // qualquer vendedor_id escolhido na hora de gerar a estratégia — evita mandar lead
+        // de um cliente pro vendedor errado.
+        user_id: candidato?.user_id_original || vendedor_id || criado_por,
         origem: `IA — ${tipoLabel[tipo]}`,
         descricao: `🤖 IA (score ${s.score_ia}/100): ${s.motivo_ia || ''} | Abordagem: ${s.abordagem || ''}`,
         itens: itens,

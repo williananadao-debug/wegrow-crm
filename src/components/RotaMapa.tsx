@@ -19,7 +19,7 @@ export default function RotaMapa({ paradas }: { paradas: ParadaGeo[] }) {
 
   if (localizadas.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center bg-black/30 rounded-2xl border border-white/5 px-6 text-center">
+      <div className="h-[50vh] min-h-[260px] max-h-[520px] flex items-center justify-center bg-black/30 rounded-2xl border border-white/5 px-6 text-center">
         <p className="text-slate-500 text-xs font-bold">
           {todasProcessadas
             ? 'Não conseguimos localizar esses endereços no mapa. A navegação de verdade continua funcionando pelo botão do Google Maps abaixo.'
@@ -32,7 +32,7 @@ export default function RotaMapa({ paradas }: { paradas: ParadaGeo[] }) {
   const linha: [number, number][] = localizadas.map(p => [p.lat, p.lng]);
 
   return (
-    <div className="h-64 rounded-2xl overflow-hidden border border-white/10">
+    <div className="h-[50vh] min-h-[320px] max-h-[520px] rounded-2xl overflow-hidden border border-white/10">
       <MapContainer
         {...(localizadas.length > 1
           ? { bounds: L.latLngBounds(linha), boundsOptions: { padding: [30, 30] as [number, number] } }

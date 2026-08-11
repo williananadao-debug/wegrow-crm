@@ -1348,7 +1348,7 @@ export default function VisitasPage() {
 
       {isRotaModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4" onClick={() => setIsRotaModalOpen(false)}>
-          <div className="bg-[#0B1120] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#0B1120] border border-white/10 rounded-3xl w-full max-w-lg sm:max-w-xl md:max-w-3xl shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-white/10 flex-shrink-0">
               <div>
                 <h2 className="text-lg font-black uppercase italic tracking-tighter text-white flex items-center gap-2">

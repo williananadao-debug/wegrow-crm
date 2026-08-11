@@ -5,7 +5,7 @@ import {
   MessageCircle, MapPin, MapPinOff, User, Edit2,
   Sparkles, Crosshair, CalendarDays, AlertTriangle,
   Building2, FileText, Hash, CheckCircle2, RefreshCcw,
-  Info, Lock, Target, Clock, Mail, PenLine, X,
+  Info, Lock, Target, Clock, Mail, PenLine, X, Car,
 } from 'lucide-react';
 
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; };
@@ -45,6 +45,7 @@ type Lead = {
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
   contrato_manual_url?: string;
+  veiculo_referencia?: string | null;
 };
 
 const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStart(4, '0')}`;
@@ -234,6 +235,12 @@ const LeadCard = React.memo(({
             {lead.unidade && (
               <span className="bg-white/5 text-slate-300 border border-white/10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                 <Building2 size={8} /> {lead.unidade}
+              </span>
+            )}
+
+            {lead.veiculo_referencia && (
+              <span title={lead.veiculo_referencia} className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 max-w-[140px] truncate">
+                <Car size={8} className="shrink-0" /> {lead.veiculo_referencia}
               </span>
             )}
 

@@ -73,6 +73,7 @@ type Lead = {
   contrato_manual_url?: string;
   contrato_manual_em?: string;
   contrato_manual_arquivos?: { nome: string; path: string }[];
+  veiculo_referencia?: string | null;
 };
 
 type ClienteOpcao = {
@@ -204,6 +205,7 @@ export default function DealsPage() {
   const isOpec = perfil?.cargo === 'opec';
   const isLideranca = isDirector || isGerente;
   const isCDL = Boolean(empresa?.modulos?.cdl);
+  const isVeiculos = Boolean(empresa?.modulos?.veiculos);
   const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;
 
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -256,6 +258,7 @@ export default function DealsPage() {
   const [novaCidade, setNovaCidade] = useState('');     
   const [novaDescricao, setNovaDescricao] = useState(''); 
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [veiculoReferencia, setVeiculoReferencia] = useState('');
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
@@ -372,7 +375,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
     const buildQ = () => {
         let q = supabase.from('leads').select(COLS);
@@ -1596,6 +1599,7 @@ export default function DealsPage() {
         user_id: (isLideranca || isOpec) ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0, criado_por: user.id }),
         client_id: finalClientId,
+        veiculo_referencia: veiculoReferencia.trim() || null,
         empresa_id: perfil?.empresa_id
     };
 
@@ -1671,6 +1675,7 @@ export default function DealsPage() {
         setNovaCidade(lead.cidade || '');
         setNovaDescricao(lead.descricao || '');
         setSelectedClientId(lead.client_id || null);
+        setVeiculoReferencia(lead.veiculo_referencia || '');
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
@@ -1723,6 +1728,7 @@ export default function DealsPage() {
         setNovaCidade('');
         setNovaDescricao('');
         setSelectedClientId(null);
+        setVeiculoReferencia('');
         setItensTemporarios([]);
         setFotoUrl('');
         setContratoInicio('');
@@ -2163,6 +2169,18 @@ export default function DealsPage() {
                             </div>
                         )}
                     </div>
+
+                    {isVeiculos && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Veículo de interesse</label>
+                            <input
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                placeholder="Ex: Honda Civic 2022 prata, ou link do anúncio..."
+                                value={veiculoReferencia}
+                                onChange={e => setVeiculoReferencia(e.target.value)}
+                            />
+                        </div>
+                    )}
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>

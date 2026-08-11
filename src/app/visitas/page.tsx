@@ -103,6 +103,12 @@ export default function VisitasPage() {
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
 
+  // Busca de cliente já cadastrado ao digitar o nome na visita — se não encontrar, segue livre (genérico)
+  const [sugestoesClienteVisita, setSugestoesClienteVisita] = useState<ClienteRota[]>([]);
+  const [buscandoClienteVisita, setBuscandoClienteVisita] = useState(false);
+  const [mostrarSugestoesVisita, setMostrarSugestoesVisita] = useState(false);
+  const [clienteVisitaSelecionado, setClienteVisitaSelecionado] = useState<string | null>(null);
+
   // Modal criar lead a partir de visita
   const [criarLeadVisita, setCriarLeadVisita] = useState<Visita | null>(null);
   const [criandoLead, setCriandoLead] = useState(false);
@@ -150,6 +156,36 @@ export default function VisitasPage() {
     }, 350);
     return () => clearTimeout(t);
   }, [buscaClienteRota, perfil?.empresa_id]);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    if (empresaVisita.trim().length < 2 || empresaVisita === clienteVisitaSelecionado) {
+      setSugestoesClienteVisita([]);
+      return;
+    }
+    setBuscandoClienteVisita(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('clientes')
+        .select('id, nome_empresa, endereco, numero, bairro, cidade, estado, telefone')
+        .eq('status', 'ativo')
+        .eq('empresa_id', perfil?.empresa_id)
+        .ilike('nome_empresa', `%${empresaVisita.trim()}%`)
+        .order('nome_empresa').limit(6);
+      setSugestoesClienteVisita((data as ClienteRota[]) || []);
+      setMostrarSugestoesVisita(true);
+      setBuscandoClienteVisita(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [empresaVisita, isModalOpen, perfil?.empresa_id, clienteVisitaSelecionado]);
+
+  function selecionarClienteVisita(c: ClienteRota) {
+    setEmpresaVisita(c.nome_empresa);
+    setClienteVisitaSelecionado(c.nome_empresa);
+    if (c.telefone) setTelefone(c.telefone);
+    if (c.cidade) setCidade(c.cidade);
+    setSugestoesClienteVisita([]);
+    setMostrarSugestoesVisita(false);
+  }
 
   const adicionarParada = (c: ClienteRota) => {
     if (paradasRota.some(p => p.id === c.id)) return;
@@ -288,6 +324,9 @@ export default function VisitasPage() {
     setSaveError('');
     setFotoFile(null);
     setFotoPreview(null);
+    setSugestoesClienteVisita([]);
+    setMostrarSugestoesVisita(false);
+    setClienteVisitaSelecionado(null);
     setIsModalOpen(true);
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -406,6 +445,7 @@ export default function VisitasPage() {
           telefone: visita.telefone || null,
           descricao: visita.observacao || null,
           tipo: 'visita',
+          origem: 'Visita',
           etapa: 0,
           status: 'aberto',
           valor_total: 0,
@@ -741,17 +781,39 @@ export default function VisitasPage() {
                 {geoStatus === 'denied' && 'Sem permissão de localização — visita será salva sem coordenadas'}
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
                   Nome do Cliente / Empresa *
                 </label>
-                <input
-                  autoFocus
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
-                  placeholder="Ex: João Silva, Loja ABC..."
-                  value={empresaVisita}
-                  onChange={e => setEmpresaVisita(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    autoFocus
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ex: João Silva, Loja ABC..."
+                    value={empresaVisita}
+                    onChange={e => { setEmpresaVisita(e.target.value); setClienteVisitaSelecionado(null); }}
+                    onFocus={() => { if (sugestoesClienteVisita.length > 0) setMostrarSugestoesVisita(true); }}
+                    onBlur={() => setTimeout(() => setMostrarSugestoesVisita(false), 150)}
+                  />
+                  {buscandoClienteVisita && (
+                    <Loader2 size={14} className="animate-spin text-slate-500 absolute right-4 top-1/2 -translate-y-1/2" />
+                  )}
+                </div>
+                {mostrarSugestoesVisita && sugestoesClienteVisita.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-[#0F172A] border border-white/10 rounded-xl overflow-hidden max-h-52 overflow-y-auto shadow-2xl">
+                    {sugestoesClienteVisita.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => selecionarClienteVisita(c)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-white/5 border-b border-white/5 last:border-0"
+                      >
+                        <p className="text-white text-sm font-bold">{c.nome_empresa}</p>
+                        <p className="text-slate-500 text-xs truncate">{enderecoParada(c)}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {unidades.length > 1 && (

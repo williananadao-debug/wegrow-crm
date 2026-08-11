@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig } from '../shared';
+import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
 
 type Movimentacao = {
@@ -54,6 +54,7 @@ export default function PulseEstoquePage() {
         empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: deltaReal,
         tipo: 'ajuste', user_id: user?.id,
       }]);
+      alertarEstoqueBaixoSeCruzou(s.id, atual, novo, s.estoque_minimo ?? 5);
     }
   };
 

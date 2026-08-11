@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 export type ClienteOpcao = {
   id: number; nome_empresa: string; telefone: string; cnpj?: string;
   inscricao_estadual?: string; email?: string; cidade?: string; endereco?: string;
@@ -61,4 +63,19 @@ export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any) {
     </body></html>
   `);
   janela.document.close();
+}
+
+// Dispara só na transição de "acima do mínimo" pra "no mínimo ou abaixo" — não manda um
+// e-mail novo a cada venda enquanto o produto já está baixo, só quando cruza a linha.
+export async function alertarEstoqueBaixoSeCruzou(servicoId: number, antes: number, depois: number, minimo: number) {
+  if (!(antes > minimo && depois <= minimo)) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    fetch('/api/pulse/alerta-estoque', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ servicoId }),
+    }).catch(() => {});
+  } catch {}
 }

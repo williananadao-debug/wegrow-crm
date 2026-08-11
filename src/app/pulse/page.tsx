@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
-import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento } from './shared';
+import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from './shared';
 
 export default function PulsePainelPage() {
   const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
@@ -102,6 +102,7 @@ export default function PulsePainelPage() {
         if (!s || s.estoque === null || s.estoque === undefined) return [];
         const novo = Math.max(0, s.estoque - item.quantidade);
         const deltaReal = novo - s.estoque;
+        alertarEstoqueBaixoSeCruzou(s.id, s.estoque, novo, s.estoque_minimo ?? 5);
         return [
           supabase.from('servicos').update({ estoque: novo }).eq('id', s.id),
           supabase.from('estoque_movimentacoes').insert([{

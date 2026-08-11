@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ClienteOpcao, ServicoConfig, ItemCarrinho, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento } from '../shared';
+import { ClienteOpcao, ServicoConfig, ItemCarrinho, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from '../shared';
 
 export default function PulseNovaVendaPage() {
   const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
@@ -166,6 +166,8 @@ export default function PulseNovaVendaPage() {
           ...carrinho.filter(i => i.estoqueMax !== null).flatMap(i => {
             const novo = Math.max(0, (i.estoqueMax as number) - i.quantidade);
             const deltaReal = novo - (i.estoqueMax as number);
+            const minimo = servicos.find(s => s.id === i.servicoId)?.estoque_minimo ?? 5;
+            alertarEstoqueBaixoSeCruzou(i.servicoId, i.estoqueMax as number, novo, minimo);
             return [
               supabase.from('servicos').update({ estoque: novo }).eq('id', i.servicoId),
               supabase.from('estoque_movimentacoes').insert([{

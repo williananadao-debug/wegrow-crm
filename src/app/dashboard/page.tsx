@@ -230,11 +230,25 @@ export default function DashboardPage() {
         return { label, valor, isCurrent: i === refMes.getMonth() };
       });
 
+      // Vendas por Dia: quando o filtro é um único dia (ex: clicou numa barra), uma faixa
+      // real de 1 dia vira 1 barra gigante — feio. Nesse caso mostra o mês inteiro do dia
+      // selecionado (com dados reais de cada dia, sem restringir por data), só destacando o
+      // dia escolhido — mesmo princípio da Evolução Mensal, que também nunca encolhe.
       const vendasPorDiaArray: { dia: string, valor: number, dataIso: string }[] = [];
-      if (dataInicio && dataFim) {
+      const diaUnicoSelecionado = Boolean(dataInicio && dataFim && dataInicio === dataFim);
+      if (diaUnicoSelecionado) {
+          const base = new Date(dataInicio + 'T12:00:00');
+          const inicioMes = new Date(base.getFullYear(), base.getMonth(), 1);
+          const diasNoMes = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+          for (let i = 0; i < diasNoMes; i++) {
+              const curr = new Date(inicioMes); curr.setDate(inicioMes.getDate() + i);
+              const iso = getLocalYYYYMMDD(curr); const label = `${String(curr.getDate()).padStart(2,'0')}/${String(curr.getMonth()+1).padStart(2,'0')}`;
+              vendasPorDiaArray.push({ dia: label, valor: 0, dataIso: iso });
+          }
+      } else if (dataInicio && dataFim) {
           const start = new Date(dataInicio + 'T12:00:00'); const end = new Date(dataFim + 'T12:00:00');
           const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
-          const maxDays = Math.min(diffDays, 60); 
+          const maxDays = Math.min(diffDays, 60);
           for (let i = 0; i <= maxDays; i++) {
               const curr = new Date(start); curr.setDate(start.getDate() + i);
               const iso = getLocalYYYYMMDD(curr); const label = `${String(curr.getDate()).padStart(2,'0')}/${String(curr.getMonth()+1).padStart(2,'0')}`;
@@ -242,7 +256,16 @@ export default function DashboardPage() {
           }
       }
 
-      leadsFiltrados.forEach(l => { if (l.status === 'ganho') { const leadData = l.created_at.substring(0, 10); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
+      // No mês inteiro (dia único selecionado) usa leads sem o recorte estreito de data —
+      // senão só o dia clicado teria valor e o resto do mês ficaria zerado sem necessidade.
+      const leadsParaVendasPorDia = diaUnicoSelecionado
+        ? rawLeads.filter(l => {
+            if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
+            if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
+            return true;
+          })
+        : leadsFiltrados;
+      leadsParaVendasPorDia.forEach(l => { if (l.status === 'ganho') { const leadData = l.created_at.substring(0, 10); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
       rawJobs.forEach((j: any) => { if (j.stage === 'roteiro') prod.roteiro++; if (j.stage === 'gravacao') prod.gravacao++; if (j.stage === 'edicao') prod.edicao++; if (j.stage === 'opec') prod.opec++; });
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);

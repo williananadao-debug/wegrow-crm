@@ -55,6 +55,7 @@ export default function AdminPage() {
   const [editPlano, setEditPlano] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editModulos, setEditModulos] = useState<Record<string, boolean>>({});
+  const [editPulseVertical, setEditPulseVertical] = useState<string>('');
   const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -101,6 +102,7 @@ export default function AdminPage() {
     setEditPlano(e.plano);
     setEditStatus(e.status);
     setEditModulos({ ...e.modulos });
+    setEditPulseVertical((e.modulos as any)?.pulse_vertical || '');
     setEditLogoUrl(e.logo_url || null);
     setMetrics(null);
 
@@ -120,7 +122,7 @@ export default function AdminPage() {
     if (!editNome.trim()) { alert('O nome da empresa não pode ficar vazio.'); return; }
     setSaving(true);
     // Mescla módulos atuais com os editados para não perder campos não-boolean (ex: tokens de integração)
-    const modulosMesclados = { ...empresaSelecionada.modulos, ...editModulos };
+    const modulosMesclados = { ...empresaSelecionada.modulos, ...editModulos, pulse_vertical: editPulseVertical || undefined };
     await fetch('/api/admin/empresas', {
       method: 'PATCH',
       headers: headers(),
@@ -381,6 +383,24 @@ export default function AdminPage() {
                       Pulse
                       {editModulos.pulse ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
                     </button>
+                    {/* Vertical do Pulse — varejo (padrão, SKU+quantidade) ou veículos (unidade
+                        única: placa/chassi/km, vitrine própria, baixa automática ao fechar lead) */}
+                    <div className={`grid grid-cols-2 gap-2 mt-2 ml-2 pl-3 border-l border-white/10 transition-opacity ${!editModulos.pulse ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <button
+                        type="button"
+                        onClick={() => setEditPulseVertical('')}
+                        className={`px-3 py-2 rounded-xl border text-[11px] font-black uppercase transition-all ${!editPulseVertical ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                      >
+                        Varejo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditPulseVertical('veiculos')}
+                        className={`px-3 py-2 rounded-xl border text-[11px] font-black uppercase transition-all ${editPulseVertical === 'veiculos' ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                      >
+                        Veículos
+                      </button>
+                    </div>
                   </div>
 
                   <div>

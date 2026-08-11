@@ -100,6 +100,19 @@ export default function VisitasPage() {
     return getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
   });
 
+  // Deep-link vindo do Dashboard (clique num KPI/gráfico lá abre aqui já filtrado)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vendedor = params.get('vendedor');
+    const lead = params.get('filtroLead');
+    const ini = params.get('dataInicio');
+    const fim = params.get('dataFim');
+    if (vendedor) setFiltroVendedor(vendedor);
+    if (lead === 'todos' || lead === 'com_lead' || lead === 'sem_lead') setFiltroLead(lead);
+    if (ini) setDataInicio(ini);
+    if (fim) setDataFim(fim);
+  }, []);
+
   // Modal de nova visita
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [empresaVisita, setEmpresaVisita] = useState('');

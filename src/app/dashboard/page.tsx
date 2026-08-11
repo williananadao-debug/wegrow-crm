@@ -312,6 +312,40 @@ export default function DashboardPage() {
   const getDonutGradient = (visitados: number, pendentes: number) => { const total = visitados + pendentes; if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`; const pct = (visitados / total) * 100; return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`; };
   const formatCompact = (num: number) => { if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k'; return num % 1 === 0 ? num.toString() : num.toFixed(2); };
 
+  // Drill-down: leva os filtros atuais do dashboard (vendedor/unidade/período) pra tela de
+  // destino, já filtrada — clicar num KPI/gráfico/lista aqui abre a lista real de lá.
+  const irParaDeals = (extra: Record<string, string> = {}) => {
+    const qs = new URLSearchParams();
+    if (vendedorSelecionado) qs.set('vendedor', vendedorSelecionado);
+    if (filtroUnidade !== 'Todas') qs.set('unidade', filtroUnidade);
+    if (dataInicio) qs.set('dataInicio', dataInicio);
+    if (dataFim) qs.set('dataFim', dataFim);
+    Object.entries(extra).forEach(([k, v]) => qs.set(k, v));
+    router.push(`/deals?${qs.toString()}`);
+  };
+
+  const irParaVisitas = (extra: Record<string, string> = {}) => {
+    const qs = new URLSearchParams();
+    if (vendedorSelecionado) qs.set('vendedor', vendedorSelecionado);
+    if (dataInicio) qs.set('dataInicio', dataInicio);
+    if (dataFim) qs.set('dataFim', dataFim);
+    Object.entries(extra).forEach(([k, v]) => qs.set(k, v));
+    router.push(`/visitas?${qs.toString()}`);
+  };
+
+  // Clicar num dia/mês do gráfico estreita o período do próprio dashboard (mesmo padrão do
+  // ranking, que já isola vendedor ao clicar) — clicar de novo no mesmo período volta ao mês cheio.
+  const filtrarPorPeriodo = (ini: string, fim: string) => {
+    const hoje = new Date();
+    if (dataInicio === ini && dataFim === fim) {
+      setDataInicio(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1)));
+      setDataFim(getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)));
+    } else {
+      setDataInicio(ini);
+      setDataFim(fim);
+    }
+  };
+
   if (loading && !rawLeads.length) return <SkeletonDashboard />;
 
   return (
@@ -395,7 +429,7 @@ export default function DashboardPage() {
       {visao === 'comercial' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-orange-500/40 transition-colors">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">{isCDL ? 'Receita de Anuidades' : 'Faturamento'} {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>
                     {statsComercial.deltaFat !== null && (
@@ -405,7 +439,7 @@ export default function DashboardPage() {
                     )}
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-blue-500/40 transition-colors">
                     <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Taxa de Filiação' : 'Conversão'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.taxaConversao}%</h3>
                     {statsComercial.deltaConv !== null && (
@@ -415,17 +449,17 @@ export default function DashboardPage() {
                     )}
                     <CheckCircle2 className="absolute top-4 right-4 text-blue-400 opacity-20" size={24} />
                 </div>
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                <div onClick={() => irParaVisitas()} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-yellow-500/40 transition-colors">
                     <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest mb-0.5">Visitas</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.totalVisitas}</h3>
                     <MapPin className="absolute top-4 right-4 text-yellow-400 opacity-20" size={24} />
                 </div>
-                <div className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                <div onClick={() => irParaDeals()} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-purple-500/40 transition-colors">
                     <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Prospectos' : 'Leads Totais'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.propostasEnviadas}</h3>
                     <FileText className="absolute top-4 right-4 text-purple-400 opacity-20" size={24} />
                 </div>
-                <div className="bg-[#0B1120] border border-red-500/20 p-4 rounded-2xl relative overflow-hidden group shadow-lg">
+                <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-red-500/20 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-red-500/50 transition-colors">
                     <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-0.5">Descontos Dados</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">
                         {statsComercial.totalDesconto > 0
@@ -459,10 +493,16 @@ export default function DashboardPage() {
                         return statsComercial.vendasPorDia.map((d, i) => {
                             const height = d.valor > 0 ? Math.max((d.valor / maxVal) * 100, 5) : 0;
                             const isHoje = d.dataIso === hojeIso;
+                            const isSelecionado = dataInicio === d.dataIso && dataFim === d.dataIso;
                             return (
-                                <div key={i} className="flex-1 min-w-[32px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                                <div
+                                    key={i}
+                                    onClick={() => filtrarPorPeriodo(d.dataIso, d.dataIso)}
+                                    title={`Ver o dia ${d.dia}`}
+                                    className={`flex-1 min-w-[32px] group flex flex-col justify-end h-full relative rounded-lg transition-colors p-0.5 cursor-pointer ${isSelecionado ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                >
                                     <div
-                                        className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'}`}
+                                        className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'} ${isSelecionado ? 'ring-2 ring-white' : ''}`}
                                         style={{ height: d.valor > 0 ? `${height}%` : '4px' }}
                                     >
                                         {d.valor > 0 && (
@@ -492,12 +532,21 @@ export default function DashboardPage() {
                         const minVal = Math.min(...(fechados.length > 0 ? fechados : valores), maxVal);
                         const scaleBase = minVal * 0.75;
                         const scaleRange = Math.max(maxVal - scaleBase, 1);
+                        const anoAtual = new Date().getFullYear();
                         return evolucaoMensal.map((m, i) => {
                             const anterior = i > 0 ? evolucaoMensal[i - 1].valor : 0;
                             const variacao = anterior > 0 ? ((m.valor - anterior) / anterior) * 100 : null;
                             const altura = m.valor > 0 ? Math.max(((m.valor - scaleBase) / scaleRange) * 100, 5) : 0;
+                            const iniMes = getLocalYYYYMMDD(new Date(anoAtual, i, 1));
+                            const fimMes = getLocalYYYYMMDD(new Date(anoAtual, i + 1, 0));
+                            const isSelecionado = dataInicio === iniMes && dataFim === fimMes;
                             return (
-                                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full relative group">
+                                <div
+                                    key={i}
+                                    onClick={() => filtrarPorPeriodo(iniMes, fimMes)}
+                                    title={`Ver ${m.label}`}
+                                    className={`flex-1 flex flex-col items-center justify-end h-full relative group cursor-pointer rounded-lg transition-colors ${isSelecionado ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                >
                                     {m.valor > 0 && (
                                         <div className="absolute flex flex-col items-center gap-0.5" style={{ bottom: `calc(${altura}% + 6px)` }}>
                                             <span className="text-[9px] font-black text-white whitespace-nowrap">{formatCompact(m.valor)}</span>
@@ -508,7 +557,7 @@ export default function DashboardPage() {
                                             )}
                                         </div>
                                     )}
-                                    <div className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'}`} style={{ height: `${altura}%` }} />
+                                    <div className={`w-full rounded-t-lg transition-all duration-700 ${m.isCurrent ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-blue-600/70'} ${isSelecionado ? 'ring-2 ring-white' : ''}`} style={{ height: `${altura}%` }} />
                                     <span className={`text-[8px] font-black mt-1.5 ${m.isCurrent ? 'text-orange-400' : 'text-slate-500'}`}>{m.label}</span>
                                 </div>
                             );
@@ -538,9 +587,9 @@ export default function DashboardPage() {
                 <div className="lg:col-span-1 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic mb-3 flex items-center gap-2"><Target size={14} className="text-blue-500"/> Funil</h3>
                     <div className="space-y-2">
-                        <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-slate-400 font-bold uppercase">Abertos</span><span className="text-xs font-black text-white">{statsComercial.leadsAbertos}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-orange-500 font-bold uppercase">{isCDL ? 'Filiados' : 'Ganhos'}</span><span className="text-xs font-black text-orange-500">{statsComercial.funil.ganho}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-white/5"><span className="text-[10px] text-red-500 font-bold uppercase">Perdidos</span><span className="text-xs font-black text-red-500">{statsComercial.funil.perdido}</span></div>
+                        <div onClick={() => irParaDeals()} className="flex justify-between py-1.5 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded-lg px-1 -mx-1 transition-colors"><span className="text-[10px] text-slate-400 font-bold uppercase">Abertos</span><span className="text-xs font-black text-white">{statsComercial.leadsAbertos}</span></div>
+                        <div onClick={() => irParaDeals({ etapa: '4' })} className="flex justify-between py-1.5 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded-lg px-1 -mx-1 transition-colors"><span className="text-[10px] text-orange-500 font-bold uppercase">{isCDL ? 'Filiados' : 'Ganhos'}</span><span className="text-xs font-black text-orange-500">{statsComercial.funil.ganho}</span></div>
+                        <div onClick={() => irParaDeals({ etapa: '5' })} className="flex justify-between py-1.5 border-b border-white/5 cursor-pointer hover:bg-white/5 rounded-lg px-1 -mx-1 transition-colors"><span className="text-[10px] text-red-500 font-bold uppercase">Perdidos</span><span className="text-xs font-black text-red-500">{statsComercial.funil.perdido}</span></div>
                     </div>
                 </div>
             </div>
@@ -553,14 +602,14 @@ export default function DashboardPage() {
                         const vc = statsComercial.visitasConvertidas;
                         const vg = statsComercial.visitasGanhas;
                         const steps = [
-                            { label: 'Registradas', val: vr, color: 'bg-blue-500', pct: 100 },
-                            { label: 'Lead', val: vc, color: 'bg-yellow-500', pct: vr > 0 ? Math.round((vc/vr)*100) : 0 },
-                            { label: 'Venda', val: vg, color: 'bg-green-500', pct: vr > 0 ? Math.round((vg/vr)*100) : 0 },
+                            { label: 'Registradas', val: vr, color: 'bg-blue-500', pct: 100, filtroLead: 'todos' as const },
+                            { label: 'Lead', val: vc, color: 'bg-yellow-500', pct: vr > 0 ? Math.round((vc/vr)*100) : 0, filtroLead: 'com_lead' as const },
+                            { label: 'Venda', val: vg, color: 'bg-green-500', pct: vr > 0 ? Math.round((vg/vr)*100) : 0, filtroLead: 'com_lead' as const },
                         ];
                         return (
                             <div className="space-y-3 flex-1 justify-center flex flex-col">
                                 {steps.map((s, i) => (
-                                    <div key={i}>
+                                    <div key={i} onClick={() => irParaVisitas({ filtroLead: s.filtroLead })} className="cursor-pointer hover:bg-white/5 rounded-lg p-1 -m-1 transition-colors">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{s.label}</span>
                                             <div className="flex items-center gap-2">
@@ -580,16 +629,16 @@ export default function DashboardPage() {
                 <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-3"><BarChart3 size={14} className="text-blue-500"/> Volume por Etapa</h3>
                     <div className="flex items-end h-40 gap-3 px-2 w-full pt-4">
-                        {[ { label: isCDL ? 'Prospectos' : 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600' }, { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500' }, { label: isCDL ? 'Filiação' : 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500' }, { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500' }, { label: isCDL ? 'Filiados' : 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500' }, ].map((etapa, i, arr) => {
+                        {[ { label: isCDL ? 'Prospectos' : 'Novos', val: statsComercial.funil.novos, color: 'bg-blue-600', etapa: 0 }, { label: 'Contato', val: statsComercial.funil.contato, color: 'bg-blue-500', etapa: 1 }, { label: isCDL ? 'Filiação' : 'Proposta', val: statsComercial.funil.proposta, color: 'bg-purple-500', etapa: 2 }, { label: 'Negoc.', val: statsComercial.funil.negociacao, color: 'bg-yellow-500', etapa: 3 }, { label: isCDL ? 'Filiados' : 'Ganhos', val: statsComercial.funil.ganho, color: 'bg-orange-500', etapa: 4 }, ].map((etapa, i, arr) => {
                             const maxEtapa = Math.max(...arr.map(e => e.val), 1);
                             const h = (etapa.val / maxEtapa) * 100;
                             return (
-                                <div key={i} className="flex-1 flex flex-col items-center justify-end group h-full relative">
+                                <div key={i} onClick={() => irParaDeals({ etapa: String(etapa.etapa) })} className="flex-1 flex flex-col items-center justify-end group h-full relative cursor-pointer">
                                     <div className="mb-1 text-[10px] font-black text-white">{etapa.val}</div>
-                                    <div className={`w-full rounded-t-lg transition-all duration-1000 ${etapa.color} opacity-90 hover:opacity-100 relative`} style={{ height: `${Math.max(h, 2)}%` }}>
+                                    <div className={`w-full rounded-t-lg transition-all duration-1000 ${etapa.color} opacity-90 group-hover:opacity-100 relative`} style={{ height: `${Math.max(h, 2)}%` }}>
                                         {etapa.val > 0 && <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/50"></div>}
                                     </div>
-                                    <div className="mt-2 text-[8px] font-black uppercase text-slate-500 tracking-wider text-center">{etapa.label}</div>
+                                    <div className="mt-2 text-[8px] font-black uppercase text-slate-500 tracking-wider text-center group-hover:text-slate-300 transition-colors">{etapa.label}</div>
                                 </div>
                             )
                         })}
@@ -644,7 +693,7 @@ export default function DashboardPage() {
                                 const hoje2 = new Date(); hoje2.setHours(0,0,0,0);
                                 const dias = Math.ceil((fim.getTime() - hoje2.getTime()) / (1000 * 60 * 60 * 24));
                                 return (
-                                    <div key={i} className="flex items-center justify-between bg-orange-500/5 border border-orange-500/20 rounded-xl px-3 py-2">
+                                    <div key={i} onClick={() => irParaDeals({ leadId: String(c.id) })} className="flex items-center justify-between bg-orange-500/5 border border-orange-500/20 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500/50 transition-colors">
                                         <span className="text-xs font-bold text-white truncate flex-1">{c.empresa}</span>
                                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg ml-2 shrink-0 ${dias <= 7 ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
                                             {dias}d

@@ -307,6 +307,22 @@ export default function DealsPage() {
   const [filtroUnidade, setFiltroUnidade] = useState<string>('todas');
   const [filtroAtrasados, setFiltroAtrasados] = useState(false);
   const [filtroSemAssinatura, setFiltroSemAssinatura] = useState(false);
+
+  // Deep-link vindo do Dashboard (clique num KPI/gráfico/etapa lá abre aqui já filtrado)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vendedor = params.get('vendedor');
+    const unidade = params.get('unidade');
+    const ini = params.get('dataInicio');
+    const fim = params.get('dataFim');
+    if (vendedor) setFiltroVendedor(vendedor);
+    if (unidade) setFiltroUnidade(unidade);
+    if (ini) setDataInicio(ini);
+    if (fim) setDataFim(fim);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const deepLinkAplicadoRef = useRef(false);
   const [proximaAcaoModal, setProximaAcaoModal] = useState<{leadId: number; etapa: number; status: string} | null>(null);
   const [proximaAcaoDate, setProximaAcaoDate] = useState('');
 
@@ -1739,6 +1755,25 @@ export default function DealsPage() {
     setDocuSignerPhone(lead?.telefone || '');
     setIsModalOpen(true);
   }, [perfil?.unidade, user?.id]);
+
+  // Deep-link vindo do Dashboard: abre o lead específico (renovação clicada) ou rola até a
+  // coluna/etapa pedida, depois que os leads terminam de carregar. Só uma vez por visita à página.
+  useEffect(() => {
+    if (deepLinkAplicadoRef.current || leads.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const leadId = params.get('leadId');
+    const etapa = params.get('etapa');
+    if (leadId) {
+      const lead = leads.find(l => String(l.id) === leadId);
+      if (lead) { abrirModal(lead); deepLinkAplicadoRef.current = true; return; }
+    }
+    if (etapa) {
+      setTimeout(() => {
+        document.getElementById(`stage-col-${etapa}`)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+      }, 300);
+      deepLinkAplicadoRef.current = true;
+    }
+  }, [leads, abrirModal]);
 
   const leadsAtivos = useMemo(() => {
       const hojeStr = getLocalYYYYMMDD(new Date());

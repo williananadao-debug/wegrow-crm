@@ -375,6 +375,7 @@ export default function KanbanBoard({
             <Droppable key={key} droppableId={key}>
               {(provided: any) => (
                 <div
+                  id={`stage-col-${key}`}
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={`bg-[#0B1120] border-t-4 ${stage.color} border-x border-b border-white/5 rounded-2xl p-2 flex flex-col min-w-[85vw] md:min-w-[250px] md:flex-1 md:snap-center`}

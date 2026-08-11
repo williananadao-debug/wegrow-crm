@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes } from 'lucide-react';
+import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento } from './shared';
@@ -18,12 +18,17 @@ export default function PulsePainelPage() {
   const [nfseLoading, setNfseLoading] = useState(false);
   const [nfseErro, setNfseErro] = useState<string | null>(null);
 
+  const [estornoVenda, setEstornoVenda] = useState<VendaPulse | null>(null);
+  const [estornoMotivo, setEstornoMotivo] = useState('');
+  const [estornoLoading, setEstornoLoading] = useState(false);
+  const [estornoErro, setEstornoErro] = useState<string | null>(null);
+
   const fetchVendas = async () => {
     if (!perfil?.empresa_id) return;
     setLoadingVendas(true);
     const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens')
+      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
       .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
       .gte('created_at', inicioMes.toISOString())
       .order('created_at', { ascending: false });
@@ -41,6 +46,7 @@ export default function PulsePainelPage() {
   const produtosEstoqueBaixo = servicos.filter(s => s.estoque !== null && s.estoque !== undefined && (s.estoque as number) <= 5);
   const pedidosFechados = vendas.filter(v => v.status === 'ganho');
   const orcamentosAbertos = vendas.filter(v => v.status === 'orcamento');
+  const vendasEstornadas = vendas.filter(v => v.estornado_em);
 
   const hojeStr = new Date().toDateString();
   const vendasHoje = pedidosFechados.filter(v => new Date(v.created_at).toDateString() === hojeStr);
@@ -98,6 +104,46 @@ export default function PulsePainelPage() {
       }),
     ]);
     fetchVendas(); fetchServicos();
+  };
+
+  const abrirEstorno = (venda: VendaPulse) => { setEstornoVenda(venda); setEstornoMotivo(''); setEstornoErro(null); };
+
+  const confirmarEstorno = async () => {
+    if (!estornoVenda) return;
+    setEstornoLoading(true); setEstornoErro(null);
+    try {
+      const { error: erroLead } = await supabase.from('leads').update({
+        status: 'perdido',
+        estornado_em: new Date().toISOString(),
+        estornado_motivo: estornoMotivo.trim() || null,
+        estornado_por: user?.id,
+      }).eq('id', estornoVenda.id);
+      if (erroLead) throw new Error(erroLead.message);
+
+      const itens = estornoVenda.itens || [];
+      await Promise.all([
+        // Reversão do lançamento — nunca apaga o registro original, lança uma saída
+        // compensatória em espelho, igual se faz em qualquer estorno contábil de verdade.
+        supabase.from('lancamentos').insert([{
+          titulo: `ESTORNO: ${estornoVenda.empresa} - OS: ${formatId(estornoVenda.id)}`,
+          valor: estornoVenda.valor_total, tipo: 'saida', categoria: 'Estorno', status: 'pendente',
+          data_vencimento: new Date().toISOString().split('T')[0],
+          user_id: user?.id, empresa_id: perfil?.empresa_id,
+        }]),
+        ...itens.map(item => {
+          const s = servicos.find(x => x.nome === item.servico);
+          if (!s || s.estoque === null || s.estoque === undefined) return Promise.resolve();
+          return supabase.from('servicos').update({ estoque: (s.estoque || 0) + item.quantidade }).eq('id', s.id);
+        }),
+      ]);
+
+      setEstornoVenda(null);
+      fetchVendas(); fetchServicos();
+    } catch (err: any) {
+      setEstornoErro(err?.message || 'Erro ao estornar venda.');
+    } finally {
+      setEstornoLoading(false);
+    }
   };
 
   const abrirNfse = (venda: VendaPulse) => { setNfseVenda(venda); setNfseCpfCnpj(venda.cnpj || ''); setNfseErro(null); };
@@ -298,12 +344,38 @@ export default function PulsePainelPage() {
                       <FileText size={10} /> Emitir NF
                     </button>
                   )}
+                  <button onClick={() => abrirEstorno(v)} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                    <Undo2 size={10} /> Estornar
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {vendasEstornadas.length > 0 && (
+        <div className="bg-[#0F172A] border border-red-500/10 rounded-3xl overflow-hidden mt-6">
+          <div className="p-5 border-b border-white/5">
+            <h3 className="font-black uppercase text-sm text-red-400/80 flex items-center gap-2"><Undo2 size={14} /> Vendas estornadas este mês ({vendasEstornadas.length})</h3>
+          </div>
+          <div className="divide-y divide-white/5">
+            {vendasEstornadas.map(v => (
+              <div key={v.id} className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-4 opacity-60">
+                <div className="min-w-0">
+                  <p className="font-bold text-white uppercase truncate text-sm">{v.empresa}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-[9px] text-slate-600 font-mono">{formatId(v.id)}</span>
+                    <span className="text-[9px] text-slate-500">estornada em {new Date(v.estornado_em!).toLocaleDateString('pt-BR')}</span>
+                    {v.estornado_motivo && <span className="text-[9px] text-slate-500">· {v.estornado_motivo}</span>}
+                  </div>
+                </div>
+                <span className="font-bold text-slate-500 text-sm shrink-0">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {nfseVenda && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setNfseVenda(null)}>
@@ -328,6 +400,34 @@ export default function PulsePainelPage() {
               <button onClick={emitirNfse} disabled={nfseLoading || !nfseCpfCnpj} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                 {nfseLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 {nfseLoading ? 'Emitindo...' : 'Emitir NFS-e'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {estornoVenda && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !estornoLoading && setEstornoVenda(null)}>
+          <div className="bg-[#0F172A] border border-red-500/20 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Undo2 size={18} className="text-red-400" /> Estornar Venda</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{estornoVenda.empresa} · {formatId(estornoVenda.id)}</p>
+              </div>
+              <button onClick={() => setEstornoVenda(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed">
+                Isso devolve {(estornoVenda.itens || []).length} item(ns) pro estoque, lança uma saída de R$ {(estornoVenda.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no financeiro pra compensar a entrada original, e a venda sai do faturamento do mês.
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Motivo (opcional)</label>
+                <input value={estornoMotivo} onChange={e => setEstornoMotivo(e.target.value)} placeholder="Ex: cliente devolveu o produto" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-red-500 transition-all" />
+              </div>
+              {estornoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{estornoErro}</div>}
+              <button onClick={confirmarEstorno} disabled={estornoLoading} className="w-full bg-red-500 hover:bg-red-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {estornoLoading ? <Loader2 size={16} className="animate-spin" /> : <Undo2 size={16} />}
+                {estornoLoading ? 'Estornando...' : 'Confirmar Estorno'}
               </button>
             </div>
           </div>

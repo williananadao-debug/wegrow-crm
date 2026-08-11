@@ -176,6 +176,13 @@ export default function PulseNovaVendaPage() {
               }]),
             ];
           }),
+          // Se algum item vendido é veículo (loja de carros), marca a baixa dele também —
+          // mesma baixa que acontece ao fechar um lead vinculado a veículo como "Ganho" no Kanban.
+          ...carrinho
+            .filter(i => servicos.find(s => s.id === i.servicoId)?.tipo === 'veiculo')
+            .map(i => supabase.from('veiculos')
+              .update({ status: 'vendido', data_venda: new Date().toISOString().split('T')[0], venda_lead_id: leadData.id })
+              .eq('servico_id', i.servicoId)),
         ]);
         setServicos(prev => prev.map(s => {
           const item = carrinho.find(i => i.servicoId === s.id);
@@ -315,18 +322,29 @@ export default function PulseNovaVendaPage() {
               <p className="text-slate-500 text-xs font-bold text-center py-6">Nenhum item ainda.</p>
             ) : (
               <div className="space-y-2 mb-4">
-                {carrinho.map(i => (
-                  <div key={i.servicoId} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-xs font-bold truncate">{i.nome}</p>
-                      <p className="text-slate-500 text-[10px]">R$ {i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
+                {carrinho.map(i => {
+                  // Veículo é sempre unidade única — não faz sentido mostrar stepper de
+                  // quantidade (nem dá pra ter 2 do mesmo carro no carrinho).
+                  const ehVeiculo = servicos.find(s => s.id === i.servicoId)?.tipo === 'veiculo';
+                  return (
+                    <div key={i.servicoId} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-xs font-bold truncate">{i.nome}</p>
+                        <p className="text-slate-500 text-[10px]">R$ {i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
+                      </div>
+                      {ehVeiculo ? (
+                        <span className="text-[9px] font-black text-slate-500 uppercase px-2">1 unidade</span>
+                      ) : (
+                        <>
+                          <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={12} /></button>
+                          <span className="text-white text-xs font-black w-5 text-center">{i.quantidade}</span>
+                          <button onClick={() => alterarQuantidade(i.servicoId, 1)} disabled={i.estoqueMax !== null && i.quantidade >= i.estoqueMax} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 disabled:opacity-30"><Plus size={12} /></button>
+                        </>
+                      )}
+                      <button onClick={() => removerItem(i.servicoId)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={13} /></button>
                     </div>
-                    <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={12} /></button>
-                    <span className="text-white text-xs font-black w-5 text-center">{i.quantidade}</span>
-                    <button onClick={() => alterarQuantidade(i.servicoId, 1)} disabled={i.estoqueMax !== null && i.quantidade >= i.estoqueMax} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 disabled:opacity-30"><Plus size={12} /></button>
-                    <button onClick={() => removerItem(i.servicoId)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={13} /></button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

@@ -73,6 +73,7 @@ type Lead = {
   contrato_manual_url?: string;
   contrato_manual_em?: string;
   contrato_manual_arquivos?: { nome: string; path: string }[];
+  veiculo_id?: number | null;
 };
 
 type ClienteOpcao = {
@@ -204,6 +205,7 @@ export default function DealsPage() {
   const isOpec = perfil?.cargo === 'opec';
   const isLideranca = isDirector || isGerente;
   const isCDL = Boolean(empresa?.modulos?.cdl);
+  const isVeiculos = empresa?.modulos?.pulse_vertical === 'veiculos';
   const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;
 
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -256,6 +258,8 @@ export default function DealsPage() {
   const [novaCidade, setNovaCidade] = useState('');     
   const [novaDescricao, setNovaDescricao] = useState(''); 
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [selectedVeiculoId, setSelectedVeiculoId] = useState<number | null>(null);
+  const [veiculosDisponiveis, setVeiculosDisponiveis] = useState<{ id: number; servicos: { nome: string; preco: number } }[]>([]);
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
   const [contratoInicio, setContratoInicio] = useState('');
   const [contratoFim, setContratoFim] = useState('');
@@ -517,6 +521,13 @@ export default function DealsPage() {
     };
   }, [user, fetchData]);
 
+  // Veículos disponíveis (loja de carros) pro seletor "Vincular veículo" no modal do lead
+  useEffect(() => {
+    if (!isVeiculos || !perfil?.empresa_id) return;
+    supabase.from('veiculos').select('id, status, servicos(nome, preco)').eq('empresa_id', perfil.empresa_id).eq('status', 'disponivel')
+      .then(({ data }) => { if (data) setVeiculosDisponiveis(data as any); });
+  }, [isVeiculos, perfil?.empresa_id]);
+
   // Re-fetch closed leads when date range changes
   useEffect(() => {
     if (user) fetchData();
@@ -645,6 +656,21 @@ export default function DealsPage() {
     );
   }, []);
 
+  // Baixa de veículo (loja de carros) ao fechar um lead vinculado como Ganho — mesma baixa
+  // que a venda direta pelo checkout do Pulse já faz, só que disparada pelo Funil.
+  const baixarVeiculo = useCallback(async (veiculoId: number, leadId: number) => {
+    const { data: veiculo } = await supabase.from('veiculos').select('servico_id').eq('id', veiculoId).single();
+    if (!veiculo) return;
+    await Promise.all([
+      supabase.from('servicos').update({ estoque: 0 }).eq('id', veiculo.servico_id),
+      supabase.from('estoque_movimentacoes').insert([{
+        empresa_id: perfil?.empresa_id, servico_id: veiculo.servico_id, quantidade: -1,
+        tipo: 'venda', observacao: `Venda via Funil — Lead #${leadId}`, user_id: user?.id,
+      }]),
+      supabase.from('veiculos').update({ status: 'vendido', data_venda: new Date().toISOString().split('T')[0], venda_lead_id: leadId }).eq('id', veiculoId),
+    ]);
+  }, [perfil?.empresa_id, user?.id]);
+
   const mudarEtapa = useCallback(async (id: number, novaEtapa: number, novoStatus: string, pedirProximaAcao = false) => {
     if (pedirProximaAcao && novoStatus === 'aberto' && novaEtapa < 4) {
       setProximaAcaoModal({ leadId: id, etapa: novaEtapa, status: novoStatus });
@@ -698,6 +724,7 @@ export default function DealsPage() {
             const acoes = isCDL
                 ? [gerarCobrancaFinanceira(lead)]
                 : [criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)];
+            if (lead.veiculo_id) acoes.push(baixarVeiculo(lead.veiculo_id, lead.id));
             await Promise.all(acoes);
             setToastMessage(isCDL ? "🎉 Novo Associado Confirmado!" : "🎉 Venda Confirmada!");
             setShowToast(true);
@@ -705,11 +732,11 @@ export default function DealsPage() {
     } catch (error: any) {
         if (error.message === 'Failed to fetch' || !navigator.onLine) {
             await localDb.syncQueue.add({ operacao: 'UPDATE', tabela: 'leads', dados: { id, etapa: etapaFinal, status: novoStatus }, data_criacao: new Date().toISOString() });
-            setToastMessage("📶 Movido offline!"); 
+            setToastMessage("📶 Movido offline!");
             setShowToast(true);
         }
     }
-  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
+  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira, baixarVeiculo]);
 
   const confirmarPerda = useCallback(async () => {
     if (!motivoPerda.trim() || motivoPerda.length < 5) return alert("Por favor, detalhe o motivo da perda. Precisamos dessa informação para melhorar as vendas.");
@@ -1596,6 +1623,7 @@ export default function DealsPage() {
         user_id: (isLideranca || isOpec) ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0, criado_por: user.id }),
         client_id: finalClientId,
+        veiculo_id: selectedVeiculoId,
         empresa_id: perfil?.empresa_id
     };
 
@@ -1671,6 +1699,7 @@ export default function DealsPage() {
         setNovaCidade(lead.cidade || '');
         setNovaDescricao(lead.descricao || '');
         setSelectedClientId(lead.client_id || null);
+        setSelectedVeiculoId(lead.veiculo_id || null);
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
         setFotoUrl(lead.foto_url || '');
         setContratoInicio(lead.contrato_inicio || '');
@@ -1723,6 +1752,7 @@ export default function DealsPage() {
         setNovaCidade('');
         setNovaDescricao('');
         setSelectedClientId(null);
+        setSelectedVeiculoId(null);
         setItensTemporarios([]);
         setFotoUrl('');
         setContratoInicio('');
@@ -2163,6 +2193,25 @@ export default function DealsPage() {
                             </div>
                         )}
                     </div>
+
+                    {isVeiculos && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Veículo vinculado</label>
+                            <select
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none"
+                                value={selectedVeiculoId ?? ''}
+                                onChange={e => setSelectedVeiculoId(e.target.value ? Number(e.target.value) : null)}
+                            >
+                                <option value="" className="bg-[#0B1120]">Nenhum — só entrar em contato</option>
+                                {veiculosDisponiveis.map(v => (
+                                    <option key={v.id} value={v.id} className="bg-[#0B1120]">
+                                        {v.servicos?.nome} — R$ {(v.servicos?.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-slate-600 text-[9px] mt-1 ml-2">Fechar esse lead como Ganho dá baixa automática no veículo vinculado.</p>
+                        </div>
+                    )}
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>

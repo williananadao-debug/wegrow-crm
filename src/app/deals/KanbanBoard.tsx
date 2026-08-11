@@ -150,11 +150,14 @@ const LeadCard = React.memo(({
           </div>
 
           {(() => {
-            const isIA = lead.origem?.includes('IA') || lead.origem?.includes('Inteligência') || lead.descricao?.includes('IA Sugere');
-            const isManual = lead.origem?.includes('Manual') || lead.origem === 'Estratégia';
-            const isPortal = !isIA && !isManual && (lead.origem === 'Portal Web' || lead.descricao);
+            // Classifica pela origem real do lead (evita rotular tudo que tem descrição como "Portal")
+            const origem = lead.origem || '';
+            const isManual = origem === 'Estratégia Manual';
+            const isIA = !isManual && (/^(IA|Estratégia)\s*—/.test(origem) || lead.descricao?.includes('IA Sugere'));
+            const isVisita = !isManual && !isIA && origem === 'Visita';
+            const isPortal = !isManual && !isIA && !isVisita && origem.toLowerCase().includes('portal');
 
-            if (!isIA && !isManual && !isPortal) return null;
+            if (!isIA && !isManual && !isVisita && !isPortal) return null;
 
             let badgeConfig = {
               color: 'text-blue-400',
@@ -176,6 +179,13 @@ const LeadCard = React.memo(({
                 bg: 'bg-[#22C55E]/10 border-[#22C55E]/20',
                 icon: <Target size={10} className="text-[#22C55E]" />,
                 label: 'Estratégia Manual'
+              };
+            } else if (isVisita) {
+              badgeConfig = {
+                color: 'text-pink-400',
+                bg: 'bg-pink-500/10 border-pink-500/20',
+                icon: <MapPin size={10} className="text-pink-400" />,
+                label: 'Veio de Visita'
               };
             }
 

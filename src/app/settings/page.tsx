@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -29,6 +29,8 @@ type ServicoConfig = {
   sku?: string | null;
   preco_custo?: number | null;
   estoque_minimo?: number | null;
+  produto_pai_id?: number | null;
+  variante_nome?: string | null;
 };
 
 type NfseConfig = {
@@ -117,6 +119,8 @@ export default function SettingsPage() {
         sku: item.sku ?? null,
         preco_custo: item.preco_custo ?? null,
         estoque_minimo: item.estoque_minimo ?? 5,
+        produto_pai_id: item.produto_pai_id ?? null,
+        variante_nome: item.variante_nome ?? null,
       }));
       setServicos(formatados);
     } else {
@@ -144,6 +148,8 @@ export default function SettingsPage() {
                 sku: s.sku?.trim() || null,
                 preco_custo: s.preco_custo ?? null,
                 estoque_minimo: s.estoque_minimo ?? 5,
+                produto_pai_id: s.produto_pai_id ?? null,
+                variante_nome: s.variante_nome?.trim() || null,
                 empresa_id: perfil?.empresa_id
             }));
             promises.push(supabase.from('servicos').insert(payload));
@@ -163,6 +169,7 @@ export default function SettingsPage() {
                     sku: s.sku?.trim() || null,
                     preco_custo: s.preco_custo ?? null,
                     estoque_minimo: s.estoque_minimo ?? 5,
+                    variante_nome: s.variante_nome?.trim() || null,
                     historico_precos: historicoAtualizado,
                 }).eq('id', parseInt(s.id))
             );
@@ -194,6 +201,46 @@ export default function SettingsPage() {
     };
     setServicos([...servicos, novo]);
   };
+
+  // Clona os campos em comum do produto base (tipo, unidade, preço, custo, mínimo) — o
+  // vendedor só preenche o que muda de fato na variante (tamanho/cor/sabor) e o estoque.
+  const criarVariante = (pai: ServicoConfig) => {
+    const nova: ServicoConfig = {
+      id: `temp-${Date.now()}-var`,
+      nome: pai.nome,
+      preco: pai.preco,
+      tipo: pai.tipo,
+      unidade: pai.unidade,
+      estoque: pai.estoque !== null && pai.estoque !== undefined ? 0 : null,
+      preco_custo: pai.preco_custo ?? null,
+      estoque_minimo: pai.estoque_minimo ?? 5,
+      produto_pai_id: Number(pai.id),
+      variante_nome: '',
+      historico_precos: [],
+    };
+    setServicos(prev => {
+      const idx = prev.findIndex(s => s.id === pai.id);
+      const copia = [...prev];
+      copia.splice(idx + 1, 0, nova);
+      return copia;
+    });
+  };
+
+  const atualizarVarianteNome = (servico: ServicoConfig, valor: string) => {
+    const pai = servicos.find(s => s.id === String(servico.produto_pai_id));
+    const nomeBase = pai?.nome || servico.nome.split(' - ')[0];
+    setServicos(prev => prev.map(s => s.id === servico.id ? { ...s, variante_nome: valor, nome: valor ? `${nomeBase} - ${valor}` : nomeBase } : s));
+  };
+
+  const servicosOrdenados = (() => {
+    const paisEAvulsos = servicos.filter(s => !s.produto_pai_id);
+    const porPai: Record<string, ServicoConfig[]> = {};
+    servicos.filter(s => s.produto_pai_id).forEach(s => {
+      const chave = String(s.produto_pai_id);
+      (porPai[chave] ||= []).push(s);
+    });
+    return paisEAvulsos.flatMap(p => [p, ...(porPai[p.id] || [])]);
+  })();
 
   const removerServico = async (id: string) => {
     if (!id.startsWith('temp-')) {
@@ -389,9 +436,9 @@ export default function SettingsPage() {
                 </div>
             )}
             
-            {servicos.map((servico) => (
-                <div key={servico.id} className="grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 group hover:border-white/10 transition-all hover:bg-white/[0.04]">
-                    
+            {servicosOrdenados.map((servico) => (
+                <div key={servico.id} className={`grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border group hover:border-white/10 transition-all hover:bg-white/[0.04] ${servico.produto_pai_id ? 'border-l-2 border-l-blue-500/40 border-y-white/5 border-r-white/5 ml-4 md:ml-8' : 'border-white/5'}`}>
+
                     <div className="col-span-2 md:col-span-1 flex justify-center md:justify-start pl-0 md:pl-2">
                         {temPulse && !servico.id.startsWith('temp-') ? (
                             <label className="relative w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center overflow-hidden cursor-pointer group/img" title="Subir foto do produto">
@@ -412,12 +459,24 @@ export default function SettingsPage() {
                     </div>
                     
                     <div className="col-span-10 md:col-span-3">
-                        <input 
-                            value={servico.nome} 
-                            onChange={(e) => atualizarServico(servico.id, 'nome', e.target.value)}
-                            className="w-full bg-transparent border-b border-transparent focus:border-white/20 text-white font-bold text-sm focus:ring-0 outline-none placeholder:text-slate-600 py-1 transition-colors"
-                            placeholder="Nome (Ex: Spot 30s)"
-                        />
+                        {servico.produto_pai_id ? (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest shrink-0">Variante:</span>
+                                <input
+                                    value={servico.variante_nome ?? ''}
+                                    onChange={(e) => atualizarVarianteNome(servico, e.target.value)}
+                                    className="w-full bg-transparent border-b border-transparent focus:border-white/20 text-white font-bold text-sm focus:ring-0 outline-none placeholder:text-slate-600 py-1 transition-colors"
+                                    placeholder="Ex: P, Azul, Morango"
+                                />
+                            </div>
+                        ) : (
+                            <input
+                                value={servico.nome}
+                                onChange={(e) => atualizarServico(servico.id, 'nome', e.target.value)}
+                                className="w-full bg-transparent border-b border-transparent focus:border-white/20 text-white font-bold text-sm focus:ring-0 outline-none placeholder:text-slate-600 py-1 transition-colors"
+                                placeholder="Nome (Ex: Spot 30s)"
+                            />
+                        )}
                     </div>
 
                     <div className="col-span-12 md:col-span-3 relative flex items-center bg-[#0F172A] rounded-lg px-3 py-1.5 border border-white/5 focus-within:border-blue-500 transition-colors">
@@ -458,6 +517,11 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="col-span-2 md:col-span-1 flex justify-end gap-1">
+                        {!servico.id.startsWith('temp-') && !servico.produto_pai_id && (
+                            <button onClick={() => criarVariante(servico)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-blue-500/10 text-slate-600 hover:text-blue-400 transition-all" title="Criar variante (tamanho/cor/sabor)">
+                                <Copy size={15} />
+                            </button>
+                        )}
                         {!servico.id.startsWith('temp-') && (servico.historico_precos?.length ?? 0) > 0 && (
                             <button onClick={() => setHistModalId(servico.id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-yellow-500/10 text-slate-600 hover:text-yellow-400 transition-all" title="Histórico de preços">
                                 <History size={15} />

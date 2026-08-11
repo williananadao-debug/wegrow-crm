@@ -41,7 +41,7 @@ export default function PulseEstoquePage() {
 
   const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
-  const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= 5);
+  const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const atual = s.estoque || 0;
@@ -122,7 +122,7 @@ export default function PulseEstoquePage() {
         ) : (
           <div className="divide-y divide-white/5">
             {[...produtosComEstoque].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(s => {
-              const baixo = (s.estoque as number) <= 5;
+              const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
               const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
               return (
                 <div key={s.id} className="flex items-center gap-3 p-4">

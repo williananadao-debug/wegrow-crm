@@ -43,7 +43,7 @@ export default function PulsePainelPage() {
 
   useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id]);
 
-  const produtosEstoqueBaixo = servicos.filter(s => s.estoque !== null && s.estoque !== undefined && (s.estoque as number) <= 5);
+  const produtosEstoqueBaixo = servicos.filter(s => s.estoque !== null && s.estoque !== undefined && (s.estoque as number) <= (s.estoque_minimo ?? 5));
   const pedidosFechados = vendas.filter(v => v.status === 'ganho');
   const orcamentosAbertos = vendas.filter(v => v.status === 'orcamento');
   const vendasEstornadas = vendas.filter(v => v.estornado_em);

@@ -3,7 +3,11 @@ export type ClienteOpcao = {
   inscricao_estadual?: string; email?: string; cidade?: string; endereco?: string;
 };
 
-export type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; imagem_url?: string | null; };
+export type ServicoConfig = {
+  id: number; nome: string; preco: number; tipo?: string; unidade?: string;
+  estoque?: number | null; imagem_url?: string | null;
+  sku?: string | null; preco_custo?: number | null; estoque_minimo?: number | null;
+};
 
 export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; };
 

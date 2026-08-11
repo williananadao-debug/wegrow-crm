@@ -26,6 +26,9 @@ type ServicoConfig = {
   historico_precos?: HistoricoPreco[];
   estoque?: number | null;
   imagem_url?: string | null;
+  sku?: string | null;
+  preco_custo?: number | null;
+  estoque_minimo?: number | null;
 };
 
 type NfseConfig = {
@@ -111,6 +114,9 @@ export default function SettingsPage() {
         historico_precos: item.historico_precos || [],
         estoque: item.estoque ?? null,
         imagem_url: item.imagem_url ?? null,
+        sku: item.sku ?? null,
+        preco_custo: item.preco_custo ?? null,
+        estoque_minimo: item.estoque_minimo ?? 5,
       }));
       setServicos(formatados);
     } else {
@@ -135,6 +141,9 @@ export default function SettingsPage() {
                 tipo: s.tipo,
                 unidade: s.unidade,
                 estoque: s.estoque ?? null,
+                sku: s.sku?.trim() || null,
+                preco_custo: s.preco_custo ?? null,
+                estoque_minimo: s.estoque_minimo ?? 5,
                 empresa_id: perfil?.empresa_id
             }));
             promises.push(supabase.from('servicos').insert(payload));
@@ -151,6 +160,9 @@ export default function SettingsPage() {
                     tipo: s.tipo,
                     unidade: s.unidade,
                     estoque: s.estoque ?? null,
+                    sku: s.sku?.trim() || null,
+                    preco_custo: s.preco_custo ?? null,
+                    estoque_minimo: s.estoque_minimo ?? 5,
                     historico_precos: historicoAtualizado,
                 }).eq('id', parseInt(s.id))
             );
@@ -244,6 +256,9 @@ export default function SettingsPage() {
       const iPreco = headers.indexOf('preco');
       const iTipo = headers.indexOf('tipo');
       const iUnidade = headers.indexOf('unidade');
+      const iSku = headers.indexOf('sku');
+      const iPrecoCusto = headers.indexOf('preco_custo');
+      const iEstoqueMinimo = headers.indexOf('estoque_minimo');
       if (iNome < 0 || iPreco < 0) {
         alert('CSV deve ter pelo menos as colunas: nome, preco');
         return;
@@ -255,6 +270,9 @@ export default function SettingsPage() {
         tipo: (iTipo >= 0 ? cols[iTipo] : '') || 'Comercial Gravado',
         unidade: (iUnidade >= 0 ? cols[iUnidade] : '') || '',
         historico_precos: [],
+        sku: iSku >= 0 ? (cols[iSku] || null) : null,
+        preco_custo: iPrecoCusto >= 0 && cols[iPrecoCusto] ? parseFloat(cols[iPrecoCusto]) : null,
+        estoque_minimo: iEstoqueMinimo >= 0 && cols[iEstoqueMinimo] ? parseFloat(cols[iEstoqueMinimo]) : 5,
       }));
       setServicos(prev => [...prev, ...novos]);
       setFeedback({ type: 'success', msg: `${novos.length} item(s) importado(s) do CSV.` });
@@ -450,8 +468,34 @@ export default function SettingsPage() {
                         </button>
                     </div>
 
+                    <div className="col-span-12 flex flex-wrap items-center gap-2 pl-0 md:pl-11 -mt-1">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</span>
+                        <input
+                            value={servico.sku ?? ''}
+                            onChange={(e) => atualizarServico(servico.id, 'sku', e.target.value)}
+                            className="w-28 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500"
+                            placeholder="código/barras"
+                        />
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Custo</span>
+                        <div className="flex items-center gap-1 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 focus-within:border-blue-500">
+                            <span className="text-[9px] text-slate-500">R$</span>
+                            <input
+                                type="number" step="0.01"
+                                value={servico.preco_custo ?? ''}
+                                onChange={(e) => atualizarServico(servico.id, 'preco_custo', e.target.value === '' ? null : Number(e.target.value))}
+                                className="w-16 bg-transparent text-white text-xs font-bold outline-none"
+                                placeholder="0.00"
+                            />
+                        </div>
+                        {servico.preco_custo != null && servico.preco > 0 && (
+                            <span className="text-[9px] font-black text-slate-500">
+                                margem {(((servico.preco - servico.preco_custo) / servico.preco) * 100).toFixed(0)}%
+                            </span>
+                        )}
+                    </div>
+
                     {temPulse && (
-                        <div className="col-span-12 flex items-center gap-2 pl-0 md:pl-11 -mt-1">
+                        <div className="col-span-12 flex flex-wrap items-center gap-2 pl-0 md:pl-11 -mt-1">
                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Estoque</span>
                             <button
                                 type="button"
@@ -462,7 +506,7 @@ export default function SettingsPage() {
                                 type="number"
                                 value={servico.estoque ?? ''}
                                 onChange={(e) => atualizarServico(servico.id, 'estoque', e.target.value === '' ? null : Number(e.target.value))}
-                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= 5 ? 'border-red-500/40' : 'border-white/5'}`}
+                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) ? 'border-red-500/40' : 'border-white/5'}`}
                                 placeholder="não controla"
                             />
                             <button
@@ -470,7 +514,18 @@ export default function SettingsPage() {
                                 onClick={() => atualizarServico(servico.id, 'estoque', (servico.estoque ?? 0) + 1)}
                                 className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-300 text-xs font-black"
                             >+</button>
-                            {servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= 5 && (
+                            {servico.estoque !== null && servico.estoque !== undefined && (
+                                <>
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Mín.</span>
+                                    <input
+                                        type="number"
+                                        value={servico.estoque_minimo ?? 5}
+                                        onChange={(e) => atualizarServico(servico.id, 'estoque_minimo', e.target.value === '' ? 5 : Number(e.target.value))}
+                                        className="w-14 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-amber-500 text-center"
+                                    />
+                                </>
+                            )}
+                            {servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) && (
                                 <span className="text-[9px] font-black text-red-400 uppercase">estoque baixo</span>
                             )}
                             <span className="text-[9px] text-slate-600">deixe em branco pra não controlar estoque desse item</span>

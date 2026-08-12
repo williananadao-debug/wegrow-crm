@@ -1,7 +1,12 @@
 "use client";
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Radar, LayoutGrid, FileSearch, DollarSign, FileSignature, Bot } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
+import {
+  Radar, LayoutGrid, FileSearch, DollarSign, FileSignature, Bot,
+  Grid3x3, LayoutDashboard, HardHat, Activity, Radio, ChevronDown,
+} from 'lucide-react';
 
 const ITENS = [
   { href: '/argus', label: 'Painel Geral', icon: LayoutGrid },
@@ -11,8 +16,32 @@ const ITENS = [
   { href: '/argus/agente', label: 'Agente IA', icon: Bot },
 ];
 
+// Argus não usa a navbar padrão (visual próprio de propósito — ver
+// src/lib/publicPages.ts) — sem isso, uma empresa com Argus + outros módulos
+// (ex: Obras) ficava sem nenhum jeito de sair do Argus a não ser digitando a
+// URL na mão.
 export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
   const pathname = usePathname();
+  const auth = useAuth() || {};
+  const empresa = auth.empresa;
+  const modulos = empresa?.modulos || {};
+  const [outrosAbertos, setOutrosAbertos] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fechar = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOutrosAbertos(false); };
+    document.addEventListener('mousedown', fechar);
+    return () => document.removeEventListener('mousedown', fechar);
+  }, []);
+
+  const outrosModulos = [
+    { href: '/dashboard', label: 'Dashboard WeGrow', icon: LayoutDashboard, mostrar: true },
+    { href: '/obras', label: 'Obras', icon: HardHat, mostrar: Boolean(modulos.obras) },
+    { href: '/pulse', label: 'Pulse', icon: Activity, mostrar: Boolean(modulos.pulse) },
+    { href: '/thor', label: 'THOR', icon: Bot, mostrar: Boolean(modulos.thor) },
+    { href: '/max', label: 'Max', icon: Radio, mostrar: Boolean(modulos.max) },
+  ].filter(m => m.mostrar);
+
   return (
     <nav className="bg-white border-b border-[#e5e0d5] sticky top-0 z-30">
       <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center gap-2">
@@ -42,6 +71,27 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
         <div className="flex items-center gap-1.5 bg-[#fdf0d4] border border-[#f0d19a] px-3 py-1.5 rounded-full flex-shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-[#1fa85a] animate-pulse" />
           <span className="text-[10px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
+        </div>
+
+        <div className="relative flex-shrink-0" ref={ref}>
+          <button onClick={() => setOutrosAbertos(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14] transition-all">
+            <Grid3x3 size={16} /> <ChevronDown size={12} className={`transition-transform ${outrosAbertos ? 'rotate-180' : ''}`} />
+          </button>
+          {outrosAbertos && (
+            <div className="absolute right-0 top-full mt-2 bg-white border border-[#e5e0d5] rounded-xl shadow-lg py-1.5 min-w-[190px] z-40">
+              <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide px-3 py-1.5">Outros módulos</p>
+              {outrosModulos.map(m => {
+                const Icon = m.icon;
+                return (
+                  <Link key={m.href} href={m.href} onClick={() => setOutrosAbertos(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-[12px] font-semibold text-[#241c14] hover:bg-[#faf7f2] transition-all">
+                    <Icon size={14} className="text-[#9a958a]" /> {m.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </nav>

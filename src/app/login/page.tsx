@@ -24,12 +24,21 @@ export default function LoginPage() {
     const passwordValue = (formData.get('password') as string) || password;
 
     try {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: emailValue,
           password: passwordValue,
         });
         if (error) throw error;
-        router.push('/dashboard');
+
+        // Empresa com o módulo Argus ativo abre direto nele — ele tem shell/tema
+        // próprios e não faz sentido pousar no /dashboard padrão pra depois
+        // precisar navegar manualmente. Busca direto do banco (não do
+        // AuthContext) porque logo após o login o contexto ainda não teve
+        // tempo de carregar o perfil/empresa.
+        const { data: perfil } = await supabase.from('profiles')
+          .select('empresa:empresa_id(modulos)').eq('id', data.user!.id).single();
+        const modulos = (perfil?.empresa as any)?.modulos || {};
+        router.push(modulos.argus ? '/argus' : '/dashboard');
     } catch (err: any) {
       setError('E-mail ou senha incorretos.');
       console.error(err);

@@ -7,6 +7,7 @@ const SYSTEM_PROMPT = `Você é a THOR, assistente de IA de vendas dentro do sis
 O que você sabe fazer hoje:
 1. Gerar uma leva de leads de reativação usando a ferramenta gerar_estrategia_ia — pra resgatar clientes inativos, prevenir perda de contrato (churn) que está vencendo, ou sugerir primeira compra (mix) pra quem nunca comprou. Use essa ferramenta sempre que o usuário pedir algo do tipo "quem eu deveria contatar", "tem cliente parado", "contratos vencendo", "lista de clientes novos pra abordar".
 2. Ler nota fiscal de fornecedor por foto e dar entrada no estoque + lançar a despesa em Contas a Pagar — isso é feito pelo botão de anexar foto (ícone de câmera) ao lado do campo de mensagem, não por texto. Se o usuário disser que quer dar entrada de nota fiscal ou mercadoria, oriente a usar o botão de anexar foto.
+3. Gerar um catálogo de vendas profissional (pronto pra imprimir/exportar em PDF) a partir do catálogo de produtos já cadastrado — use a ferramenta gerar_material_vendas quando o usuário pedir "material de vendas", "catálogo", "folder", "algo pra mostrar/imprimir pro cliente".
 
 Seja direto, converse em português, sem enrolação e sem inventar números que você não tem — só fale de resultados reais depois que uma ferramenta rodar de fato.`;
 
@@ -25,6 +26,14 @@ const TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
         },
         required: ['tipo'],
       },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'gerar_material_vendas',
+      description: 'Confirma que a empresa tem catálogo de produtos cadastrado e libera o catálogo de vendas pronto pra imprimir/exportar em PDF.',
+      parameters: { type: 'object', properties: {} },
     },
   },
 ];
@@ -83,6 +92,7 @@ export async function POST(req: NextRequest) {
     historico.push(respostaMsg as any);
 
     let resultadoEstrategia: { count: number; leads?: any[]; message?: string } | null = null;
+    let materialGerado = false;
 
     for (const call of toolCalls) {
       if (call.function.name === 'gerar_estrategia_ia') {
@@ -105,6 +115,17 @@ export async function POST(req: NextRequest) {
           resultadoEstrategia = json;
           historico.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(json) });
         }
+      } else if (call.function.name === 'gerar_material_vendas') {
+        const { count } = await supabaseAdmin
+          .from('servicos')
+          .select('id', { count: 'exact', head: true })
+          .eq('empresa_id', perfilSolicitante.empresa_id);
+        if (!count || count === 0) {
+          historico.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: false, erro: 'Nenhum produto cadastrado ainda — cadastre o catálogo em Configurações antes de gerar o material.' }) });
+        } else {
+          materialGerado = true;
+          historico.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: true, totalProdutos: count }) });
+        }
       } else {
         historico.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ erro: 'Ferramenta desconhecida.' }) });
       }
@@ -120,6 +141,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       resposta: segunda.choices[0]?.message?.content || '',
       leadsGerados: resultadoEstrategia?.count || 0,
+      materialGerado,
     });
 
   } catch (err: any) {

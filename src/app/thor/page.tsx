@@ -7,12 +7,13 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
 import { ServicoConfig } from '@/app/pulse/shared';
 
-type Mensagem = { role: 'user' | 'assistant'; content: string; leadsGerados?: number };
+type Mensagem = { role: 'user' | 'assistant'; content: string; leadsGerados?: number; materialGerado?: boolean };
 
 const SUGESTOES = [
   'Tem cliente parado que eu deveria resgatar?',
   'Algum contrato vencendo que eu preciso renovar?',
   'Me dá uma lista de clientes novos pra abordar',
+  'Monta o catálogo de vendas pra eu imprimir',
 ];
 
 export default function ThorPage() {
@@ -57,7 +58,7 @@ export default function ThorPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao falar com a THOR.');
-      setMensagens(prev => [...prev, { role: 'assistant', content: json.resposta || '...', leadsGerados: json.leadsGerados || 0 }]);
+      setMensagens(prev => [...prev, { role: 'assistant', content: json.resposta || '...', leadsGerados: json.leadsGerados || 0, materialGerado: Boolean(json.materialGerado) }]);
     } catch (err: any) {
       setErro(err?.message || 'Erro ao falar com a THOR.');
     } finally {
@@ -110,6 +111,11 @@ export default function ThorPage() {
               {m.role === 'assistant' && (m.leadsGerados || 0) > 0 && (
                 <Link href="/deals" className="mt-2 inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#22C55E]">
                   <Sparkles size={11} /> {m.leadsGerados} leads criados <ExternalLink size={10} />
+                </Link>
+              )}
+              {m.role === 'assistant' && m.materialGerado && (
+                <Link href="/thor/catalogo" target="_blank" className="mt-2 inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#22C55E]">
+                  <Sparkles size={11} /> Ver catálogo de vendas <ExternalLink size={10} />
                 </Link>
               )}
             </div>

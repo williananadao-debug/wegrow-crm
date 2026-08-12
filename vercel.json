@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/cobranca-recorrente", "schedule": "0 6 1 * *" }
+    { "path": "/api/cron/cobranca-recorrente", "schedule": "0 6 1 * *" },
+    { "path": "/api/cron/argus-sync", "schedule": "0 7 * * *" }
   ]
 }

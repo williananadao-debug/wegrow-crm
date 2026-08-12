@@ -419,6 +419,17 @@ export default function AdminPage() {
                   <div>
                     <button
                       type="button"
+                      onClick={() => setEditModulos(prev => ({ ...prev, argus: !prev.argus }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.argus ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                    >
+                      Argus (licitações)
+                      {editModulos.argus ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    </button>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
                       onClick={() => setEditModulos(prev => ({ ...prev, veiculos: !prev.veiculos }))}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.veiculos ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
                     >

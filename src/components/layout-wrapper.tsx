@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
 import Topbar from '@/components/topbar';
-import { isPublicPage } from '@/lib/publicPages';
+import { isPublicPage, hasCustomShell } from '@/lib/publicPages';
 
 const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 const GlobalSearch = dynamic(() => import('@/components/GlobalSearch'), { ssr: false });
@@ -17,7 +17,11 @@ interface LayoutWrapperProps {
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
 
-  if (isPublicPage(pathname)) {
+  // isPublicPage = sem login. hasCustomShell = autenticado, mas com layout/tema
+  // próprio (ex: Argus) — os dois pulam o Navbar/Topbar padrão, por motivos
+  // diferentes; o gate de autenticação de verdade continua em AuthContext/RLS,
+  // isso aqui só decide qual casca visual desenhar.
+  if (isPublicPage(pathname) || hasCustomShell(pathname)) {
     return <>{children}</>;
   }
 

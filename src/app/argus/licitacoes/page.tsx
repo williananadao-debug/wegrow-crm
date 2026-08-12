@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Search, Plus, Save, ChevronRight, Filter } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
-import { ArgusEdital, ArgusFiltroBusca, STATUS_INTERESSE_CORES, STATUS_INTERESSE_LABELS, fmtMoeda, fmtData } from '../shared';
+import { ArgusEdital, ArgusFiltroBusca, STATUS_INTERESSE_CORES, STATUS_INTERESSE_LABELS, fmtMoeda, fmtData, fetchJsonSeguro } from '../shared';
 import { MODALIDADES_PNCP, PncpContratacao } from '@/lib/pncp';
 
 const ABAS: { key: ArgusEdital['status_interesse'] | 'todos'; label: string }[] = [
@@ -58,13 +58,12 @@ export default function ArgusLicitacoesPage() {
     setResultados([]);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/argus/pncp/buscar', {
+      const { ok, json } = await fetchJsonSeguro('/api/argus/pncp/buscar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ uf, modalidade, palavras_chave: palavrasChave, dias: 30 }),
       });
-      const json = await res.json();
-      if (!res.ok) { setErroBusca(json.erro || 'Erro ao buscar no PNCP.'); return; }
+      if (!ok) { setErroBusca(json.erro || 'Erro ao buscar no PNCP.'); return; }
       setResultados(json.resultados || []);
 
       if (salvarFiltro && nomeFiltro.trim() && perfil?.empresa_id) {
@@ -87,14 +86,13 @@ export default function ArgusLicitacoesPage() {
     setErroBusca(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/argus/pncp/salvar', {
+      const { ok, json } = await fetchJsonSeguro('/api/argus/pncp/salvar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ item }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErroBusca(`Erro ao salvar "${item.orgaoEntidade?.razaoSocial || item.objetoCompra}": ${json.erro || res.statusText}`);
+      if (!ok) {
+        setErroBusca(`Erro ao salvar "${item.orgaoEntidade?.razaoSocial || item.objetoCompra}": ${json.erro}`);
         return;
       }
       await carregar();

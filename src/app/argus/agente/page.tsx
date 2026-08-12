@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, ArrowUp, Bot, User as UserIcon } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
+import { fetchJsonSeguro } from '../shared';
 
 type Mensagem = { role: 'user' | 'assistant'; content: string };
 
@@ -36,13 +37,12 @@ export default function ArgusAgentePage() {
     setEnviando(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/argus/agente/chat', {
+      const { ok, json } = await fetchJsonSeguro('/api/argus/agente/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ mensagens: novasMensagens }),
       });
-      const json = await res.json();
-      setMensagens(prev => [...prev, { role: 'assistant', content: res.ok ? (json.resposta || 'Sem resposta.') : `Erro: ${json.error}` }]);
+      setMensagens(prev => [...prev, { role: 'assistant', content: ok ? (json.resposta || 'Sem resposta.') : `Erro: ${json.erro || json.error}` }]);
     } catch {
       setMensagens(prev => [...prev, { role: 'assistant', content: 'Erro ao falar com o agente. Tenta de novo.' }]);
     } finally {

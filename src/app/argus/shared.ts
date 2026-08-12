@@ -1,3 +1,21 @@
+// fetch de rota de API própria com parse seguro — se o servidor devolver HTML/texto
+// (ex: página de timeout do Vercel em vez de JSON), evita o "Unexpected token ... is
+// not valid JSON" cru e explica o que provavelmente aconteceu.
+export async function fetchJsonSeguro(url: string, options: RequestInit): Promise<{ ok: boolean; status: number; json: any }> {
+  const res = await fetch(url, options);
+  const texto = await res.text();
+  try {
+    return { ok: res.ok, status: res.status, json: texto ? JSON.parse(texto) : {} };
+  } catch {
+    const provavelTimeout = res.status === 504 || res.status === 0 || !texto.trim().startsWith('{');
+    return {
+      ok: false,
+      status: res.status,
+      json: { erro: provavelTimeout ? 'O servidor demorou demais pra responder (provável timeout na consulta ao PNCP) — tenta de novo em alguns segundos.' : `Resposta inesperada do servidor (status ${res.status}).` },
+    };
+  }
+}
+
 export type ArgusEdital = {
   id: number;
   origem: 'pncp' | 'manual';

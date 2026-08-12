@@ -8,18 +8,12 @@ import {
   Grid3x3, LayoutDashboard, HardHat, Activity, Radio, ChevronDown,
 } from 'lucide-react';
 
-const ITENS = [
-  { href: '/argus', label: 'Painel Geral', icon: LayoutGrid },
-  { href: '/argus/licitacoes', label: 'Licitações', icon: FileSearch },
-  { href: '/argus/financeiro', label: 'Financeiro', icon: DollarSign },
-  { href: '/argus/contratos', label: 'Contratos', icon: FileSignature },
-  { href: '/argus/agente', label: 'Agente IA', icon: Bot },
-];
-
 // Argus não usa a navbar padrão (visual próprio de propósito — ver
-// src/lib/publicPages.ts) — sem isso, uma empresa com Argus + outros módulos
-// (ex: Obras) ficava sem nenhum jeito de sair do Argus a não ser digitando a
-// URL na mão.
+// src/lib/publicPages.ts). Obras foi trazido pra dentro do Argus de verdade
+// (rotas /argus/obras/*, mesmo visual, mesmas tabelas) — não é mais um link
+// pra fora, por isso vira aba nativa igual Licitações/Financeiro/Contratos.
+// Os módulos que continuam fora (Dashboard geral, Pulse, THOR, Max) ficam no
+// dropdown "outros módulos", senão o Argus vira um beco sem saída.
 export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
   const pathname = usePathname();
   const auth = useAuth() || {};
@@ -34,9 +28,17 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
     return () => document.removeEventListener('mousedown', fechar);
   }, []);
 
+  const itens = [
+    { href: '/argus', label: 'Painel Geral', icon: LayoutGrid, mostrar: true },
+    { href: '/argus/licitacoes', label: 'Licitações', icon: FileSearch, mostrar: true },
+    { href: '/argus/obras', label: 'Obras', icon: HardHat, mostrar: Boolean(modulos.obras) },
+    { href: '/argus/financeiro', label: 'Financeiro', icon: DollarSign, mostrar: true },
+    { href: '/argus/contratos', label: 'Contratos', icon: FileSignature, mostrar: true },
+    { href: '/argus/agente', label: 'Agente IA', icon: Bot, mostrar: true },
+  ].filter(i => i.mostrar);
+
   const outrosModulos = [
     { href: '/dashboard', label: 'Dashboard WeGrow', icon: LayoutDashboard, mostrar: true },
-    { href: '/obras', label: 'Obras', icon: HardHat, mostrar: Boolean(modulos.obras) },
     { href: '/pulse', label: 'Pulse', icon: Activity, mostrar: Boolean(modulos.pulse) },
     { href: '/thor', label: 'THOR', icon: Bot, mostrar: Boolean(modulos.thor) },
     { href: '/max', label: 'Max', icon: Radio, mostrar: Boolean(modulos.max) },
@@ -56,7 +58,7 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
         </div>
 
         <div className="flex items-center gap-1 flex-1 overflow-x-auto">
-          {ITENS.map(item => {
+          {itens.map(item => {
             const ativo = item.href === '/argus' ? pathname === '/argus' : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
@@ -73,26 +75,28 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
           <span className="text-[10px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
         </div>
 
-        <div className="relative flex-shrink-0" ref={ref}>
-          <button onClick={() => setOutrosAbertos(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14] transition-all">
-            <Grid3x3 size={16} /> <ChevronDown size={12} className={`transition-transform ${outrosAbertos ? 'rotate-180' : ''}`} />
-          </button>
-          {outrosAbertos && (
-            <div className="absolute right-0 top-full mt-2 bg-white border border-[#e5e0d5] rounded-xl shadow-lg py-1.5 min-w-[190px] z-40">
-              <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide px-3 py-1.5">Outros módulos</p>
-              {outrosModulos.map(m => {
-                const Icon = m.icon;
-                return (
-                  <Link key={m.href} href={m.href} onClick={() => setOutrosAbertos(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 text-[12px] font-semibold text-[#241c14] hover:bg-[#faf7f2] transition-all">
-                    <Icon size={14} className="text-[#9a958a]" /> {m.label}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {outrosModulos.length > 0 && (
+          <div className="relative flex-shrink-0" ref={ref}>
+            <button onClick={() => setOutrosAbertos(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14] transition-all">
+              <Grid3x3 size={16} /> <ChevronDown size={12} className={`transition-transform ${outrosAbertos ? 'rotate-180' : ''}`} />
+            </button>
+            {outrosAbertos && (
+              <div className="absolute right-0 top-full mt-2 bg-white border border-[#e5e0d5] rounded-xl shadow-lg py-1.5 min-w-[190px] z-40">
+                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide px-3 py-1.5">Outros módulos</p>
+                {outrosModulos.map(m => {
+                  const Icon = m.icon;
+                  return (
+                    <Link key={m.href} href={m.href} onClick={() => setOutrosAbertos(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-[12px] font-semibold text-[#241c14] hover:bg-[#faf7f2] transition-all">
+                      <Icon size={14} className="text-[#9a958a]" /> {m.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );

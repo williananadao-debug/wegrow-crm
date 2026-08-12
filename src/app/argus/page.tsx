@@ -117,7 +117,7 @@ export default function ArgusPainelPage() {
           <div className="mt-12">
             <div className="flex items-center justify-between mb-4">
               <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-widest flex items-center gap-2"><HardHat size={14} /> Obras</p>
-              <Link href="/obras" className="text-[11px] font-bold text-[#d9861c] flex items-center gap-1">Ver todas <ChevronRight size={12} /></Link>
+              <Link href="/argus/obras" className="text-[11px] font-bold text-[#d9861c] flex items-center gap-1">Ver todas <ChevronRight size={12} /></Link>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
@@ -142,7 +142,7 @@ export default function ArgusPainelPage() {
             {obras.length > 0 && (
               <div className="space-y-2">
                 {obras.slice(0, 5).map(o => (
-                  <Link key={o.id} href={`/obras/${o.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-all">
+                  <Link key={o.id} href={`/argus/obras/${o.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-all">
                     <p className="text-xs font-bold text-[#241c14] truncate">{o.nome}</p>
                     <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${OBRA_STATUS_CORES[o.status as keyof typeof OBRA_STATUS_CORES] || 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]'}`}>
                       {OBRA_STATUS_LABELS[o.status as keyof typeof OBRA_STATUS_LABELS] || o.status}

@@ -11,7 +11,7 @@
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 
-async function fetchComRetryPncp(url: string, tentativas = 3): Promise<Response> {
+async function fetchComRetryPncp(url: string, tentativas = 5): Promise<Response> {
   let ultimoErro: unknown;
   for (let i = 0; i < tentativas; i++) {
     try {
@@ -25,7 +25,7 @@ async function fetchComRetryPncp(url: string, tentativas = 3): Promise<Response>
       ultimoErro = err; // erro de rede/timeout — também vale retry
     }
     if (i < tentativas - 1) {
-      await new Promise(r => setTimeout(r, 800 * Math.pow(2, i))); // 800ms, 1.6s
+      await new Promise(r => setTimeout(r, Math.min(600 * Math.pow(1.8, i), 5000))); // 600ms, 1.1s, 1.9s, 3.5s
     }
   }
   throw ultimoErro instanceof Error ? ultimoErro : new Error('Falha ao conectar no PNCP após retries.');

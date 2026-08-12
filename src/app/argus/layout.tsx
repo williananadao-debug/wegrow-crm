@@ -7,8 +7,12 @@ import { Loader2, Radar } from 'lucide-react';
 // (declarado uma vez só em src/app/layout.tsx). font-family/cor de fundo são
 // propriedades herdadas: a declaração explícita no <div> abaixo sobrepõe o
 // Inter/navy do body por cascata normal, sem precisar de !important.
-const outfit = Outfit({ subsets: ['latin'], weight: ['300', '400', '500', '600', '700', '800', '900'], variable: '--font-argus-sans' });
-const playfair = Playfair_Display({ subsets: ['latin'], weight: ['400', '700'], style: ['normal', 'italic'], variable: '--font-argus-serif' });
+// Sem `weight` explícito: as duas são fontes variáveis, então next/font baixa
+// 1 arquivo por estilo em vez de um arquivo por peso — tinha ficado pedindo
+// 7 pesos estáticos do Outfit + 4 do Playfair (11 arquivos!), o que pesava
+// de verdade no primeiro carregamento do Argus.
+const outfit = Outfit({ subsets: ['latin'], variable: '--font-argus-sans' });
+const playfair = Playfair_Display({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-argus-serif' });
 
 export default function ArgusLayout({ children }: { children: React.ReactNode }) {
   const auth = useAuth() || {};

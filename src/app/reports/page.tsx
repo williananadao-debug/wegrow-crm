@@ -270,6 +270,7 @@ export default function ReportsPage() {
       const calcImpacto = estrategiasProcessadas.filter((est: any) => est.gerados > 0).sort((a: any, b: any) => b.faturamento - a.faturamento).slice(0, 5); 
 
       const leadStatusById = rawLeads.reduce((acc: any, l) => { acc[l.id] = l.status; return acc; }, {});
+      const leadValorById = rawLeads.reduce((acc: any, l) => { acc[l.id] = Number(l.valor_total) || 0; return acc; }, {});
 
       const visitasBase = rawVisitas.filter(v => {
           if (filtroVendedor !== 'Todos' && v.user_id !== filtroVendedor) return false;
@@ -282,12 +283,15 @@ export default function ReportsPage() {
       const visitasPorVendedor = Object.values(visitasBase.reduce((acc: any, v) => {
           const chave = v.user_id || 'sem_dono';
           const nome = nomesMap[v.user_id] || 'Desconhecido';
-          if (!acc[chave]) acc[chave] = { nome, total: 0, convertidas: 0, ganhas: 0 };
+          if (!acc[chave]) acc[chave] = { nome, total: 0, convertidas: 0, ganhas: 0, valorGanho: 0 };
           acc[chave].total++;
           if (v.lead_id) acc[chave].convertidas++;
-          if (v.lead_id && leadStatusById[v.lead_id] === 'ganho') acc[chave].ganhas++;
+          if (v.lead_id && leadStatusById[v.lead_id] === 'ganho') {
+              acc[chave].ganhas++;
+              acc[chave].valorGanho += leadValorById[v.lead_id] || 0;
+          }
           return acc;
-      }, {})).sort((a: any, b: any) => b.total - a.total) as { nome: string; total: number; convertidas: number; ganhas: number }[];
+      }, {})).sort((a: any, b: any) => b.total - a.total) as { nome: string; total: number; convertidas: number; ganhas: number; valorGanho: number }[];
 
       const calcVisitas = { total: visitasBase.length, convertidas: visitasConvertidas.length, ganhas: visitasGanhas.length, porVendedor: visitasPorVendedor };
 
@@ -614,7 +618,9 @@ export default function ReportsPage() {
                     <div className="flex gap-3 text-[9px] font-black uppercase shrink-0">
                       <span className="text-blue-400">{v.total}v</span>
                       <span className="text-yellow-400">{v.convertidas}l</span>
-                      <span className="text-green-400">{v.ganhas}$</span>
+                      <span className="text-green-400" title={`${v.ganhas} venda${v.ganhas === 1 ? '' : 's'} fechada${v.ganhas === 1 ? '' : 's'}`}>
+                        R$ {v.valorGanho.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}
+                      </span>
                     </div>
                   </div>
                 ))}

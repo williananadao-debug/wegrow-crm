@@ -59,10 +59,10 @@ export default function ArgusObraDetalhePage() {
 
         <header className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide">{formatObraId(obra.id)}</p>
+            <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide">{formatObraId(obra.id)}</p>
             <h1 className="text-2xl font-bold text-[#241c14]" style={{ fontFamily: 'var(--font-argus-serif)' }}>{obra.nome}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-2">
-              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${OBRA_STATUS_CORES[obra.status]}`}>
+              <span className={`text-[12px] font-bold uppercase px-2.5 py-1 rounded-full border ${OBRA_STATUS_CORES[obra.status]}`}>
                 {OBRA_STATUS_LABELS[obra.status]}
               </span>
               {obra.endereco && <span className="text-xs text-[#6b6862] flex items-center gap-1.5"><MapPin size={12} /> {obra.endereco}</span>}
@@ -71,7 +71,7 @@ export default function ArgusObraDetalhePage() {
           </div>
           {obra.valor_orcado_total ? (
             <div className="text-right">
-              <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide">Orçamento Total</p>
+              <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide">Orçamento Total</p>
               <p className="text-2xl font-bold text-[#1fa85a]">{fmtMoeda(obra.valor_orcado_total)}</p>
             </div>
           ) : null}
@@ -85,12 +85,12 @@ export default function ArgusObraDetalhePage() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#241c14] uppercase">Cronograma</p>
-              <p className="text-[10px] text-[#9a958a] font-bold uppercase mt-0.5">{etapas.length} etapa(s)</p>
+              <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">{etapas.length} etapa(s)</p>
             </div>
             <div className="w-full h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
               <div className="h-full bg-[#d9861c] rounded-full transition-all" style={{ width: `${Math.min(percentualMedio, 100)}%` }} />
             </div>
-            <p className="text-[10px] text-[#9a958a] font-bold">{Math.round(percentualMedio)}% executado (média das etapas)</p>
+            <p className="text-[12px] text-[#9a958a] font-bold">{Math.round(percentualMedio)}% executado (média das etapas)</p>
           </Link>
 
           <Link href={`/argus/obras/${obra.id}/medicoes`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-6 transition-all flex flex-col gap-3 shadow-sm">
@@ -100,9 +100,9 @@ export default function ArgusObraDetalhePage() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#241c14] uppercase">Medições</p>
-              <p className="text-[10px] text-[#9a958a] font-bold uppercase mt-0.5">{medicoes.length} recente(s)</p>
+              <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">{medicoes.length} recente(s)</p>
             </div>
-            <p className="text-[10px] text-[#9a958a] font-bold">
+            <p className="text-[12px] text-[#9a958a] font-bold">
               {medicoes.filter(m => m.status === 'em_aprovacao').length} aguardando aprovação
             </p>
           </Link>
@@ -114,7 +114,7 @@ export default function ArgusObraDetalhePage() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#241c14] uppercase">Contratados</p>
-              <p className="text-[10px] text-[#9a958a] font-bold uppercase mt-0.5">Fornecedores e subempreiteiros</p>
+              <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">Fornecedores e subempreiteiros</p>
             </div>
           </Link>
         </div>

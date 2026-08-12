@@ -41,15 +41,15 @@ export default function ArgusObrasPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
-            <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Total de Obras</p>
+            <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Total de Obras</p>
             <p className="text-2xl font-bold text-[#241c14]">{obras.length}</p>
           </div>
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
-            <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Em Andamento</p>
+            <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Em Andamento</p>
             <p className="text-2xl font-bold text-[#d9861c]">{emAndamento}</p>
           </div>
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5 col-span-2 md:col-span-1">
-            <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Orçado Total</p>
+            <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Orçado Total</p>
             <p className="text-2xl font-bold text-[#1fa85a]">{fmtMoedaObra(orcadoTotal)}</p>
           </div>
         </div>
@@ -70,17 +70,17 @@ export default function ArgusObrasPage() {
               <Link key={obra.id} href={`/argus/obras/${obra.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-5 transition-all flex flex-col gap-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide">{formatObraId(obra.id)}</p>
+                    <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide">{formatObraId(obra.id)}</p>
                     <h2 className="text-sm font-bold text-[#241c14] leading-tight">{obra.nome}</h2>
                   </div>
-                  <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border whitespace-nowrap ${OBRA_STATUS_CORES[obra.status]}`}>
+                  <span className={`text-[11px] font-bold uppercase px-2 py-1 rounded-full border whitespace-nowrap ${OBRA_STATUS_CORES[obra.status]}`}>
                     {OBRA_STATUS_LABELS[obra.status]}
                   </span>
                 </div>
                 {obra.endereco && (
-                  <p className="text-[11px] text-[#6b6862] flex items-center gap-1.5"><MapPin size={12} className="flex-shrink-0" /> {obra.endereco}</p>
+                  <p className="text-[13px] text-[#6b6862] flex items-center gap-1.5"><MapPin size={12} className="flex-shrink-0" /> {obra.endereco}</p>
                 )}
-                <div className="flex items-center justify-between text-[10px] text-[#9a958a] font-bold uppercase mt-auto pt-2 border-t border-[#f0ede6]">
+                <div className="flex items-center justify-between text-[12px] text-[#9a958a] font-bold uppercase mt-auto pt-2 border-t border-[#f0ede6]">
                   <span className="flex items-center gap-1.5"><Calendar size={12} /> {fmtDataObra(obra.data_inicio)}</span>
                   {obra.valor_orcado_total ? <span className="text-[#241c14]">{fmtMoedaObra(obra.valor_orcado_total)}</span> : null}
                 </div>

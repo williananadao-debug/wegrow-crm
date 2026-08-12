@@ -96,7 +96,7 @@ export default function ArgusNovaMedicaoPage() {
 
         <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6 space-y-4">
           <div>
-            <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Contratado *</label>
+            <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Contratado *</label>
             <select value={contratadoId} onChange={e => setContratadoId(e.target.value)}
               className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]">
               <option value="">Selecione...</option>
@@ -106,7 +106,7 @@ export default function ArgusNovaMedicaoPage() {
 
           {etapas.length > 0 && (
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Etapa (opcional)</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Etapa (opcional)</label>
               <select value={etapaId} onChange={e => setEtapaId(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]">
                 <option value="">Sem etapa vinculada</option>
@@ -117,12 +117,12 @@ export default function ArgusNovaMedicaoPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nº da medição</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nº da medição</label>
               <input type="number" min={1} value={numeroMedicao} onChange={e => setNumeroMedicao(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Valor medido (R$) *</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Valor medido (R$) *</label>
               <input type="number" value={valorMedido} onChange={e => setValorMedido(e.target.value)} placeholder="0,00"
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]" />
             </div>
@@ -130,19 +130,19 @@ export default function ArgusNovaMedicaoPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Período — início</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Período — início</label>
               <input type="date" value={periodoInicio} onChange={e => setPeriodoInicio(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Período — fim</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Período — fim</label>
               <input type="date" value={periodoFim} onChange={e => setPeriodoFim(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]" />
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">% do período (opcional)</label>
+            <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">% do período (opcional)</label>
             <input type="number" min={0} max={100} value={percentualPeriodo} onChange={e => setPercentualPeriodo(e.target.value)}
               className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c]" />
           </div>

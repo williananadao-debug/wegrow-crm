@@ -8,12 +8,29 @@ import {
   Grid3x3, LayoutDashboard, HardHat, Activity, Radio, ChevronDown,
 } from 'lucide-react';
 
+// Logo real da empresa (Admin → Logo) igual o resto do sistema já faz —
+// senão cai no quadrado dourado com a inicial do nome.
+function MarcaEmpresaArgus({ logoUrl, inicial }: { logoUrl?: string | null; inicial: string }) {
+  if (logoUrl) {
+    return (
+      <div className="bg-white border border-[#e5e0d5] rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 w-10 h-10">
+        <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
+      </div>
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-xl bg-[#241c14] flex items-center justify-center flex-shrink-0">
+      <Radar size={19} className="text-[#d9861c]" />
+    </div>
+  );
+}
+
 // Argus não usa a navbar padrão (visual próprio de propósito — ver
 // src/lib/publicPages.ts). Obras foi trazido pra dentro do Argus de verdade
 // (rotas /argus/obras/*, mesmo visual, mesmas tabelas) — não é mais um link
 // pra fora, por isso vira aba nativa igual Licitações/Financeiro/Contratos.
-// Os módulos que continuam fora (Dashboard geral, Pulse, THOR, Max) ficam no
-// dropdown "outros módulos", senão o Argus vira um beco sem saída.
+// Os módulos que continuam fora (Dashboard geral quando modulos.crm está
+// desligado, Pulse, THOR, Max) ficam no dropdown "outros módulos".
 export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
   const pathname = usePathname();
   const auth = useAuth() || {};
@@ -46,14 +63,12 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
 
   return (
     <nav className="bg-white border-b border-[#e5e0d5] sticky top-0 z-30">
-      <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center gap-2">
-        <div className="flex items-center gap-2 mr-6 flex-shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-[#241c14] flex items-center justify-center">
-            <Radar size={18} className="text-[#d9861c]" />
-          </div>
-          <div className="leading-none">
-            <p className="text-[13px] font-bold text-[#241c14]" style={{ fontFamily: 'var(--font-argus-serif)' }}>Argus</p>
-            <p className="text-[9px] text-[#9a958a] font-semibold uppercase tracking-wide">{nomeEmpresa || 'Licitações'}</p>
+      <div className="max-w-[1400px] mx-auto px-6 h-[72px] flex items-center gap-3">
+        <div className="flex items-center gap-3 mr-6 flex-shrink-0">
+          <MarcaEmpresaArgus logoUrl={empresa?.logo_url} inicial={(nomeEmpresa || 'A').charAt(0).toUpperCase()} />
+          <div className="leading-tight">
+            <p className="text-[15px] font-bold text-[#241c14]">{nomeEmpresa || 'Argus'}</p>
+            <p className="text-[13px] text-[#9a958a] font-semibold uppercase tracking-wide" style={{ fontFamily: 'var(--font-argus-serif)' }}>Argus · Licitações</p>
           </div>
         </div>
 
@@ -63,33 +78,33 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-all ${ativo ? 'bg-[#fdf0d4] text-[#d9861c]' : 'text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14]'}`}>
-                <Icon size={14} /> {item.label}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-semibold whitespace-nowrap transition-all ${ativo ? 'bg-[#fdf0d4] text-[#d9861c]' : 'text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14]'}`}>
+                <Icon size={16} /> {item.label}
               </Link>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-1.5 bg-[#fdf0d4] border border-[#f0d19a] px-3 py-1.5 rounded-full flex-shrink-0">
+        <div className="flex items-center gap-2 bg-[#fdf0d4] border border-[#f0d19a] px-3.5 py-2 rounded-full flex-shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-[#1fa85a] animate-pulse" />
-          <span className="text-[10px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
+          <span className="text-[13px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
         </div>
 
         {outrosModulos.length > 0 && (
           <div className="relative flex-shrink-0" ref={ref}>
             <button onClick={() => setOutrosAbertos(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14] transition-all">
-              <Grid3x3 size={16} /> <ChevronDown size={12} className={`transition-transform ${outrosAbertos ? 'rotate-180' : ''}`} />
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-[14px] font-semibold text-[#6b6862] hover:bg-[#f7f6f3] hover:text-[#241c14] transition-all">
+              <Grid3x3 size={18} /> <ChevronDown size={13} className={`transition-transform ${outrosAbertos ? 'rotate-180' : ''}`} />
             </button>
             {outrosAbertos && (
-              <div className="absolute right-0 top-full mt-2 bg-white border border-[#e5e0d5] rounded-xl shadow-lg py-1.5 min-w-[190px] z-40">
-                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide px-3 py-1.5">Outros módulos</p>
+              <div className="absolute right-0 top-full mt-2 bg-white border border-[#e5e0d5] rounded-xl shadow-lg py-1.5 min-w-[200px] z-40">
+                <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide px-3 py-1.5">Outros módulos</p>
                 {outrosModulos.map(m => {
                   const Icon = m.icon;
                   return (
                     <Link key={m.href} href={m.href} onClick={() => setOutrosAbertos(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 text-[12px] font-semibold text-[#241c14] hover:bg-[#faf7f2] transition-all">
-                      <Icon size={14} className="text-[#9a958a]" /> {m.label}
+                      className="flex items-center gap-2.5 px-3 py-2.5 text-[14px] font-semibold text-[#241c14] hover:bg-[#faf7f2] transition-all">
+                      <Icon size={15} className="text-[#9a958a]" /> {m.label}
                     </Link>
                   );
                 })}

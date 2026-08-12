@@ -60,16 +60,16 @@ export default function ArgusFinanceiroPage() {
         </div>
 
         <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
-          <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-3">Lançamentos vinculados a editais</p>
+          <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-3">Lançamentos vinculados a editais</p>
           {lancamentos.length === 0 ? (
-            <p className="text-[11px] text-[#9a958a] font-semibold">Nenhum lançamento financeiro vinculado a edital ainda — medições/pagamentos aparecem aqui quando lançados no módulo Financeiro com o edital marcado.</p>
+            <p className="text-[13px] text-[#9a958a] font-semibold">Nenhum lançamento financeiro vinculado a edital ainda — medições/pagamentos aparecem aqui quando lançados no módulo Financeiro com o edital marcado.</p>
           ) : (
             <div className="space-y-2">
               {lancamentos.map(l => (
                 <div key={l.id} className="flex items-center justify-between gap-3 py-2 border-b border-[#f0ede6] last:border-0">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-[#241c14] truncate">{l.titulo}</p>
-                    <p className="text-[10px] text-[#9a958a] font-semibold">Vencimento: {fmtData(l.data_vencimento)}</p>
+                    <p className="text-[12px] text-[#9a958a] font-semibold">Vencimento: {fmtData(l.data_vencimento)}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {l.tipo === 'entrada' ? <TrendingUp size={13} className="text-[#1fa85a]" /> : <TrendingDown size={13} className="text-[#d63f3f]" />}
@@ -89,7 +89,7 @@ export default function ArgusFinanceiroPage() {
 function Kpi({ titulo, valor, corBorda, alerta }: { titulo: string; valor: string; corBorda: string; alerta?: boolean }) {
   return (
     <div className={`bg-white border border-[#e5e0d5] border-t-4 ${corBorda} rounded-2xl p-5 shadow-sm`}>
-      <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-2">{titulo}</p>
+      <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-2">{titulo}</p>
       <p className={`text-2xl font-bold ${alerta ? 'text-[#d63f3f]' : 'text-[#241c14]'}`}>{valor}</p>
     </div>
   );

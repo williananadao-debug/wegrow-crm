@@ -84,25 +84,25 @@ export default function ArgusCronogramaObraPage() {
                   <GripVertical size={16} className="text-[#d9d5c8] flex-shrink-0" />
                   <div className="min-w-0">
                     <p className="font-bold text-sm text-[#241c14] truncate">{etapa.nome}</p>
-                    <p className="text-[10px] text-[#9a958a] font-bold uppercase">{fmtData(etapa.data_inicio_prevista)} — {fmtData(etapa.data_fim_prevista)}</p>
+                    <p className="text-[12px] text-[#9a958a] font-bold uppercase">{fmtData(etapa.data_inicio_prevista)} — {fmtData(etapa.data_fim_prevista)}</p>
                   </div>
                 </div>
 
                 <select value={etapa.status} disabled={!isLideranca}
                   onChange={e => atualizarEtapa(etapa.id, { status: e.target.value as ObraEtapa['status'] })}
-                  className={`text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-full border outline-none flex-shrink-0 ${STATUS_CORES[etapa.status]}`}>
+                  className={`text-[12px] font-bold uppercase px-2.5 py-1.5 rounded-full border outline-none flex-shrink-0 ${STATUS_CORES[etapa.status]}`}>
                   {Object.entries(ETAPA_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
 
                 <div className="flex items-center gap-4 flex-shrink-0">
                   <div className="w-32">
-                    <p className="text-[9px] font-bold text-[#9a958a] uppercase mb-1">% Previsto</p>
+                    <p className="text-[11px] font-bold text-[#9a958a] uppercase mb-1">% Previsto</p>
                     <input type="number" min={0} max={100} defaultValue={etapa.percentual_previsto} disabled={!isLideranca}
                       onBlur={e => atualizarEtapa(etapa.id, { percentual_previsto: Number(e.target.value) })}
                       className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:border-[#d9861c]" />
                   </div>
                   <div className="w-32">
-                    <p className="text-[9px] font-bold text-[#9a958a] uppercase mb-1">% Executado</p>
+                    <p className="text-[11px] font-bold text-[#9a958a] uppercase mb-1">% Executado</p>
                     <input type="number" min={0} max={100} defaultValue={etapa.percentual_executado} disabled={!isLideranca}
                       onBlur={e => atualizarEtapa(etapa.id, { percentual_executado: Number(e.target.value) })}
                       className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:border-[#d9861c]" />

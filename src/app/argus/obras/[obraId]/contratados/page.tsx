@@ -80,22 +80,22 @@ export default function ArgusContratadosObraPage() {
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5 mb-6 space-y-4 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nome / Razão social *</label>
+                <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nome / Razão social *</label>
                 <input value={nome} onChange={e => setNome(e.target.value)}
                   className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">CPF/CNPJ</label>
+                <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">CPF/CNPJ</label>
                 <input value={documento} onChange={e => setDocumento(e.target.value)}
                   className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Tipo de serviço</label>
+                <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Tipo de serviço</label>
                 <input value={tipoServico} onChange={e => setTipoServico(e.target.value)} placeholder="Ex: Elétrica, Alvenaria..."
                   className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Valor do contrato</label>
+                <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Valor do contrato</label>
                 <input type="number" value={valorContrato} onChange={e => setValorContrato(e.target.value)} placeholder="0,00"
                   className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
@@ -117,9 +117,9 @@ export default function ArgusContratadosObraPage() {
             {contratados.map(c => (
               <div key={c.id} className="bg-white border border-[#e5e0d5] rounded-2xl p-5 shadow-sm">
                 <p className="font-bold text-sm text-[#241c14]">{c.nome}</p>
-                {c.documento && <p className="text-[10px] text-[#9a958a] font-bold uppercase mt-0.5">{c.documento}</p>}
+                {c.documento && <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">{c.documento}</p>}
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#f0ede6]">
-                  {c.tipo_servico && <span className="text-[10px] font-bold uppercase text-[#d9861c] bg-[#fdf0d4] border border-[#f0d19a] px-2 py-1 rounded-full">{c.tipo_servico}</span>}
+                  {c.tipo_servico && <span className="text-[12px] font-bold uppercase text-[#d9861c] bg-[#fdf0d4] border border-[#f0d19a] px-2 py-1 rounded-full">{c.tipo_servico}</span>}
                   {c.valor_contrato ? <span className="text-sm font-bold text-[#1fa85a]">{fmtMoeda(c.valor_contrato)}</span> : null}
                 </div>
               </div>

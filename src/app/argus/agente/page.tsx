@@ -60,7 +60,7 @@ export default function ArgusAgentePage() {
         <div className="flex flex-wrap gap-2 mb-4">
           {SUGESTOES.map(s => (
             <button key={s} onClick={() => enviar(s)} disabled={enviando}
-              className="text-[11px] font-semibold text-[#6b6862] bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 hover:text-[#d9861c] px-3 py-1.5 rounded-full transition-all disabled:opacity-50">
+              className="text-[13px] font-semibold text-[#6b6862] bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 hover:text-[#d9861c] px-3 py-1.5 rounded-full transition-all disabled:opacity-50">
               {s}
             </button>
           ))}

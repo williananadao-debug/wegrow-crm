@@ -61,7 +61,7 @@ export default function ArgusPainelPage() {
         <div className="max-w-[1400px] mx-auto px-6 py-14">
           <div className="inline-flex items-center gap-2 bg-white/10 border border-white/15 px-3 py-1 rounded-full mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-[#d9861c]" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">Inteligência em Licitações</span>
+            <span className="text-[12px] font-bold uppercase tracking-widest text-white/70">Inteligência em Licitações</span>
           </div>
           <h1 className="text-5xl font-bold leading-[1.05] mb-4" style={{ fontFamily: 'var(--font-argus-serif)' }}>
             Controle total<br />das <em className="text-[#f0a94a]">Licitações</em>
@@ -70,17 +70,17 @@ export default function ArgusPainelPage() {
             Monitoramento de editais via PNCP + agente de IA que analisa, alerta e recomenda ações pra propostas, contratos e prazos.
           </p>
           <div className="flex flex-wrap gap-10">
-            <div><p className="text-3xl font-bold">{emAcompanhamento.length}</p><p className="text-[10px] text-white/50 font-bold uppercase tracking-wide mt-1">Em acompanhamento</p></div>
-            <div><p className="text-3xl font-bold">{fmtMoedaCompacta(valorTotalDisputa)}</p><p className="text-[10px] text-white/50 font-bold uppercase tracking-wide mt-1">Valor total em disputa</p></div>
-            <div><p className="text-3xl font-bold">{taxaExito}%</p><p className="text-[10px] text-white/50 font-bold uppercase tracking-wide mt-1">Taxa de êxito</p></div>
+            <div><p className="text-3xl font-bold">{emAcompanhamento.length}</p><p className="text-[12px] text-white/50 font-bold uppercase tracking-wide mt-1">Em acompanhamento</p></div>
+            <div><p className="text-3xl font-bold">{fmtMoedaCompacta(valorTotalDisputa)}</p><p className="text-[12px] text-white/50 font-bold uppercase tracking-wide mt-1">Valor total em disputa</p></div>
+            <div><p className="text-3xl font-bold">{taxaExito}%</p><p className="text-[12px] text-white/50 font-bold uppercase tracking-wide mt-1">Taxa de êxito</p></div>
           </div>
         </div>
       </header>
 
       <main className="max-w-[1400px] mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-widest">Editais em destaque</p>
-          <Link href="/argus/licitacoes" className="text-[11px] font-bold text-[#d9861c] flex items-center gap-1">Ver todos <ChevronRight size={12} /></Link>
+          <p className="text-[13px] font-bold text-[#9a958a] uppercase tracking-widest">Editais em destaque</p>
+          <Link href="/argus/licitacoes" className="text-[13px] font-bold text-[#d9861c] flex items-center gap-1">Ver todos <ChevronRight size={12} /></Link>
         </div>
 
         {loading ? (
@@ -97,15 +97,15 @@ export default function ArgusPainelPage() {
             {destaques.map(edital => (
               <Link key={edital.id} href={`/argus/licitacoes/${edital.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-5 transition-all flex flex-col gap-2 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[10px] font-bold text-[#9a958a] uppercase">{edital.modalidade || 'Edital'}</p>
-                  <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_INTERESSE_CORES[edital.status_interesse]}`}>
+                  <p className="text-[12px] font-bold text-[#9a958a] uppercase">{edital.modalidade || 'Edital'}</p>
+                  <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_INTERESSE_CORES[edital.status_interesse]}`}>
                     {STATUS_INTERESSE_LABELS[edital.status_interesse]}
                   </span>
                 </div>
                 <p className="text-sm font-bold text-[#241c14] leading-snug line-clamp-2">{edital.orgao || edital.objeto || 'Sem órgão'}</p>
-                <p className="text-[11px] text-[#6b6862] line-clamp-2">{edital.objeto}</p>
+                <p className="text-[13px] text-[#6b6862] line-clamp-2">{edital.objeto}</p>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#f0ede6]">
-                  <span className="text-[10px] text-[#9a958a] font-semibold">{edital.municipio}{edital.uf ? `, ${edital.uf}` : ''}</span>
+                  <span className="text-[12px] text-[#9a958a] font-semibold">{edital.municipio}{edital.uf ? `, ${edital.uf}` : ''}</span>
                   <span className="text-xs font-bold text-[#241c14]">{fmtMoeda(edital.valor_estimado)}</span>
                 </div>
               </Link>
@@ -116,25 +116,25 @@ export default function ArgusPainelPage() {
         {temObras && (
           <div className="mt-12">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-widest flex items-center gap-2"><HardHat size={14} /> Obras</p>
-              <Link href="/argus/obras" className="text-[11px] font-bold text-[#d9861c] flex items-center gap-1">Ver todas <ChevronRight size={12} /></Link>
+              <p className="text-[13px] font-bold text-[#9a958a] uppercase tracking-widest flex items-center gap-2"><HardHat size={14} /> Obras</p>
+              <Link href="/argus/obras" className="text-[13px] font-bold text-[#d9861c] flex items-center gap-1">Ver todas <ChevronRight size={12} /></Link>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
               <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
-                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Total de obras</p>
+                <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Total de obras</p>
                 <p className="text-xl font-bold text-[#241c14]">{obras.length}</p>
               </div>
               <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
-                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Em andamento</p>
+                <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Em andamento</p>
                 <p className="text-xl font-bold text-[#241c14]">{obras.filter(o => o.status === 'em_andamento').length}</p>
               </div>
               <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
-                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Orçado total</p>
+                <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Orçado total</p>
                 <p className="text-xl font-bold text-[#241c14]">{fmtMoedaCompacta(orcadoObras)}</p>
               </div>
               <div className={`bg-white border rounded-2xl p-4 ${medicoesPendentes > 0 ? 'border-[#d9861c]/40' : 'border-[#e5e0d5]'}`}>
-                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 flex items-center gap-1"><Receipt size={11} /> Medições pendentes</p>
+                <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 flex items-center gap-1"><Receipt size={11} /> Medições pendentes</p>
                 <p className={`text-xl font-bold ${medicoesPendentes > 0 ? 'text-[#d9861c]' : 'text-[#241c14]'}`}>{medicoesPendentes}</p>
               </div>
             </div>
@@ -144,7 +144,7 @@ export default function ArgusPainelPage() {
                 {obras.slice(0, 5).map(o => (
                   <Link key={o.id} href={`/argus/obras/${o.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-all">
                     <p className="text-xs font-bold text-[#241c14] truncate">{o.nome}</p>
-                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${OBRA_STATUS_CORES[o.status as keyof typeof OBRA_STATUS_CORES] || 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]'}`}>
+                    <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${OBRA_STATUS_CORES[o.status as keyof typeof OBRA_STATUS_CORES] || 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]'}`}>
                       {OBRA_STATUS_LABELS[o.status as keyof typeof OBRA_STATUS_LABELS] || o.status}
                     </span>
                   </Link>

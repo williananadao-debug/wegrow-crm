@@ -97,7 +97,7 @@ export default function ArgusContratosPage() {
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5 mb-6 space-y-3">
             {editaisGanhos.length > 0 && (
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">A partir de um edital ganho (opcional)</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">A partir de um edital ganho (opcional)</label>
                 <select value={editalId} onChange={e => selecionarEdital(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]">
                   <option value="">Nenhum — preencher manualmente</option>
                   {editaisGanhos.map(e => <option key={e.id} value={e.id}>{e.orgao} — {e.objeto?.slice(0, 60)}</option>)}
@@ -106,23 +106,23 @@ export default function ArgusContratosPage() {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Órgão *</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Órgão *</label>
                 <input value={orgao} onChange={e => setOrgao(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Valor do contrato</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Valor do contrato</label>
                 <input type="number" value={valorContrato} onChange={e => setValorContrato(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div className="md:col-span-2">
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Objeto</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Objeto</label>
                 <input value={objeto} onChange={e => setObjeto(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Início</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Início</label>
                 <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Fim</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Fim</label>
                 <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
             </div>
@@ -144,14 +144,14 @@ export default function ArgusContratosPage() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <p className="text-sm font-bold text-[#241c14]">{c.orgao}</p>
                   <select value={c.status} disabled={!isLideranca} onChange={e => atualizarStatus(c.id, e.target.value as ArgusContrato['status'])}
-                    className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full border outline-none flex-shrink-0 ${STATUS_CORES[c.status]}`}>
+                    className={`text-[11px] font-bold uppercase px-2 py-1 rounded-full border outline-none flex-shrink-0 ${STATUS_CORES[c.status]}`}>
                     <option value="ativo">Ativo</option>
                     <option value="encerrado">Encerrado</option>
                     <option value="rescindido">Rescindido</option>
                   </select>
                 </div>
-                {c.objeto && <p className="text-[11px] text-[#6b6862] mb-3">{c.objeto}</p>}
-                <div className="flex items-center justify-between pt-2 border-t border-[#f0ede6] text-[10px] font-semibold text-[#9a958a]">
+                {c.objeto && <p className="text-[13px] text-[#6b6862] mb-3">{c.objeto}</p>}
+                <div className="flex items-center justify-between pt-2 border-t border-[#f0ede6] text-[12px] font-semibold text-[#9a958a]">
                   <span>{fmtData(c.data_inicio)} — {fmtData(c.data_fim)}</span>
                   {c.valor_contrato ? <span className="text-sm font-bold text-[#241c14]">{fmtMoeda(c.valor_contrato)}</span> : null}
                 </div>

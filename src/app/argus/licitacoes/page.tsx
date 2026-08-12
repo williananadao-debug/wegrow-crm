@@ -125,17 +125,17 @@ export default function ArgusLicitacoesPage() {
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5 mb-6 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">UF</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">UF</label>
                 <input value={uf} onChange={e => setUf(e.target.value.toUpperCase().slice(0, 2))} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
               <div>
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Modalidade</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Modalidade</label>
                 <select value={modalidade} onChange={e => setModalidade(Number(e.target.value))} className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]">
                   {Object.entries(MODALIDADES_PNCP).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Palavras-chave (separadas por vírgula)</label>
+                <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 block">Palavras-chave (separadas por vírgula)</label>
                 <input value={palavrasChave} onChange={e => setPalavrasChave(e.target.value)} placeholder="ex: instrumentos musicais, transporte"
                   className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-[#d9861c]" />
               </div>
@@ -152,7 +152,7 @@ export default function ArgusLicitacoesPage() {
             <button onClick={buscarPncp} disabled={buscando} className="inline-flex items-center gap-2 bg-[#241c14] hover:bg-[#3a2e20] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all">
               {buscando ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Buscar agora
             </button>
-            {buscando && <p className="text-[#9a958a] text-[11px] font-semibold mt-2">Consultando o PNCP — pode levar alguns segundos, a API do governo às vezes é lenta/instável.</p>}
+            {buscando && <p className="text-[#9a958a] text-[13px] font-semibold mt-2">Consultando o PNCP — pode levar alguns segundos, a API do governo às vezes é lenta/instável.</p>}
             {erroBusca && (
               <div className="flex items-center gap-3 mt-2">
                 <p className="text-[#d63f3f] text-xs font-semibold">{erroBusca}</p>
@@ -162,19 +162,19 @@ export default function ArgusLicitacoesPage() {
 
             {resultados.length > 0 && (
               <div className="mt-5 space-y-2 max-h-96 overflow-y-auto">
-                <p className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide">{resultados.length} resultado(s) — {filtros.length > 0 ? '' : ''}</p>
+                <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide">{resultados.length} resultado(s) — {filtros.length > 0 ? '' : ''}</p>
                 {resultados.map(item => (
                   <div key={item.numeroControlePNCP} className="border border-[#e5e0d5] rounded-xl p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-[#241c14] truncate">{item.orgaoEntidade?.razaoSocial}</p>
-                      <p className="text-[11px] text-[#6b6862] truncate">{item.objetoCompra}</p>
-                      <p className="text-[10px] text-[#9a958a] font-semibold mt-0.5">{item.unidadeOrgao?.municipioNome}/{item.unidadeOrgao?.ufSigla} · {fmtMoeda(item.valorTotalEstimado)}</p>
+                      <p className="text-[13px] text-[#6b6862] truncate">{item.objetoCompra}</p>
+                      <p className="text-[12px] text-[#9a958a] font-semibold mt-0.5">{item.unidadeOrgao?.municipioNome}/{item.unidadeOrgao?.ufSigla} · {fmtMoeda(item.valorTotalEstimado)}</p>
                     </div>
                     {jaSalvo(item.numeroControlePNCP) ? (
-                      <span className="text-[10px] font-bold text-[#1fa85a] uppercase flex-shrink-0">Já salvo</span>
+                      <span className="text-[12px] font-bold text-[#1fa85a] uppercase flex-shrink-0">Já salvo</span>
                     ) : (
                       <button onClick={() => salvarComoCandidato(item)} disabled={salvandoId === item.numeroControlePNCP}
-                        className="inline-flex items-center gap-1.5 bg-[#fdf0d4] border border-[#f0d19a] text-[#d9861c] hover:bg-[#d9861c] hover:text-white px-3 py-2 rounded-lg font-bold text-[10px] uppercase tracking-wide transition-all flex-shrink-0">
+                        className="inline-flex items-center gap-1.5 bg-[#fdf0d4] border border-[#f0d19a] text-[#d9861c] hover:bg-[#d9861c] hover:text-white px-3 py-2 rounded-lg font-bold text-[12px] uppercase tracking-wide transition-all flex-shrink-0">
                         {salvandoId === item.numeroControlePNCP ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Salvar
                       </button>
                     )}
@@ -188,7 +188,7 @@ export default function ArgusLicitacoesPage() {
         <div className="flex items-center gap-2 mb-5 overflow-x-auto">
           {ABAS.map(a => (
             <button key={a.key} onClick={() => setAba(a.key)}
-              className={`px-3.5 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wide whitespace-nowrap transition-all ${aba === a.key ? 'bg-[#241c14] text-white' : 'bg-white border border-[#e5e0d5] text-[#6b6862] hover:border-[#d9861c]/40'}`}>
+              className={`px-3.5 py-2 rounded-lg text-[13px] font-bold uppercase tracking-wide whitespace-nowrap transition-all ${aba === a.key ? 'bg-[#241c14] text-white' : 'bg-white border border-[#e5e0d5] text-[#6b6862] hover:border-[#d9861c]/40'}`}>
               {a.label}
             </button>
           ))}
@@ -208,12 +208,12 @@ export default function ArgusLicitacoesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold text-[#241c14] truncate">{edital.orgao || 'Sem órgão'}</p>
-                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_INTERESSE_CORES[edital.status_interesse]}`}>
+                    <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_INTERESSE_CORES[edital.status_interesse]}`}>
                       {STATUS_INTERESSE_LABELS[edital.status_interesse]}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#6b6862] truncate mt-0.5">{edital.objeto}</p>
-                  <p className="text-[10px] text-[#9a958a] font-semibold mt-1">{edital.modalidade} · {edital.municipio}{edital.uf ? `/${edital.uf}` : ''} · Sessão: {fmtData(edital.data_sessao)}</p>
+                  <p className="text-[13px] text-[#6b6862] truncate mt-0.5">{edital.objeto}</p>
+                  <p className="text-[12px] text-[#9a958a] font-semibold mt-1">{edital.modalidade} · {edital.municipio}{edital.uf ? `/${edital.uf}` : ''} · Sessão: {fmtData(edital.data_sessao)}</p>
                 </div>
                 <p className="text-sm font-bold text-[#241c14] flex-shrink-0">{fmtMoeda(edital.valor_estimado)}</p>
                 <ChevronRight size={16} className="text-[#c9c3b5] flex-shrink-0" />

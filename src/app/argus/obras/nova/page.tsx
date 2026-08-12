@@ -56,20 +56,20 @@ export default function NovaObraArgusPage() {
 
         <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6 space-y-4">
           <div>
-            <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nome da obra *</label>
+            <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Nome da obra *</label>
             <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Edifício Aurora — Torre 1"
               className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all" />
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Endereço</label>
+            <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Endereço</label>
             <input value={endereco} onChange={e => setEndereco(e.target.value)} placeholder="Rua, número, bairro, cidade"
               className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Status</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Status</label>
               <select value={status} onChange={e => setStatus(e.target.value as Obra['status'])}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all">
                 <option value="planejamento">Planejamento</option>
@@ -79,7 +79,7 @@ export default function NovaObraArgusPage() {
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Orçamento total (informativo)</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Orçamento total (informativo)</label>
               <input type="number" value={valorOrcado} onChange={e => setValorOrcado(e.target.value)} placeholder="0,00"
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all" />
             </div>
@@ -87,12 +87,12 @@ export default function NovaObraArgusPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Início</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Início</label>
               <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Previsão de término</label>
+              <label className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-1.5 block">Previsão de término</label>
               <input type="date" value={dataPrevistaFim} onChange={e => setDataPrevistaFim(e.target.value)}
                 className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-[#d9861c] transition-all" />
             </div>

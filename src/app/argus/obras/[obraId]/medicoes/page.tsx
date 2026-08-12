@@ -109,12 +109,12 @@ export default function ArgusMedicoesObraPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-sm text-[#241c14]">Medição #{m.numero_medicao}</p>
-                      <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${MEDICAO_STATUS_CORES_ARGUS[m.status]}`}>
+                      <span className={`text-[11px] font-bold uppercase px-2 py-0.5 rounded-full border ${MEDICAO_STATUS_CORES_ARGUS[m.status]}`}>
                         {MEDICAO_STATUS_LABELS[m.status]}
                       </span>
                     </div>
                     <p className="text-xs text-[#6b6862] font-semibold mt-0.5">{contratado?.nome || 'Contratado removido'}</p>
-                    <p className="text-[10px] text-[#9a958a] font-bold uppercase mt-1">
+                    <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-1">
                       {fmtData(m.periodo_inicio)} — {fmtData(m.periodo_fim)}{m.percentual_periodo ? ` · ${m.percentual_periodo}% do período` : ''}
                     </p>
                   </div>
@@ -122,11 +122,11 @@ export default function ArgusMedicoesObraPage() {
                   {isLideranca && m.status === 'em_aprovacao' && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button onClick={() => aprovar(m)} disabled={processando === m.id}
-                        className="inline-flex items-center gap-1.5 bg-[#d9f2e3] border border-[#b8e6cb] text-[#1fa85a] hover:bg-[#1fa85a] hover:text-white px-3 py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 bg-[#d9f2e3] border border-[#b8e6cb] text-[#1fa85a] hover:bg-[#1fa85a] hover:text-white px-3 py-2 rounded-lg font-bold text-[12px] uppercase tracking-widest transition-all disabled:opacity-50">
                         {processando === m.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Aprovar
                       </button>
                       <button onClick={() => rejeitar(m)} disabled={processando === m.id}
-                        className="inline-flex items-center gap-1.5 bg-[#fce8e8] border border-[#f5c6c6] text-[#d63f3f] hover:bg-[#d63f3f] hover:text-white px-3 py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 bg-[#fce8e8] border border-[#f5c6c6] text-[#d63f3f] hover:bg-[#d63f3f] hover:text-white px-3 py-2 rounded-lg font-bold text-[12px] uppercase tracking-widest transition-all disabled:opacity-50">
                         <X size={12} /> Rejeitar
                       </button>
                     </div>

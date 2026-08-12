@@ -24,7 +24,14 @@ async function verificarUsuario(request: Request) {
   return { user, empresa_id: perfil.empresa_id, cargo: perfil.cargo };
 }
 
-const MAX_PAGINAS = 5; // busca ao vivo dentro do request — conservador de propósito, sem rate-limit exposto pelo PNCP
+// Busca interativa: usuário está esperando na tela, então prioriza responder
+// rápido (poucas páginas, poucas tentativas por página) em vez de tentar ser
+// exaustivo — se a 1ª leva não bastar, o usuário clica em buscar de novo.
+// Confirmado na prática (2026-08-12) que mesmo com maxDuration=60 configurado
+// a requisição ainda estourava algum limite antes disso, então o ajuste real
+// é fazer menos trabalho por chamada, não pedir mais tempo.
+const MAX_PAGINAS = 2;
+const TENTATIVAS_POR_PAGINA = 2;
 
 // Busca ao vivo no PNCP (só preview — não grava nada). O usuário escolhe quais
 // resultados salvar como candidato via /api/argus/pncp/salvar.
@@ -49,6 +56,7 @@ export async function POST(request: Request) {
       modalidade: Number(modalidade),
       uf: uf || null,
       tamanhoPagina: 50,
+      tentativas: TENTATIVAS_POR_PAGINA,
     };
 
     // 1ª página primeiro (é a única forma de saber quantas páginas existem no

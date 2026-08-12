@@ -153,7 +153,12 @@ export default function ArgusLicitacoesPage() {
               {buscando ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Buscar agora
             </button>
             {buscando && <p className="text-[#9a958a] text-[11px] font-semibold mt-2">Consultando o PNCP — pode levar alguns segundos, a API do governo às vezes é lenta/instável.</p>}
-            {erroBusca && <p className="text-[#d63f3f] text-xs font-semibold mt-2">{erroBusca}</p>}
+            {erroBusca && (
+              <div className="flex items-center gap-3 mt-2">
+                <p className="text-[#d63f3f] text-xs font-semibold">{erroBusca}</p>
+                <button onClick={buscarPncp} disabled={buscando} className="text-[#d9861c] text-xs font-bold uppercase tracking-wide underline flex-shrink-0">Tentar de novo</button>
+              </div>
+            )}
 
             {resultados.length > 0 && (
               <div className="mt-5 space-y-2 max-h-96 overflow-y-auto">

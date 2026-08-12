@@ -78,6 +78,10 @@ export async function buscarContratacoesPncp(opts: {
   uf?: string | null;
   pagina?: number;
   tamanhoPagina?: number;
+  // Tela interativa precisa responder rápido (usuário esperando) — melhor falhar
+  // cedo e deixar clicar "tentar de novo" do que segurar a requisição perto do
+  // limite da plataforma. O cron em background pode ser bem mais paciente.
+  tentativas?: number;
 }): Promise<PncpBuscaResultado> {
   const params = new URLSearchParams({
     dataInicial: opts.dataInicial,
@@ -88,7 +92,7 @@ export async function buscarContratacoesPncp(opts: {
   });
   if (opts.uf) params.set('uf', opts.uf);
 
-  const res = await fetchComRetryPncp(`${PNCP_BASE}/contratacoes/publicacao?${params.toString()}`);
+  const res = await fetchComRetryPncp(`${PNCP_BASE}/contratacoes/publicacao?${params.toString()}`, opts.tentativas);
   if (!res.ok) throw new Error(`PNCP respondeu ${res.status} ao buscar contratações (depois de retry)`);
   return res.json();
 }

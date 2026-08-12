@@ -30,6 +30,7 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
 
   const itens = [
     { href: '/argus', label: 'Painel Geral', icon: LayoutGrid, mostrar: true },
+    { href: '/argus/dashboard', label: 'Dashboard', icon: LayoutDashboard, mostrar: modulos.crm !== false },
     { href: '/argus/licitacoes', label: 'Licitações', icon: FileSearch, mostrar: true },
     { href: '/argus/obras', label: 'Obras', icon: HardHat, mostrar: Boolean(modulos.obras) },
     { href: '/argus/financeiro', label: 'Financeiro', icon: DollarSign, mostrar: true },
@@ -38,7 +39,6 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
   ].filter(i => i.mostrar);
 
   const outrosModulos = [
-    { href: '/dashboard', label: 'Dashboard WeGrow', icon: LayoutDashboard, mostrar: true },
     { href: '/pulse', label: 'Pulse', icon: Activity, mostrar: Boolean(modulos.pulse) },
     { href: '/thor', label: 'THOR', icon: Bot, mostrar: Boolean(modulos.thor) },
     { href: '/max', label: 'Max', icon: Radio, mostrar: Boolean(modulos.max) },

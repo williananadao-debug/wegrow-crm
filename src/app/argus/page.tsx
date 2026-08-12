@@ -3,17 +3,25 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronRight, HardHat, Receipt } from 'lucide-react';
 import ArgusTopNav from './ArgusTopNav';
 import { ArgusEdital, STATUS_INTERESSE_CORES, STATUS_INTERESSE_LABELS, fmtMoeda, fmtMoedaCompacta, fmtData } from './shared';
+import { OBRA_STATUS_LABELS, OBRA_STATUS_CORES } from '@/app/obras/shared';
+
+type ObraResumo = { id: number; nome: string; status: string };
 
 export default function ArgusPainelPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const empresa = auth.empresa;
+  const temObras = Boolean(empresa?.modulos?.obras);
 
   const [editais, setEditais] = useState<ArgusEdital[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [obras, setObras] = useState<ObraResumo[]>([]);
+  const [medicoesPendentes, setMedicoesPendentes] = useState(0);
+  const [orcadoObras, setOrcadoObras] = useState(0);
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;
@@ -21,6 +29,22 @@ export default function ArgusPainelPage() {
       .order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { setEditais((data as ArgusEdital[]) || []); setLoading(false); });
   }, [perfil?.empresa_id]);
+
+  // Painel Geral do Argus também resume Obras quando a empresa tem os dois
+  // módulos ativos — pedido explícito: ver os módulos consolidados aqui, não
+  // só licitação isolada.
+  useEffect(() => {
+    if (!perfil?.empresa_id || !temObras) return;
+    Promise.all([
+      supabase.from('obras').select('id, nome, status, valor_orcado_total').eq('empresa_id', perfil.empresa_id),
+      supabase.from('medicoes').select('id', { count: 'exact', head: true }).eq('empresa_id', perfil.empresa_id).eq('status', 'em_aprovacao'),
+    ]).then(([obrasRes, medicoesRes]) => {
+      const lista = (obrasRes.data as any[]) || [];
+      setObras(lista);
+      setOrcadoObras(lista.reduce((acc, o) => acc + Number(o.valor_orcado_total || 0), 0));
+      setMedicoesPendentes(medicoesRes.count || 0);
+    });
+  }, [perfil?.empresa_id, temObras]);
 
   const emAcompanhamento = editais.filter(e => !['perdido', 'arquivado'].includes(e.status_interesse));
   const valorTotalDisputa = emAcompanhamento.reduce((acc, e) => acc + Number(e.valor_estimado || 0), 0);
@@ -86,6 +110,47 @@ export default function ArgusPainelPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {temObras && (
+          <div className="mt-12">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[11px] font-bold text-[#9a958a] uppercase tracking-widest flex items-center gap-2"><HardHat size={14} /> Obras</p>
+              <Link href="/obras" className="text-[11px] font-bold text-[#d9861c] flex items-center gap-1">Ver todas <ChevronRight size={12} /></Link>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
+                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Total de obras</p>
+                <p className="text-xl font-bold text-[#241c14]">{obras.length}</p>
+              </div>
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
+                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Em andamento</p>
+                <p className="text-xl font-bold text-[#241c14]">{obras.filter(o => o.status === 'em_andamento').length}</p>
+              </div>
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
+                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1">Orçado total</p>
+                <p className="text-xl font-bold text-[#241c14]">{fmtMoedaCompacta(orcadoObras)}</p>
+              </div>
+              <div className={`bg-white border rounded-2xl p-4 ${medicoesPendentes > 0 ? 'border-[#d9861c]/40' : 'border-[#e5e0d5]'}`}>
+                <p className="text-[9px] font-bold text-[#9a958a] uppercase tracking-wide mb-1 flex items-center gap-1"><Receipt size={11} /> Medições pendentes</p>
+                <p className={`text-xl font-bold ${medicoesPendentes > 0 ? 'text-[#d9861c]' : 'text-[#241c14]'}`}>{medicoesPendentes}</p>
+              </div>
+            </div>
+
+            {obras.length > 0 && (
+              <div className="space-y-2">
+                {obras.slice(0, 5).map(o => (
+                  <Link key={o.id} href={`/obras/${o.id}`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-all">
+                    <p className="text-xs font-bold text-[#241c14] truncate">{o.nome}</p>
+                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${OBRA_STATUS_CORES[o.status as keyof typeof OBRA_STATUS_CORES] || 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]'}`}>
+                      {OBRA_STATUS_LABELS[o.status as keyof typeof OBRA_STATUS_LABELS] || o.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

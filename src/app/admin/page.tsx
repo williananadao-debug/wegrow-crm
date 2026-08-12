@@ -408,6 +408,17 @@ export default function AdminPage() {
                   <div>
                     <button
                       type="button"
+                      onClick={() => setEditModulos(prev => ({ ...prev, obras: !prev.obras }))}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.obras ? 'bg-orange-500/10 border-orange-500/40 text-orange-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
+                    >
+                      Obras
+                      {editModulos.obras ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                    </button>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
                       onClick={() => setEditModulos(prev => ({ ...prev, veiculos: !prev.veiculos }))}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.veiculos ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
                     >

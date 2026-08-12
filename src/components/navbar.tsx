@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +61,7 @@ export default function Navbar() {
   const mostrarPulse = Boolean(modulos.pulse);
   const mostrarThor = Boolean(modulos.thor);
   const mostrarMax = Boolean(modulos.max);
+  const mostrarObras = Boolean(modulos.obras);
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
   const mostrarCRM = modulos.crm !== false;
@@ -113,6 +114,7 @@ export default function Navbar() {
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
   const thorItem = { name: 'THOR', icon: <Bot size={20} />, href: '/thor' };
   const maxItem = { name: 'Max', icon: <Radio size={20} />, href: '/max' };
+  const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
       mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,
@@ -128,6 +130,7 @@ export default function Navbar() {
       ...(mostrarPulse ? pulseItems : []),
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
+      ...(mostrarObras ? [obrasItem] : []),
   ];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -243,6 +246,12 @@ export default function Navbar() {
           {mostrarMax && (
             <Link href={maxItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === maxItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {maxItem.icon} {maxItem.name}
+            </Link>
+          )}
+
+          {mostrarObras && (
+            <Link href={obrasItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === obrasItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {obrasItem.icon} {obrasItem.name}
             </Link>
           )}
 
@@ -369,6 +378,13 @@ export default function Navbar() {
                     <Link href={maxItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === maxItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{maxItem.icon}</div>
                       <span className="text-sm font-semibold">{maxItem.name}</span>
+                    </Link>
+                  )}
+
+                  {mostrarObras && (
+                    <Link href={obrasItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === obrasItem.href ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{obrasItem.icon}</div>
+                      <span className="text-sm font-semibold">{obrasItem.name}</span>
                     </Link>
                   )}
                 </>

@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight } from 'lucide-react';
+import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, FileSearch } from 'lucide-react';
 import ArgusTopNav from '../../ArgusTopNav';
 import { Obra, ObraEtapa, Medicao, OBRA_STATUS_LABELS, OBRA_STATUS_CORES, fmtMoeda, fmtData, formatObraId } from '@/app/obras/shared';
 
@@ -76,6 +76,12 @@ export default function ArgusObraDetalhePage() {
             </div>
           ) : null}
         </header>
+
+        {obra.edital_id && (
+          <Link href={`/argus/licitacoes/${obra.edital_id}`} className="mb-6 flex items-center gap-2 text-[#d9861c] text-xs font-bold uppercase tracking-widest hover:underline w-fit">
+            <FileSearch size={14} /> Ver edital de origem desta obra
+          </Link>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link href={`/argus/obras/${obra.id}/cronograma`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-6 transition-all flex flex-col gap-3 shadow-sm">

@@ -9,6 +9,7 @@ export type Obra = {
   valor_orcado_total: number | null;
   responsavel_id: string | null;
   empresa_id: string;
+  edital_id: number | null;
   created_at: string;
 };
 

@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, ArrowLeft, ExternalLink, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { Loader2, ArrowLeft, ExternalLink, AlertTriangle, CheckCircle2, Info, HardHat, ChevronRight } from 'lucide-react';
 import ArgusTopNav from '../../ArgusTopNav';
 import {
   ArgusEdital, ArgusEvento, ArgusAlerta, STATUS_INTERESSE_CORES, STATUS_INTERESSE_LABELS,
@@ -15,31 +15,54 @@ const TODOS_STATUS: ArgusEdital['status_interesse'][] = ['candidato', 'acompanha
 
 export default function ArgusEditalDetalhePage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const empresa = auth.empresa;
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
+  const temObras = Boolean(empresa?.modulos?.obras);
 
   const [edital, setEdital] = useState<ArgusEdital | null>(null);
   const [eventos, setEventos] = useState<ArgusEvento[]>([]);
   const [alertasSalvos, setAlertasSalvos] = useState<ArgusAlerta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [obraVinculada, setObraVinculada] = useState<{ id: number; nome: string } | null>(null);
+  const [criandoObra, setCriandoObra] = useState(false);
 
   const carregar = async () => {
     if (!perfil?.empresa_id || !id) return;
     setLoading(true);
-    const [editalRes, eventosRes, alertasRes] = await Promise.all([
+    const [editalRes, eventosRes, alertasRes, obraRes] = await Promise.all([
       supabase.from('argus_editais').select('*').eq('id', id).eq('empresa_id', perfil.empresa_id).single(),
       supabase.from('argus_edital_eventos').select('*').eq('edital_id', id).order('data_evento', { ascending: false }),
       supabase.from('argus_edital_alertas').select('*').eq('edital_id', id).eq('resolvido', false),
+      supabase.from('obras').select('id, nome').eq('edital_id', id).eq('empresa_id', perfil.empresa_id).maybeSingle(),
     ]);
     setEdital(editalRes.data as ArgusEdital);
     setEventos((eventosRes.data as ArgusEvento[]) || []);
     setAlertasSalvos((alertasRes.data as ArgusAlerta[]) || []);
+    setObraVinculada(obraRes.data as { id: number; nome: string } | null);
     setLoading(false);
   };
 
   useEffect(() => { carregar(); }, [perfil?.empresa_id, id]);
+
+  const criarObraApartirDoEdital = async () => {
+    if (!edital || !perfil?.empresa_id) return;
+    setCriandoObra(true);
+    const nome = edital.orgao ? `${edital.orgao} — ${edital.objeto?.slice(0, 60) || 'Obra'}` : (edital.objeto?.slice(0, 80) || `Obra do edital #${edital.id}`);
+    const { data, error } = await supabase.from('obras').insert([{
+      empresa_id: perfil.empresa_id,
+      edital_id: edital.id,
+      nome,
+      endereco: edital.municipio ? `${edital.municipio}${edital.uf ? `/${edital.uf}` : ''}` : null,
+      status: 'planejamento',
+      valor_orcado_total: edital.valor_homologado || edital.valor_proposto || edital.valor_estimado || null,
+    }]).select().single();
+    setCriandoObra(false);
+    if (error) { alert('Erro ao criar obra: ' + error.message); return; }
+    router.push(`/argus/obras/${data.id}`);
+  };
 
   const atualizarCampo = async (campos: Partial<ArgusEdital>) => {
     if (!edital) return;
@@ -84,6 +107,37 @@ export default function ArgusEditalDetalhePage() {
             {TODOS_STATUS.map(s => <option key={s} value={s}>{STATUS_INTERESSE_LABELS[s]}</option>)}
           </select>
         </div>
+
+        {temObras && edital.status_interesse === 'ganho' && (
+          obraVinculada ? (
+            <Link href={`/argus/obras/${obraVinculada.id}`} className="mb-5 flex items-center justify-between gap-3 bg-[#d9f2e3] border border-[#b8e6cb] rounded-2xl p-5 hover:border-[#1fa85a]/60 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center flex-shrink-0"><HardHat size={18} className="text-[#1fa85a]" /></div>
+                <div>
+                  <p className="text-sm font-bold text-[#241c14]">Obra vinculada: {obraVinculada.nome}</p>
+                  <p className="text-[12px] text-[#6b6862] font-semibold">Cronograma, medições e contratados já estão sendo acompanhados lá.</p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-[#1fa85a] flex-shrink-0" />
+            </Link>
+          ) : (
+            <div className="mb-5 flex items-center justify-between gap-3 bg-[#fdf0d4] border border-[#f0d19a] rounded-2xl p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center flex-shrink-0"><HardHat size={18} className="text-[#d9861c]" /></div>
+                <div>
+                  <p className="text-sm font-bold text-[#241c14]">Edital ganho — criar a obra correspondente?</p>
+                  <p className="text-[12px] text-[#6b6862] font-semibold">Leva órgão, endereço e valor pro cadastro da obra automaticamente.</p>
+                </div>
+              </div>
+              {isLideranca && (
+                <button onClick={criarObraApartirDoEdital} disabled={criandoObra}
+                  className="inline-flex items-center gap-2 bg-[#d9861c] hover:bg-[#c47716] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex-shrink-0">
+                  {criandoObra ? <Loader2 size={14} className="animate-spin" /> : <HardHat size={14} />} Criar Obra
+                </button>
+              )}
+            </div>
+          )
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">

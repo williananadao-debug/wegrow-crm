@@ -7,7 +7,7 @@ import {
   Target, Users, RefreshCcw, AlertTriangle, CheckCircle2,
   User as UserIcon, Loader2, Calendar, TrendingUp, Zap, Mail, Building2
 } from 'lucide-react';
-import { SkeletonPage } from '@/components/Skeleton';
+import { SkeletonPage, SkeletonBox } from '@/components/Skeleton';
 import { Toast } from '@/components/Toast';
 
 export default function GoalsPage() {
@@ -41,6 +41,7 @@ export default function GoalsPage() {
 
   const { unidades } = useUnidades(perfil?.empresa_id);
   const [unidadeSelecionadaMeta, setUnidadeSelecionadaMeta] = useState<string>('');
+  const [loadingUnidade, setLoadingUnidade] = useState(true);
   const [metaAnoUnidade, setMetaAnoUnidade] = useState(0);
   const [metasMensaisUnidade, setMetasMensaisUnidade] = useState<MetaMensal[]>([]);
   const [realizadoAnoUnidade, setRealizadoAnoUnidade] = useState(0);
@@ -226,34 +227,39 @@ export default function GoalsPage() {
 
   async function fetchMetasERealizadoUnidade() {
     if (!perfil?.empresa_id || !unidadeSelecionadaMeta) return;
-    const [{ data: metasData }, { data: vendas }] = await Promise.all([
-      supabase.from('metas').select('mes, valor_objetivo')
-        .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
-        .eq('unidade', unidadeSelecionadaMeta).eq('ano', anoFiltro),
-      supabase.from('leads').select('valor_total, created_at')
-        .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id).eq('unidade', unidadeSelecionadaMeta)
-        .gte('created_at', `${anoFiltro}-01-01`).lte('created_at', `${anoFiltro}-12-31`),
-    ]);
+    setLoadingUnidade(true);
+    try {
+      const [{ data: metasData }, { data: vendas }] = await Promise.all([
+        supabase.from('metas').select('mes, valor_objetivo')
+          .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
+          .eq('unidade', unidadeSelecionadaMeta).eq('ano', anoFiltro),
+        supabase.from('leads').select('valor_total, created_at')
+          .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id).eq('unidade', unidadeSelecionadaMeta)
+          .gte('created_at', `${anoFiltro}-01-01`).lte('created_at', `${anoFiltro}-12-31`),
+      ]);
 
-    // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
-    // upsert do Supabase não consegue casar via onConflict).
-    const metasMensaisDaUnidade = metasData?.filter(m => m.mes !== 0) || [];
-    const metaAnualSalva = metasData?.find(m => m.mes === 0)?.valor_objetivo || 0;
-    const somaMeses = metasMensaisDaUnidade.reduce((acc, m) => acc + Number(m.valor_objetivo || 0), 0);
-    // Se nunca definiu uma meta do ano manualmente (nem via "distribuir igualmente"), mostra
-    // a soma dos meses já preenchidos em vez de ficar zerado.
-    setMetaAnoUnidade(metaAnualSalva > 0 ? metaAnualSalva : somaMeses);
-    setMetasMensaisUnidade(metasMensaisDaUnidade);
+      // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
+      // upsert do Supabase não consegue casar via onConflict).
+      const metasMensaisDaUnidade = metasData?.filter(m => m.mes !== 0) || [];
+      const metaAnualSalva = metasData?.find(m => m.mes === 0)?.valor_objetivo || 0;
+      const somaMeses = metasMensaisDaUnidade.reduce((acc, m) => acc + Number(m.valor_objetivo || 0), 0);
+      // Se nunca definiu uma meta do ano manualmente (nem via "distribuir igualmente"), mostra
+      // a soma dos meses já preenchidos em vez de ficar zerado.
+      setMetaAnoUnidade(metaAnualSalva > 0 ? metaAnualSalva : somaMeses);
+      setMetasMensaisUnidade(metasMensaisDaUnidade);
 
-    const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
-    setRealizadoAnoUnidade(totalAno);
+      const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
+      setRealizadoAnoUnidade(totalAno);
 
-    const mensalMap: Record<number, number> = {};
-    vendas?.forEach(v => {
-      const mesVenda = new Date(v.created_at).getMonth() + 1;
-      mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
-    });
-    setRealizadoMensalMapUnidade(mensalMap);
+      const mensalMap: Record<number, number> = {};
+      vendas?.forEach(v => {
+        const mesVenda = new Date(v.created_at).getMonth() + 1;
+        mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
+      });
+      setRealizadoMensalMapUnidade(mensalMap);
+    } finally {
+      setLoadingUnidade(false);
+    }
   }
 
   const handleUpdateMetaUnidade = async (mes: number | null, valor: number) => {
@@ -636,6 +642,11 @@ export default function GoalsPage() {
           </div>
 
           {/* Grade Mensal por Unidade */}
+          {loadingUnidade ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 12 }).map((_, i) => <SkeletonBox key={i} className="h-48" />)}
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(mes => {
               const mMeta = metasMensaisUnidade.find(m => m.mes === mes)?.valor_objetivo || 0;
@@ -680,6 +691,7 @@ export default function GoalsPage() {
               );
             })}
           </div>
+          )}
         </div>
       )}
 

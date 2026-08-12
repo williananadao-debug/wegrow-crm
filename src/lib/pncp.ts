@@ -3,8 +3,33 @@
 // público, sem autenticação, CORS liberado (access-control-allow-origin: *).
 // Sem headers de rate-limit expostos — o cron de sync deve ser conservador
 // mesmo assim (paginação sequencial, sem paralelismo agressivo).
+//
+// A API é instável na prática: confirmado ao vivo em 2026-08-12 (fora do spike
+// inicial) que a mesma requisição, sem nenhuma mudança de parâmetro, alterna
+// entre 200, 500, 502 e 503 em questão de segundos e volta sozinha. Todo fetch
+// pro PNCP passa por retry com backoff curto — não é opcional.
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
+
+async function fetchComRetryPncp(url: string, tentativas = 3): Promise<Response> {
+  let ultimoErro: unknown;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (res.ok) return res;
+      // 5xx é o padrão de instabilidade observado — vale tentar de novo.
+      // 4xx é erro de parâmetro nosso, não adianta repetir.
+      if (res.status < 500) return res;
+      ultimoErro = new Error(`PNCP respondeu ${res.status}`);
+    } catch (err) {
+      ultimoErro = err; // erro de rede/timeout — também vale retry
+    }
+    if (i < tentativas - 1) {
+      await new Promise(r => setTimeout(r, 800 * Math.pow(2, i))); // 800ms, 1.6s
+    }
+  }
+  throw ultimoErro instanceof Error ? ultimoErro : new Error('Falha ao conectar no PNCP após retries.');
+}
 
 export type PncpContratacao = {
   numeroControlePNCP: string;
@@ -63,10 +88,8 @@ export async function buscarContratacoesPncp(opts: {
   });
   if (opts.uf) params.set('uf', opts.uf);
 
-  const res = await fetch(`${PNCP_BASE}/contratacoes/publicacao?${params.toString()}`, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`PNCP respondeu ${res.status} ao buscar contratações`);
+  const res = await fetchComRetryPncp(`${PNCP_BASE}/contratacoes/publicacao?${params.toString()}`);
+  if (!res.ok) throw new Error(`PNCP respondeu ${res.status} ao buscar contratações (depois de retry)`);
   return res.json();
 }
 
@@ -89,9 +112,7 @@ export async function detalharContratacaoPncp(numeroControlePNCP: string): Promi
   if (!match) return null;
   const [, cnpj, sequencialStr, ano] = match;
   const sequencial = Number(sequencialStr);
-  const res = await fetch(`${PNCP_BASE.replace('/consulta', '')}/orgaos/${cnpj}/compras/${ano}/${sequencial}`, {
-    headers: { Accept: 'application/json' },
-  });
+  const res = await fetchComRetryPncp(`${PNCP_BASE.replace('/consulta', '')}/orgaos/${cnpj}/compras/${ano}/${sequencial}`);
   if (!res.ok) return null;
   return res.json();
 }

@@ -22,7 +22,21 @@ const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
 
 // --- TIPOS ---
-type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; };
+type TipoEspecialItem = 'bonificacao' | 'doacao';
+type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; };
+
+// "bonificacao" era um checkbox (só um tipo). Vira lista suspensa com mais opções —
+// tipoEspecial é o campo novo; bonificacao (boolean) continua sendo lido pra não perder
+// o rótulo de itens já salvos em leads antigos antes dessa mudança.
+const TIPOS_ESPECIAIS_ITEM: Record<TipoEspecialItem, string> = {
+  bonificacao: 'Bonificação',
+  doacao: 'Doação',
+};
+function tipoEspecialDoItem(item: Pick<ItemVenda, 'tipoEspecial' | 'bonificacao'>): TipoEspecialItem | null {
+  if (item.tipoEspecial) return item.tipoEspecial;
+  if (item.bonificacao) return 'bonificacao';
+  return null;
+}
 type Historico = { id: number; texto: string; created_at: string; };
 type Atividade = { id: number; tipo: 'etapa' | 'nota' | 'followup'; descricao: string; created_at: string; };
 type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; };
@@ -956,14 +970,18 @@ export default function DealsPage() {
         listaItens = Array.isArray(lead.itens) ? lead.itens : JSON.parse(lead.itens as any);
     } catch { }
 
-    const itensHtml = listaItens.map(i => `
+    const itensHtml = listaItens.map(i => {
+        const tipoEspecial = tipoEspecialDoItem(i);
+        const rotulo = tipoEspecial ? TIPOS_ESPECIAIS_ITEM[tipoEspecial] : null;
+        return `
         <tr>
-            <td style="padding: 5px; border: 1px solid #000; font-size: 9px;">${i.servico}${(i as any).bonificacao ? ' <span style="color:#b45309;font-size:8px;font-weight:bold;text-transform:uppercase;">(Bonificação)</span>' : ''}</td>
+            <td style="padding: 5px; border: 1px solid #000; font-size: 9px;">${i.servico}${rotulo ? ` <span style="color:#b45309;font-size:8px;font-weight:bold;text-transform:uppercase;">(${rotulo})</span>` : ''}</td>
             <td style="padding: 5px; border: 1px solid #000; text-align: center; font-size: 9px;">${i.quantidade}</td>
-            <td style="padding: 5px; border: 1px solid #000; text-align: right; font-size: 9px;">${(i as any).bonificacao ? '<span style="color:#b45309;font-weight:bold;">BONIFICAÇÃO</span>' : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td style="padding: 5px; border: 1px solid #000; text-align: right; font-size: 9px;">${rotulo ? `<span style="color:#b45309;font-weight:bold;">${rotulo.toUpperCase()}</span>` : 'R$ ' + (i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
         </tr>
-    `).join('');
-    const subtotalItens = listaItens.reduce((s, i) => (i as any).bonificacao ? s : s + i.quantidade * i.precoUnitario, 0);
+    `;
+    }).join('');
+    const subtotalItens = listaItens.reduce((s, i) => tipoEspecialDoItem(i) ? s : s + i.quantidade * i.precoUnitario, 0);
     const linhasDesconto = (lead.desconto || 0) > 0 ? `
         <tr>
             <td style="padding: 5px; border: 1px solid #000; font-size: 9px; font-weight: bold;">Subtotal</td>
@@ -1549,7 +1567,7 @@ export default function DealsPage() {
         }
     }
 
-    const subtotal = itensTemporarios.reduce((acc, item) => !item.bonificacao ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
+    const subtotal = itensTemporarios.reduce((acc, item) => !tipoEspecialDoItem(item) ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
     const calculado = Math.max(0, subtotal - desconto);
     const valorTotalFinal = valorTotalOverride !== null ? valorTotalOverride : calculado;
     const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
@@ -1830,7 +1848,7 @@ export default function DealsPage() {
 
   const getStageTotal = useCallback((stageIdx: number) => { return getLeadsByStage(stageIdx).reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0); }, [getLeadsByStage]);
 
-  const subtotalModal = itensTemporarios.reduce((acc, item) => !item.bonificacao ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
+  const subtotalModal = itensTemporarios.reduce((acc, item) => !tipoEspecialDoItem(item) ? acc + (item.precoUnitario * item.quantidade) : acc, 0);
   const totalModalCalculado = Math.max(0, subtotalModal - desconto);
   const totalModalFinal = valorTotalOverride !== null ? valorTotalOverride : totalModalCalculado;
   const percModal = subtotalModal > 0 ? (desconto / subtotalModal) * 100 : 0;
@@ -2339,8 +2357,8 @@ export default function DealsPage() {
                                                 <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {item.bonificacao
-                                                  ? <span className="font-black text-amber-400 text-[9px] uppercase tracking-wider">Bonificação</span>
+                                                {tipoEspecialDoItem(item)
+                                                  ? <span className="font-black text-amber-400 text-[9px] uppercase tracking-wider">{TIPOS_ESPECIAIS_ITEM[tipoEspecialDoItem(item)!]}</span>
                                                   : <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
                                                 }
                                                 <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
@@ -2351,10 +2369,25 @@ export default function DealsPage() {
                                               <label className="text-[8px] text-slate-500 font-bold uppercase mb-0.5 flex items-center gap-1"><Radio size={8}/> Programa</label>
                                               <input type="text" value={item.programa || ''} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].programa = e.target.value; setItensTemporarios(novos); }} className="w-full bg-black/50 border border-white/10 rounded p-1.5 outline-none text-white text-[10px] uppercase" placeholder="Ex: ROTATIVO" />
                                             </div>
-                                            <label className="flex items-center gap-1.5 cursor-pointer mt-3 shrink-0">
-                                              <input type="checkbox" checked={!!item.bonificacao} onChange={(e) => { const novos = [...itensTemporarios]; novos[i].bonificacao = e.target.checked; novos[i].precoUnitario = e.target.checked ? 0 : novos[i].precoUnitario; setItensTemporarios(novos); }} className="accent-amber-400 w-3 h-3"/>
-                                              <span className="text-[8px] font-bold uppercase text-amber-400/80">Bonif.</span>
-                                            </label>
+                                            <div className="shrink-0 mt-3">
+                                              <select
+                                                value={tipoEspecialDoItem(item) || ''}
+                                                onChange={(e) => {
+                                                  const novos = [...itensTemporarios];
+                                                  const v = (e.target.value || undefined) as TipoEspecialItem | undefined;
+                                                  novos[i].tipoEspecial = v;
+                                                  novos[i].bonificacao = v === 'bonificacao';
+                                                  novos[i].precoUnitario = v ? 0 : novos[i].precoUnitario;
+                                                  setItensTemporarios(novos);
+                                                }}
+                                                className="bg-black/50 border border-white/10 rounded px-1.5 py-1 text-[9px] font-bold uppercase text-amber-400/90 outline-none focus:border-amber-400"
+                                              >
+                                                <option className="bg-[#0F172A] text-slate-300" value="">Normal</option>
+                                                {Object.entries(TIPOS_ESPECIAIS_ITEM).map(([v, label]) => (
+                                                  <option key={v} className="bg-[#0F172A] text-amber-400" value={v}>{label}</option>
+                                                ))}
+                                              </select>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}

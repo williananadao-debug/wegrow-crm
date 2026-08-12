@@ -18,7 +18,7 @@ export type ContratoData = {
   cidade: string;
   contrato_inicio: string;
   contrato_fim: string;
-  itens: { servico: string; quantidade: number; precoUnitario: number; bonificacao?: boolean }[];
+  itens: { servico: string; quantidade: number; precoUnitario: number; bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' }[];
   desconto: number;
   valor_total: number;
   parcelas: string;
@@ -217,13 +217,19 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       ty += rowH;
 
       // Linhas de itens
+      // "bonificacao" era o único tipo (checkbox); agora é lista suspensa com mais
+      // opções (ex: doação) — tipoEspecial é o campo novo, bonificacao (boolean)
+      // continua lido por compatibilidade com item salvo antes dessa mudança.
+      const rotuloEspecial = (item: { bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' }) =>
+        item.tipoEspecial === 'doacao' ? 'DOAÇÃO' : (item.tipoEspecial === 'bonificacao' || item.bonificacao) ? 'BONIFICAÇÃO' : null;
       doc.font('Helvetica').fontSize(8).fillColor('#000');
       for (const item of data.itens) {
         doc.rect(50, ty, W, rowH).stroke('#000');
         doc.text(item.servico, colX[0] + 4, ty + 4, { width: 295 });
         doc.text(String(item.quantidade), colX[1] + 4, ty + 4, { width: 75, align: 'center' });
-        if (item.bonificacao) {
-          doc.fillColor('#b45309').font('Helvetica-Bold').text('BONIFICAÇÃO', colX[2] + 4, ty + 4, { width: 80, align: 'right' });
+        const rotulo = rotuloEspecial(item);
+        if (rotulo) {
+          doc.fillColor('#b45309').font('Helvetica-Bold').text(rotulo, colX[2] + 4, ty + 4, { width: 80, align: 'right' });
           doc.fillColor('#000').font('Helvetica');
         } else {
           doc.text(fmt(item.quantidade * item.precoUnitario), colX[2] + 4, ty + 4, { width: 80, align: 'right' });
@@ -232,7 +238,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       }
 
       // Desconto (se houver)
-      const subtotal = data.itens.reduce((s, i) => i.bonificacao ? s : s + i.quantidade * i.precoUnitario, 0);
+      const subtotal = data.itens.reduce((s, i) => rotuloEspecial(i) ? s : s + i.quantidade * i.precoUnitario, 0);
       if (data.desconto > 0) {
         doc.rect(50, ty, W, rowH).stroke('#000');
         doc.font('Helvetica-Bold').text('Subtotal', colX[0] + 4, ty + 4, { width: 295 });

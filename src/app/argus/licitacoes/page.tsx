@@ -154,6 +154,7 @@ export default function ArgusLicitacoesPage() {
             <button onClick={buscarPncp} disabled={buscando} className="inline-flex items-center gap-2 bg-[#241c14] hover:bg-[#3a2e20] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all">
               {buscando ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Buscar agora
             </button>
+            {buscando && <p className="text-[#9a958a] text-[11px] font-semibold mt-2">Consultando o PNCP — pode levar alguns segundos, a API do governo às vezes é lenta/instável.</p>}
             {erroBusca && <p className="text-[#d63f3f] text-xs font-semibold mt-2">{erroBusca}</p>}
 
             {resultados.length > 0 && (

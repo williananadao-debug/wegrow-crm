@@ -3,6 +3,8 @@ import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 import { buscarContratacoesPncp, filtrarPorPalavrasChave, formatarDataPncp } from '@/lib/pncp';
 
+export const maxDuration = 60; // ferramenta buscar_pncp chama a API instável do PNCP (ver src/lib/pncp.ts)
+
 const SYSTEM_PROMPT = `Você é o Agente Argus, assistente de IA especializado em licitações públicas dentro do sistema WeGrow.
 
 O que você sabe fazer:

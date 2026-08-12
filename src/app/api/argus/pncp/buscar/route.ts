@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buscarContratacoesPncp, filtrarPorPalavrasChave, formatarDataPncp } from '@/lib/pncp';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // o PNCP é instável na prática (ver src/lib/pncp.ts) — retry + várias páginas pode passar do default
 
 function supabaseAdmin() {
   return createClient(
@@ -42,25 +43,28 @@ export async function POST(request: Request) {
   inicio.setDate(inicio.getDate() - Number(dias || 30));
 
   try {
-    const encontrados: any[] = [];
-    let pagina = 1;
-    let paginasRestantes = 1;
-    while (paginasRestantes > 0 && pagina <= MAX_PAGINAS) {
-      const resultado = await buscarContratacoesPncp({
-        dataInicial: formatarDataPncp(inicio),
-        dataFinal: formatarDataPncp(hoje),
-        modalidade: Number(modalidade),
-        uf: uf || null,
-        pagina,
-        tamanhoPagina: 50,
-      });
-      encontrados.push(...resultado.data);
-      paginasRestantes = resultado.paginasRestantes;
-      pagina++;
-    }
+    const paramsBase = {
+      dataInicial: formatarDataPncp(inicio),
+      dataFinal: formatarDataPncp(hoje),
+      modalidade: Number(modalidade),
+      uf: uf || null,
+      tamanhoPagina: 50,
+    };
 
+    // 1ª página primeiro (é a única forma de saber quantas páginas existem no
+    // total) — o resto busca em paralelo em vez de sequencial, já que o PNCP
+    // não expõe rate-limit e cada página já tem retry próprio (src/lib/pncp.ts).
+    // Isso é o que evita a busca demorar 15-20s+ no pior caso.
+    const primeira = await buscarContratacoesPncp({ ...paramsBase, pagina: 1 });
+    const paginasParaBuscar = Math.min(primeira.paginasRestantes, MAX_PAGINAS - 1);
+
+    const resto = await Promise.all(
+      Array.from({ length: paginasParaBuscar }, (_, i) => buscarContratacoesPncp({ ...paramsBase, pagina: i + 2 }))
+    );
+
+    const encontrados = [primeira, ...resto].flatMap(r => r.data);
     const filtrados = filtrarPorPalavrasChave(encontrados, palavras_chave);
-    return NextResponse.json({ resultados: filtrados, total_antes_do_filtro: encontrados.length });
+    return NextResponse.json({ resultados: filtrados, total_antes_do_filtro: encontrados.length, total_no_pncp: primeira.totalRegistros });
   } catch (err: any) {
     console.error('[Argus PNCP buscar] Erro:', err);
     return NextResponse.json({ erro: err.message || 'Erro ao consultar o PNCP.' }, { status: 502 });

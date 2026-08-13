@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +63,7 @@ export default function Navbar() {
   const mostrarMax = Boolean(modulos.max);
   const mostrarObras = Boolean(modulos.obras);
   const mostrarArgus = Boolean(modulos.argus);
+  const mostrarMidia = Boolean(modulos.midia);
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
   const mostrarCRM = modulos.crm !== false;
@@ -117,6 +118,7 @@ export default function Navbar() {
   const maxItem = { name: 'Max', icon: <Radio size={20} />, href: '/max' };
   const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
+  const midiaItem = { name: 'Mídia', icon: <Megaphone size={20} />, href: '/midia' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
       mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,
@@ -134,6 +136,7 @@ export default function Navbar() {
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
       ...(mostrarArgus ? [argusItem] : []),
+      ...(mostrarMidia ? [midiaItem] : []),
   ];
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -261,6 +264,12 @@ export default function Navbar() {
           {mostrarArgus && (
             <Link href={argusItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {argusItem.icon} {argusItem.name}
+            </Link>
+          )}
+
+          {mostrarMidia && (
+            <Link href={midiaItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(midiaItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {midiaItem.icon} {midiaItem.name}
             </Link>
           )}
 
@@ -401,6 +410,13 @@ export default function Navbar() {
                     <Link href={argusItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{argusItem.icon}</div>
                       <span className="text-sm font-semibold">{argusItem.name}</span>
+                    </Link>
+                  )}
+
+                  {mostrarMidia && (
+                    <Link href={midiaItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(midiaItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{midiaItem.icon}</div>
+                      <span className="text-sm font-semibold">{midiaItem.name}</span>
                     </Link>
                   )}
                 </>

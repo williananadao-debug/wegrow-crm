@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   TrendingUp, Users, DollarSign,
   BarChart3, Calendar, Loader2,
-  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag
+  CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag, Megaphone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [rawVisitas, setRawVisitas] = useState<any[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
+  const temMidia = Boolean(empresa?.modulos?.midia);
 
   // 👇 FUNÇÃO DE CARREGAMENTO BLINDADA 👇
   const carregarDadosOtimizado = useCallback(async (isAutoRefresh = false) => {
@@ -408,6 +409,12 @@ export default function DashboardPage() {
                     <TrendingUp size={12}/> {isCDL ? 'Captação' : 'Comercial'}
                 </button>
             </div>
+
+            {isDirector && temMidia && (
+              <a href="/midia" className="flex items-center justify-center gap-2 px-3 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-[#0F172A] border border-white/10 text-pink-400 hover:bg-pink-500 hover:text-white hover:border-pink-500 shadow-lg">
+                <Megaphone size={12}/> Mídia
+              </a>
+            )}
             
             <div className="hidden lg:flex items-center gap-1 h-10">
               {([

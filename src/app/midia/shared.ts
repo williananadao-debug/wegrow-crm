@@ -112,7 +112,14 @@ export type LeadCrmResumo = {
   valor_total: number;
   vendedor_nome: string | null;
   created_at: string;
+  itens: { servico?: string }[] | null;
 };
+
+// "aniversário"/"aniversario" com ou sem acento, em qualquer item vendido no lead —
+// só cidade bate demais lead (qualquer venda normal pra cliente de lá), então esse
+// filtro extra é o que separa patrocínio de aniversário de anúncio comum.
+export const leadTemItemAniversario = (lead: { itens: { servico?: string }[] | null }) =>
+  Array.isArray(lead.itens) && lead.itens.some(i => normalizarNomeCidade(i.servico || '').includes('ANIVERSARIO'));
 
 // Data recorrente (só dia/mês) — calcula quantos dias faltam pra próxima ocorrência,
 // já virando o ano quando a data deste ano já passou.

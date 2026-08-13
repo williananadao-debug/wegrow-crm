@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
 import {
   MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario, LeadCrmResumo,
-  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade,
+  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade, leadTemItemAniversario,
 } from '../shared';
 
 const DIAS_ALERTA_ANIVERSARIO = 5;
@@ -36,9 +36,10 @@ export default function MidiaAniversariosPage() {
     const [{ data: anivs }, { data: res }, { data: leads }] = await Promise.all([
       supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true),
       supabase.from('midia_aniversarios_resultados').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano),
-      // Casa por cidade do lead — é como o Willian confirmou que os leads de aniversário
-      // de município são identificados hoje (sem tag própria pra isso ainda no CRM).
-      supabase.from('leads').select('id, empresa, cidade, valor_total, vendedor_nome, created_at')
+      // Casa por cidade do lead + item com "aniversário" no nome do serviço — só cidade
+      // sozinha pega qualquer venda normal pro município (superestimava demais, ex:
+      // Taió mostrava R$87mil quando o real era um punhado de patrocínios).
+      supabase.from('leads').select('id, empresa, cidade, valor_total, vendedor_nome, created_at, itens')
         .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
         .gte('created_at', `${ano}-01-01T00:00:00`).lte('created_at', `${ano}-12-31T23:59:59`)
         .not('cidade', 'is', null),
@@ -69,7 +70,7 @@ export default function MidiaAniversariosPage() {
 
   const leadsDoMunicipio = (municipio: string): LeadCrmResumo[] => {
     const alvo = normalizarNomeCidade(municipio);
-    return leadsGanhos.filter(l => normalizarNomeCidade(l.cidade || '') === alvo);
+    return leadsGanhos.filter(l => normalizarNomeCidade(l.cidade || '') === alvo && leadTemItemAniversario(l));
   };
 
   const ordenados = aniversarios

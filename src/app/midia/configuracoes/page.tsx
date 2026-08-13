@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM } from '../shared';
+import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, PRACAS, MidiaEmissoraAudiencia } from '../shared';
 
 const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-pink-500";
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
@@ -32,6 +32,10 @@ export default function MidiaConfiguracoesPage() {
     instagram_demais_news_visualizacoes: '', instagram_demais_news_interacoes: '', instagram_demais_news_seguidores: '',
     app_downloads_apple_total: '', app_downloads_android_total: '', monetizacao_valor: '',
   });
+
+  const [praca, setPraca] = useState<string>(PRACAS[0]);
+  const [audienciaPraca, setAudienciaPraca] = useState({ ouvintes_por_minuto: '', share_audiencia: '' });
+  const [salvandoAudiencia, setSalvandoAudiencia] = useState(false);
 
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [carregandoSugestao, setCarregandoSugestao] = useState(false);
@@ -69,6 +73,30 @@ export default function MidiaConfiguracoesPage() {
     });
     carregarAniversarios();
   }, [perfil?.empresa_id, temMidia, isDiretor, ano, mes]);
+
+  useEffect(() => {
+    if (!perfil?.empresa_id || !temMidia) return;
+    supabase.from('midia_emissoras_audiencia').select('*').eq('empresa_id', perfil.empresa_id).eq('praca', praca).eq('ano', ano).eq('mes', mes).maybeSingle()
+      .then(({ data }) => {
+        const d = data as MidiaEmissoraAudiencia | null;
+        setAudienciaPraca({ ouvintes_por_minuto: d?.ouvintes_por_minuto?.toString() || '', share_audiencia: d?.share_audiencia?.toString() || '' });
+      });
+  }, [perfil?.empresa_id, temMidia, praca, ano, mes]);
+
+  const salvarAudienciaPraca = async () => {
+    if (!perfil?.empresa_id) return;
+    setSalvandoAudiencia(true);
+    const num = (v: string) => v.trim() === '' ? null : Number(v);
+    const { error } = await supabase.from('midia_emissoras_audiencia').upsert([{
+      empresa_id: perfil.empresa_id, praca, ano, mes,
+      ouvintes_por_minuto: num(audienciaPraca.ouvintes_por_minuto),
+      share_audiencia: num(audienciaPraca.share_audiencia),
+      criado_por: perfil.id, updated_at: new Date().toISOString(),
+    }], { onConflict: 'empresa_id,praca,ano,mes' });
+    setSalvandoAudiencia(false);
+    setToast(error ? `Erro: ${error.message}` : `Audiência de ${praca} FM (${MESES_LABEL[mes - 1]}/${ano}) salva!`);
+    setTimeout(() => setToast(''), 4000);
+  };
 
   const carregarSugestao = async () => {
     if (!perfil?.empresa_id) return;
@@ -193,6 +221,36 @@ export default function MidiaConfiguracoesPage() {
               </button>
             </div>
           )}
+
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className="text-sm font-black uppercase text-slate-300">Audiência por praça (aba Emissoras)</h2>
+              <div className="flex items-center gap-2">
+                <select value={praca} onChange={e => setPraca(e.target.value)} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
+                  {PRACAS.map(p => <option key={p} value={p}>{p} FM</option>)}
+                </select>
+                <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
+                  {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
+                </select>
+                <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
+                  {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL}>Ouvintes por minuto (estimado)</label>
+                <input type="number" className={CAMPO} value={audienciaPraca.ouvintes_por_minuto} onChange={e => setAudienciaPraca({ ...audienciaPraca, ouvintes_por_minuto: e.target.value })} />
+              </div>
+              <div>
+                <label className={LABEL}>Share de audiência (%)</label>
+                <input type="number" step="0.1" className={CAMPO} value={audienciaPraca.share_audiencia} onChange={e => setAudienciaPraca({ ...audienciaPraca, share_audiencia: e.target.value })} />
+              </div>
+            </div>
+            <button onClick={salvarAudienciaPraca} disabled={salvandoAudiencia} className="bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              {salvandoAudiencia ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar {praca} FM — {MESES_LABEL[mes - 1]}/{ano}
+            </button>
+          </div>
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">

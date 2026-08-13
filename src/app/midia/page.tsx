@@ -1,12 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Megaphone, Settings, Loader2, RefreshCw, Instagram, Youtube, Smartphone, DollarSign, Radio, Newspaper, AlertTriangle, Cake, Bell } from 'lucide-react';
+import { Megaphone, Loader2, RefreshCw, Instagram, Youtube, Smartphone, DollarSign, Radio, Newspaper, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { MidiaMetricasMensais, InstagramInsightsResposta, MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero, MidiaAniversarioMunicipio, diasAteProximaOcorrencia } from './shared';
-
-const DIAS_ALERTA_ANIVERSARIO = 5;
+import MidiaTabs from './MidiaTabs';
+import { MidiaMetricasMensais, InstagramInsightsResposta, MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero } from './shared';
 
 export default function MidiaPage() {
   const auth = useAuth() || {};
@@ -25,19 +24,16 @@ export default function MidiaPage() {
   const [erroInstagram, setErroInstagram] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [carregandoInstagram, setCarregandoInstagram] = useState(false);
-  const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
 
   const carregarManual = useCallback(async () => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
-    const [{ data: atual }, { data: hist }, { data: anivs }] = await Promise.all([
+    const [{ data: atual }, { data: hist }] = await Promise.all([
       supabase.from('midia_metricas_mensais').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano).eq('mes', mes).maybeSingle(),
       supabase.from('midia_metricas_mensais').select('*').eq('empresa_id', perfil.empresa_id).order('ano', { ascending: true }).order('mes', { ascending: true }).limit(12),
-      supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true),
     ]);
     setMetricas(atual as MidiaMetricasMensais | null);
     setHistorico((hist as MidiaMetricasMensais[]) || []);
-    setAniversarios((anivs as MidiaAniversarioMunicipio[]) || []);
     setLoading(false);
   }, [perfil?.empresa_id, ano, mes]);
 
@@ -82,21 +78,11 @@ export default function MidiaPage() {
   });
   const maxGrafico = Math.max(...graficoMeses.map(m => m.valor), 1);
 
-  const aniversariosOrdenados = aniversarios
-    .map(a => ({ ...a, diasRestantes: diasAteProximaOcorrencia(a.dia, a.mes) }))
-    .sort((a, b) => a.diasRestantes - b.diasRestantes);
-  const aniversariosUrgentes = aniversariosOrdenados.filter(a => a.diasRestantes <= DIAS_ALERTA_ANIVERSARIO);
-  const proximosAniversarios = aniversariosOrdenados.filter(a => a.diasRestantes > DIAS_ALERTA_ANIVERSARIO).slice(0, 8);
-
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3">
-            <Megaphone size={28} className="text-pink-500" /> Mídia
-          </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Prestação de contas — audiência e redes sociais</p>
-        </div>
+      <MidiaTabs />
+
+      <div className="flex justify-end mb-6">
         <div className="flex items-center gap-2">
           <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
             {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
@@ -104,25 +90,8 @@ export default function MidiaPage() {
           <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
             {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          {(perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente') && (
-            <Link href="/midia/configuracoes" className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 transition-colors" title="Configurações">
-              <Settings size={16} />
-            </Link>
-          )}
         </div>
       </div>
-
-      {!loading && aniversariosUrgentes.length > 0 && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap mb-6">
-          <Bell size={16} className="text-emerald-400 shrink-0 animate-pulse" />
-          <p className="text-emerald-300 text-xs font-black uppercase tracking-wide flex-1">
-            {aniversariosUrgentes.length} aniversário{aniversariosUrgentes.length > 1 ? 's' : ''} de município nos próximos {DIAS_ALERTA_ANIVERSARIO} dias:
-            <span className="text-white ml-2">
-              {aniversariosUrgentes.map(a => `${a.municipio} (${a.diasRestantes === 0 ? 'hoje' : `${a.diasRestantes}d`})`).join(' · ')}
-            </span>
-          </p>
-        </div>
-      )}
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
@@ -223,22 +192,6 @@ export default function MidiaPage() {
             </div>
             <h3 className="text-2xl font-black text-[#22C55E]">{fmtMoeda(metricas?.monetizacao_valor)}</h3>
             <p className="text-[10px] text-slate-500 font-bold mt-1">receita líquida do mês</p>
-          </div>
-
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5 md:col-span-2 lg:col-span-3">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Cake size={12} /> Próximos Aniversários de Município</p>
-            {aniversariosOrdenados.length === 0 ? (
-              <p className="text-[10px] text-slate-600 font-bold">Nenhuma cidade cadastrada. {(perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente') && <Link href="/midia/configuracoes" className="text-pink-400 hover:underline">Cadastrar em Configurações →</Link>}</p>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-                {[...aniversariosUrgentes, ...proximosAniversarios].map(a => (
-                  <div key={a.id} className={`rounded-xl px-3 py-2.5 border ${a.diasRestantes <= DIAS_ALERTA_ANIVERSARIO ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.03] border-white/5'}`}>
-                    <p className="text-[11px] font-bold text-white truncate">{a.municipio}</p>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')} · {a.diasRestantes === 0 ? 'hoje' : `${a.diasRestantes}d`}</p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
         </div>

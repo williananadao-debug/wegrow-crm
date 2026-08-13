@@ -37,6 +37,23 @@ export const MESES_LABEL = [
   'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
 ];
 
+export const PRACAS = ['101.1', '104.7', '107.9'] as const;
+export const PRACA_CIDADE_SEDE: Record<string, string> = {
+  '101.1': 'Itaiópolis',
+  '104.7': 'Taió',
+  '107.9': 'Presidente Getúlio',
+};
+
+export type MidiaEmissoraAudiencia = {
+  id: number;
+  empresa_id: string;
+  praca: string;
+  ano: number;
+  mes: number;
+  ouvintes_por_minuto: number | null;
+  share_audiencia: number | null;
+};
+
 export type MidiaAniversarioMunicipio = {
   id: number;
   empresa_id: string;

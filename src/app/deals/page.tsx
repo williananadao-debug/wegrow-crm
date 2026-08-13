@@ -396,7 +396,10 @@ export default function DealsPage() {
         if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
         if (!isDirector) {
             if (isOpec) q = q.or(`user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
-            else if (isGerente && perfil?.unidade) q = q.eq('unidade', perfil.unidade);
+            // Gerente vê a unidade dele inteira, mas também precisa ver os próprios leads
+            // mesmo quando abertos pra outra unidade (ex: atendimento cross-unidade) —
+            // sem o OR aqui, um lead criado por ele fora da sua unidade some do próprio Kanban.
+            else if (isGerente && perfil?.unidade) q = q.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
             else q = q.eq('user_id', user?.id);
         }
         return q;

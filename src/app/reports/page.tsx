@@ -114,7 +114,9 @@ export default function ReportsPage() {
       .order('created_at', { ascending: false })
       .limit(3000);
     if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
-    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.eq('unidade', perfil.unidade); }
+    // OR (não só eq) — gerente também precisa ver os próprios leads mesmo quando
+    // abertos pra outra unidade, senão eles somem do relatório dele.
+    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id},criado_por.eq.${user?.id}`); }
     else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
     return leadsQuery;
   }
@@ -125,7 +127,7 @@ export default function ReportsPage() {
       .lte('created_at', dataFim + 'T23:59:59')
       .limit(3000);
     if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
-    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.eq('unidade', perfil.unidade);
+    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id}`);
     else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
     return visitasQuery;
   }
@@ -144,7 +146,7 @@ export default function ReportsPage() {
         .eq('status', 'ganho')
         .limit(5000);
       if (perfil?.empresa_id) graficoQuery = graficoQuery.eq('empresa_id', perfil.empresa_id);
-      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.eq('unidade', perfil.unidade);
+      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id}`);
       else if (!isDirector) graficoQuery = graficoQuery.eq('user_id', user?.id);
 
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
@@ -179,7 +181,10 @@ export default function ReportsPage() {
       const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
 
       const baseFiltrada = rawLeads.filter(lead => {
-          if (isGerente && lead.unidade !== perfil?.unidade) return false;
+          // Já veio filtrado no nível do banco (buildLeadsQuery) — aqui só reforça pro
+          // caso de troca de unidade em runtime; tem que aceitar os próprios leads do
+          // gerente também, senão o que a query trouxe a mais é descartado aqui.
+          if (isGerente && lead.unidade !== perfil?.unidade && lead.user_id !== user?.id) return false;
           if (!isGerente && filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== nomesMap[filtroVendedor]) return false;
           return true;

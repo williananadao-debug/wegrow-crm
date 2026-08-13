@@ -79,6 +79,20 @@ export const REQUISICAO_STATUS_CORES: Record<ObraRequisicao['status'], string> =
   atendida: 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/20',
 };
 
+export type FotoAnexo = { url: string; path: string; nome: string };
+
+export type ObraDiarioEntrada = {
+  id: number;
+  obra_id: number;
+  data: string;
+  efetivo: number | null;
+  clima: string | null;
+  ocorrencias: string | null;
+  fotos: FotoAnexo[];
+  criado_por: string | null;
+  created_at: string;
+};
+
 export const OBRA_STATUS_LABELS: Record<Obra['status'], string> = {
   planejamento: 'Planejamento',
   em_andamento: 'Em Andamento',

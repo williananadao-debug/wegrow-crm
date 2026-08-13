@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { SkeletonDashboard } from '@/components/Skeleton';
 
 type RankingItem = { id: string; nome: string; total: number; count: number; vendas: number; visitas: number; };
@@ -463,7 +464,12 @@ export default function DashboardPage() {
                     <TrendingUp className="absolute top-4 right-4 text-orange-500 opacity-20" size={24} />
                 </div>
                 <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-blue-500/40 transition-colors">
-                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Taxa de Filiação' : 'Conversão'}</p>
+                    <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5 flex items-center">
+                      {isCDL ? 'Taxa de Filiação' : 'Conversão'}
+                      <span onClick={e => e.stopPropagation()}>
+                        <InfoTooltip texto="Leads ganhos ÷ visitas registradas × 100 (não sobre o total de leads do funil). Por isso pode diferir da Taxa de Conversão do Relatórios, que usa leads ganhos ÷ total de leads criados no período." />
+                      </span>
+                    </p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.taxaConversao}%</h3>
                     {statsComercial.deltaConv !== null && (
                       <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaConv >= 0 ? 'text-green-400' : 'text-red-400'}`}>

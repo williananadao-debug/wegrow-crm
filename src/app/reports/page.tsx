@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonPage } from '@/components/Skeleton';
+import { InfoTooltip } from '@/components/InfoTooltip';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
@@ -515,14 +516,17 @@ export default function ReportsPage() {
         {/* DEMAIS KPIs */}
         {[
           { label: `Oportunidades (Vol)`, current: currentMonth.leads, last: lastMonth.leads, prefix: '', icon: Target, color: 'text-blue-500' },
-          { label: `Ticket Médio`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500' },
-          { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500' },
+          { label: `Ticket Médio`, current: currentMonth.ticket, last: lastMonth.ticket, prefix: 'R$ ', icon: Zap, color: 'text-purple-500', formula: 'Faturamento líquido do período ÷ número de leads ganhos.' },
+          { label: `Taxa de Conversão`, current: currentMonth.conversao, last: lastMonth.conversao, prefix: '', suffix: '%', icon: Clock, color: 'text-orange-500', formula: 'Leads ganhos ÷ total de leads criados no período × 100. Diferente da Conversão do Dashboard, que usa leads ganhos ÷ visitas registradas.' },
         ].map((item, i) => {
           const growth = getGrowth(item.current, item.last);
           return (
             <div key={i} className="bg-[#0B1120] border border-white/5 p-6 rounded-[32px] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-all">
               <item.icon className={`absolute -right-4 -top-4 w-20 h-20 opacity-5 ${item.color}`} />
-              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{item.label}</p>
+              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1 flex items-center">
+                {item.label}
+                {'formula' in item && item.formula && <InfoTooltip texto={item.formula} />}
+              </p>
               <div className="flex items-end gap-2">
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
                   {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {minimumFractionDigits: item.prefix === 'R$ ' ? 2 : 0, maximumFractionDigits: item.prefix === 'R$ ' ? 2 : 0})}{item.suffix}
@@ -699,7 +703,7 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
-                    <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase">Conversão: {Math.round(vend.conversao || 0)}%</p>
+                    <p className="text-[9px] text-slate-600 font-bold mt-1 uppercase cursor-help" title="Leads ganhos ÷ total de leads criados no período × 100 (por vendedor).">Conversão: {Math.round(vend.conversao || 0)}%</p>
                   </div>
                 </div>
               );
@@ -744,7 +748,7 @@ export default function ReportsPage() {
                     <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
                     <td className="px-8 py-5 text-center">
                       <div className="flex flex-col items-center">
-                          <span className={`text-[10px] font-black uppercase ${(est.conversao || 0) >= 10 ? 'text-[#22C55E]' : 'text-slate-500'}`}>{Math.round(est.conversao || 0)}%</span>
+                          <span className={`text-[10px] font-black uppercase cursor-help ${(est.conversao || 0) >= 10 ? 'text-[#22C55E]' : 'text-slate-500'}`} title="Leads ganhos ÷ leads gerados por esta campanha/estratégia × 100.">{Math.round(est.conversao || 0)}%</span>
                           <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
                               <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
                           </div>

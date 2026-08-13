@@ -10,6 +10,9 @@ import {
 import { SkeletonPage, SkeletonBox } from '@/components/Skeleton';
 import { Toast } from '@/components/Toast';
 
+const fmtMilhar = (v: number) => (v ? Math.round(v).toLocaleString('pt-BR') : '');
+const parseMilhar = (v: string) => Number(v.replace(/\D/g, '')) || 0;
+
 export default function GoalsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
@@ -286,7 +289,7 @@ export default function GoalsPage() {
 
   const distribuirMetaAnoUnidade = async () => {
     if (!metaAnoUnidade || metaAnoUnidade <= 0 || !unidadeSelecionadaMeta) return;
-    if (!confirm(`Dividir R$ ${metaAnoUnidade.toLocaleString()} igualmente entre os 12 meses de ${unidadeSelecionadaMeta}?`)) return;
+    if (!confirm(`Dividir R$ ${metaAnoUnidade.toLocaleString('pt-BR')} igualmente entre os 12 meses de ${unidadeSelecionadaMeta}?`)) return;
 
     const valorMensal = metaAnoUnidade / 12;
     const novasMetas = Array.from({ length: 12 }).map((_, i) => ({
@@ -353,7 +356,7 @@ export default function GoalsPage() {
 
   const distribuirMetaAno = async () => {
     if (!metaAno || metaAno <= 0) return;
-    if (!confirm(`Dividir R$ ${metaAno.toLocaleString()} igualmente entre os 12 meses?`)) return;
+    if (!confirm(`Dividir R$ ${metaAno.toLocaleString('pt-BR')} igualmente entre os 12 meses?`)) return;
 
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
     const valorMensal = metaAno / 12;
@@ -479,12 +482,13 @@ export default function GoalsPage() {
               )}
               <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-[#22C55E]">
                 <span className="text-slate-500 font-bold mr-2 text-sm">R$</span>
-                <input 
-                  type="number" 
-                  className="bg-transparent text-2xl font-black text-white text-right outline-none w-40" 
-                  value={metaAno}
-                  onChange={(e) => setMetaAno(Number(e.target.value))}
-                  onBlur={(e) => handleUpdateMeta(null, Number(e.target.value))}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="bg-transparent text-2xl font-black text-white text-right outline-none w-40"
+                  value={fmtMilhar(metaAno)}
+                  onChange={(e) => setMetaAno(parseMilhar(e.target.value))}
+                  onBlur={(e) => handleUpdateMeta(null, parseMilhar(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   disabled={!isDirector}
                 />
@@ -558,11 +562,13 @@ export default function GoalsPage() {
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Meta Mensal</p>
                       <div className="flex items-center gap-1 border-b border-white/5 focus-within:border-blue-500 transition-all">
                         <span className="text-slate-600 text-xs font-bold">R$</span>
-                        <input 
-                          type="number" 
-                          className="bg-transparent text-lg font-black text-white outline-none py-1 w-full" 
-                          defaultValue={mMeta}
-                          onBlur={(e) => handleUpdateMeta(mes, Number(e.target.value))}
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="bg-transparent text-lg font-black text-white outline-none py-1 w-full"
+                          defaultValue={fmtMilhar(mMeta)}
+                          onChange={(e) => { e.currentTarget.value = fmtMilhar(parseMilhar(e.currentTarget.value)); }}
+                          onBlur={(e) => handleUpdateMeta(mes, parseMilhar(e.target.value))}
                           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                           disabled={!isDirector}
                         />
@@ -604,11 +610,12 @@ export default function GoalsPage() {
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-orange-500">
                   <span className="text-slate-500 font-bold mr-2 text-sm">R$</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     className="bg-transparent text-xl font-black text-white text-right outline-none w-32"
-                    value={metaAnoUnidade}
-                    onChange={(e) => setMetaAnoUnidade(Number(e.target.value))}
-                    onBlur={(e) => handleUpdateMetaUnidade(null, Number(e.target.value))}
+                    value={fmtMilhar(metaAnoUnidade)}
+                    onChange={(e) => setMetaAnoUnidade(parseMilhar(e.target.value))}
+                    onBlur={(e) => handleUpdateMetaUnidade(null, parseMilhar(e.target.value))}
                     onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     disabled={!isDirector}
                   />
@@ -669,10 +676,12 @@ export default function GoalsPage() {
                       <div className="flex items-center gap-1 border-b border-white/5 focus-within:border-orange-500 transition-all">
                         <span className="text-slate-600 text-xs font-bold">R$</span>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           className="bg-transparent text-lg font-black text-white outline-none py-1 w-full"
-                          defaultValue={mMeta}
-                          onBlur={(e) => handleUpdateMetaUnidade(mes, Number(e.target.value))}
+                          defaultValue={fmtMilhar(mMeta)}
+                          onChange={(e) => { e.currentTarget.value = fmtMilhar(parseMilhar(e.currentTarget.value)); }}
+                          onBlur={(e) => handleUpdateMetaUnidade(mes, parseMilhar(e.target.value))}
                           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                           disabled={!isDirector}
                         />
@@ -769,12 +778,14 @@ export default function GoalsPage() {
                       isEditing ? (
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             autoFocus
-                            defaultValue={meta || ''}
+                            defaultValue={fmtMilhar(meta)}
                             className="w-28 bg-[#0B1120] border border-blue-500 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none"
-                            onBlur={(e) => handleUpdateMetaProduto(prod.nome, Number(e.target.value))}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateMetaProduto(prod.nome, Number((e.target as HTMLInputElement).value)); if (e.key === 'Escape') setEditandoMetaProduto(null); }}
+                            onChange={(e) => { e.currentTarget.value = fmtMilhar(parseMilhar(e.currentTarget.value)); }}
+                            onBlur={(e) => handleUpdateMetaProduto(prod.nome, parseMilhar(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateMetaProduto(prod.nome, parseMilhar((e.target as HTMLInputElement).value)); if (e.key === 'Escape') setEditandoMetaProduto(null); }}
                           />
                         </div>
                       ) : (

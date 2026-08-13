@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Save, Instagram, KeyRound } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL } from '../shared';
+import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM } from '../shared';
 
 const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-pink-500";
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
@@ -33,6 +33,17 @@ export default function MidiaConfiguracoesPage() {
     app_downloads_apple_total: '', app_downloads_android_total: '', monetizacao_valor: '',
   });
 
+  const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
+  const [carregandoSugestao, setCarregandoSugestao] = useState(false);
+  const [novoAniversario, setNovoAniversario] = useState({ municipio: '', uf: '', praca: '', dia: '', mes: '' });
+  const [salvandoAniversario, setSalvandoAniversario] = useState(false);
+
+  const carregarAniversarios = async () => {
+    if (!perfil?.empresa_id) return;
+    const { data } = await supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).order('mes').order('dia');
+    setAniversarios((data as MidiaAniversarioMunicipio[]) || []);
+  };
+
   useEffect(() => {
     if (!perfil?.empresa_id || !temMidia) return;
     setLoading(true);
@@ -56,7 +67,41 @@ export default function MidiaConfiguracoesPage() {
       });
       setLoading(false);
     });
+    carregarAniversarios();
   }, [perfil?.empresa_id, temMidia, isDiretor, ano, mes]);
+
+  const carregarSugestao = async () => {
+    if (!perfil?.empresa_id) return;
+    setCarregandoSugestao(true);
+    const existentes = new Set(aniversarios.map(a => a.municipio.toLowerCase()));
+    const faltando = SUGESTOES_ANIVERSARIOS_DEMAIS_FM.filter(s => !existentes.has(s.municipio.toLowerCase()));
+    if (faltando.length === 0) { setCarregandoSugestao(false); setToast('Todas as cidades sugeridas já estão cadastradas.'); setTimeout(() => setToast(''), 4000); return; }
+    const { error } = await supabase.from('midia_aniversarios_municipios').insert(
+      faltando.map(s => ({ empresa_id: perfil.empresa_id, municipio: s.municipio, uf: s.uf, praca: s.praca, dia: s.dia, mes: s.mes, observacao: s.observacao || null, criado_por: perfil.id }))
+    );
+    setCarregandoSugestao(false);
+    setToast(error ? `Erro: ${error.message}` : `${faltando.length} cidade(s) adicionada(s)! Confira as datas com observação antes de usar pra vender.`);
+    setTimeout(() => setToast(''), 6000);
+    carregarAniversarios();
+  };
+
+  const adicionarAniversario = async () => {
+    if (!perfil?.empresa_id || !novoAniversario.municipio.trim() || !novoAniversario.dia || !novoAniversario.mes) return;
+    setSalvandoAniversario(true);
+    const { error } = await supabase.from('midia_aniversarios_municipios').insert([{
+      empresa_id: perfil.empresa_id, municipio: novoAniversario.municipio.trim(), uf: novoAniversario.uf.trim() || null,
+      praca: novoAniversario.praca.trim() || null, dia: Number(novoAniversario.dia), mes: Number(novoAniversario.mes), criado_por: perfil.id,
+    }]);
+    setSalvandoAniversario(false);
+    if (!error) { setNovoAniversario({ municipio: '', uf: '', praca: '', dia: '', mes: '' }); carregarAniversarios(); }
+    else { setToast(`Erro: ${error.message}`); setTimeout(() => setToast(''), 4000); }
+  };
+
+  const excluirAniversario = async (id: number) => {
+    if (!confirm('Remover essa cidade da lista de aniversários?')) return;
+    await supabase.from('midia_aniversarios_municipios').delete().eq('id', id);
+    carregarAniversarios();
+  };
 
   const salvarMetaConfig = async () => {
     if (!perfil?.empresa_id) return;
@@ -207,6 +252,58 @@ export default function MidiaConfiguracoesPage() {
 
             <button onClick={salvarMetricas} disabled={salvandoMetricas} className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
               {salvandoMetricas ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar {MESES_LABEL[mes - 1]}/{ano}
+            </button>
+          </div>
+
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2"><Cake size={16} /> Aniversários de Município</h2>
+              <button onClick={carregarSugestao} disabled={carregandoSugestao} className="inline-flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                {carregandoSugestao ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar sugestão (24 cidades)
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 font-semibold">
+              Alerta dispara 5 dias antes da data. Algumas cidades têm data de instalação diferente da data de criação — confira as com observação antes de usar pra vender.
+            </p>
+
+            {aniversarios.length > 0 && (
+              <div className="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                {aniversarios.map(a => (
+                  <div key={a.id} className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{a.municipio}{a.uf ? `/${a.uf}` : ''} <span className="text-slate-500 font-normal">— {String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')}</span></p>
+                      {(a.praca || a.observacao) && <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{a.praca}{a.observacao ? ` · ${a.observacao}` : ''}</p>}
+                    </div>
+                    <button onClick={() => excluirAniversario(a.id)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-white/5 rounded-lg flex-shrink-0"><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end pt-2 border-t border-white/5">
+              <div className="col-span-2">
+                <label className={LABEL}>Município</label>
+                <input className={CAMPO} value={novoAniversario.municipio} onChange={e => setNovoAniversario({ ...novoAniversario, municipio: e.target.value })} />
+              </div>
+              <div>
+                <label className={LABEL}>UF</label>
+                <input className={CAMPO} maxLength={2} value={novoAniversario.uf} onChange={e => setNovoAniversario({ ...novoAniversario, uf: e.target.value.toUpperCase() })} />
+              </div>
+              <div>
+                <label className={LABEL}>Praça</label>
+                <input className={CAMPO} value={novoAniversario.praca} onChange={e => setNovoAniversario({ ...novoAniversario, praca: e.target.value })} placeholder="104.7" />
+              </div>
+              <div>
+                <label className={LABEL}>Dia</label>
+                <input type="number" min={1} max={31} className={CAMPO} value={novoAniversario.dia} onChange={e => setNovoAniversario({ ...novoAniversario, dia: e.target.value })} />
+              </div>
+              <div>
+                <label className={LABEL}>Mês</label>
+                <input type="number" min={1} max={12} className={CAMPO} value={novoAniversario.mes} onChange={e => setNovoAniversario({ ...novoAniversario, mes: e.target.value })} />
+              </div>
+            </div>
+            <button onClick={adicionarAniversario} disabled={salvandoAniversario} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50">
+              {salvandoAniversario ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Adicionar cidade
             </button>
           </div>
 

@@ -93,6 +93,33 @@ export type ObraDiarioEntrada = {
   created_at: string;
 };
 
+export type ObraDocumento = {
+  id: number;
+  obra_id: number;
+  nome: string;
+  categoria: 'projeto' | 'licenca' | 'contrato' | 'art_rrt' | 'outro';
+  arquivo_url: string;
+  arquivo_path: string;
+  tamanho_bytes: number | null;
+  enviado_por: string | null;
+  created_at: string;
+};
+
+export const CATEGORIA_DOCUMENTO_LABELS: Record<ObraDocumento['categoria'], string> = {
+  projeto: 'Projeto',
+  licenca: 'Licença',
+  contrato: 'Contrato',
+  art_rrt: 'ART/RRT',
+  outro: 'Outro',
+};
+
+export function fmtTamanhoArquivo(bytes: number | null): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export const OBRA_STATUS_LABELS: Record<Obra['status'], string> = {
   planejamento: 'Planejamento',
   em_andamento: 'Em Andamento',

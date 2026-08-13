@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, Boxes, BookOpen } from 'lucide-react';
+import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, Boxes, BookOpen, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useObrasAccess } from '../useObrasAccess';
 import { Obra, ObraEtapa, Medicao, OBRA_STATUS_LABELS, OBRA_STATUS_CORES, fmtMoeda, fmtData, formatObraId } from '../shared';
@@ -146,6 +146,17 @@ export default function ObraDetalhePage() {
           <div>
             <p className="text-sm font-black text-white uppercase">Diário (RDO)</p>
             <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Efetivo, clima, ocorrências</p>
+          </div>
+        </Link>
+
+        <Link href={`/obras/${obra.id}/documentos`} className="bg-[#0F172A] border border-white/10 hover:border-orange-500/40 rounded-2xl p-6 transition-all flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center"><FileText size={18} className="text-cyan-400" /></div>
+            <ChevronRight size={16} className="text-slate-600" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white uppercase">Documentos</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Projetos, licenças, ARTs</p>
           </div>
         </Link>
       </div>

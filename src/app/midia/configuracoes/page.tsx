@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, PRACAS, MidiaEmissoraAudiencia } from '../shared';
+import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026, PRACAS, MidiaEmissoraAudiencia } from '../shared';
 
 const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-pink-500";
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
@@ -39,6 +39,7 @@ export default function MidiaConfiguracoesPage() {
 
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [carregandoSugestao, setCarregandoSugestao] = useState(false);
+  const [carregandoResultados, setCarregandoResultados] = useState(false);
   const [novoAniversario, setNovoAniversario] = useState({ municipio: '', uf: '', praca: '', dia: '', mes: '' });
   const [salvandoAniversario, setSalvandoAniversario] = useState(false);
 
@@ -101,16 +102,52 @@ export default function MidiaConfiguracoesPage() {
   const carregarSugestao = async () => {
     if (!perfil?.empresa_id) return;
     setCarregandoSugestao(true);
-    const existentes = new Set(aniversarios.map(a => a.municipio.toLowerCase()));
-    const faltando = SUGESTOES_ANIVERSARIOS_DEMAIS_FM.filter(s => !existentes.has(s.municipio.toLowerCase()));
-    if (faltando.length === 0) { setCarregandoSugestao(false); setToast('Todas as cidades sugeridas já estão cadastradas.'); setTimeout(() => setToast(''), 4000); return; }
-    const { error } = await supabase.from('midia_aniversarios_municipios').insert(
-      faltando.map(s => ({ empresa_id: perfil.empresa_id, municipio: s.municipio, uf: s.uf, praca: s.praca, dia: s.dia, mes: s.mes, observacao: s.observacao || null, criado_por: perfil.id }))
-    );
+    const porNome = new Map(aniversarios.map(a => [a.municipio.toLowerCase(), a]));
+    const novos = SUGESTOES_ANIVERSARIOS_DEMAIS_FM.filter(s => !porNome.has(s.municipio.toLowerCase()));
+    const existentes = SUGESTOES_ANIVERSARIOS_DEMAIS_FM.filter(s => porNome.has(s.municipio.toLowerCase()));
+
+    let erro: string | null = null;
+    if (novos.length > 0) {
+      const { error } = await supabase.from('midia_aniversarios_municipios').insert(
+        novos.map(s => ({ empresa_id: perfil.empresa_id, municipio: s.municipio, uf: s.uf, praca: s.praca, dia: s.dia, mes: s.mes, observacao: s.observacao || null, criado_por: perfil.id }))
+      );
+      if (error) erro = error.message;
+    }
+    // Datas/observações da sugestão foram corrigidas (confrontadas com o painel real de
+    // vendas) — atualiza quem já estava cadastrado com os dados antigos também.
+    for (const s of existentes) {
+      const atual = porNome.get(s.municipio.toLowerCase())!;
+      if (atual.dia !== s.dia || atual.mes !== s.mes || atual.praca !== s.praca || (atual.observacao || '') !== (s.observacao || '')) {
+        const { error } = await supabase.from('midia_aniversarios_municipios').update({ dia: s.dia, mes: s.mes, praca: s.praca, observacao: s.observacao || null }).eq('id', atual.id);
+        if (error) erro = error.message;
+      }
+    }
+
     setCarregandoSugestao(false);
-    setToast(error ? `Erro: ${error.message}` : `${faltando.length} cidade(s) adicionada(s)! Confira as datas com observação antes de usar pra vender.`);
+    setToast(erro ? `Erro: ${erro}` : `Sugestão carregada/atualizada (${novos.length} nova(s), ${existentes.length} conferida(s)). Confira as datas com observação antes de usar pra vender.`);
     setTimeout(() => setToast(''), 6000);
     carregarAniversarios();
+  };
+
+  const carregarResultados2026 = async () => {
+    if (!perfil?.empresa_id) return;
+    if (aniversarios.length === 0) { setToast('Carregue a lista de cidades primeiro.'); setTimeout(() => setToast(''), 4000); return; }
+    setCarregandoResultados(true);
+    const porNome = new Map(aniversarios.map(a => [a.municipio.toLowerCase(), a]));
+    const linhas = SUGESTOES_RESULTADOS_ANIVERSARIOS_2026
+      .map(r => { const a = porNome.get(r.municipio.toLowerCase()); return a ? { a, r } : null; })
+      .filter((x): x is { a: MidiaAniversarioMunicipio; r: typeof SUGESTOES_RESULTADOS_ANIVERSARIOS_2026[number] } => Boolean(x));
+
+    const { error } = await supabase.from('midia_aniversarios_resultados').upsert(
+      linhas.map(({ a, r }) => ({
+        empresa_id: perfil.empresa_id, aniversario_id: a.id, ano: 2026,
+        status: r.status, valor: r.valor ?? null, observacao: r.observacao || null, criado_por: perfil.id,
+      })),
+      { onConflict: 'aniversario_id,ano' }
+    );
+    setCarregandoResultados(false);
+    setToast(error ? `Erro: ${error.message}` : `${linhas.length} resultado(s) de 2026 carregado(s).`);
+    setTimeout(() => setToast(''), 5000);
   };
 
   const adicionarAniversario = async () => {
@@ -316,12 +353,17 @@ export default function MidiaConfiguracoesPage() {
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2"><Cake size={16} /> Aniversários de Município</h2>
-              <button onClick={carregarSugestao} disabled={carregandoSugestao} className="inline-flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
-                {carregandoSugestao ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar sugestão (24 cidades)
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={carregarSugestao} disabled={carregandoSugestao} className="inline-flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                  {carregandoSugestao ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar sugestão (24 cidades)
+                </button>
+                <button onClick={carregarResultados2026} disabled={carregandoResultados} className="inline-flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                  {carregandoResultados ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar resultados de vendas 2026
+                </button>
+              </div>
             </div>
             <p className="text-[11px] text-slate-500 font-semibold">
-              Alerta dispara 5 dias antes da data. Algumas cidades têm data de instalação diferente da data de criação — confira as com observação antes de usar pra vender.
+              Alerta dispara 5 dias antes da data. Algumas cidades têm dia não confirmado (só o mês bate com o painel real de vendas) — confira as com observação antes de usar pra vender.
             </p>
 
             {aniversarios.length > 0 && (

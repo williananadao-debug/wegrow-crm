@@ -1,11 +1,14 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Loader2, Bell, Cake, Megaphone } from 'lucide-react';
+import { Loader2, Bell, Cake, Megaphone, AlertTriangle, Check, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
-import { MidiaAniversarioMunicipio, diasAteProximaOcorrencia } from '../shared';
+import {
+  MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario,
+  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda,
+} from '../shared';
 
 const DIAS_ALERTA_ANIVERSARIO = 5;
 
@@ -17,15 +20,28 @@ export default function MidiaAniversariosPage() {
   const temMidia = Boolean(empresa?.modulos?.midia);
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
 
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
+  const [resultados, setResultados] = useState<MidiaAniversarioResultado[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editando, setEditando] = useState<number | null>(null);
+  const [form, setForm] = useState<{ status: StatusVendaAniversario; valor: string; observacao: string }>({ status: 'sem_registro', valor: '', observacao: '' });
+  const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => {
+  const carregar = useCallback(async () => {
     if (!perfil?.empresa_id || !temMidia) return;
     setLoading(true);
-    supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true)
-      .then(({ data }) => { setAniversarios((data as MidiaAniversarioMunicipio[]) || []); setLoading(false); });
-  }, [perfil?.empresa_id, temMidia]);
+    const [{ data: anivs }, { data: res }] = await Promise.all([
+      supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true),
+      supabase.from('midia_aniversarios_resultados').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano),
+    ]);
+    setAniversarios((anivs as MidiaAniversarioMunicipio[]) || []);
+    setResultados((res as MidiaAniversarioResultado[]) || []);
+    setLoading(false);
+  }, [perfil?.empresa_id, temMidia, ano]);
+
+  useEffect(() => { carregar(); }, [carregar]);
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -40,15 +56,47 @@ export default function MidiaAniversariosPage() {
     );
   }
 
+  const resultadoDe = (aniversarioId: number): MidiaAniversarioResultado | null =>
+    resultados.find(r => r.aniversario_id === aniversarioId) || null;
+
   const ordenados = aniversarios
     .map(a => ({ ...a, diasRestantes: diasAteProximaOcorrencia(a.dia, a.mes) }))
     .sort((a, b) => a.diasRestantes - b.diasRestantes);
   const urgentes = ordenados.filter(a => a.diasRestantes <= DIAS_ALERTA_ANIVERSARIO);
-  const demais = ordenados.filter(a => a.diasRestantes > DIAS_ALERTA_ANIVERSARIO);
+
+  const vendidosSemValor = aniversarios
+    .map(a => ({ a, r: resultadoDe(a.id) }))
+    .filter(({ r }) => r?.status === 'vendido_sem_valor');
+
+  const iniciarEdicao = (aniversarioId: number) => {
+    const r = resultadoDe(aniversarioId);
+    setForm({ status: r?.status || 'sem_registro', valor: r?.valor?.toString() || '', observacao: r?.observacao || '' });
+    setEditando(aniversarioId);
+  };
+
+  const salvarResultado = async (aniversarioId: number) => {
+    if (!perfil?.empresa_id) return;
+    setSalvando(true);
+    const { error } = await supabase.from('midia_aniversarios_resultados').upsert([{
+      empresa_id: perfil.empresa_id, aniversario_id: aniversarioId, ano,
+      status: form.status,
+      valor: form.valor.trim() === '' ? null : Number(form.valor),
+      observacao: form.observacao.trim() || null,
+      criado_por: perfil.id, updated_at: new Date().toISOString(),
+    }], { onConflict: 'aniversario_id,ano' });
+    setSalvando(false);
+    if (!error) { setEditando(null); carregar(); }
+  };
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
       <MidiaTabs />
+
+      <div className="flex justify-end mb-6">
+        <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
+          {[hoje.getFullYear() + 1, hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
@@ -61,7 +109,7 @@ export default function MidiaAniversariosPage() {
       ) : (
         <>
           {urgentes.length > 0 && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap mb-6">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap mb-4">
               <Bell size={16} className="text-emerald-400 shrink-0 animate-pulse" />
               <p className="text-emerald-300 text-xs font-black uppercase tracking-wide flex-1">
                 {urgentes.length} aniversário{urgentes.length > 1 ? 's' : ''} de município nos próximos {DIAS_ALERTA_ANIVERSARIO} dias:
@@ -72,16 +120,102 @@ export default function MidiaAniversariosPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {ordenados.map(a => (
-              <div key={a.id} className={`rounded-2xl p-4 border ${a.diasRestantes <= DIAS_ALERTA_ANIVERSARIO ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[#0B1120] border-white/10'}`}>
-                <p className="text-sm font-bold text-white truncate">{a.municipio}</p>
-                {a.uf && <p className="text-[9px] text-slate-500 font-bold uppercase">{a.uf}{a.praca ? ` · ${a.praca}` : ''}</p>}
-                <p className="text-lg font-black text-white mt-1">{String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')}</p>
-                <p className={`text-[10px] font-black uppercase mt-0.5 ${a.diasRestantes <= DIAS_ALERTA_ANIVERSARIO ? 'text-emerald-400' : 'text-slate-500'}`}>{a.diasRestantes === 0 ? 'Hoje' : `Faltam ${a.diasRestantes} dias`}</p>
-                {a.observacao && <p className="text-[9px] text-amber-400/80 mt-1.5">{a.observacao}</p>}
-              </div>
-            ))}
+          {/* CARDS DE RECEITA POR PRAÇA */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {PRACAS.map(praca => {
+              const daPraca = aniversarios.filter(a => (a.praca || '').includes(praca));
+              const comResultado = daPraca.map(a => ({ a, r: resultadoDe(a.id) }));
+              const receita = comResultado.reduce((acc, { r }) => acc + (r?.status === 'vendido' ? Number(r.valor || 0) : 0), 0);
+              const contagem = (status: StatusVendaAniversario) => comResultado.filter(({ r }) => (r?.status || 'sem_registro') === status).length;
+              return (
+                <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black uppercase text-pink-400 bg-pink-500/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Uso interno</span>
+                  </div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita de aniversários ({ano})</p>
+                  <h3 className="text-2xl font-black text-white mt-0.5">{fmtMoeda(receita)}</h3>
+                  <div className="border-t border-white/5 mt-3 pt-3 space-y-1">
+                    <div className="flex justify-between text-[10px]"><span className="text-slate-500 font-bold">Não vendido</span><span className="text-slate-300 font-black">{contagem('nao_vendido')}</span></div>
+                    <div className="flex justify-between text-[10px]"><span className="text-slate-500 font-bold">Sem registro</span><span className="text-slate-300 font-black">{contagem('sem_registro')}</span></div>
+                    <div className="flex justify-between text-[10px]"><span className="text-[#22C55E] font-bold">Vendido</span><span className="text-[#22C55E] font-black">{contagem('vendido')}</span></div>
+                    <div className="flex justify-between text-[10px]"><span className="text-blue-400 font-bold">Vendido s/ valor</span><span className="text-blue-400 font-black">{contagem('vendido_sem_valor')}</span></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {vendidosSemValor.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex items-start gap-3 mb-6">
+              <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-amber-200 text-xs font-semibold">
+                {vendidosSemValor.length} aniversário{vendidosSemValor.length > 1 ? 's estão registrados' : ' está registrado'} como vendido sem valor informado
+                ({vendidosSemValor.map(({ a }) => a.municipio).join(', ')}). Os totais acima são, portanto, um piso — a receita real foi maior.
+              </p>
+            </div>
+          )}
+
+          {/* LISTA POR PRAÇA, AGRUPADA POR MÊS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {PRACAS.map(praca => {
+              const daPraca = ordenados.filter(a => (a.praca || '').includes(praca)).sort((a, b) => a.mes - b.mes || a.dia - b.dia);
+              return (
+                <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-xs font-black uppercase text-pink-400 bg-pink-500/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <h3 className="text-sm font-black text-white">Aniversários {ano}</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {(() => {
+                      let mesAtual: number | null = null;
+                      return daPraca.map(a => {
+                        const r = resultadoDe(a.id);
+                        const status: StatusVendaAniversario = r?.status || 'sem_registro';
+                        const mostrarMes = a.mes !== mesAtual;
+                        mesAtual = a.mes;
+                        return (
+                          <div key={a.id}>
+                            {mostrarMes && <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1.5">{MESES_LABEL[a.mes - 1]}</p>}
+                            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-bold text-white truncate">{a.municipio}</p>
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS_VENDA_CORES[status]}`}>{STATUS_VENDA_LABELS[status]}</span>
+                              </div>
+                              {status === 'vendido' && <p className="text-sm font-black text-[#22C55E] mt-1">{fmtMoeda(r?.valor)}</p>}
+                              {r?.observacao && <p className="text-[10px] text-slate-500 mt-1">{r.observacao}</p>}
+
+                              {isLideranca && editando !== a.id && (
+                                <button onClick={() => iniciarEdicao(a.id)} className="text-[9px] font-black uppercase text-slate-600 hover:text-pink-400 mt-2">Editar resultado</button>
+                              )}
+
+                              {editando === a.id && (
+                                <div className="mt-2 pt-2 border-t border-white/5 space-y-2">
+                                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as StatusVendaAniversario })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase text-white outline-none">
+                                    {Object.entries(STATUS_VENDA_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                  </select>
+                                  {form.status === 'vendido' && (
+                                    <input type="number" step="0.01" placeholder="Valor R$" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-white outline-none" />
+                                  )}
+                                  <textarea placeholder="Observação (opcional)" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white outline-none resize-none" />
+                                  <div className="flex gap-1.5">
+                                    <button onClick={() => salvarResultado(a.id)} disabled={salvando} className="flex-1 bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1">
+                                      {salvando ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar
+                                    </button>
+                                    <button onClick={() => setEditando(null)} className="px-3 bg-white/5 hover:bg-white/10 text-slate-400 py-1.5 rounded-lg text-[9px] font-black uppercase"><X size={11} /></button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                    {daPraca.length === 0 && <p className="text-[10px] text-slate-600 font-bold">Nenhuma cidade cadastrada pra essa praça.</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

@@ -66,6 +66,32 @@ export type MidiaAniversarioMunicipio = {
   ativo: boolean;
 };
 
+export type StatusVendaAniversario = 'nao_vendido' | 'sem_registro' | 'vendido' | 'vendido_sem_valor';
+
+export type MidiaAniversarioResultado = {
+  id: number;
+  empresa_id: string;
+  aniversario_id: number;
+  ano: number;
+  status: StatusVendaAniversario;
+  valor: number | null;
+  observacao: string | null;
+};
+
+export const STATUS_VENDA_LABELS: Record<StatusVendaAniversario, string> = {
+  nao_vendido: 'Não vendido',
+  sem_registro: 'Sem registro',
+  vendido: 'Vendido',
+  vendido_sem_valor: 'Vendido s/ valor',
+};
+
+export const STATUS_VENDA_CORES: Record<StatusVendaAniversario, string> = {
+  nao_vendido: 'text-slate-400 bg-white/5 border-white/10',
+  sem_registro: 'text-slate-500 bg-white/5 border-white/10',
+  vendido: 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/20',
+  vendido_sem_valor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+};
+
 // Data recorrente (só dia/mês) — calcula quantos dias faltam pra próxima ocorrência,
 // já virando o ano quando a data deste ano já passou.
 export function diasAteProximaOcorrencia(dia: number, mes: number, hoje = new Date()): number {

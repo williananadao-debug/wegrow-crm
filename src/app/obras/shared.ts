@@ -51,6 +51,34 @@ export type Medicao = {
   lancamento_id: number | null;
 };
 
+export type ObraRequisicao = {
+  id: number;
+  obra_id: number;
+  etapa_id: number | null;
+  servico_id: number;
+  quantidade: number;
+  status: 'solicitada' | 'aprovada' | 'rejeitada' | 'atendida';
+  observacao: string | null;
+  solicitado_por: string | null;
+  aprovado_por: string | null;
+  aprovado_em: string | null;
+  created_at: string;
+};
+
+export const REQUISICAO_STATUS_LABELS: Record<ObraRequisicao['status'], string> = {
+  solicitada: 'Solicitada',
+  aprovada: 'Aprovada',
+  rejeitada: 'Rejeitada',
+  atendida: 'Atendida',
+};
+
+export const REQUISICAO_STATUS_CORES: Record<ObraRequisicao['status'], string> = {
+  solicitada: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+  aprovada: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  rejeitada: 'text-red-400 bg-red-500/10 border-red-500/20',
+  atendida: 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/20',
+};
+
 export const OBRA_STATUS_LABELS: Record<Obra['status'], string> = {
   planejamento: 'Planejamento',
   em_andamento: 'Em Andamento',

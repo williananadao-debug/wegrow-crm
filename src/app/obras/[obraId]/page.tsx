@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight } from 'lucide-react';
+import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, Boxes } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useObrasAccess } from '../useObrasAccess';
 import { Obra, ObraEtapa, Medicao, OBRA_STATUS_LABELS, OBRA_STATUS_CORES, fmtMoeda, fmtData, formatObraId } from '../shared';
@@ -86,7 +86,7 @@ export default function ObraDetalhePage() {
         ) : null}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link href={`/obras/${obra.id}/cronograma`} className="bg-[#0F172A] border border-white/10 hover:border-orange-500/40 rounded-2xl p-6 transition-all flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center"><ListChecks size={18} className="text-orange-400" /></div>
@@ -124,6 +124,17 @@ export default function ObraDetalhePage() {
           <div>
             <p className="text-sm font-black text-white uppercase">Contratados</p>
             <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Fornecedores e subempreiteiros</p>
+          </div>
+        </Link>
+
+        <Link href={`/obras/${obra.id}/suprimentos`} className="bg-[#0F172A] border border-white/10 hover:border-orange-500/40 rounded-2xl p-6 transition-all flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center"><Boxes size={18} className="text-purple-400" /></div>
+            <ChevronRight size={16} className="text-slate-600" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white uppercase">Suprimentos</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Requisição de material</p>
           </div>
         </Link>
       </div>

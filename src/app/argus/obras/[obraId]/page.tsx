@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, FileSearch } from 'lucide-react';
+import { Loader2, HardHat, ArrowLeft, MapPin, Calendar, ListChecks, Users, Receipt, ChevronRight, FileSearch, Boxes } from 'lucide-react';
 import ArgusTopNav from '../../ArgusTopNav';
 import { Obra, ObraEtapa, Medicao, OBRA_STATUS_LABELS, OBRA_STATUS_CORES, fmtMoeda, fmtData, formatObraId } from '@/app/obras/shared';
 
@@ -83,7 +83,7 @@ export default function ArgusObraDetalhePage() {
           </Link>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href={`/argus/obras/${obra.id}/cronograma`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-6 transition-all flex flex-col gap-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="w-10 h-10 bg-[#fdf0d4] rounded-xl flex items-center justify-center"><ListChecks size={18} className="text-[#d9861c]" /></div>
@@ -121,6 +121,17 @@ export default function ArgusObraDetalhePage() {
             <div>
               <p className="text-sm font-bold text-[#241c14] uppercase">Contratados</p>
               <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">Fornecedores e subempreiteiros</p>
+            </div>
+          </Link>
+
+          <Link href={`/argus/obras/${obra.id}/suprimentos`} className="bg-white border border-[#e5e0d5] hover:border-[#d9861c]/50 rounded-2xl p-6 transition-all flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 bg-[#f3e8fd] rounded-xl flex items-center justify-center"><Boxes size={18} className="text-[#8b5cf6]" /></div>
+              <ChevronRight size={16} className="text-[#c9c3b5]" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#241c14] uppercase">Suprimentos</p>
+              <p className="text-[12px] text-[#9a958a] font-bold uppercase mt-0.5">Requisição de material</p>
             </div>
           </Link>
         </div>

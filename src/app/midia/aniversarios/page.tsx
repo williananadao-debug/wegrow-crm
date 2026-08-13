@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
 import {
   MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario, LeadCrmResumo,
-  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade, leadTemItemAniversario,
+  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade,
 } from '../shared';
 
 const DIAS_ALERTA_ANIVERSARIO = 5;
@@ -36,10 +36,10 @@ export default function MidiaAniversariosPage() {
     const [{ data: anivs }, { data: res }, { data: leads }] = await Promise.all([
       supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true),
       supabase.from('midia_aniversarios_resultados').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano),
-      // Casa por cidade do lead + item com "aniversário" no nome do serviço — só cidade
-      // sozinha pega qualquer venda normal pro município (superestimava demais, ex:
-      // Taió mostrava R$87mil quando o real era um punhado de patrocínios).
-      supabase.from('leads').select('id, empresa, cidade, valor_total, vendedor_nome, created_at, itens')
+      // Casa por cidade do lead + MÊS do aniversário (não o ano inteiro) — "receita de
+      // aniversário" é o volume de venda que a cobertura do mês gerou, não venda com
+      // alguma tag específica.
+      supabase.from('leads').select('id, empresa, cidade, valor_total, vendedor_nome, created_at')
         .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
         .gte('created_at', `${ano}-01-01T00:00:00`).lte('created_at', `${ano}-12-31T23:59:59`)
         .not('cidade', 'is', null),
@@ -68,9 +68,13 @@ export default function MidiaAniversariosPage() {
   const resultadoDe = (aniversarioId: number): MidiaAniversarioResultado | null =>
     resultados.find(r => r.aniversario_id === aniversarioId) || null;
 
-  const leadsDoMunicipio = (municipio: string): LeadCrmResumo[] => {
-    const alvo = normalizarNomeCidade(municipio);
-    return leadsGanhos.filter(l => normalizarNomeCidade(l.cidade || '') === alvo && leadTemItemAniversario(l));
+  // "Receita de aniversário" = todo lead ganho pra clientes daquela cidade, dentro do
+  // MÊS do aniversário (não o ano inteiro) — é assim que a Demais FM mede: volume de
+  // venda que a cobertura do aniversário do município gerou naquele mês, não venda
+  // marcada com alguma tag específica.
+  const leadsDoMunicipio = (a: MidiaAniversarioMunicipio): LeadCrmResumo[] => {
+    const alvo = normalizarNomeCidade(a.municipio);
+    return leadsGanhos.filter(l => normalizarNomeCidade(l.cidade || '') === alvo && (new Date(l.created_at).getMonth() + 1) === a.mes);
   };
 
   const ordenados = aniversarios
@@ -89,7 +93,7 @@ export default function MidiaAniversariosPage() {
   };
 
   const usarValorDoCrm = (a: MidiaAniversarioMunicipio) => {
-    const leads = leadsDoMunicipio(a.municipio);
+    const leads = leadsDoMunicipio(a);
     const total = leads.reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
     const obs = leads.map(l => `${l.empresa} — R$ ${Number(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (lead #${l.id})`).join('; ');
     setForm({ status: 'vendido', valor: total.toString(), observacao: obs });
@@ -196,7 +200,7 @@ export default function MidiaAniversariosPage() {
                         const status: StatusVendaAniversario = r?.status || 'sem_registro';
                         const mostrarMes = a.mes !== mesAtual;
                         mesAtual = a.mes;
-                        const leadsCrm = leadsDoMunicipio(a.municipio);
+                        const leadsCrm = leadsDoMunicipio(a);
                         const totalCrm = leadsCrm.reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
                         const crmDivergeDoResultado = leadsCrm.length > 0 && (status !== 'vendido' || Number(r?.valor || 0) !== totalCrm);
                         return (
@@ -212,7 +216,7 @@ export default function MidiaAniversariosPage() {
 
                               {crmDivergeDoResultado && (
                                 <div className="mt-2 bg-blue-500/10 border border-blue-500/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
-                                  <p className="text-[9px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {leadsCrm.length} venda(s) — {fmtMoeda(totalCrm)}</p>
+                                  <p className="text-[9px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {fmtMoeda(totalCrm)} em {leadsCrm.length} venda(s) de {MESES_LABEL[a.mes - 1]}/{ano}</p>
                                   {isLideranca && <button onClick={() => usarValorDoCrm(a)} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 whitespace-nowrap">Usar valor →</button>}
                                 </div>
                               )}

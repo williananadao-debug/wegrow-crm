@@ -92,6 +92,28 @@ export const STATUS_VENDA_CORES: Record<StatusVendaAniversario, string> = {
   vendido_sem_valor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
 };
 
+// Mesmo padrão de normalização usado no Reports/Max — remove acento e caixa pra casar
+// nome de município digitado de formas ligeiramente diferentes no CRM.
+export const normalizarNomeCidade = (str: string) => {
+  if (!str) return '';
+  return String(str)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/gi, '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+};
+
+export type LeadCrmResumo = {
+  id: number;
+  empresa: string;
+  cidade: string | null;
+  valor_total: number;
+  vendedor_nome: string | null;
+  created_at: string;
+};
+
 // Data recorrente (só dia/mês) — calcula quantos dias faltam pra próxima ocorrência,
 // já virando o ano quando a data deste ano já passou.
 export function diasAteProximaOcorrencia(dia: number, mes: number, hoje = new Date()): number {

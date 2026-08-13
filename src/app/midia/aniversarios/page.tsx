@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Loader2, Bell, Cake, Megaphone, AlertTriangle, Check, X } from 'lucide-react';
+import { Loader2, Bell, Cake, Megaphone, AlertTriangle, Check, X, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
 import {
-  MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario,
-  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda,
+  MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario, LeadCrmResumo,
+  STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade,
 } from '../shared';
 
 const DIAS_ALERTA_ANIVERSARIO = 5;
@@ -24,6 +24,7 @@ export default function MidiaAniversariosPage() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [resultados, setResultados] = useState<MidiaAniversarioResultado[]>([]);
+  const [leadsGanhos, setLeadsGanhos] = useState<LeadCrmResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<number | null>(null);
   const [form, setForm] = useState<{ status: StatusVendaAniversario; valor: string; observacao: string }>({ status: 'sem_registro', valor: '', observacao: '' });
@@ -32,12 +33,19 @@ export default function MidiaAniversariosPage() {
   const carregar = useCallback(async () => {
     if (!perfil?.empresa_id || !temMidia) return;
     setLoading(true);
-    const [{ data: anivs }, { data: res }] = await Promise.all([
+    const [{ data: anivs }, { data: res }, { data: leads }] = await Promise.all([
       supabase.from('midia_aniversarios_municipios').select('*').eq('empresa_id', perfil.empresa_id).eq('ativo', true),
       supabase.from('midia_aniversarios_resultados').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano),
+      // Casa por cidade do lead — é como o Willian confirmou que os leads de aniversário
+      // de município são identificados hoje (sem tag própria pra isso ainda no CRM).
+      supabase.from('leads').select('id, empresa, cidade, valor_total, vendedor_nome, created_at')
+        .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
+        .gte('created_at', `${ano}-01-01T00:00:00`).lte('created_at', `${ano}-12-31T23:59:59`)
+        .not('cidade', 'is', null),
     ]);
     setAniversarios((anivs as MidiaAniversarioMunicipio[]) || []);
     setResultados((res as MidiaAniversarioResultado[]) || []);
+    setLeadsGanhos((leads as LeadCrmResumo[]) || []);
     setLoading(false);
   }, [perfil?.empresa_id, temMidia, ano]);
 
@@ -59,6 +67,11 @@ export default function MidiaAniversariosPage() {
   const resultadoDe = (aniversarioId: number): MidiaAniversarioResultado | null =>
     resultados.find(r => r.aniversario_id === aniversarioId) || null;
 
+  const leadsDoMunicipio = (municipio: string): LeadCrmResumo[] => {
+    const alvo = normalizarNomeCidade(municipio);
+    return leadsGanhos.filter(l => normalizarNomeCidade(l.cidade || '') === alvo);
+  };
+
   const ordenados = aniversarios
     .map(a => ({ ...a, diasRestantes: diasAteProximaOcorrencia(a.dia, a.mes) }))
     .sort((a, b) => a.diasRestantes - b.diasRestantes);
@@ -72,6 +85,14 @@ export default function MidiaAniversariosPage() {
     const r = resultadoDe(aniversarioId);
     setForm({ status: r?.status || 'sem_registro', valor: r?.valor?.toString() || '', observacao: r?.observacao || '' });
     setEditando(aniversarioId);
+  };
+
+  const usarValorDoCrm = (a: MidiaAniversarioMunicipio) => {
+    const leads = leadsDoMunicipio(a.municipio);
+    const total = leads.reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
+    const obs = leads.map(l => `${l.empresa} — R$ ${Number(l.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (lead #${l.id})`).join('; ');
+    setForm({ status: 'vendido', valor: total.toString(), observacao: obs });
+    setEditando(a.id);
   };
 
   const salvarResultado = async (aniversarioId: number) => {
@@ -174,6 +195,9 @@ export default function MidiaAniversariosPage() {
                         const status: StatusVendaAniversario = r?.status || 'sem_registro';
                         const mostrarMes = a.mes !== mesAtual;
                         mesAtual = a.mes;
+                        const leadsCrm = leadsDoMunicipio(a.municipio);
+                        const totalCrm = leadsCrm.reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
+                        const crmDivergeDoResultado = leadsCrm.length > 0 && (status !== 'vendido' || Number(r?.valor || 0) !== totalCrm);
                         return (
                           <div key={a.id}>
                             {mostrarMes && <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1.5">{MESES_LABEL[a.mes - 1]}</p>}
@@ -184,6 +208,13 @@ export default function MidiaAniversariosPage() {
                               </div>
                               {status === 'vendido' && <p className="text-sm font-black text-[#22C55E] mt-1">{fmtMoeda(r?.valor)}</p>}
                               {r?.observacao && <p className="text-[10px] text-slate-500 mt-1">{r.observacao}</p>}
+
+                              {crmDivergeDoResultado && (
+                                <div className="mt-2 bg-blue-500/10 border border-blue-500/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
+                                  <p className="text-[9px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {leadsCrm.length} venda(s) — {fmtMoeda(totalCrm)}</p>
+                                  {isLideranca && <button onClick={() => usarValorDoCrm(a)} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 whitespace-nowrap">Usar valor →</button>}
+                                </div>
+                              )}
 
                               {isLideranca && editando !== a.id && (
                                 <button onClick={() => iniciarEdicao(a.id)} className="text-[9px] font-black uppercase text-slate-600 hover:text-pink-400 mt-2">Editar resultado</button>

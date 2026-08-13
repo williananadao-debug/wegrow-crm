@@ -17,6 +17,13 @@ function contextoData() {
   return `Contexto automático: hoje é ${hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}. Use essa data pra avaliar prazos, sazonalidade e urgência do que o vendedor pedir.`;
 }
 
+// As instruções do Leo dizem "você já sabe qual vendedor está logado", mas isso só é
+// verdade se essa info for injetada aqui — sem isso o Max fica perguntando "quem está
+// falando" a cada conversa, mesmo o backend já sabendo (perfilSolicitante vem do token).
+function contextoVendedorLogado(nome: string, cargo: string | null) {
+  return `Vendedor logado nesta conversa: ${nome}${cargo ? ` (${cargo})` : ''}. Você já sabe quem é — nunca pergunte "quem está falando" ou peça pro vendedor se identificar. Use esse nome automaticamente no campo "nome" do vendedor ao emitir o JSON final. Pra "cargo" e "whatsapp", localize esse mesmo nome na tabela EQUIPE COMERCIAL das instruções e use o telefone de lá; se o nome não constar exatamente na tabela, use "${cargo || 'vendedor'}" como cargo e deixe o whatsapp em branco.`;
+}
+
 async function chamarGemini(model: string, contents: any[]): Promise<any> {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
     method: 'POST',
@@ -145,6 +152,8 @@ export async function POST(req: NextRequest) {
       { role: 'model', parts: [{ text: ACK_INSTRUCOES }] },
       { role: 'user', parts: [{ text: contextoData() }] },
       { role: 'model', parts: [{ text: 'Ok, considerando essa data.' }] },
+      { role: 'user', parts: [{ text: contextoVendedorLogado(perfilSolicitante.nome, perfilSolicitante.cargo) }] },
+      { role: 'model', parts: [{ text: `Entendido, ${perfilSolicitante.nome} está logado(a). Vou usar esses dados automaticamente no JSON final, sem perguntar quem está falando.` }] },
       ...historico,
     ];
 

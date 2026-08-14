@@ -173,6 +173,13 @@ const UF_NOMES: Record<string, string> = {
 };
 const nomeEstadoExtenso = (uf?: string) => (uf ? (UF_NOMES[uf.toUpperCase()] || uf) : '');
 
+// PostgREST exige aspas em volta de valores com vírgula/parênteses dentro de um
+// filtro .or() — sem isso, um nome de unidade com vírgula (ex: "Filial Norte, SP")
+// quebra o parser da API inteiro e a query falha silenciosa (zero linhas voltam,
+// sem erro visível). .eq() não tem esse problema porque o supabase-js serializa o
+// valor sozinho; .or() usa string crua, então quem monta precisa escapar.
+const escaparValorFiltroOr = (v: string) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+
 const timbradoPorUnidade = (unidadeNome: string) => {
   const digitos = (unidadeNome || '').replace(/\D/g, '');
   if (digitos.startsWith('104')) return '/contratos/timbrado-1047.png';
@@ -399,7 +406,7 @@ export default function DealsPage() {
             // Gerente vê a unidade dele inteira, mas também precisa ver os próprios leads
             // mesmo quando abertos pra outra unidade (ex: atendimento cross-unidade) —
             // sem o OR aqui, um lead criado por ele fora da sua unidade some do próprio Kanban.
-            else if (isGerente && perfil?.unidade) q = q.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
+            else if (isGerente && perfil?.unidade) q = q.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
             else q = q.eq('user_id', user?.id);
         }
         return q;
@@ -414,6 +421,14 @@ export default function DealsPage() {
 
     if (openRes.error) console.error('[fetchData] open leads:', openRes.error.message);
     if (closedRes.error) console.error('[fetchData] closed leads:', closedRes.error.message);
+    // Antes disso, um erro de query aqui só ia pro console — a tela mostrava um
+    // Kanban vazio igual a "não tenho leads", sem diferença visível de um bug real.
+    // Um lead visível a menos é reversível; um alerta que não devia disparar é só
+    // ruído — por isso avisa aqui mesmo sem certeza absoluta da causa.
+    if (openRes.error || closedRes.error) {
+        setToastMessage(`⚠️ Erro ao carregar leads: ${(openRes.error || closedRes.error)?.message}`);
+        setShowToast(true);
+    }
 
     const leadsData = (openRes.data || []).length + (closedRes.data || []).length > 0
         ? [...(openRes.data || []), ...(closedRes.data || [])]

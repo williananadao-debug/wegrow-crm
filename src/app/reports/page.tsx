@@ -32,6 +32,11 @@ const normalizeString = (str: string) => {
         .replace(/\s+/g, ' '); 
 };
 
+// PostgREST exige aspas em volta de valores com vírgula/parênteses dentro de um
+// filtro .or() — sem isso, um nome de unidade com vírgula quebra o parser da API
+// inteiro e a query falha silenciosa (zero linhas voltam, sem erro visível).
+const escaparValorFiltroOr = (v: string) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -116,7 +121,7 @@ export default function ReportsPage() {
     if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
     // OR (não só eq) — gerente também precisa ver os próprios leads mesmo quando
     // abertos pra outra unidade, senão eles somem do relatório dele.
-    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id},criado_por.eq.${user?.id}`); }
+    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id},criado_por.eq.${user?.id}`); }
     else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
     return leadsQuery;
   }
@@ -127,7 +132,7 @@ export default function ReportsPage() {
       .lte('created_at', dataFim + 'T23:59:59')
       .limit(3000);
     if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
-    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id}`);
+    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id}`);
     else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
     return visitasQuery;
   }
@@ -146,7 +151,7 @@ export default function ReportsPage() {
         .eq('status', 'ganho')
         .limit(5000);
       if (perfil?.empresa_id) graficoQuery = graficoQuery.eq('empresa_id', perfil.empresa_id);
-      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.or(`unidade.eq.${perfil.unidade},user_id.eq.${user?.id}`);
+      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id}`);
       else if (!isDirector) graficoQuery = graficoQuery.eq('user_id', user?.id);
 
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);

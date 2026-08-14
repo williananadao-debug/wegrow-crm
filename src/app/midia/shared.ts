@@ -23,6 +23,8 @@ export type MidiaMetaConfig = {
   access_token: string | null;
   token_atualizado_em: string | null;
   youtube_channel_id: string | null;
+  youtube_oauth_refresh_token: string | null;
+  youtube_oauth_conectado_em: string | null;
 };
 
 export type InstagramInsightsResposta = {

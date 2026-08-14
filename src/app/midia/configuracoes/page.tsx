@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube, LinkIcon, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026, PRACAS, MidiaEmissoraAudiencia } from '../shared';
@@ -10,6 +11,14 @@ const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 t
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
 
 export default function MidiaConfiguracoesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>}>
+      <MidiaConfiguracoesContent />
+    </Suspense>
+  );
+}
+
+function MidiaConfiguracoesContent() {
   const auth = useAuth() || {};
   const authLoading = (auth as any).loading;
   const perfil = auth.perfil;
@@ -25,6 +34,12 @@ export default function MidiaConfiguracoesPage() {
   const [toast, setToast] = useState('');
 
   const [metaConfig, setMetaConfig] = useState({ ig_business_account_id: '', fb_page_id: '', access_token: '', youtube_channel_id: '' });
+  const [youtubeConectadoEm, setYoutubeConectadoEm] = useState<string | null>(null);
+  const [conectandoGoogle, setConectandoGoogle] = useState(false);
+  const [viewsOauthMes, setViewsOauthMes] = useState<number | null>(null);
+  const [erroViewsOauth, setErroViewsOauth] = useState<string | null>(null);
+  const [carregandoViewsOauth, setCarregandoViewsOauth] = useState(false);
+  const searchParams = useSearchParams();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [metricas, setMetricas] = useState({
@@ -56,7 +71,10 @@ export default function MidiaConfiguracoesPage() {
       isDiretor ? supabase.from('midia_meta_config').select('*').eq('empresa_id', perfil.empresa_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('midia_metricas_mensais').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano).eq('mes', mes).maybeSingle(),
     ]).then(([{ data: cfg }, { data: met }]) => {
-      if (cfg) setMetaConfig({ ig_business_account_id: cfg.ig_business_account_id || '', fb_page_id: cfg.fb_page_id || '', access_token: cfg.access_token || '', youtube_channel_id: cfg.youtube_channel_id || '' });
+      if (cfg) {
+        setMetaConfig({ ig_business_account_id: cfg.ig_business_account_id || '', fb_page_id: cfg.fb_page_id || '', access_token: cfg.access_token || '', youtube_channel_id: cfg.youtube_channel_id || '' });
+        setYoutubeConectadoEm(cfg.youtube_oauth_conectado_em || null);
+      }
       const m = met as MidiaMetricasMensais | null;
       setMetricas({
         ouvintes_por_minuto_estimado: m?.ouvintes_por_minuto_estimado?.toString() || '',
@@ -83,6 +101,54 @@ export default function MidiaConfiguracoesPage() {
         setAudienciaPraca({ ouvintes_por_minuto: d?.ouvintes_por_minuto?.toString() || '', share_audiencia: d?.share_audiencia?.toString() || '' });
       });
   }, [perfil?.empresa_id, temMidia, praca, ano, mes]);
+
+  useEffect(() => {
+    const resultado = searchParams.get('youtube_oauth');
+    if (!resultado) return;
+    const msg = searchParams.get('msg');
+    setToast(resultado === 'sucesso' ? 'Google conectado! Já dá pra puxar visualizações mensais reais.' : `Erro ao conectar: ${msg || 'tente de novo'}`);
+    setTimeout(() => setToast(''), 6000);
+    window.history.replaceState(null, '', '/midia/configuracoes');
+  }, [searchParams]);
+
+  const conectarGoogle = async () => {
+    setConectandoGoogle(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/midia/youtube/oauth/iniciar', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao iniciar conexão.');
+      window.location.href = json.authUrl;
+    } catch (err: any) {
+      setToast(`Erro: ${err.message}`);
+      setTimeout(() => setToast(''), 5000);
+      setConectandoGoogle(false);
+    }
+  };
+
+  const buscarViewsOauth = async () => {
+    setCarregandoViewsOauth(true);
+    setErroViewsOauth(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch(`/api/midia/youtube/mensal?ano=${ano}&mes=${mes}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao buscar views.');
+      setViewsOauthMes(json.visualizacoes);
+    } catch (err: any) {
+      setViewsOauthMes(null);
+      setErroViewsOauth(err?.message || 'Erro ao buscar views.');
+    } finally {
+      setCarregandoViewsOauth(false);
+    }
+  };
 
   const salvarAudienciaPraca = async () => {
     if (!perfil?.empresa_id) return;
@@ -258,7 +324,7 @@ export default function MidiaConfiguracoesPage() {
               <h2 className="text-sm font-black uppercase flex items-center gap-2 text-red-400 pt-2 border-t border-white/5"><Youtube size={16} /> YouTube (Data API)</h2>
               <p className="text-[11px] text-slate-500 font-semibold">
                 Só precisa do Channel ID do canal — a chave de API é configurada uma vez só no servidor (YOUTUBE_API_KEY), não por empresa.
-                Traz inscritos e visualizações totais históricas; visualização por mês continua manual (exige OAuth do dono do canal).
+                Traz inscritos e visualizações totais históricas.
               </p>
               <div>
                 <label className={LABEL}>YouTube Channel ID</label>
@@ -268,6 +334,19 @@ export default function MidiaConfiguracoesPage() {
               <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
                 {salvandoMeta ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
               </button>
+
+              <div className="pt-3 border-t border-white/5">
+                <p className="text-[11px] text-slate-500 font-semibold mb-2">
+                  Visualização <strong>por mês</strong> real (não só total histórico) exige autorização do dono do canal via Google — conecta uma vez, renova sozinho depois.
+                </p>
+                {youtubeConectadoEm ? (
+                  <p className="text-[10px] text-[#22C55E] font-bold flex items-center gap-1.5"><CheckCircle2 size={13} /> Conectado desde {new Date(youtubeConectadoEm).toLocaleDateString('pt-BR')}</p>
+                ) : (
+                  <button onClick={conectarGoogle} disabled={conectandoGoogle} className="inline-flex items-center gap-2 bg-white text-[#0B1120] hover:bg-slate-200 disabled:opacity-50 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">
+                    {conectandoGoogle ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />} Conectar com Google
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -326,6 +405,19 @@ export default function MidiaConfiguracoesPage() {
               <div>
                 <label className={LABEL}>Visualizações YouTube da rede</label>
                 <input type="number" className={CAMPO} value={metricas.youtube_visualizacoes} onChange={e => setMetricas({ ...metricas, youtube_visualizacoes: e.target.value })} />
+                {youtubeConectadoEm && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <button type="button" onClick={buscarViewsOauth} disabled={carregandoViewsOauth} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 disabled:opacity-50 flex items-center gap-1">
+                      {carregandoViewsOauth ? <Loader2 size={10} className="animate-spin" /> : <Youtube size={10} />} Buscar real de {MESES_LABEL[mes - 1]}/{ano}
+                    </button>
+                    {erroViewsOauth && <span className="text-[9px] text-amber-400 font-bold">{erroViewsOauth}</span>}
+                    {viewsOauthMes !== null && (
+                      <button type="button" onClick={() => setMetricas({ ...metricas, youtube_visualizacoes: String(viewsOauthMes) })} className="text-[9px] font-black uppercase text-[#22C55E] hover:underline">
+                        {viewsOauthMes.toLocaleString('pt-BR')} — usar este valor
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className={LABEL}>Observações do YouTube (ex: "início do Podmais")</label>

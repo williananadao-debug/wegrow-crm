@@ -54,7 +54,7 @@ export default function AdminPage() {
   const [editNome, setEditNome] = useState('');
   const [editPlano, setEditPlano] = useState('');
   const [editStatus, setEditStatus] = useState('');
-  const [editModulos, setEditModulos] = useState<Record<string, boolean>>({});
+  const [editModulos, setEditModulos] = useState<Record<string, boolean | string>>({});
   const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -422,9 +422,19 @@ export default function AdminPage() {
                       onClick={() => setEditModulos(prev => ({ ...prev, argus: !prev.argus }))}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.argus ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
                     >
-                      Argus (licitações)
+                      Argus (torre de controle)
                       {editModulos.argus ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
                     </button>
+                    {editModulos.argus && (
+                      <select
+                        value={String(editModulos.argus_vertical || 'licitacao')}
+                        onChange={e => setEditModulos(prev => ({ ...prev, argus_vertical: e.target.value }))}
+                        className="w-full mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold uppercase text-slate-300 outline-none"
+                      >
+                        <option value="licitacao" className="bg-[#0B1120]">Vertical: Licitações</option>
+                        <option value="veiculos" className="bg-[#0B1120]">Vertical: Veículos (loja de automóveis)</option>
+                      </select>
+                    )}
                   </div>
 
                   <div>

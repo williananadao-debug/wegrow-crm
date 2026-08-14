@@ -71,7 +71,7 @@ export default function ClientesWeGrowPage() {
   const [registrandoPgto, setRegistrandoPgto] = useState<string | null>(null);
 
   // Aba Módulos
-  const [modulosEdit, setModulosEdit] = useState<Record<string, boolean>>({});
+  const [modulosEdit, setModulosEdit] = useState<Record<string, boolean | string>>({});
   const [savingModulos, setSavingModulos] = useState(false);
 
   // Aba Portais
@@ -173,6 +173,18 @@ export default function ClientesWeGrowPage() {
   const toggleModulo = async (modulo: string, valorExplicito?: boolean) => {
     if (!editando) return;
     const valor = valorExplicito !== undefined ? valorExplicito : !modulosEdit[modulo];
+    const novo = { ...modulosEdit, [modulo]: valor };
+    setModulosEdit(novo); setSavingModulos(true);
+    await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: editando.id, modulos: { ...editando.modulos, ...novo } }),
+    });
+    setSavingModulos(false); carregar();
+  };
+
+  const setModuloValor = async (modulo: string, valor: string) => {
+    if (!editando) return;
     const novo = { ...modulosEdit, [modulo]: valor };
     setModulosEdit(novo); setSavingModulos(true);
     await fetch('/api/admin/empresas', {
@@ -507,6 +519,16 @@ export default function ClientesWeGrowPage() {
                       <Package size={12}/> Argus
                       {Boolean(modulosEdit.argus) && <CheckCircle2 size={12} className="ml-auto"/>}
                     </button>
+                    {Boolean(modulosEdit.argus) && (
+                      <select
+                        value={String(modulosEdit.argus_vertical || 'licitacao')}
+                        onChange={e => setModuloValor('argus_vertical', e.target.value)}
+                        className="w-full mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold uppercase text-slate-300 outline-none"
+                      >
+                        <option value="licitacao" className="bg-[#0B1120]">Vertical: Licitações</option>
+                        <option value="veiculos" className="bg-[#0B1120]">Vertical: Veículos (loja de automóveis)</option>
+                      </select>
+                    )}
                   </div>
 
                   <div>

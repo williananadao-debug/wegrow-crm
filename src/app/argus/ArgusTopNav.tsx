@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Radar, LayoutGrid, FileSearch, DollarSign, FileSignature, Bot,
-  Grid3x3, LayoutDashboard, HardHat, Activity, Radio, ChevronDown,
+  Grid3x3, LayoutDashboard, HardHat, Activity, Radio, ChevronDown, Car, Percent, Megaphone,
 } from 'lucide-react';
 
 // Logo real da empresa (Admin → Logo) igual o resto do sistema já faz —
@@ -45,7 +45,13 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
     return () => document.removeEventListener('mousedown', fechar);
   }, []);
 
-  const itens = [
+  // Argus nasceu focado em licitação, mas é uma "torre de controle" genérica — a vertical
+  // escolhida na ativação do módulo (empresa.modulos.argus_vertical) troca o conjunto de
+  // abas. 'licitacao' é o padrão (compatibilidade com quem já usa, ex: Grupo Foscarini).
+  const vertical = modulos.argus_vertical || 'licitacao';
+  const isVeiculos = vertical === 'veiculos';
+
+  const itensLicitacao = [
     { href: '/argus', label: 'Painel Geral', icon: LayoutGrid, mostrar: true },
     { href: '/argus/dashboard', label: 'Dashboard', icon: LayoutDashboard, mostrar: modulos.crm !== false },
     { href: '/argus/licitacoes', label: 'Licitações', icon: FileSearch, mostrar: true },
@@ -53,7 +59,17 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
     { href: '/argus/financeiro', label: 'Financeiro', icon: DollarSign, mostrar: true },
     { href: '/argus/contratos', label: 'Contratos', icon: FileSignature, mostrar: true },
     { href: '/argus/agente', label: 'Agente IA', icon: Bot, mostrar: true },
-  ].filter(i => i.mostrar);
+  ];
+
+  const itensVeiculos = [
+    { href: '/argus', label: 'Painel Geral', icon: LayoutGrid, mostrar: true },
+    { href: '/argus/dashboard', label: 'Dashboard', icon: LayoutDashboard, mostrar: modulos.crm !== false },
+    { href: '/argus/vendas', label: 'Vendas', icon: Car, mostrar: true },
+    { href: '/argus/comissoes', label: 'Comissões', icon: Percent, mostrar: true },
+    { href: '/argus/marketing', label: 'Marketing', icon: Megaphone, mostrar: true },
+  ];
+
+  const itens = (isVeiculos ? itensVeiculos : itensLicitacao).filter(i => i.mostrar);
 
   const outrosModulos = [
     { href: '/pulse', label: 'Pulse', icon: Activity, mostrar: Boolean(modulos.pulse) },
@@ -68,7 +84,7 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
           <MarcaEmpresaArgus logoUrl={empresa?.logo_url} inicial={(nomeEmpresa || 'A').charAt(0).toUpperCase()} />
           <div className="leading-tight">
             <p className="text-[15px] font-bold text-[#241c14]">{nomeEmpresa || 'Argus'}</p>
-            <p className="text-[13px] text-[#9a958a] font-semibold uppercase tracking-wide" style={{ fontFamily: 'var(--font-argus-serif)' }}>Argus · Licitações</p>
+            <p className="text-[13px] text-[#9a958a] font-semibold uppercase tracking-wide" style={{ fontFamily: 'var(--font-argus-serif)' }}>Argus · {isVeiculos ? 'Veículos' : 'Licitações'}</p>
           </div>
         </div>
 
@@ -85,10 +101,12 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
           })}
         </div>
 
-        <div className="flex items-center gap-2 bg-[#fdf0d4] border border-[#f0d19a] px-3.5 py-2 rounded-full flex-shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#1fa85a] animate-pulse" />
-          <span className="text-[13px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
-        </div>
+        {!isVeiculos && (
+          <div className="flex items-center gap-2 bg-[#fdf0d4] border border-[#f0d19a] px-3.5 py-2 rounded-full flex-shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1fa85a] animate-pulse" />
+            <span className="text-[13px] font-bold text-[#d9861c] uppercase tracking-wide">PNCP · Sync ativo</span>
+          </div>
+        )}
 
         {outrosModulos.length > 0 && (
           <div className="relative flex-shrink-0" ref={ref}>

@@ -118,7 +118,7 @@ export default function Navbar() {
   const maxItem = { name: 'Max', icon: <Radio size={20} />, href: '/max' };
   const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
-  const midiaItem = { name: 'Mídia', icon: <Megaphone size={20} />, href: '/midia' };
+  const midiaItem = { name: 'Demais FM Comercial', icon: <Megaphone size={20} />, href: '/midia' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
       mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,

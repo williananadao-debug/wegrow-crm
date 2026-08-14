@@ -454,7 +454,7 @@ export default function AdminPage() {
                       onClick={() => setEditModulos(prev => ({ ...prev, midia: !prev.midia }))}
                       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.midia ? 'bg-pink-500/10 border-pink-500/40 text-pink-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
                     >
-                      Mídia
+                      Demais FM Comercial
                       {editModulos.midia ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
                     </button>
                   </div>

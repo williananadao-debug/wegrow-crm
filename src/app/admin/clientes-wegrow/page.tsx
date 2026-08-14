@@ -534,7 +534,7 @@ export default function ClientesWeGrowPage() {
                   <div>
                     <button type="button" onClick={() => toggleModulo('midia')}
                       className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.midia) ? 'bg-pink-500/10 border-pink-500/30 text-pink-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
-                      <Package size={12}/> Mídia
+                      <Package size={12}/> Demais FM Comercial
                       {Boolean(modulosEdit.midia) && <CheckCircle2 size={12} className="ml-auto"/>}
                     </button>
                   </div>

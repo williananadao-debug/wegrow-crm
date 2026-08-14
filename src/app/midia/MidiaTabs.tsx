@@ -21,9 +21,9 @@ export default function MidiaTabs() {
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
       <div>
         <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3">
-          <Megaphone size={28} className="text-pink-500" /> Mídia
+          <Megaphone size={28} className="text-pink-500" /> Demais FM Comercial
         </h1>
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Prestação de contas — audiência e redes sociais</p>
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Painel de audiência, redes e propostas</p>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 flex-wrap">

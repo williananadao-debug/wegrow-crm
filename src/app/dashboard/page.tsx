@@ -412,7 +412,7 @@ export default function DashboardPage() {
 
             {isDirector && temMidia && (
               <a href="/midia" className="flex items-center justify-center gap-2 px-3 h-10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-[#0F172A] border border-white/10 text-pink-400 hover:bg-pink-500 hover:text-white hover:border-pink-500 shadow-lg">
-                <Megaphone size={12}/> Mídia
+                <Megaphone size={12}/> Demais FM Comercial
               </a>
             )}
             

@@ -13,7 +13,7 @@ export default function MidiaPromocoesPage() {
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm">O módulo Mídia não está ativo pra sua empresa ainda.</p>
+          <p className="text-slate-400 font-bold text-sm">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
         </div>
       </div>
     );

@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   const { data: config } = await db.from('midia_meta_config').select('youtube_oauth_refresh_token').eq('empresa_id', auth.empresa_id).maybeSingle();
 
   if (!config?.youtube_oauth_refresh_token) {
-    return NextResponse.json({ erro: 'YouTube ainda não conectado via Google. Conecte em Mídia → Configurações.' }, { status: 400 });
+    return NextResponse.json({ erro: 'YouTube ainda não conectado via Google. Conecte em Demais FM Comercial → Configurações.' }, { status: 400 });
   }
 
   try {

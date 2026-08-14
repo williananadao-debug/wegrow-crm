@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube, LinkIcon, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026, PRACAS, MidiaEmissoraAudiencia } from '../shared';
+import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026 } from '../shared';
 
 const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-pink-500";
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
@@ -43,14 +43,9 @@ function MidiaConfiguracoesContent() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [metricas, setMetricas] = useState({
-    ouvintes_por_minuto_estimado: '', site_acessos: '', youtube_visualizacoes: '', youtube_observacoes: '',
+    youtube_visualizacoes: '', youtube_observacoes: '',
     instagram_demais_news_visualizacoes: '', instagram_demais_news_interacoes: '', instagram_demais_news_seguidores: '',
-    app_downloads_apple_total: '', app_downloads_android_total: '', monetizacao_valor: '',
   });
-
-  const [praca, setPraca] = useState<string>(PRACAS[0]);
-  const [audienciaPraca, setAudienciaPraca] = useState({ ouvintes_por_minuto: '', share_audiencia: '' });
-  const [salvandoAudiencia, setSalvandoAudiencia] = useState(false);
 
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [carregandoSugestao, setCarregandoSugestao] = useState(false);
@@ -77,30 +72,16 @@ function MidiaConfiguracoesContent() {
       }
       const m = met as MidiaMetricasMensais | null;
       setMetricas({
-        ouvintes_por_minuto_estimado: m?.ouvintes_por_minuto_estimado?.toString() || '',
-        site_acessos: m?.site_acessos?.toString() || '',
         youtube_visualizacoes: m?.youtube_visualizacoes?.toString() || '',
         youtube_observacoes: m?.youtube_observacoes || '',
         instagram_demais_news_visualizacoes: m?.instagram_demais_news_visualizacoes?.toString() || '',
         instagram_demais_news_interacoes: m?.instagram_demais_news_interacoes?.toString() || '',
         instagram_demais_news_seguidores: m?.instagram_demais_news_seguidores?.toString() || '',
-        app_downloads_apple_total: m?.app_downloads_apple_total?.toString() || '',
-        app_downloads_android_total: m?.app_downloads_android_total?.toString() || '',
-        monetizacao_valor: m?.monetizacao_valor?.toString() || '',
       });
       setLoading(false);
     });
     carregarAniversarios();
   }, [perfil?.empresa_id, temMidia, isDiretor, ano, mes]);
-
-  useEffect(() => {
-    if (!perfil?.empresa_id || !temMidia) return;
-    supabase.from('midia_emissoras_audiencia').select('*').eq('empresa_id', perfil.empresa_id).eq('praca', praca).eq('ano', ano).eq('mes', mes).maybeSingle()
-      .then(({ data }) => {
-        const d = data as MidiaEmissoraAudiencia | null;
-        setAudienciaPraca({ ouvintes_por_minuto: d?.ouvintes_por_minuto?.toString() || '', share_audiencia: d?.share_audiencia?.toString() || '' });
-      });
-  }, [perfil?.empresa_id, temMidia, praca, ano, mes]);
 
   useEffect(() => {
     const resultado = searchParams.get('youtube_oauth');
@@ -148,21 +129,6 @@ function MidiaConfiguracoesContent() {
     } finally {
       setCarregandoViewsOauth(false);
     }
-  };
-
-  const salvarAudienciaPraca = async () => {
-    if (!perfil?.empresa_id) return;
-    setSalvandoAudiencia(true);
-    const num = (v: string) => v.trim() === '' ? null : Number(v);
-    const { error } = await supabase.from('midia_emissoras_audiencia').upsert([{
-      empresa_id: perfil.empresa_id, praca, ano, mes,
-      ouvintes_por_minuto: num(audienciaPraca.ouvintes_por_minuto),
-      share_audiencia: num(audienciaPraca.share_audiencia),
-      criado_por: perfil.id, updated_at: new Date().toISOString(),
-    }], { onConflict: 'empresa_id,praca,ano,mes' });
-    setSalvandoAudiencia(false);
-    setToast(error ? `Erro: ${error.message}` : `Audiência de ${praca} FM (${MESES_LABEL[mes - 1]}/${ano}) salva!`);
-    setTimeout(() => setToast(''), 4000);
   };
 
   const carregarSugestao = async () => {
@@ -258,16 +224,11 @@ function MidiaConfiguracoesContent() {
     const num = (v: string) => v.trim() === '' ? null : Number(v);
     const { error } = await supabase.from('midia_metricas_mensais').upsert([{
       empresa_id: perfil.empresa_id, ano, mes,
-      ouvintes_por_minuto_estimado: num(metricas.ouvintes_por_minuto_estimado),
-      site_acessos: num(metricas.site_acessos),
       youtube_visualizacoes: num(metricas.youtube_visualizacoes),
       youtube_observacoes: metricas.youtube_observacoes.trim() || null,
       instagram_demais_news_visualizacoes: num(metricas.instagram_demais_news_visualizacoes),
       instagram_demais_news_interacoes: num(metricas.instagram_demais_news_interacoes),
       instagram_demais_news_seguidores: num(metricas.instagram_demais_news_seguidores),
-      app_downloads_apple_total: num(metricas.app_downloads_apple_total),
-      app_downloads_android_total: num(metricas.app_downloads_android_total),
-      monetizacao_valor: num(metricas.monetizacao_valor),
       criado_por: perfil.id,
       updated_at: new Date().toISOString(),
     }], { onConflict: 'empresa_id,ano,mes' });
@@ -282,7 +243,7 @@ function MidiaConfiguracoesContent() {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
-          <p className="text-slate-400 font-bold text-sm">{!temMidia ? 'O módulo Mídia não está ativo pra sua empresa ainda.' : 'Só diretor ou gerente pode acessar essa área.'}</p>
+          <p className="text-slate-400 font-bold text-sm">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor ou gerente pode acessar essa área.'}</p>
         </div>
       </div>
     );
@@ -294,7 +255,7 @@ function MidiaConfiguracoesContent() {
         <ArrowLeft size={14} /> Voltar
       </Link>
 
-      <h1 className="text-2xl font-black uppercase italic tracking-tighter mb-6">Configurações — Mídia</h1>
+      <h1 className="text-2xl font-black uppercase italic tracking-tighter mb-6">Configurações — Demais FM Comercial</h1>
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
@@ -350,34 +311,11 @@ function MidiaConfiguracoesContent() {
             </div>
           )}
 
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="text-sm font-black uppercase text-slate-300">Audiência por praça (aba Emissoras)</h2>
-              <div className="flex items-center gap-2">
-                <select value={praca} onChange={e => setPraca(e.target.value)} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
-                  {PRACAS.map(p => <option key={p} value={p}>{p} FM</option>)}
-                </select>
-                <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
-                  {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
-                </select>
-                <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
-                  {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>Ouvintes por minuto (estimado)</label>
-                <input type="number" className={CAMPO} value={audienciaPraca.ouvintes_por_minuto} onChange={e => setAudienciaPraca({ ...audienciaPraca, ouvintes_por_minuto: e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL}>Share de audiência (%)</label>
-                <input type="number" step="0.1" className={CAMPO} value={audienciaPraca.share_audiencia} onChange={e => setAudienciaPraca({ ...audienciaPraca, share_audiencia: e.target.value })} />
-              </div>
-            </div>
-            <button onClick={salvarAudienciaPraca} disabled={salvandoAudiencia} className="bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
-              {salvandoAudiencia ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar {praca} FM — {MESES_LABEL[mes - 1]}/{ano}
-            </button>
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-4">
+            <p className="text-[11px] text-slate-400 font-semibold">
+              Audiência, site, downloads do app e monetização agora vêm ao vivo da API da Demais FM Comercial (Leo) — não precisam mais ser digitados aqui.
+              Só o YouTube da rede e o Instagram do Demais News continuam manuais/abaixo.
+            </p>
           </div>
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
@@ -394,14 +332,6 @@ function MidiaConfiguracoesContent() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>Ouvintes por minuto (estimado, rede em cadeia)</label>
-                <input type="number" className={CAMPO} value={metricas.ouvintes_por_minuto_estimado} onChange={e => setMetricas({ ...metricas, ouvintes_por_minuto_estimado: e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL}>Acessos do site Demais News</label>
-                <input type="number" className={CAMPO} value={metricas.site_acessos} onChange={e => setMetricas({ ...metricas, site_acessos: e.target.value })} />
-              </div>
               <div>
                 <label className={LABEL}>Visualizações YouTube da rede</label>
                 <input type="number" className={CAMPO} value={metricas.youtube_visualizacoes} onChange={e => setMetricas({ ...metricas, youtube_visualizacoes: e.target.value })} />
@@ -434,18 +364,6 @@ function MidiaConfiguracoesContent() {
               <div>
                 <label className={LABEL}>Instagram Demais News — seguidores</label>
                 <input type="number" className={CAMPO} value={metricas.instagram_demais_news_seguidores} onChange={e => setMetricas({ ...metricas, instagram_demais_news_seguidores: e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL}>Monetização digital (R$ líquido do mês)</label>
-                <input type="number" step="0.01" className={CAMPO} value={metricas.monetizacao_valor} onChange={e => setMetricas({ ...metricas, monetizacao_valor: e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL}>Downloads do app — Apple (acumulado)</label>
-                <input type="number" className={CAMPO} value={metricas.app_downloads_apple_total} onChange={e => setMetricas({ ...metricas, app_downloads_apple_total: e.target.value })} />
-              </div>
-              <div>
-                <label className={LABEL}>Downloads do app — Android (acumulado)</label>
-                <input type="number" className={CAMPO} value={metricas.app_downloads_android_total} onChange={e => setMetricas({ ...metricas, app_downloads_android_total: e.target.value })} />
               </div>
             </div>
 

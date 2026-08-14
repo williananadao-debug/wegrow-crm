@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   const { data: config } = await db.from('midia_meta_config').select('ig_business_account_id, access_token').eq('empresa_id', auth.empresa_id).maybeSingle();
 
   if (!config?.ig_business_account_id || !config?.access_token) {
-    return NextResponse.json({ erro: 'Instagram ainda não configurado. Cadastre o token e a conta em Mídia → Configurações.' }, { status: 400 });
+    return NextResponse.json({ erro: 'Instagram ainda não configurado. Cadastre o token e a conta em Demais FM Comercial → Configurações.' }, { status: 400 });
   }
 
   const since = `${ano}-${String(mes).padStart(2, '0')}-01`;

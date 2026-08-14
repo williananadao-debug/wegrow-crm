@@ -1,3 +1,17 @@
+// Payloads da API "Demais FM Comercial" do Leo (spec-api-demais-fm-comercial-v1) —
+// audiência e site substituem os antigos campos manuais; downloads do app e
+// monetização são confidenciais (classe "interno"), restritos a diretor.
+export type {
+  DemaisFmAudienciaItem,
+  DemaisFmAudienciaResposta,
+  DemaisFmSiteItem,
+  DemaisFmSiteResposta,
+  DemaisFmAppDownloadItem,
+  DemaisFmAppDownloadsResposta,
+  DemaisFmMonetizacaoItem,
+  DemaisFmMonetizacaoResposta,
+} from '@/lib/demais-fm-api';
+
 export type MidiaMetricasMensais = {
   id: number;
   empresa_id: string;

@@ -19,15 +19,21 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
   const authLoading = (auth as any).loading;
   const empresa = auth.empresa;
   const temArgus = Boolean(empresa?.modulos?.argus);
-  // Vertical "veículos" (ex: GB Motors) usa o shell/tema padrão do WeGrow — só
-  // "licitação" (ex: Foscarini) pediu identidade visual própria (Outfit+Playfair,
-  // dourado/creme). Ver mesma decisão em src/lib/publicPages.ts (hasCustomShell).
+  // As duas verticais usam a mesma estrutura visual do Argus (Outfit+Playfair,
+  // cartões claros) — só a paleta muda: licitação (ex: Foscarini) é dourado/creme,
+  // veículos (ex: GB Motors) é cinza/preto (cor da marca do cliente). Ver mesma
+  // decisão em ArgusTopNav.tsx.
   const isVeiculos = (empresa?.modulos?.argus_vertical || 'licitacao') === 'veiculos';
+  const bgFundo = isVeiculos ? 'bg-[#f2f2f2]' : 'bg-[#faf7f2]';
+  const corTexto = isVeiculos ? 'text-[#171717]' : 'text-[#241c14]';
+  const corAccent = isVeiculos ? 'text-[#171717]' : 'text-[#d9861c]';
+  const corBorda = isVeiculos ? 'border-[#e0e0e0]' : 'border-[#e5e0d5]';
+  const corMuted = isVeiculos ? 'text-[#5c5c5c]' : 'text-[#6b6862]';
 
   if (authLoading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isVeiculos ? 'bg-[#0B1120]' : 'bg-[#faf7f2]'}`}>
-        <Loader2 size={24} className={`animate-spin ${isVeiculos ? 'text-[#22C55E]' : 'text-[#d9861c]'}`} />
+      <div className={`min-h-screen flex items-center justify-center ${bgFundo}`}>
+        <Loader2 size={24} className={`animate-spin ${corAccent}`} />
       </div>
     );
   }
@@ -36,36 +42,19 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
   // de verdade é RLS (empresa_id = meu_empresa_id()) + o bearer check de cada
   // rota de API do Argus, não esse gate client-side.
   if (!temArgus) {
-    if (isVeiculos) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0B1120] px-4 text-white">
-          <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-10 text-center max-w-sm">
-            <Radar size={32} className="text-[#22C55E] mx-auto mb-3" />
-            <p className="text-slate-400 font-semibold text-sm">O módulo Argus não está ativo pra sua empresa ainda.</p>
-          </div>
-        </div>
-      );
-    }
     return (
-      <div className={`${outfit.variable} ${playfair.variable} min-h-screen flex items-center justify-center bg-[#faf7f2] px-4`} style={{ fontFamily: 'var(--font-argus-sans)' }}>
-        <div className="bg-white border border-[#e5e0d5] rounded-2xl p-10 text-center max-w-sm shadow-sm">
-          <Radar size={32} className="text-[#d9861c] mx-auto mb-3" />
-          <p className="text-[#6b6862] font-semibold text-sm">O módulo Argus não está ativo pra sua empresa ainda.</p>
+      <div className={`${outfit.variable} ${playfair.variable} min-h-screen flex items-center justify-center ${bgFundo} px-4`} style={{ fontFamily: 'var(--font-argus-sans)' }}>
+        <div className={`bg-white border ${corBorda} rounded-2xl p-10 text-center max-w-sm shadow-sm`}>
+          <Radar size={32} className={`${corAccent} mx-auto mb-3`} />
+          <p className={`${corMuted} font-semibold text-sm`}>O módulo Argus não está ativo pra sua empresa ainda.</p>
         </div>
       </div>
     );
   }
 
-  // Vertical veículos: mesma estrutura de nav própria no topo (ArgusTopNav) que a
-  // licitação, mas sem Outfit/Playfair — herda a Inter padrão do WeGrow, só troca
-  // o fundo pro navy padrão em vez do creme/dourado da vertical licitação.
-  if (isVeiculos) {
-    return <div className="min-h-screen bg-[#0B1120]">{children}</div>;
-  }
-
   return (
     <div
-      className={`${outfit.variable} ${playfair.variable} min-h-screen bg-[#faf7f2] text-[#241c14]`}
+      className={`${outfit.variable} ${playfair.variable} min-h-screen ${bgFundo} ${corTexto}`}
       style={{ fontFamily: 'var(--font-argus-sans)' }}
     >
       {children}

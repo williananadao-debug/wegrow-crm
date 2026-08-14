@@ -7,10 +7,23 @@ import { Loader2, ChevronRight, HardHat, Receipt } from 'lucide-react';
 import ArgusTopNav from './ArgusTopNav';
 import { ArgusEdital, STATUS_INTERESSE_CORES, STATUS_INTERESSE_LABELS, fmtMoeda, fmtMoedaCompacta, fmtData } from './shared';
 import { OBRA_STATUS_LABELS, OBRA_STATUS_CORES } from '@/app/obras/shared';
+import ArgusPainelVeiculos from './PainelVeiculos';
 
 type ObraResumo = { id: number; nome: string; status: string };
 
+// Componente-porta sem hooks próprios — decide a vertical e delega. Não dá pra fazer
+// esse "if" dentro do componente de licitação (que já usa vários hooks abaixo), porque
+// React exige a mesma sequência de hooks em toda renderização.
 export default function ArgusPainelPage() {
+  const auth = useAuth() || {};
+  const empresa = auth.empresa;
+  if ((empresa?.modulos?.argus_vertical || 'licitacao') === 'veiculos') {
+    return <ArgusPainelVeiculos />;
+  }
+  return <ArgusPainelLicitacao />;
+}
+
+function ArgusPainelLicitacao() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const empresa = auth.empresa;

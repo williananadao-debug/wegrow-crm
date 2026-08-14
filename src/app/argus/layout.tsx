@@ -19,11 +19,15 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
   const authLoading = (auth as any).loading;
   const empresa = auth.empresa;
   const temArgus = Boolean(empresa?.modulos?.argus);
+  // Vertical "veículos" (ex: GB Motors) usa o shell/tema padrão do WeGrow — só
+  // "licitação" (ex: Foscarini) pediu identidade visual própria (Outfit+Playfair,
+  // dourado/creme). Ver mesma decisão em src/lib/publicPages.ts (hasCustomShell).
+  const isVeiculos = (empresa?.modulos?.argus_vertical || 'licitacao') === 'veiculos';
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#faf7f2]">
-        <Loader2 size={24} className="animate-spin text-[#d9861c]" />
+      <div className={`min-h-screen flex items-center justify-center ${isVeiculos ? 'bg-[#0B1120]' : 'bg-[#faf7f2]'}`}>
+        <Loader2 size={24} className={`animate-spin ${isVeiculos ? 'text-[#22C55E]' : 'text-[#d9861c]'}`} />
       </div>
     );
   }
@@ -32,6 +36,16 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
   // de verdade é RLS (empresa_id = meu_empresa_id()) + o bearer check de cada
   // rota de API do Argus, não esse gate client-side.
   if (!temArgus) {
+    if (isVeiculos) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#0B1120] px-4 text-white">
+          <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-10 text-center max-w-sm">
+            <Radar size={32} className="text-[#22C55E] mx-auto mb-3" />
+            <p className="text-slate-400 font-semibold text-sm">O módulo Argus não está ativo pra sua empresa ainda.</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={`${outfit.variable} ${playfair.variable} min-h-screen flex items-center justify-center bg-[#faf7f2] px-4`} style={{ fontFamily: 'var(--font-argus-sans)' }}>
         <div className="bg-white border border-[#e5e0d5] rounded-2xl p-10 text-center max-w-sm shadow-sm">
@@ -41,6 +55,10 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+  // Vertical veículos: sem wrapper de fonte/cor própria — herda Inter + navy do
+  // shell padrão (que o LayoutWrapper já está desenhando por fora agora).
+  if (isVeiculos) return <>{children}</>;
 
   return (
     <div

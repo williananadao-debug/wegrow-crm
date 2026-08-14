@@ -12,6 +12,11 @@ import DashboardPage from '@/app/dashboard/page';
 export default function ArgusDashboardPage() {
   const auth = useAuth() || {};
   const empresa = auth.empresa;
+  const isVeiculos = (empresa?.modulos?.argus_vertical || 'licitacao') === 'veiculos';
+
+  // Vertical veículos já ganha o shell padrão (Navbar/Topbar) por fora — a
+  // ArgusTopNav é só da vertical licitação, com visual próprio.
+  if (isVeiculos) return <DashboardPage />;
 
   return (
     <div>

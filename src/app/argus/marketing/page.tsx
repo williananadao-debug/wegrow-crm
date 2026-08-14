@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Instagram, RefreshCw, AlertTriangle, KeyRound, Save, TrendingUp } from 'lucide-react';
-import ArgusTopNav from '../ArgusTopNav';
 
 type InstagramInsights = { seguidores: number; visualizacoes: number; interacoes: number; visitasPerfil: number };
 
@@ -13,7 +12,6 @@ const fmtNumero = (v: number | null | undefined) => Number(v || 0).toLocaleStrin
 export default function ArgusMarketingPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
-  const empresa = auth.empresa;
   const isDiretor = perfil?.cargo === 'diretor';
 
   const [insights, setInsights] = useState<InstagramInsights | null>(null);
@@ -73,60 +71,57 @@ export default function ArgusMarketingPage() {
   };
 
   return (
-    <div>
-      <ArgusTopNav nomeEmpresa={empresa?.nome} />
-      <main className="max-w-[1400px] mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-[#241c14] flex items-center gap-2 mb-6" style={{ fontFamily: 'var(--font-argus-serif)' }}>
-          <TrendingUp size={22} className="text-[#d9861c]" /> Marketing
-        </h1>
+    <div className="p-4 md:p-8 pb-20 text-white">
+      <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3 mb-6">
+        <TrendingUp size={26} className="text-[#22C55E]" /> Marketing
+      </h1>
 
-        <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-bold text-[#241c14] flex items-center gap-2"><Instagram size={16} className="text-[#d9861c]" /> Instagram (ao vivo)</p>
-            <button onClick={carregarInsights} disabled={carregando} className="text-[#9a958a] hover:text-[#241c14] transition-colors">
-              <RefreshCw size={15} className={carregando ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          {erro && !precisaConfigurar && (
-            <p className="text-[13px] text-amber-600 font-semibold flex items-center gap-2"><AlertTriangle size={14} /> {erro}</p>
-          )}
-
-          {precisaConfigurar && !isDiretor && (
-            <p className="text-[13px] text-[#6b6862] font-semibold">Instagram ainda não configurado — peça pro diretor cadastrar as credenciais.</p>
-          )}
-
-          {insights && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div><p className="text-xl font-bold text-[#241c14]">{fmtNumero(insights.seguidores)}</p><p className="text-[11px] text-[#9a958a] font-bold uppercase mt-0.5">Seguidores</p></div>
-              <div><p className="text-xl font-bold text-[#241c14]">{fmtCompacto(insights.visualizacoes)}</p><p className="text-[11px] text-[#9a958a] font-bold uppercase mt-0.5">Visualizações</p></div>
-              <div><p className="text-xl font-bold text-[#241c14]">{fmtCompacto(insights.interacoes)}</p><p className="text-[11px] text-[#9a958a] font-bold uppercase mt-0.5">Interações</p></div>
-              <div><p className="text-xl font-bold text-[#241c14]">{fmtCompacto(insights.visitasPerfil)}</p><p className="text-[11px] text-[#9a958a] font-bold uppercase mt-0.5">Visitas ao Perfil</p></div>
-            </div>
-          )}
+      <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-bold text-white flex items-center gap-2"><Instagram size={16} className="text-[#22C55E]" /> Instagram (ao vivo)</p>
+          <button onClick={carregarInsights} disabled={carregando} className="text-slate-500 hover:text-white transition-colors">
+            <RefreshCw size={15} className={carregando ? 'animate-spin' : ''} />
+          </button>
         </div>
 
-        {isDiretor && (
-          <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6 space-y-4">
-            <h2 className="text-sm font-bold text-[#241c14] flex items-center gap-2"><KeyRound size={16} className="text-[#d9861c]" /> Credenciais do Instagram</h2>
-            <p className="text-[12px] text-[#9a958a] font-semibold">
-              Conta Instagram Business/Creator vinculada a uma Página do Facebook, com token de acesso de longa duração. Visível só pra diretor.
-            </p>
-            <div>
-              <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide block mb-1">Instagram Business Account ID</label>
-              <input className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-bold text-[#241c14] outline-none focus:border-[#d9861c]" value={config.ig_business_account_id} onChange={e => setConfig({ ...config, ig_business_account_id: e.target.value })} placeholder="17841400000000000" />
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-[#9a958a] uppercase tracking-wide block mb-1">Access Token</label>
-              <input type="password" className="w-full bg-[#faf7f2] border border-[#e5e0d5] rounded-xl px-4 py-2.5 text-sm font-bold text-[#241c14] outline-none focus:border-[#d9861c]" value={config.access_token} onChange={e => setConfig({ ...config, access_token: e.target.value })} placeholder="EAAG..." />
-            </div>
-            <button onClick={salvarConfig} disabled={salvando} className="bg-[#d9861c] hover:bg-[#c47716] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-              {salvando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
-            </button>
-            {toast && <p className="text-xs font-bold text-[#6b6862]">{toast}</p>}
+        {erro && !precisaConfigurar && (
+          <p className="text-[13px] text-amber-400 font-semibold flex items-center gap-2"><AlertTriangle size={14} /> {erro}</p>
+        )}
+
+        {precisaConfigurar && !isDiretor && (
+          <p className="text-[13px] text-slate-400 font-semibold">Instagram ainda não configurado — peça pro diretor cadastrar as credenciais.</p>
+        )}
+
+        {insights && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div><p className="text-xl font-black text-white">{fmtNumero(insights.seguidores)}</p><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Seguidores</p></div>
+            <div><p className="text-xl font-black text-white">{fmtCompacto(insights.visualizacoes)}</p><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Visualizações</p></div>
+            <div><p className="text-xl font-black text-white">{fmtCompacto(insights.interacoes)}</p><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+            <div><p className="text-xl font-black text-white">{fmtCompacto(insights.visitasPerfil)}</p><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao Perfil</p></div>
           </div>
         )}
-      </main>
+      </div>
+
+      {isDiretor && (
+        <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2"><KeyRound size={16} className="text-[#22C55E]" /> Credenciais do Instagram</h2>
+          <p className="text-[12px] text-slate-500 font-semibold">
+            Conta Instagram Business/Creator vinculada a uma Página do Facebook, com token de acesso de longa duração. Visível só pra diretor.
+          </p>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Instagram Business Account ID</label>
+            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[#22C55E]" value={config.ig_business_account_id} onChange={e => setConfig({ ...config, ig_business_account_id: e.target.value })} placeholder="17841400000000000" />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Access Token</label>
+            <input type="password" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[#22C55E]" value={config.access_token} onChange={e => setConfig({ ...config, access_token: e.target.value })} placeholder="EAAG..." />
+          </div>
+          <button onClick={salvarConfig} disabled={salvando} className="bg-[#22C55E] hover:bg-[#1ea34e] disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+            {salvando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
+          </button>
+          {toast && <p className="text-xs font-bold text-slate-400">{toast}</p>}
+        </div>
+      )}
     </div>
   );
 }

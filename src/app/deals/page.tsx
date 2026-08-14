@@ -1084,7 +1084,7 @@ export default function DealsPage() {
                 <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
-                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/><br/>
                     ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(lead.valor_total / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
                     <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
                     <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || ''}<br/>
@@ -1204,7 +1204,7 @@ export default function DealsPage() {
                 <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
                     <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
-                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/>
+                    <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/><br/>
                     ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(lead.valor_total / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
                     <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
                     <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || ''}<br/>

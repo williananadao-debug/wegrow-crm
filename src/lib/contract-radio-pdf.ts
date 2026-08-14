@@ -305,6 +305,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.fontSize(9).fillColor('#000');
       linha('Parcela(s): ', data.parcelas || '1');
       linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
+      doc.moveDown(0.6);
       if (data.valor_total > 0) {
         const qtdParcelas = Math.max(1, parseInt(data.parcelas, 10) || 1);
         linha('Valor da Parcela: ', fmt(data.valor_total / qtdParcelas));

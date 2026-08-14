@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026, PRACAS, MidiaEmissoraAudiencia } from '../shared';
@@ -24,7 +24,7 @@ export default function MidiaConfiguracoesPage() {
   const [salvandoMetricas, setSalvandoMetricas] = useState(false);
   const [toast, setToast] = useState('');
 
-  const [metaConfig, setMetaConfig] = useState({ ig_business_account_id: '', fb_page_id: '', access_token: '' });
+  const [metaConfig, setMetaConfig] = useState({ ig_business_account_id: '', fb_page_id: '', access_token: '', youtube_channel_id: '' });
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth() + 1);
   const [metricas, setMetricas] = useState({
@@ -56,7 +56,7 @@ export default function MidiaConfiguracoesPage() {
       isDiretor ? supabase.from('midia_meta_config').select('*').eq('empresa_id', perfil.empresa_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('midia_metricas_mensais').select('*').eq('empresa_id', perfil.empresa_id).eq('ano', ano).eq('mes', mes).maybeSingle(),
     ]).then(([{ data: cfg }, { data: met }]) => {
-      if (cfg) setMetaConfig({ ig_business_account_id: cfg.ig_business_account_id || '', fb_page_id: cfg.fb_page_id || '', access_token: cfg.access_token || '' });
+      if (cfg) setMetaConfig({ ig_business_account_id: cfg.ig_business_account_id || '', fb_page_id: cfg.fb_page_id || '', access_token: cfg.access_token || '', youtube_channel_id: cfg.youtube_channel_id || '' });
       const m = met as MidiaMetricasMensais | null;
       setMetricas({
         ouvintes_por_minuto_estimado: m?.ouvintes_por_minuto_estimado?.toString() || '',
@@ -176,12 +176,13 @@ export default function MidiaConfiguracoesPage() {
       ig_business_account_id: metaConfig.ig_business_account_id.trim() || null,
       fb_page_id: metaConfig.fb_page_id.trim() || null,
       access_token: metaConfig.access_token.trim() || null,
+      youtube_channel_id: metaConfig.youtube_channel_id.trim() || null,
       token_atualizado_em: new Date().toISOString(),
       criado_por: perfil.id,
       updated_at: new Date().toISOString(),
     }], { onConflict: 'empresa_id' });
     setSalvandoMeta(false);
-    setToast(error ? `Erro: ${error.message}` : 'Credenciais do Instagram salvas!');
+    setToast(error ? `Erro: ${error.message}` : 'Credenciais salvas!');
     setTimeout(() => setToast(''), 4000);
   };
 
@@ -253,6 +254,17 @@ export default function MidiaConfiguracoesPage() {
                 <label className={LABEL}><KeyRound size={10} className="inline mr-1" />Access Token</label>
                 <input type="password" className={CAMPO} value={metaConfig.access_token} onChange={e => setMetaConfig({ ...metaConfig, access_token: e.target.value })} placeholder="EAAG..." />
               </div>
+
+              <h2 className="text-sm font-black uppercase flex items-center gap-2 text-red-400 pt-2 border-t border-white/5"><Youtube size={16} /> YouTube (Data API)</h2>
+              <p className="text-[11px] text-slate-500 font-semibold">
+                Só precisa do Channel ID do canal — a chave de API é configurada uma vez só no servidor (YOUTUBE_API_KEY), não por empresa.
+                Traz inscritos e visualizações totais históricas; visualização por mês continua manual (exige OAuth do dono do canal).
+              </p>
+              <div>
+                <label className={LABEL}>YouTube Channel ID</label>
+                <input className={CAMPO} value={metaConfig.youtube_channel_id} onChange={e => setMetaConfig({ ...metaConfig, youtube_channel_id: e.target.value })} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" />
+              </div>
+
               <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
                 {salvandoMeta ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
               </button>

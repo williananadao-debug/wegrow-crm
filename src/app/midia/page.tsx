@@ -5,7 +5,7 @@ import { Megaphone, Loader2, RefreshCw, Instagram, Youtube, Smartphone, DollarSi
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from './MidiaTabs';
-import { MidiaMetricasMensais, InstagramInsightsResposta, MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero } from './shared';
+import { MidiaMetricasMensais, InstagramInsightsResposta, YoutubeInsightsResposta, MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero } from './shared';
 
 export default function MidiaPage() {
   const auth = useAuth() || {};
@@ -22,8 +22,11 @@ export default function MidiaPage() {
   const [historico, setHistorico] = useState<MidiaMetricasMensais[]>([]);
   const [instagram, setInstagram] = useState<InstagramInsightsResposta | null>(null);
   const [erroInstagram, setErroInstagram] = useState<string | null>(null);
+  const [youtube, setYoutube] = useState<YoutubeInsightsResposta | null>(null);
+  const [erroYoutube, setErroYoutube] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [carregandoInstagram, setCarregandoInstagram] = useState(false);
+  const [carregandoYoutube, setCarregandoYoutube] = useState(false);
 
   const carregarManual = useCallback(async () => {
     if (!perfil?.empresa_id) return;
@@ -57,7 +60,27 @@ export default function MidiaPage() {
     }
   }, [ano, mes]);
 
-  useEffect(() => { if (temMidia) { carregarManual(); carregarInstagram(); } }, [temMidia, carregarManual, carregarInstagram]);
+  const carregarYoutube = useCallback(async () => {
+    setCarregandoYoutube(true);
+    setErroYoutube(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/midia/youtube', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao buscar YouTube.');
+      setYoutube(json);
+    } catch (err: any) {
+      setYoutube(null);
+      setErroYoutube(err?.message || 'Erro ao buscar YouTube.');
+    } finally {
+      setCarregandoYoutube(false);
+    }
+  }, []);
+
+  useEffect(() => { if (temMidia) { carregarManual(); carregarInstagram(); carregarYoutube(); } }, [temMidia, carregarManual, carregarInstagram, carregarYoutube]);
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -160,6 +183,22 @@ export default function MidiaPage() {
             <h3 className="text-2xl font-black text-white">{fmtCompacto(metricas?.youtube_visualizacoes)}</h3>
             <p className="text-[10px] text-slate-500 font-bold mt-1">visualizações no mês</p>
             {metricas?.youtube_observacoes && <p className="text-[9px] text-slate-500 mt-2 italic">{metricas.youtube_observacoes}</p>}
+
+            <div className="border-t border-white/5 mt-3 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[8px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded">Canal ao vivo</span>
+                <button onClick={carregarYoutube} disabled={carregandoYoutube} className="text-slate-500 hover:text-white transition-colors">
+                  <RefreshCw size={11} className={carregandoYoutube ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              {erroYoutube ? (
+                <p className="text-[9px] text-amber-400 font-bold flex items-center gap-1"><AlertTriangle size={10} /> {erroYoutube}</p>
+              ) : youtube ? (
+                <p className="text-[10px] text-slate-400 font-bold">{fmtNumero(youtube.inscritos)} inscritos · {fmtCompacto(youtube.visualizacoesTotais)} views totais (histórico do canal)</p>
+              ) : (
+                <p className="text-[9px] text-slate-600 font-bold">Carregando...</p>
+              )}
+            </div>
           </div>
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5 md:col-span-2">

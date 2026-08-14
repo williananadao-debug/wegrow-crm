@@ -22,6 +22,7 @@ export type MidiaMetaConfig = {
   fb_page_id: string | null;
   access_token: string | null;
   token_atualizado_em: string | null;
+  youtube_channel_id: string | null;
 };
 
 export type InstagramInsightsResposta = {
@@ -31,6 +32,12 @@ export type InstagramInsightsResposta = {
   visualizacoes: number;
   interacoes: number;
   visitasPerfil: number;
+};
+
+export type YoutubeInsightsResposta = {
+  inscritos: number;
+  visualizacoesTotais: number;
+  videos: number;
 };
 
 export const MESES_LABEL = [

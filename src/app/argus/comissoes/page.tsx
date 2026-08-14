@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Percent, Save } from 'lucide-react';
+import ArgusTopNav from '../ArgusTopNav';
 import { fmtMoeda } from '../shared';
 
 type LeadGanho = {
@@ -17,6 +18,7 @@ type LeadGanho = {
 export default function ArgusComissoesPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
   const isLideranca = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
 
   const [leads, setLeads] = useState<LeadGanho[]>([]);
@@ -64,6 +66,8 @@ export default function ArgusComissoesPage() {
   }, {})).sort((a, b) => b.valor - a.valor);
 
   return (
+    <div>
+      <ArgusTopNav nomeEmpresa={empresa?.nome} />
     <div className="p-4 md:p-8 pb-20 text-white">
       <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3 mb-6">
         <Percent size={26} className="text-[#22C55E]" /> Comissões
@@ -151,6 +155,7 @@ export default function ArgusComissoesPage() {
           )}
         </>
       )}
+    </div>
     </div>
   );
 }

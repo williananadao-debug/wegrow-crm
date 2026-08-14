@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Car, Search } from 'lucide-react';
+import ArgusTopNav from '../ArgusTopNav';
 import { fmtMoeda, fmtData } from '../shared';
 
 type LeadVeiculo = {
@@ -23,6 +24,7 @@ const ETAPA_LABEL: Record<number, string> = { 0: 'Novo', 1: 'Contato', 2: 'Propo
 export default function ArgusVendasVeiculosPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
 
   const [leads, setLeads] = useState<LeadVeiculo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +57,8 @@ export default function ArgusVendasVeiculosPage() {
   const valorGanho = leads.filter(l => l.status === 'ganho').reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
 
   return (
+    <div>
+      <ArgusTopNav nomeEmpresa={empresa?.nome} />
     <div className="p-4 md:p-8 pb-20 text-white">
       <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3 mb-6">
         <Car size={26} className="text-[#22C55E]" /> Vendas
@@ -129,6 +133,7 @@ export default function ArgusVendasVeiculosPage() {
           </table>
         </div>
       )}
+    </div>
     </div>
   );
 }

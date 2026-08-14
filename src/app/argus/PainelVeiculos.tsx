@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, ChevronRight, Car, TrendingUp, Percent } from 'lucide-react';
+import ArgusTopNav from './ArgusTopNav';
 import { fmtMoeda, fmtMoedaCompacta } from './shared';
 
 type LeadVeiculo = {
@@ -20,6 +21,7 @@ type LeadVeiculo = {
 export default function ArgusPainelVeiculos() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
 
   const [leads, setLeads] = useState<LeadVeiculo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +47,8 @@ export default function ArgusPainelVeiculos() {
   const recentes = [...leads].slice(0, 8);
 
   return (
+    <div>
+      <ArgusTopNav nomeEmpresa={empresa?.nome} />
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-8">
         <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white">
@@ -121,6 +125,7 @@ export default function ArgusPainelVeiculos() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

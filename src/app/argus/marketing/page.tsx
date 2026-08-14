@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Instagram, RefreshCw, AlertTriangle, KeyRound, Save, TrendingUp } from 'lucide-react';
+import ArgusTopNav from '../ArgusTopNav';
 
 type InstagramInsights = { seguidores: number; visualizacoes: number; interacoes: number; visitasPerfil: number };
 
@@ -12,6 +13,7 @@ const fmtNumero = (v: number | null | undefined) => Number(v || 0).toLocaleStrin
 export default function ArgusMarketingPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
+  const empresa = auth.empresa;
   const isDiretor = perfil?.cargo === 'diretor';
 
   const [insights, setInsights] = useState<InstagramInsights | null>(null);
@@ -71,6 +73,8 @@ export default function ArgusMarketingPage() {
   };
 
   return (
+    <div>
+      <ArgusTopNav nomeEmpresa={empresa?.nome} />
     <div className="p-4 md:p-8 pb-20 text-white">
       <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3 mb-6">
         <TrendingUp size={26} className="text-[#22C55E]" /> Marketing
@@ -122,6 +126,7 @@ export default function ArgusMarketingPage() {
           {toast && <p className="text-xs font-bold text-slate-400">{toast}</p>}
         </div>
       )}
+    </div>
     </div>
   );
 }

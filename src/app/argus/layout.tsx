@@ -56,9 +56,12 @@ export default function ArgusLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // Vertical veículos: sem wrapper de fonte/cor própria — herda Inter + navy do
-  // shell padrão (que o LayoutWrapper já está desenhando por fora agora).
-  if (isVeiculos) return <>{children}</>;
+  // Vertical veículos: mesma estrutura de nav própria no topo (ArgusTopNav) que a
+  // licitação, mas sem Outfit/Playfair — herda a Inter padrão do WeGrow, só troca
+  // o fundo pro navy padrão em vez do creme/dourado da vertical licitação.
+  if (isVeiculos) {
+    return <div className="min-h-screen bg-[#0B1120]">{children}</div>;
+  }
 
   return (
     <div

@@ -268,7 +268,7 @@ export default function MidiaPage() {
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={12} /> Site da rede</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={12} /> Demais News</p>
               <div className="flex items-center gap-2">
                 <span className="text-[8px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded">Medido</span>
                 <button onClick={carregarSiteFm} disabled={carregandoSiteFm} className="text-slate-500 hover:text-white transition-colors">

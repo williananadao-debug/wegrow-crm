@@ -32,11 +32,6 @@ const normalizeString = (str: string) => {
         .replace(/\s+/g, ' '); 
 };
 
-// PostgREST exige aspas em volta de valores com vírgula/parênteses dentro de um
-// filtro .or() — sem isso, um nome de unidade com vírgula quebra o parser da API
-// inteiro e a query falha silenciosa (zero linhas voltam, sem erro visível).
-const escaparValorFiltroOr = (v: string) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -110,31 +105,53 @@ export default function ReportsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user && rawLeads.length > 0) fetchDadosDoPeriodo(); }, [dataInicio, dataFim]);
 
+  // Junta os resultados de várias queries .eq() (uma por condição de visibilidade) em
+  // vez de uma .or() com string montada na mão — .or() exige escapar vírgula/parênteses
+  // no valor (nome de unidade é texto livre) pra não quebrar o parser do PostgREST
+  // inteiro, e isso já derrubou o Kanban do Fábio duas vezes. .eq() não tem esse risco
+  // porque o supabase-js parametriza o valor sozinho.
+  async function mesclarQueries(queries: any[], limite: number) {
+    const results = await Promise.all(queries);
+    const erro = results.find((r: any) => r.error)?.error || null;
+    const porId = new Map<number, any>();
+    results.forEach((r: any) => (r.data || []).forEach((linha: any) => porId.set(linha.id, linha)));
+    const linhas = Array.from(porId.values())
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limite);
+    return { data: linhas, error: erro };
+  }
+
   // Leads e visitas dependem do filtro de data (dataInicio/dataFim) — precisam recarregar
   // toda vez que o período muda.
   function buildLeadsQuery() {
-    let leadsQuery = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
-      .gte('created_at', dataInicio + 'T00:00:00')
-      .lte('created_at', dataFim + 'T23:59:59')
-      .order('created_at', { ascending: false })
-      .limit(3000);
-    if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
-    // OR (não só eq) — gerente também precisa ver os próprios leads mesmo quando
-    // abertos pra outra unidade, senão eles somem do relatório dele.
-    if (isGerente && perfil?.unidade) { leadsQuery = leadsQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id},criado_por.eq.${user?.id}`); }
-    else if (!isDirector) { leadsQuery = leadsQuery.eq('user_id', user?.id); }
-    return leadsQuery;
+    const base = () => {
+      let q = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
+        .gte('created_at', dataInicio + 'T00:00:00')
+        .lte('created_at', dataFim + 'T23:59:59')
+        .order('created_at', { ascending: false })
+        .limit(3000);
+      if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+      return q;
+    };
+    // Gerente também precisa ver os próprios leads mesmo quando abertos pra outra
+    // unidade, senão eles somem do relatório dele.
+    if (isGerente && perfil?.unidade) return mesclarQueries([base().eq('unidade', perfil.unidade), base().eq('user_id', user?.id), base().eq('criado_por', user?.id)], 3000);
+    if (!isDirector) return base().eq('user_id', user?.id);
+    return base();
   }
 
   function buildVisitasQuery() {
-    let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
-      .gte('created_at', dataInicio + 'T00:00:00')
-      .lte('created_at', dataFim + 'T23:59:59')
-      .limit(3000);
-    if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id);
-    if (isGerente && perfil?.unidade) visitasQuery = visitasQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id}`);
-    else if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id);
-    return visitasQuery;
+    const base = () => {
+      let q = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
+        .gte('created_at', dataInicio + 'T00:00:00')
+        .lte('created_at', dataFim + 'T23:59:59')
+        .limit(3000);
+      if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+      return q;
+    };
+    if (isGerente && perfil?.unidade) return mesclarQueries([base().eq('unidade', perfil.unidade), base().eq('user_id', user?.id)], 3000);
+    if (!isDirector) return base().eq('user_id', user?.id);
+    return base();
   }
 
   // premissas, profiles, clientes e o gráfico do ano NÃO dependem do filtro de data —
@@ -145,14 +162,18 @@ export default function ReportsPage() {
     try {
       const inicioAno = getLocalYYYYMMDD(new Date(new Date().getFullYear(), 0, 1));
       const hoje = getLocalYYYYMMDD(new Date());
-      let graficoQuery = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
-        .gte('created_at', inicioAno + 'T00:00:00')
-        .lte('created_at', hoje + 'T23:59:59')
-        .eq('status', 'ganho')
-        .limit(5000);
-      if (perfil?.empresa_id) graficoQuery = graficoQuery.eq('empresa_id', perfil.empresa_id);
-      if (isGerente && perfil?.unidade) graficoQuery = graficoQuery.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id}`);
-      else if (!isDirector) graficoQuery = graficoQuery.eq('user_id', user?.id);
+      const baseGrafico = () => {
+        let q = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
+          .gte('created_at', inicioAno + 'T00:00:00')
+          .lte('created_at', hoje + 'T23:59:59')
+          .eq('status', 'ganho')
+          .limit(5000);
+        if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+        return q;
+      };
+      const graficoQuery = isGerente && perfil?.unidade
+        ? mesclarQueries([baseGrafico().eq('unidade', perfil.unidade), baseGrafico().eq('user_id', user?.id)], 5000)
+        : (!isDirector ? baseGrafico().eq('user_id', user?.id) : baseGrafico());
 
       let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
       if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);

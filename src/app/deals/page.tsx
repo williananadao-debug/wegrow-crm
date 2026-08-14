@@ -173,13 +173,6 @@ const UF_NOMES: Record<string, string> = {
 };
 const nomeEstadoExtenso = (uf?: string) => (uf ? (UF_NOMES[uf.toUpperCase()] || uf) : '');
 
-// PostgREST exige aspas em volta de valores com vírgula/parênteses dentro de um
-// filtro .or() — sem isso, um nome de unidade com vírgula (ex: "Filial Norte, SP")
-// quebra o parser da API inteiro e a query falha silenciosa (zero linhas voltam,
-// sem erro visível). .eq() não tem esse problema porque o supabase-js serializa o
-// valor sozinho; .or() usa string crua, então quem monta precisa escapar.
-const escaparValorFiltroOr = (v: string) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-
 const timbradoPorUnidade = (unidadeNome: string) => {
   const digitos = (unidadeNome || '').replace(/\D/g, '');
   if (digitos.startsWith('104')) return '/contratos/timbrado-1047.png';
@@ -398,26 +391,46 @@ export default function DealsPage() {
     setLoading(true);
     const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
-    const buildQ = () => {
-        let q = supabase.from('leads').select(COLS);
-        if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
-        if (!isDirector) {
-            if (isOpec) q = q.or(`user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
-            // Gerente vê a unidade dele inteira, mas também precisa ver os próprios leads
-            // mesmo quando abertos pra outra unidade (ex: atendimento cross-unidade) —
-            // sem o OR aqui, um lead criado por ele fora da sua unidade some do próprio Kanban.
-            else if (isGerente && perfil?.unidade) q = q.or(`unidade.eq.${escaparValorFiltroOr(perfil.unidade)},user_id.eq.${user?.id},criado_por.eq.${user?.id}`);
-            else q = q.eq('user_id', user?.id);
-        }
-        return q;
+    // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
+    // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
+    // no valor (nome de unidade é texto livre, digitado por gente) pra não quebrar o
+    // parser do PostgREST inteiro; .eq() não tem esse risco porque o supabase-js
+    // parametriza o valor sozinho. Já quebrou o Kanban do Fábio duas vezes com .or() —
+    // por isso a troca, não só um ajuste de escape.
+    const buildQs = () => {
+        const base = () => {
+            let q = supabase.from('leads').select(COLS);
+            if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+            return q;
+        };
+        if (isDirector) return [base()];
+        if (isOpec) return [base().eq('user_id', user?.id), base().eq('criado_por', user?.id)];
+        // Gerente vê a unidade dele inteira, mas também precisa ver os próprios leads
+        // mesmo quando abertos pra outra unidade (ex: atendimento cross-unidade) — sem
+        // isso, um lead criado por ele fora da sua unidade some do próprio Kanban.
+        if (isGerente && perfil?.unidade) return [base().eq('unidade', perfil.unidade), base().eq('user_id', user?.id), base().eq('criado_por', user?.id)];
+        return [base().eq('user_id', user?.id)];
     };
 
     const inicio = dataInicioRef.current + 'T00:00:00';
     const fim = dataFimRef.current + 'T23:59:59';
-    const [openRes, closedRes] = await Promise.all([
-        buildQ().lte('etapa', 3).order('created_at', { ascending: false }).limit(500),
-        buildQ().gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }).limit(200),
+
+    const mesclarResultados = (resultados: { data: any[] | null; error: any }[], limite: number) => {
+        const erro = resultados.find(r => r.error)?.error || null;
+        const porId = new Map<number, any>();
+        resultados.forEach(r => (r.data || []).forEach((linha: any) => porId.set(linha.id, linha)));
+        const linhas = Array.from(porId.values())
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, limite);
+        return { data: linhas, error: erro };
+    };
+
+    const [resAbertos, resFechados] = await Promise.all([
+        Promise.all(buildQs().map(q => q.lte('etapa', 3).order('created_at', { ascending: false }).limit(500))),
+        Promise.all(buildQs().map(q => q.gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }).limit(200))),
     ]);
+    const openRes = mesclarResultados(resAbertos, 500);
+    const closedRes = mesclarResultados(resFechados, 200);
 
     if (openRes.error) console.error('[fetchData] open leads:', openRes.error.message);
     if (closedRes.error) console.error('[fetchData] closed leads:', closedRes.error.message);

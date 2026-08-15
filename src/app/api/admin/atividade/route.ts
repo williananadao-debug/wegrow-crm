@@ -21,8 +21,8 @@ async function verificarAdmin(request: Request) {
   return user;
 }
 
-// GET — atividade cross-tenant da plataforma toda: últimos logins, usuários ativos
-// nos últimos 7 dias e leads criados no mês corrente (soma de todas as empresas).
+// GET — atividade cross-tenant da plataforma toda: agregado + quebra por empresa
+// (usuários ativos, leads do mês, último acesso), além dos últimos logins.
 export async function GET(request: Request) {
   if (!await verificarAdmin(request))
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
@@ -35,23 +35,24 @@ export async function GET(request: Request) {
   const [
     { data: profiles },
     { data: empresasData },
-    { count: leadsMes },
+    { data: leadsData },
     { data: authData },
   ] = await Promise.all([
     db.from('profiles').select('id, nome, email, empresa_id'),
-    db.from('empresas').select('id, nome'),
-    db.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', inicioMes),
+    db.from('empresas').select('id, nome, status'),
+    db.from('leads').select('empresa_id, created_at'),
     db.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
-  const empresaNomeMap = new Map((empresasData || []).map(e => [e.id, e.nome]));
   const authMap = new Map((authData?.users || []).map(u => [u.id, u]));
+  const empresaNomeMap = new Map((empresasData || []).map(e => [e.id, e.nome]));
 
   const comLogin = (profiles || [])
     .map(p => {
       const u = authMap.get(p.id);
       return {
         nome: p.nome || p.email || 'Sem nome',
+        empresa_id: p.empresa_id,
         empresa: p.empresa_id ? (empresaNomeMap.get(p.empresa_id) || '—') : '—',
         ultimo_acesso: u?.last_sign_in_at || null,
       };
@@ -61,9 +62,32 @@ export async function GET(request: Request) {
 
   const usuariosAtivos7d = comLogin.filter(p => new Date(p.ultimo_acesso!) >= new Date(ha7dias)).length;
 
+  // Quebra por empresa
+  const porEmpresa = (empresasData || []).map(e => {
+    const usuariosDaEmpresa = comLogin.filter(p => p.empresa_id === e.id);
+    const leadsDaEmpresa = (leadsData || []).filter(l => l.empresa_id === e.id);
+    const totalUsuariosEmpresa = (profiles || []).filter(p => p.empresa_id === e.id).length;
+    return {
+      id: e.id,
+      nome: e.nome,
+      status: e.status,
+      total_usuarios: totalUsuariosEmpresa,
+      usuarios_ativos_7d: usuariosDaEmpresa.filter(p => new Date(p.ultimo_acesso!) >= new Date(ha7dias)).length,
+      leads_mes: leadsDaEmpresa.filter(l => l.created_at >= inicioMes).length,
+      leads_total: leadsDaEmpresa.length,
+      ultimo_acesso: usuariosDaEmpresa[0]?.ultimo_acesso ?? null,
+    };
+  }).sort((a, b) => {
+    if (!a.ultimo_acesso && !b.ultimo_acesso) return 0;
+    if (!a.ultimo_acesso) return 1;
+    if (!b.ultimo_acesso) return -1;
+    return new Date(b.ultimo_acesso).getTime() - new Date(a.ultimo_acesso).getTime();
+  });
+
   return NextResponse.json({
-    leads_mes: leadsMes ?? 0,
+    leads_mes: (leadsData || []).filter(l => l.created_at >= inicioMes).length,
     usuarios_ativos_7d: usuariosAtivos7d,
     ultimos_logins: comLogin.slice(0, 8),
+    por_empresa: porEmpresa,
   });
 }

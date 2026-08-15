@@ -61,7 +61,11 @@ export default function AdminPage() {
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Empresa | null>(null);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
-  const [atividade, setAtividade] = useState<{ leads_mes: number; usuarios_ativos_7d: number; ultimos_logins: { nome: string; empresa: string; ultimo_acesso: string }[] } | null>(null);
+  const [atividade, setAtividade] = useState<{
+    leads_mes: number; usuarios_ativos_7d: number;
+    ultimos_logins: { nome: string; empresa: string; ultimo_acesso: string }[];
+    por_empresa: { id: string; nome: string; status: string; total_usuarios: number; usuarios_ativos_7d: number; leads_mes: number; leads_total: number; ultimo_acesso: string | null }[];
+  } | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Form empresa selecionada
@@ -355,6 +359,45 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Atividade por empresa ativa */}
+        <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5 mb-6">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Building2 size={12}/> Atividade por empresa ativa</p>
+          {!atividade ? (
+            <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-slate-600"/></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5">
+                    <th className="text-left py-2 pr-3">Empresa</th>
+                    <th className="text-right py-2 px-3">Usuários ativos (7d)</th>
+                    <th className="text-right py-2 px-3">Leads (mês)</th>
+                    <th className="text-right py-2 px-3">Leads (total)</th>
+                    <th className="text-right py-2 pl-3">Último acesso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {atividade.por_empresa.filter(e => e.status === 'ativa').map(e => (
+                    <tr key={e.id} className="border-b border-white/5 last:border-0">
+                      <td className="py-2.5 pr-3 font-bold text-white truncate max-w-[200px]">{e.nome}</td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        <span className={e.usuarios_ativos_7d > 0 ? 'text-[#22C55E] font-bold' : 'text-slate-600'}>{e.usuarios_ativos_7d}</span>
+                        <span className="text-slate-600"> / {e.total_usuarios}</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">{e.leads_mes}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-500">{e.leads_total}</td>
+                      <td className="py-2.5 pl-3 text-right text-slate-500">{e.ultimo_acesso ? tempoRelativo(e.ultimo_acesso) : '—'}</td>
+                    </tr>
+                  ))}
+                  {atividade.por_empresa.filter(e => e.status === 'ativa').length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-6 text-slate-600">Nenhuma empresa ativa.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

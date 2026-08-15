@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
+
 export default function LoginPage() {
   const router = useRouter();
   
@@ -29,6 +31,13 @@ export default function LoginPage() {
           password: passwordValue,
         });
         if (error) throw error;
+
+        // Admin da plataforma pousa direto no God Mode — não faz sentido passar
+        // pelo dashboard de tenant pra depois navegar manualmente até lá.
+        if (ADMIN_EMAILS.includes(emailValue)) {
+          router.push('/admin');
+          return;
+        }
 
         // Empresa com o módulo Argus ativo abre direto nele — ele tem shell/tema
         // próprios e não faz sentido pousar no /dashboard padrão pra depois

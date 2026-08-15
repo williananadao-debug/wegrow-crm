@@ -40,6 +40,19 @@ const COR_PLANO: Record<string, string> = {
   enterprise: 'text-purple-400',
 };
 
+const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+function tempoRelativo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  const d = Math.floor(h / 24);
+  return `há ${d}d`;
+}
+
 export default function AdminPage() {
   const { user, perfil, loading: authLoading } = useAuth();
   const [token, setToken] = useState('');
@@ -48,6 +61,7 @@ export default function AdminPage() {
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Empresa | null>(null);
   const [unidades, setUnidades] = useState<Unidade[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
+  const [atividade, setAtividade] = useState<{ leads_mes: number; usuarios_ativos_7d: number; ultimos_logins: { nome: string; empresa: string; ultimo_acesso: string }[] } | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Form empresa selecionada
@@ -90,8 +104,12 @@ export default function AdminPage() {
 
   const carregarEmpresas = async () => {
     setLoading(true);
-    const res = await fetch('/api/admin/empresas', { headers: headers() });
-    if (res.ok) setEmpresas(await res.json());
+    const [resEmpresas, resAtividade] = await Promise.all([
+      fetch('/api/admin/empresas', { headers: headers() }),
+      fetch('/api/admin/atividade', { headers: headers() }),
+    ]);
+    if (resEmpresas.ok) setEmpresas(await resEmpresas.json());
+    if (resAtividade.ok) setAtividade(await resAtividade.json());
     setLoading(false);
   };
 
@@ -261,6 +279,81 @@ export default function AdminPage() {
             >
               <Plus size={14}/> Nova Empresa
             </button>
+          </div>
+        </div>
+
+        {/* Visão geral */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Empresas ativas</p>
+            <p className="text-xl font-black text-white">{empresas.filter(e => e.status === 'ativa').length}</p>
+          </div>
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Usuários ativos (7d)</p>
+            <p className="text-xl font-black text-[#22C55E]">{atividade?.usuarios_ativos_7d ?? '—'}</p>
+          </div>
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Leads criados (mês)</p>
+            <p className="text-xl font-black text-white">{atividade?.leads_mes ?? '—'}</p>
+          </div>
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Total de empresas</p>
+            <p className="text-xl font-black text-white">{empresas.length}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+          {/* Novas empresas por mês */}
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Activity size={12}/> Novas empresas por mês</p>
+            {(() => {
+              const hoje = new Date();
+              const meses6 = Array.from({ length: 6 }).map((_, i) => {
+                const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+                return { ano: d.getFullYear(), mes: d.getMonth(), label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}` };
+              });
+              const porMes = meses6.map(m => ({
+                ...m,
+                count: empresas.filter(e => {
+                  const d = new Date(e.created_at);
+                  return d.getFullYear() === m.ano && d.getMonth() === m.mes;
+                }).length,
+              }));
+              const max = Math.max(1, ...porMes.map(m => m.count));
+              return (
+                <div className="space-y-2">
+                  {porMes.map((m, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-slate-500 uppercase w-10 shrink-0">{m.label}</span>
+                      <div className="flex-1 h-2.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#22C55E] rounded-full transition-all" style={{ width: `${(m.count / max) * 100}%` }}/>
+                      </div>
+                      <span className="text-xs font-black text-white w-5 text-right shrink-0">{m.count}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Atividade recente */}
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Clock size={12}/> Atividade recente</p>
+            {!atividade || atividade.ultimos_logins.length === 0 ? (
+              <p className="text-slate-600 text-xs py-4 text-center">Sem logins recentes.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {atividade.ultimos_logins.map((l, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <span className="text-white font-bold">{l.nome}</span>
+                      <span className="text-slate-500"> · {l.empresa}</span>
+                    </div>
+                    <span className="text-slate-600 shrink-0">{tempoRelativo(l.ultimo_acesso)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

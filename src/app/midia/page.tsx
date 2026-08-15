@@ -392,30 +392,45 @@ export default function MidiaPage() {
                 <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
               ) : (
                 <>
-                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mb-2">Acumulado</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {appDownloadsAcumulado.map(d => (
-                      <div key={d.loja}>
-                        <h3 className="text-xl font-black text-white">{fmtNumero(d.valor)}</h3>
-                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{d.loja} · {d.unidade}</p>
+                  <h3 className="text-3xl font-black text-amber-400">{fmtNumero(appDownloadsAcumulado.reduce((acc, d) => acc + d.valor, 0))}</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1">downloads · total acumulado{appDownloadsMensal[0] ? ` até ${fmtPeriodo(appDownloadsMensal[0].periodo)}` : ''}</p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-2">
+                    {appDownloadsAcumulado.map((d, i) => (<span key={d.loja}>{i > 0 ? ' · ' : ''}{d.loja} {fmtNumero(d.valor)}</span>))}
+                  </p>
+
+                  {appDownloadsMensal.length > 0 && (() => {
+                    const periodos = [...new Set(appDownloadsMensal.map(d => d.periodo))].sort();
+                    const maxMensal = Math.max(...appDownloadsMensal.map(d => d.valor), 1);
+                    return (
+                      <div className="mt-4 pt-4 border-t border-white/5">
+                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mb-2">Por mês</p>
+                        <div className="flex items-end gap-4 h-20">
+                          {periodos.map(p => {
+                            const apple = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Apple');
+                            const android = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Android');
+                            return (
+                              <div key={p} className="flex flex-col items-center gap-1">
+                                <div className="flex items-end gap-1 h-14">
+                                  <div className="w-4 rounded-t bg-white/40 group" style={{ height: `${Math.max(((apple?.valor || 0) / maxMensal) * 100, 4)}%` }} title={`Apple ${fmtNumero(apple?.valor)} ${apple?.unidade || ''}`} />
+                                  <div className="w-4 rounded-t bg-amber-400" style={{ height: `${Math.max(((android?.valor || 0) / maxMensal) * 100, 4)}%` }} title={`Android ${fmtNumero(android?.valor)} ${android?.unidade || ''}`} />
+                                </div>
+                                <span className="text-[8px] text-slate-600 font-bold uppercase">{fmtPeriodo(p)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-sm bg-white/40" /> Apple</span>
+                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400" /> Android</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                  {appDownloadsMensal.length > 0 && (
-                    <>
-                      <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-white/5">Por mês</p>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {appDownloadsMensal.map(d => (
-                          <div key={`${d.periodo}-${d.loja}`}>
-                            <h4 className="text-base font-black text-white">{fmtNumero(d.valor)}</h4>
-                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{d.loja} · {fmtPeriodo(d.periodo)}</p>
-                            <p className="text-[8px] text-slate-600 font-bold uppercase">{d.unidade}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Acumulado e mensal nunca são somados entre si — o acumulado já contém os meses.</p>
+                    );
+                  })()}
+
+                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">
+                    Acumulado e mensal nunca são somados entre si — o acumulado já contém os meses.
+                    {appDownloadsMensal.some(d => d.unidade !== 'downloads') ? ' Atenção: pelo menos um mês veio como unidade diferente de "downloads" (ex: "instalações ativas") — confira antes de comparar meses.' : ''}
+                  </p>
                 </>
               )}
             </div>

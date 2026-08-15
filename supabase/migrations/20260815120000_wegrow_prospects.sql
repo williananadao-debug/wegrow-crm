@@ -22,6 +22,9 @@ create table if not exists public.wegrow_prospects (
 
 alter table public.wegrow_prospects enable row level security;
 -- Nenhuma policy criada de propósito: só o service role (server-side, via API admin) acessa.
+-- BYPASSRLS do service_role só pula a checagem de policy — GRANT de tabela é separado e
+-- não vem de graça nesse projeto (diferente do padrão default do Supabase), tem que pedir.
+grant select, insert, update, delete on public.wegrow_prospects to service_role;
 
 -- Seed com o mapa de prospecção já levantado (Radar Alto Vale, 25 empresas reais).
 insert into public.wegrow_prospects (nome, segmento, cidade, status, canal, faturamento_nota, fonte, estrategia) values

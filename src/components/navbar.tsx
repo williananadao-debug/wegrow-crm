@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
-  Users, Briefcase, DollarSign, ChevronLeft, ChevronRight,
+  Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
@@ -54,7 +54,6 @@ export default function Navbar() {
   const modulos = empresa?.modulos || {};
 
   const isCDL = Boolean(modulos.cdl);
-  const mostrarFinanceiro = Boolean(modulos.financeiro);
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
   const mostrarNexus = Boolean(modulos.nexus);
@@ -99,7 +98,6 @@ export default function Navbar() {
       { name: isCDL ? 'Prospecção' : 'Vendas', icon: <Zap size={20} />, href: '/deals' },
       mostrarOpec ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
-      mostrarFinanceiro ? { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' }  : null,
       (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];
 

@@ -45,6 +45,7 @@ function MidiaConfiguracoesContent() {
   const [metricas, setMetricas] = useState({
     youtube_visualizacoes: '', youtube_observacoes: '',
     instagram_demais_news_visualizacoes: '', instagram_demais_news_interacoes: '', instagram_demais_news_seguidores: '',
+    redes_sociais_visualizacoes: '', redes_sociais_interacoes: '', redes_sociais_visitas_perfil: '',
   });
 
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
@@ -77,6 +78,9 @@ function MidiaConfiguracoesContent() {
         instagram_demais_news_visualizacoes: m?.instagram_demais_news_visualizacoes?.toString() || '',
         instagram_demais_news_interacoes: m?.instagram_demais_news_interacoes?.toString() || '',
         instagram_demais_news_seguidores: m?.instagram_demais_news_seguidores?.toString() || '',
+        redes_sociais_visualizacoes: m?.redes_sociais_visualizacoes?.toString() || '',
+        redes_sociais_interacoes: m?.redes_sociais_interacoes?.toString() || '',
+        redes_sociais_visitas_perfil: m?.redes_sociais_visitas_perfil?.toString() || '',
       });
       setLoading(false);
     });
@@ -229,6 +233,9 @@ function MidiaConfiguracoesContent() {
       instagram_demais_news_visualizacoes: num(metricas.instagram_demais_news_visualizacoes),
       instagram_demais_news_interacoes: num(metricas.instagram_demais_news_interacoes),
       instagram_demais_news_seguidores: num(metricas.instagram_demais_news_seguidores),
+      redes_sociais_visualizacoes: num(metricas.redes_sociais_visualizacoes),
+      redes_sociais_interacoes: num(metricas.redes_sociais_interacoes),
+      redes_sociais_visitas_perfil: num(metricas.redes_sociais_visitas_perfil),
       criado_por: perfil.id,
       updated_at: new Date().toISOString(),
     }], { onConflict: 'empresa_id,ano,mes' });
@@ -332,6 +339,19 @@ function MidiaConfiguracoesContent() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL}>Redes sociais (rede) — visualizações</label>
+                <input type="number" className={CAMPO} value={metricas.redes_sociais_visualizacoes} onChange={e => setMetricas({ ...metricas, redes_sociais_visualizacoes: e.target.value })} placeholder="Ex: 21500000" />
+              </div>
+              <div>
+                <label className={LABEL}>Redes sociais (rede) — interações</label>
+                <input type="number" className={CAMPO} value={metricas.redes_sociais_interacoes} onChange={e => setMetricas({ ...metricas, redes_sociais_interacoes: e.target.value })} placeholder="Ex: 315000" />
+              </div>
+              <div>
+                <label className={LABEL}>Redes sociais (rede) — visitas ao perfil</label>
+                <input type="number" className={CAMPO} value={metricas.redes_sociais_visitas_perfil} onChange={e => setMetricas({ ...metricas, redes_sociais_visitas_perfil: e.target.value })} placeholder="Ex: 81000" />
+                <p className="text-[9px] text-slate-600 font-bold mt-1">Soma Instagram + Facebook das três emissoras — vem pronto do painel do Leo/IAlto, mesmo número do card "Redes sociais" dele.</p>
+              </div>
               <div>
                 <label className={LABEL}>Visualizações YouTube da rede</label>
                 <input type="number" className={CAMPO} value={metricas.youtube_visualizacoes} onChange={e => setMetricas({ ...metricas, youtube_visualizacoes: e.target.value })} />

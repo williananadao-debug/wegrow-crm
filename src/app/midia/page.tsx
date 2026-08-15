@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from './MidiaTabs';
 import {
-  MidiaMetricasMensais, InstagramInsightsResposta, YoutubeInsightsResposta,
+  MidiaMetricasMensais, YoutubeInsightsResposta,
   DemaisFmAudienciaResposta, DemaisFmSiteResposta, DemaisFmAppDownloadsResposta, DemaisFmMonetizacaoResposta,
   MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero,
 } from './shared';
@@ -31,12 +31,9 @@ export default function MidiaPage() {
 
   const [metricas, setMetricas] = useState<MidiaMetricasMensais | null>(null);
   const [historico, setHistorico] = useState<MidiaMetricasMensais[]>([]);
-  const [instagram, setInstagram] = useState<InstagramInsightsResposta | null>(null);
-  const [erroInstagram, setErroInstagram] = useState<string | null>(null);
   const [youtube, setYoutube] = useState<YoutubeInsightsResposta | null>(null);
   const [erroYoutube, setErroYoutube] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [carregandoInstagram, setCarregandoInstagram] = useState(false);
   const [carregandoYoutube, setCarregandoYoutube] = useState(false);
 
   const [audienciaFm, setAudienciaFm] = useState<DemaisFmAudienciaResposta | null>(null);
@@ -63,26 +60,6 @@ export default function MidiaPage() {
     setHistorico((hist as MidiaMetricasMensais[]) || []);
     setLoading(false);
   }, [perfil?.empresa_id, ano, mes]);
-
-  const carregarInstagram = useCallback(async () => {
-    setCarregandoInstagram(true);
-    setErroInstagram(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada.');
-      const res = await fetch(`/api/midia/instagram?ano=${ano}&mes=${mes}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.erro || 'Erro ao buscar Instagram.');
-      setInstagram(json);
-    } catch (err: any) {
-      setInstagram(null);
-      setErroInstagram(err?.message || 'Erro ao buscar Instagram.');
-    } finally {
-      setCarregandoInstagram(false);
-    }
-  }, [ano, mes]);
 
   const carregarYoutube = useCallback(async () => {
     setCarregandoYoutube(true);
@@ -181,9 +158,9 @@ export default function MidiaPage() {
 
   useEffect(() => {
     if (!temMidia) return;
-    carregarManual(); carregarInstagram(); carregarYoutube(); carregarAudienciaFm(); carregarSiteFm();
+    carregarManual(); carregarYoutube(); carregarAudienciaFm(); carregarSiteFm();
     if (isDiretor) { carregarAppDownloadsFm(); carregarMonetizacaoFm(); }
-  }, [temMidia, isDiretor, carregarManual, carregarInstagram, carregarYoutube, carregarAudienciaFm, carregarSiteFm, carregarAppDownloadsFm, carregarMonetizacaoFm]);
+  }, [temMidia, isDiretor, carregarManual, carregarYoutube, carregarAudienciaFm, carregarSiteFm, carregarAppDownloadsFm, carregarMonetizacaoFm]);
 
   const audienciaRede = audienciaFm?.dados.find(d => d.emissora === 'REDE') || null;
 
@@ -277,33 +254,26 @@ export default function MidiaPage() {
             )}
           </div>
 
-          {/* REDES SOCIAIS — medido (Instagram ao vivo; Facebook ainda não integrado) */}
+          {/* REDES SOCIAIS — manual, número pronto do painel do Leo (IG+FB das 3 emissoras) */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais — {MESES_LABEL[mes - 1]}/{ano}</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Medido</span>
-                <button onClick={carregarInstagram} disabled={carregandoInstagram} className="text-slate-500 hover:text-white transition-colors">
-                  <RefreshCw size={12} className={carregandoInstagram ? 'animate-spin' : ''} />
-                </button>
-              </div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{metricasEfetivas ? ` — ${fmtPeriodo(`${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`)}` : ''}</p>
+              <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
             </div>
-            {erroInstagram ? (
-              <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroInstagram}</p>
-            ) : instagram ? (
+            {metricasEfetivas?.redes_sociais_visualizacoes == null ? (
+              <p className="text-[11px] text-slate-500 font-bold">Sem dados — cadastre em Configurações.</p>
+            ) : (
               <>
                 <div className="flex items-baseline gap-2 mb-3">
-                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(instagram.visualizacoes)}</h3>
+                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(metricasEfetivas.redes_sociais_visualizacoes)}</h3>
                   <span className="text-xs text-slate-400 font-bold">visualizações</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(instagram.interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(instagram.visitasPerfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(metricasEfetivas.redes_sociais_interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(metricasEfetivas.redes_sociais_visitas_perfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
                 </div>
-                <p className="text-[10px] text-slate-600 font-semibold mt-3">Soma do Instagram das três emissoras · {fmtNumero(instagram.seguidores)} seguidores hoje. Facebook ainda não integrado — Leo mede IG+FB juntos, aqui só sai Instagram por enquanto.</p>
+                <p className="text-[10px] text-slate-600 font-semibold mt-3">Soma de Instagram + Facebook das três emissoras — número pronto do painel do Leo/IAlto, digitado manualmente aqui por enquanto.</p>
               </>
-            ) : (
-              <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
             )}
           </div>
 

@@ -24,6 +24,9 @@ export type MidiaMetricasMensais = {
   instagram_demais_news_visualizacoes: number | null;
   instagram_demais_news_interacoes: number | null;
   instagram_demais_news_seguidores: number | null;
+  redes_sociais_visualizacoes: number | null;
+  redes_sociais_interacoes: number | null;
+  redes_sociais_visitas_perfil: number | null;
   app_downloads_apple_total: number | null;
   app_downloads_android_total: number | null;
   monetizacao_valor: number | null;

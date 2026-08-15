@@ -119,7 +119,7 @@ export default function MidiaAniversariosPage() {
       <MidiaTabs />
 
       <div className="flex justify-end mb-6">
-        <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
+        <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
           {[hoje.getFullYear() + 1, hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
@@ -130,7 +130,7 @@ export default function MidiaAniversariosPage() {
         <div className="bg-[#0B1120] border border-white/10 rounded-3xl p-10 text-center">
           <Cake size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm mb-3">Nenhuma cidade cadastrada ainda.</p>
-          {isLideranca && <Link href="/midia/configuracoes" className="inline-block bg-pink-500 hover:bg-pink-400 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">Cadastrar em Configurações</Link>}
+          {isLideranca && <Link href="/midia/configuracoes" className="inline-block bg-[#22C55E] hover:bg-[#22C55E] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">Cadastrar em Configurações</Link>}
         </div>
       ) : (
         <>
@@ -156,8 +156,8 @@ export default function MidiaAniversariosPage() {
               return (
                 <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-black uppercase text-pink-400 bg-pink-500/10 px-2.5 py-1 rounded-full">{praca} FM</span>
-                    <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Uso interno</span>
+                    <span className="text-xs font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <span className="text-[8px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Uso Interno</span>
                   </div>
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita de aniversários ({ano})</p>
                   <h3 className="text-2xl font-black text-white mt-0.5">{fmtMoeda(receita)}</h3>
@@ -189,7 +189,7 @@ export default function MidiaAniversariosPage() {
               return (
                 <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="text-xs font-black uppercase text-pink-400 bg-pink-500/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <span className="text-xs font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
                     <h3 className="text-sm font-black text-white">Aniversários {ano}</h3>
                   </div>
                   <div className="space-y-4">
@@ -222,7 +222,7 @@ export default function MidiaAniversariosPage() {
                               )}
 
                               {isLideranca && editando !== a.id && (
-                                <button onClick={() => iniciarEdicao(a.id)} className="text-[9px] font-black uppercase text-slate-600 hover:text-pink-400 mt-2">Editar resultado</button>
+                                <button onClick={() => iniciarEdicao(a.id)} className="text-[9px] font-black uppercase text-slate-600 hover:text-[#22C55E] mt-2">Editar resultado</button>
                               )}
 
                               {editando === a.id && (
@@ -235,7 +235,7 @@ export default function MidiaAniversariosPage() {
                                   )}
                                   <textarea placeholder="Observação (opcional)" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white outline-none resize-none" />
                                   <div className="flex gap-1.5">
-                                    <button onClick={() => salvarResultado(a.id)} disabled={salvando} className="flex-1 bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1">
+                                    <button onClick={() => salvarResultado(a.id)} disabled={salvando} className="flex-1 bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1">
                                       {salvando ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar
                                     </button>
                                     <button onClick={() => setEditando(null)} className="px-3 bg-white/5 hover:bg-white/10 text-slate-400 py-1.5 rounded-lg text-[9px] font-black uppercase"><X size={11} /></button>

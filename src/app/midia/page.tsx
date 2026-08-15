@@ -178,9 +178,10 @@ export default function MidiaPage() {
 
   const audienciaRede = audienciaFm?.dados.find(d => d.emissora === 'REDE') || null;
   const siteMesAtual = siteFm?.dados.find(d => d.periodo === `${ano}-${String(mes).padStart(2, '0')}`) || null;
+  // Nunca soma mensal com acumulado (o acumulado já contém os mensais — aviso do Leo) e
+  // nunca soma Apple com Android num único número: a unidade pode divergir entre lojas
+  // (ex: Android às vezes vem como "instalações ativas", não "downloads").
   const appDownloadsAcumulado = (appDownloadsFm?.dados || []).filter(d => d.escopo === 'acumulado');
-  const appDownloadsApple = appDownloadsAcumulado.filter(d => d.loja === 'Apple').reduce((acc, d) => acc + Number(d.valor || 0), 0);
-  const appDownloadsAndroid = appDownloadsAcumulado.filter(d => d.loja === 'Android').reduce((acc, d) => acc + Number(d.valor || 0), 0);
   const monetizacaoMesAtual = monetizacaoFm?.dados.find(d => d.escopo === 'mensal' && d.periodo === `${ano}-${String(mes).padStart(2, '0')}`) || null;
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -206,12 +207,16 @@ export default function MidiaPage() {
     <div className="p-4 md:p-8 pb-20 text-white">
       <MidiaTabs />
 
-      <div className="flex justify-end mb-6">
+      <div className="flex items-end justify-between mb-6 gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-black text-white">Visão Geral</h2>
+          <p className="text-[11px] text-slate-500 font-bold mt-0.5">Indicadores de rede — audiência, redes sociais e prestação de contas do mês.</p>
+        </div>
         <div className="flex items-center gap-2">
-          <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
+          <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
             {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
           </select>
-          <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-pink-500">
+          <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
             {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -220,165 +225,187 @@ export default function MidiaPage() {
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex flex-col gap-4">
 
+          {/* REDE EM CADEIA — estimado */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Radio size={12} /> Rede em cadeia</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Radio size={13} /> Rede em cadeia</p>
               <div className="flex items-center gap-2">
-                <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Estimado</span>
+                <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Estimado</span>
                 <button onClick={carregarAudienciaFm} disabled={carregandoAudienciaFm} className="text-slate-500 hover:text-white transition-colors">
-                  <RefreshCw size={11} className={carregandoAudienciaFm ? 'animate-spin' : ''} />
+                  <RefreshCw size={12} className={carregandoAudienciaFm ? 'animate-spin' : ''} />
                 </button>
               </div>
             </div>
             {erroAudienciaFm ? (
-              <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroAudienciaFm}</p>
+              <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAudienciaFm}</p>
             ) : (
               <>
-                <h3 className="text-2xl font-black text-white">{fmtNumero(audienciaRede?.ouvintes_por_minuto)}</h3>
-                <p className="text-[10px] text-slate-500 font-bold mt-1">ouvintes por minuto</p>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-3xl font-black text-amber-400">{fmtNumero(audienciaRede?.ouvintes_por_minuto)}</h3>
+                  <span className="text-xs text-slate-400 font-bold">ouvintes por minuto</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-semibold mt-2">Cálculo por parâmetros médios de mercado, apenas população das cidades sede — com cidades vizinhas o alcance é maior.</p>
               </>
             )}
           </div>
 
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5 md:col-span-2">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={12} /> Instagram (ao vivo)</p>
+          {/* REDES SOCIAIS — medido (Instagram ao vivo; Facebook ainda não integrado) */}
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais — {MESES_LABEL[mes - 1]}/{ano}</p>
               <div className="flex items-center gap-2">
-                <span className="text-[8px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded">Medido</span>
+                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Medido</span>
                 <button onClick={carregarInstagram} disabled={carregandoInstagram} className="text-slate-500 hover:text-white transition-colors">
                   <RefreshCw size={12} className={carregandoInstagram ? 'animate-spin' : ''} />
                 </button>
               </div>
             </div>
             {erroInstagram ? (
-              <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroInstagram}</p>
+              <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroInstagram}</p>
             ) : instagram ? (
-              <div className="grid grid-cols-3 gap-4">
-                <div><h3 className="text-xl font-black text-white">{fmtCompacto(instagram.visualizacoes)}</h3><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visualizações</p></div>
-                <div><h3 className="text-xl font-black text-white">{fmtCompacto(instagram.interacoes)}</h3><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
-                <div><h3 className="text-xl font-black text-white">{fmtCompacto(instagram.visitasPerfil)}</h3><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao Perfil</p></div>
-              </div>
-            ) : (
-              <p className="text-[10px] text-slate-500 font-bold">Sem dados.</p>
-            )}
-            {instagram && <p className="text-[9px] text-slate-600 font-bold mt-2">{fmtNumero(instagram.seguidores)} seguidores hoje. Facebook ainda não integrado — some com o manual em Configurações se quiser somar.</p>}
-          </div>
-
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={12} /> Demais News</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[8px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded">Medido</span>
-                <button onClick={carregarSiteFm} disabled={carregandoSiteFm} className="text-slate-500 hover:text-white transition-colors">
-                  <RefreshCw size={11} className={carregandoSiteFm ? 'animate-spin' : ''} />
-                </button>
-              </div>
-            </div>
-            {erroSiteFm ? (
-              <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroSiteFm}</p>
-            ) : siteMesAtual?.visitas == null ? (
-              <p className="text-[10px] text-slate-500 font-bold">Mês ainda não ingerido pela Demais FM.</p>
-            ) : (
               <>
-                <h3 className="text-2xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
-                <p className="text-[10px] text-slate-500 font-bold mt-1">acessos no site</p>
+                <div className="flex items-baseline gap-2 mb-3">
+                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(instagram.visualizacoes)}</h3>
+                  <span className="text-xs text-slate-400 font-bold">visualizações</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(instagram.interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(instagram.visitasPerfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
+                </div>
+                <p className="text-[10px] text-slate-600 font-semibold mt-3">Soma do Instagram das três emissoras · {fmtNumero(instagram.seguidores)} seguidores hoje. Facebook ainda não integrado — Leo mede IG+FB juntos, aqui só sai Instagram por enquanto.</p>
               </>
+            ) : (
+              <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
             )}
           </div>
 
+          {/* DEMAIS NEWS — site + instagram próprio, split */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={12} /> Instagram Demais News</p>
-              <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Manual</span>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={13} /> Demais News</p>
+              <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Medido</span>
             </div>
-            <h3 className="text-2xl font-black text-white">{fmtCompacto(metricas?.instagram_demais_news_visualizacoes)}</h3>
-            <p className="text-[10px] text-slate-500 font-bold mt-1">
-              {fmtNumero(metricas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricas?.instagram_demais_news_seguidores)} seguidores
-            </p>
-            <p className="text-[9px] text-slate-600 font-bold mt-2">Propriedade distinta das três emissoras — não entra na soma do card de Instagram acima.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:border-r md:border-white/5 md:pr-5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Site</p>
+                  <button onClick={carregarSiteFm} disabled={carregandoSiteFm} className="text-slate-500 hover:text-white transition-colors">
+                    <RefreshCw size={11} className={carregandoSiteFm ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                {erroSiteFm ? (
+                  <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroSiteFm}</p>
+                ) : siteMesAtual?.visitas == null ? (
+                  <p className="text-[11px] text-slate-500 font-bold">Mês ainda não ingerido pela Demais FM.</p>
+                ) : (
+                  <>
+                    <h3 className="text-2xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">acessos · {MESES_LABEL[mes - 1]}/{ano}</p>
+                  </>
+                )}
+              </div>
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
+                <h3 className="text-2xl font-black text-white">{fmtCompacto(metricas?.instagram_demais_news_visualizacoes)}</h3>
+                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                  {fmtNumero(metricas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricas?.instagram_demais_news_seguidores)} seguidores
+                </p>
+              </div>
+            </div>
+            <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">O Demais News é propriedade distinta das três emissoras — esses números não entram na soma do card de redes sociais acima.</p>
           </div>
 
+          {/* YOUTUBE DA REDE — manual + canal ao vivo + mini gráfico */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Youtube size={12} /> YouTube da Rede</p>
-              <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Manual</span>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Youtube size={13} /> YouTube da Rede — {MESES_LABEL[mes - 1]}/{ano}</p>
+              <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
             </div>
-            <h3 className="text-2xl font-black text-white">{fmtCompacto(metricas?.youtube_visualizacoes)}</h3>
-            <p className="text-[10px] text-slate-500 font-bold mt-1">visualizações no mês</p>
-            {metricas?.youtube_observacoes && <p className="text-[9px] text-slate-500 mt-2 italic">{metricas.youtube_observacoes}</p>}
+            <div className="flex flex-col md:flex-row md:items-end gap-5">
+              <div className="flex-shrink-0">
+                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricas?.youtube_visualizacoes)}</h3>
+                <p className="text-[10px] text-slate-500 font-bold mt-1">visualizações no mês</p>
+                {metricas?.youtube_observacoes && <p className="text-[10px] text-slate-500 mt-2 italic max-w-xs">{metricas.youtube_observacoes}</p>}
+              </div>
+              <div className="flex-1 flex items-end gap-1.5 h-16 min-w-[200px]">
+                {graficoMeses.map((m, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+                    <div className="w-full rounded-t bg-[#22C55E]/50 group-hover:bg-[#22C55E] transition-all" style={{ height: `${Math.max((m.valor / maxGrafico) * 100, m.valor > 0 ? 4 : 0)}%` }} title={`${m.label}: ${fmtNumero(m.valor)}`} />
+                    <span className="text-[7px] text-slate-600 font-bold uppercase">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="border-t border-white/5 mt-3 pt-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[8px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded">Canal ao vivo</span>
+                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Canal ao vivo</span>
                 <button onClick={carregarYoutube} disabled={carregandoYoutube} className="text-slate-500 hover:text-white transition-colors">
-                  <RefreshCw size={11} className={carregandoYoutube ? 'animate-spin' : ''} />
+                  <RefreshCw size={12} className={carregandoYoutube ? 'animate-spin' : ''} />
                 </button>
               </div>
               {erroYoutube ? (
-                <p className="text-[9px] text-amber-400 font-bold flex items-center gap-1"><AlertTriangle size={10} /> {erroYoutube}</p>
+                <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1"><AlertTriangle size={11} /> {erroYoutube}</p>
               ) : youtube ? (
-                <p className="text-[10px] text-slate-400 font-bold">{fmtNumero(youtube.inscritos)} inscritos · {fmtCompacto(youtube.visualizacoesTotais)} views totais (histórico do canal)</p>
+                <p className="text-[11px] text-slate-400 font-bold">{fmtNumero(youtube.inscritos)} inscritos · {fmtCompacto(youtube.visualizacoesTotais)} views totais (histórico do canal)</p>
               ) : (
-                <p className="text-[9px] text-slate-600 font-bold">Carregando...</p>
+                <p className="text-[10px] text-slate-600 font-bold">Carregando...</p>
               )}
             </div>
           </div>
 
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5 md:col-span-2">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Evolução — visualizações YouTube ({ano})</p>
-            <div className="flex items-end gap-2 h-24">
-              {graficoMeses.map((m, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-                  <div className="w-full rounded-t-lg bg-red-500/70 group-hover:bg-red-500 transition-all" style={{ height: `${Math.max((m.valor / maxGrafico) * 100, m.valor > 0 ? 3 : 0)}%` }} title={`${m.label}: ${fmtNumero(m.valor)}`} />
-                  <span className="text-[8px] text-slate-600 font-bold uppercase">{m.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
+          {/* DOWNLOADS DO APP — uso interno */}
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Smartphone size={12} /> Downloads do App</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Smartphone size={13} /> Downloads do App</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[8px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Confidencial</span>
+                  <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
                   <button onClick={carregarAppDownloadsFm} disabled={carregandoAppDownloadsFm} className="text-slate-500 hover:text-white transition-colors">
-                    <RefreshCw size={11} className={carregandoAppDownloadsFm ? 'animate-spin' : ''} />
+                    <RefreshCw size={12} className={carregandoAppDownloadsFm ? 'animate-spin' : ''} />
                   </button>
                 </div>
               </div>
               {erroAppDownloadsFm ? (
-                <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroAppDownloadsFm}</p>
+                <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAppDownloadsFm}</p>
+              ) : appDownloadsAcumulado.length === 0 ? (
+                <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
               ) : (
                 <>
-                  <h3 className="text-2xl font-black text-white">{fmtNumero(appDownloadsApple + appDownloadsAndroid)}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">
-                    Apple {fmtNumero(appDownloadsApple)} · Android {fmtNumero(appDownloadsAndroid)} (acumulado)
-                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {appDownloadsAcumulado.map(d => (
+                      <div key={d.loja}>
+                        <h3 className="text-xl font-black text-white">{fmtNumero(d.valor)}</h3>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{d.loja} · {d.unidade}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Total acumulado até {MESES_LABEL[mes - 1]}/{ano} — nunca somado com o mensal, que já está contido no acumulado.</p>
                 </>
               )}
             </div>
           )}
 
+          {/* MONETIZAÇÃO DIGITAL — uso interno */}
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><DollarSign size={12} /> Monetização Digital</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><DollarSign size={13} /> Monetização Digital</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[8px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Confidencial</span>
+                  <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
                   <button onClick={carregarMonetizacaoFm} disabled={carregandoMonetizacaoFm} className="text-slate-500 hover:text-white transition-colors">
-                    <RefreshCw size={11} className={carregandoMonetizacaoFm ? 'animate-spin' : ''} />
+                    <RefreshCw size={12} className={carregandoMonetizacaoFm ? 'animate-spin' : ''} />
                   </button>
                 </div>
               </div>
               {erroMonetizacaoFm ? (
-                <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroMonetizacaoFm}</p>
+                <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroMonetizacaoFm}</p>
               ) : (
                 <>
-                  <h3 className="text-2xl font-black text-[#22C55E]">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">receita líquida do mês · {monetizacaoMesAtual?.fonte || 'YouTube + Facebook'}</p>
+                  <h3 className="text-3xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1">receita líquida do mês · {monetizacaoMesAtual?.fonte || 'YouTube + Facebook'} · {MESES_LABEL[mes - 1]}/{ano} (não soma com o acumulado)</p>
                 </>
               )}
             </div>

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026 } from '../shared';
 
-const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-pink-500";
+const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]";
 const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
 
 export default function MidiaConfiguracoesPage() {
@@ -264,7 +264,7 @@ function MidiaConfiguracoesContent() {
 
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
-              <h2 className="text-sm font-black uppercase flex items-center gap-2 text-pink-400"><Instagram size={16} /> Instagram (Meta Graph API)</h2>
+              <h2 className="text-sm font-black uppercase flex items-center gap-2 text-[#22C55E]"><Instagram size={16} /> Instagram (Meta Graph API)</h2>
               <p className="text-[11px] text-slate-500 font-semibold">
                 Precisa de uma conta Instagram Business/Creator vinculada a uma Página do Facebook, um app criado em developers.facebook.com,
                 e um token de acesso de longa duração com permissão de leitura de insights. Visível só pra diretor.
@@ -292,7 +292,7 @@ function MidiaConfiguracoesContent() {
                 <input className={CAMPO} value={metaConfig.youtube_channel_id} onChange={e => setMetaConfig({ ...metaConfig, youtube_channel_id: e.target.value })} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" />
               </div>
 
-              <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
                 {salvandoMeta ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
               </button>
 

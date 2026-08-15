@@ -107,6 +107,7 @@ export default function MidiaEmissorasPage() {
                 <h3 className="text-2xl font-black text-white">{d?.pct_audiencia != null ? `${d.pct_audiencia}%` : '—'}</h3>
               </div>
             </div>
+            {d && <p className="text-[9px] text-slate-600 font-bold mt-3 pt-3 border-t border-white/5">Fonte: {d.fonte} · atualizado em {audiencia?.atualizado_em ? new Date(audiencia.atualizado_em).toLocaleDateString('pt-BR') : '—'}</p>}
           </div>
 
           {/* Redes sociais por praça — sem dado ainda */}

@@ -183,9 +183,11 @@ export default function MidiaPage() {
   // nunca soma Apple com Android num único número: a unidade pode divergir entre lojas
   // (ex: Android às vezes vem como "instalações ativas", não "downloads").
   const appDownloadsAcumulado = (appDownloadsFm?.dados || []).filter(d => d.escopo === 'acumulado');
+  const appDownloadsMensal = [...(appDownloadsFm?.dados || [])].filter(d => d.escopo === 'mensal').sort((a, b) => (b.periodo || '').localeCompare(a.periodo || ''));
 
   const monetizacaoOrdenada = [...(monetizacaoFm?.dados || [])].filter(d => d.escopo === 'mensal').sort((a, b) => (b.periodo || '').localeCompare(a.periodo || ''));
   const monetizacaoMesAtual = monetizacaoOrdenada.find(d => d.periodo === periodoSelecionado) || monetizacaoOrdenada[0] || null;
+  const monetizacaoAcumulado = monetizacaoFm?.dados.find(d => d.escopo === 'acumulado') || null;
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -250,6 +252,9 @@ export default function MidiaPage() {
                   <span className="text-xs text-slate-400 font-bold">ouvintes por minuto</span>
                 </div>
                 <p className="text-[10px] text-slate-500 font-semibold mt-2">Cálculo por parâmetros médios de mercado, apenas população das cidades sede — com cidades vizinhas o alcance é maior.</p>
+                {audienciaFm && (
+                  <p className="text-[9px] text-slate-600 font-bold mt-2">Fonte: {audienciaRede?.fonte || '—'} · atualizado em {audienciaFm.atualizado_em ? new Date(audienciaFm.atualizado_em).toLocaleDateString('pt-BR') : '—'}</p>
+                )}
               </>
             )}
           </div>
@@ -299,6 +304,20 @@ export default function MidiaPage() {
                   <>
                     <h3 className="text-2xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
                     <p className="text-[10px] text-slate-500 font-bold mt-0.5">acessos · {fmtPeriodo(siteMesAtual.periodo)}{siteMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}</p>
+                    {siteOrdenado.length > 1 && (
+                      <div className="flex items-end gap-1 h-10 mt-3">
+                        {[...siteOrdenado].reverse().map(d => {
+                          const maxSite = Math.max(...siteOrdenado.map(x => x.visitas || 0), 1);
+                          const v = d.visitas || 0;
+                          return (
+                            <div key={d.periodo} className="flex-1 flex flex-col items-center gap-0.5 group">
+                              <div className="w-full rounded-t bg-[#22C55E]/50 group-hover:bg-[#22C55E] transition-all" style={{ height: `${Math.max((v / maxSite) * 100, v > 0 ? 4 : 0)}%` }} title={`${fmtPeriodo(d.periodo)}: ${fmtNumero(v)}`} />
+                              <span className="text-[6px] text-slate-600 font-bold uppercase">{MESES_LABEL[Number(d.periodo.split('-')[1]) - 1]}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -373,6 +392,7 @@ export default function MidiaPage() {
                 <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
               ) : (
                 <>
+                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mb-2">Acumulado</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {appDownloadsAcumulado.map(d => (
                       <div key={d.loja}>
@@ -381,7 +401,21 @@ export default function MidiaPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Total acumulado até {MESES_LABEL[mes - 1]}/{ano} — nunca somado com o mensal, que já está contido no acumulado.</p>
+                  {appDownloadsMensal.length > 0 && (
+                    <>
+                      <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mt-4 mb-2 pt-3 border-t border-white/5">Por mês</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {appDownloadsMensal.map(d => (
+                          <div key={`${d.periodo}-${d.loja}`}>
+                            <h4 className="text-base font-black text-white">{fmtNumero(d.valor)}</h4>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{d.loja} · {fmtPeriodo(d.periodo)}</p>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase">{d.unidade}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Acumulado e mensal nunca são somados entre si — o acumulado já contém os meses.</p>
                 </>
               )}
             </div>
@@ -403,10 +437,21 @@ export default function MidiaPage() {
                 <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroMonetizacaoFm}</p>
               ) : (
                 <>
-                  <h3 className="text-3xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">
-                    receita líquida · {monetizacaoMesAtual?.fonte || 'YouTube + Facebook'} · {fmtPeriodo(monetizacaoMesAtual?.periodo)}{monetizacaoMesAtual && monetizacaoMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''} (não soma com o acumulado)
-                  </p>
+                  <div className="flex items-end gap-6 flex-wrap">
+                    <div>
+                      <h3 className="text-3xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
+                      <p className="text-[10px] text-slate-500 font-bold mt-1">
+                        receita líquida do mês · {fmtPeriodo(monetizacaoMesAtual?.periodo)}{monetizacaoMesAtual && monetizacaoMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}
+                      </p>
+                    </div>
+                    {monetizacaoAcumulado && (
+                      <div>
+                        <h4 className="text-lg font-black text-white">{fmtMoeda(Number(monetizacaoAcumulado.valor))}</h4>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Acumulado</p>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Fonte: {monetizacaoMesAtual?.fonte || monetizacaoAcumulado?.fonte || 'YouTube + Facebook'} · mês e acumulado nunca são somados entre si.</p>
                 </>
               )}
             </div>

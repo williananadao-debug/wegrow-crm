@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
 import DashboardPage from '@/app/dashboard/page';
-import { ArgusEdital, fmtMoeda, fmtMoedaCompacta } from '../shared';
+import { ArgusEdital, ArgusContrato, fmtMoeda, fmtMoedaCompacta } from '../shared';
+import { Obra, Medicao } from '@/app/obras/shared';
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -69,19 +70,54 @@ const STATUS_ORDEM: { status: ArgusEdital['status_interesse']; label: string; co
   { status: 'arquivado', label: 'Arquivado', cor: 'bg-[#e5e0d5]' },
 ];
 
+const STATUS_CONTRATO_ORDEM: { status: ArgusContrato['status']; label: string; cor: string }[] = [
+  { status: 'ativo', label: 'Ativo', cor: 'bg-[#1fa85a]' },
+  { status: 'encerrado', label: 'Encerrado', cor: 'bg-[#c4c0b4]' },
+  { status: 'rescindido', label: 'Rescindido', cor: 'bg-[#d63f3f]' },
+];
+
+const STATUS_OBRA_ORDEM: { status: Obra['status']; label: string; cor: string }[] = [
+  { status: 'planejamento', label: 'Planejamento', cor: 'bg-[#1d6fd9]' },
+  { status: 'em_andamento', label: 'Em Andamento', cor: 'bg-[#d9861c]' },
+  { status: 'concluida', label: 'Concluída', cor: 'bg-[#1fa85a]' },
+  { status: 'paralisada', label: 'Paralisada', cor: 'bg-[#d63f3f]' },
+];
+
+const STATUS_MEDICAO_ORDEM: { status: Medicao['status']; label: string; cor: string }[] = [
+  { status: 'rascunho', label: 'Rascunho', cor: 'bg-[#c4c0b4]' },
+  { status: 'em_aprovacao', label: 'Em Aprovação', cor: 'bg-[#d9861c]' },
+  { status: 'aprovada', label: 'Aprovada', cor: 'bg-[#1d6fd9]' },
+  { status: 'rejeitada', label: 'Rejeitada', cor: 'bg-[#d63f3f]' },
+  { status: 'paga', label: 'Paga', cor: 'bg-[#1fa85a]' },
+];
+
 function ArgusDashboardLicitacao() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const empresa = auth.empresa;
+  const temObras = Boolean(empresa?.modulos?.obras);
 
   const [editais, setEditais] = useState<ArgusEdital[]>([]);
+  const [contratos, setContratos] = useState<ArgusContrato[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
+  const [medicoes, setMedicoes] = useState<Medicao[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;
-    supabase.from('argus_editais').select('*').eq('empresa_id', perfil.empresa_id).limit(1000)
-      .then(({ data }) => { setEditais((data as ArgusEdital[]) || []); setLoading(false); });
-  }, [perfil?.empresa_id]);
+    Promise.all([
+      supabase.from('argus_editais').select('*').eq('empresa_id', perfil.empresa_id).limit(1000),
+      supabase.from('argus_contratos').select('*').eq('empresa_id', perfil.empresa_id).limit(1000),
+      temObras ? supabase.from('obras').select('*').eq('empresa_id', perfil.empresa_id).limit(500) : Promise.resolve({ data: [] }),
+      temObras ? supabase.from('medicoes').select('*').eq('empresa_id', perfil.empresa_id).limit(1000) : Promise.resolve({ data: [] }),
+    ]).then(([editaisRes, contratosRes, obrasRes, medicoesRes]) => {
+      setEditais((editaisRes.data as ArgusEdital[]) || []);
+      setContratos((contratosRes.data as ArgusContrato[]) || []);
+      setObras((obrasRes.data as Obra[]) || []);
+      setMedicoes((medicoesRes.data as Medicao[]) || []);
+      setLoading(false);
+    });
+  }, [perfil?.empresa_id, temObras]);
 
   if (loading) return <div><ArgusTopNav nomeEmpresa={empresa?.nome} /><div className="p-8 flex justify-center"><Loader2 size={22} className="animate-spin text-[#d9861c]" /></div></div>;
 
@@ -135,6 +171,42 @@ function ArgusDashboardLicitacao() {
     return acc;
   }, {})).sort((a, b) => b.qtd - a.qtd).slice(0, 6);
   const maxModalidade = Math.max(...porModalidade.map(m => m.qtd), 1);
+
+  // ── Contratos ──────────────────────────────────────────────
+  const contratosAtivos = contratos.filter(c => c.status === 'ativo');
+  const valorContratosAtivos = contratosAtivos.reduce((acc, c) => acc + Number(c.valor_contrato || 0), 0);
+  const em60Dias = new Date(); em60Dias.setDate(em60Dias.getDate() + 60);
+  const contratosVencendo = contratosAtivos.filter(c => c.data_fim && new Date(c.data_fim) <= em60Dias);
+  const porStatusContrato = STATUS_CONTRATO_ORDEM.map(s => ({
+    ...s,
+    qtd: contratos.filter(c => c.status === s.status).length,
+    valor: contratos.filter(c => c.status === s.status).reduce((acc, c) => acc + Number(c.valor_contrato || 0), 0),
+  }));
+  const maxStatusContrato = Math.max(...porStatusContrato.map(s => s.qtd), 1);
+  const maxValorContrato = Math.max(...porStatusContrato.map(s => s.valor), 1);
+
+  // ── Obras ──────────────────────────────────────────────────
+  const obrasEmAndamento = obras.filter(o => o.status === 'em_andamento');
+  const orcadoTotalObras = obras.reduce((acc, o) => acc + Number(o.valor_orcado_total || 0), 0);
+  const medicoesPagas = medicoes.filter(m => m.status === 'paga');
+  const valorMedidoPago = medicoesPagas.reduce((acc, m) => acc + Number(m.valor_medido || 0), 0);
+  const porStatusObra = STATUS_OBRA_ORDEM.map(s => ({ ...s, qtd: obras.filter(o => o.status === s.status).length }));
+  const maxStatusObra = Math.max(...porStatusObra.map(s => s.qtd), 1);
+  const porStatusMedicao = STATUS_MEDICAO_ORDEM.map(s => ({ ...s, qtd: medicoes.filter(m => m.status === s.status).length }));
+  const maxStatusMedicao = Math.max(...porStatusMedicao.map(s => s.qtd), 1);
+
+  // Evolução mensal do valor pago em medições — usa aprovado_em como proxy do mês de
+  // pagamento (não existe campo dedicado "data_pagamento" em medições).
+  const ultimosMesesMedicoes = Array.from({ length: 6 }, (_, i) => {
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+    const valorPago = medicoesPagas.filter(m => {
+      if (!m.aprovado_em) return false;
+      const d = new Date(m.aprovado_em);
+      return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+    }).reduce((acc, m) => acc + Number(m.valor_medido || 0), 0);
+    return { label: MESES_LABEL[ref.getMonth()], valorPago };
+  });
+  const maxMesMedicao = Math.max(...ultimosMesesMedicoes.map(m => m.valorPago), 1);
 
   return (
     <div>
@@ -212,6 +284,93 @@ function ArgusDashboardLicitacao() {
                 )}
               </div>
             </div>
+
+            {/* ── CONTRATOS ─────────────────────────────────────── */}
+            <p className="text-[13px] font-bold text-[#9a958a] uppercase tracking-widest mt-10 mb-4">Contratos</p>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <Kpi titulo="Contratos ativos" valor={`${contratosAtivos.length}`} corBorda="border-t-[#1fa85a]" />
+              <Kpi titulo="Valor ativo" valor={fmtMoedaCompacta(valorContratosAtivos)} corBorda="border-t-[#241c14]" />
+              <Kpi titulo="Vencendo em 60 dias" valor={`${contratosVencendo.length}`} corBorda={contratosVencendo.length > 0 ? 'border-t-[#d63f3f]' : 'border-t-[#e5e0d5]'} />
+            </div>
+
+            {contratos.length === 0 ? (
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6 mb-4">
+                <p className="text-[13px] text-[#9a958a] font-semibold">Nenhum contrato cadastrado ainda.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
+                <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
+                  <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-4">Por status (quantidade)</p>
+                  <div className="space-y-3">
+                    {porStatusContrato.map(s => (
+                      <BarraProporcional key={s.status} label={s.label} valor={s.qtd} max={maxStatusContrato} cor={s.cor} sufixo={`${s.qtd}`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
+                  <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-4">Por status (valor)</p>
+                  <div className="space-y-3">
+                    {porStatusContrato.map(s => (
+                      <BarraProporcional key={s.status} label={s.label} valor={s.valor} max={maxValorContrato} cor={s.cor} sufixo={fmtMoedaCompacta(s.valor)} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── OBRAS ──────────────────────────────────────────── */}
+            {temObras && (
+              <>
+                <p className="text-[13px] font-bold text-[#9a958a] uppercase tracking-widest mb-4">Obras</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  <Kpi titulo="Total de obras" valor={`${obras.length}`} corBorda="border-t-[#1d6fd9]" />
+                  <Kpi titulo="Em andamento" valor={`${obrasEmAndamento.length}`} corBorda="border-t-[#d9861c]" />
+                  <Kpi titulo="Orçado total" valor={fmtMoedaCompacta(orcadoTotalObras)} corBorda="border-t-[#241c14]" />
+                  <Kpi titulo="Medido e pago" valor={fmtMoedaCompacta(valorMedidoPago)} corBorda="border-t-[#1fa85a]" />
+                </div>
+
+                {obras.length === 0 ? (
+                  <div className="bg-white border border-[#e5e0d5] rounded-2xl p-6">
+                    <p className="text-[13px] text-[#9a958a] font-semibold">Nenhuma obra cadastrada ainda.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                      <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
+                        <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-4">Obras por status</p>
+                        <div className="space-y-3">
+                          {porStatusObra.map(s => (
+                            <BarraProporcional key={s.status} label={s.label} valor={s.qtd} max={maxStatusObra} cor={s.cor} sufixo={`${s.qtd}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
+                        <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-4">Medições por status</p>
+                        <div className="space-y-3">
+                          {porStatusMedicao.map(s => (
+                            <BarraProporcional key={s.status} label={s.label} valor={s.qtd} max={maxStatusMedicao} cor={s.cor} sufixo={`${s.qtd}`} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5">
+                      <p className="text-[12px] font-bold text-[#9a958a] uppercase tracking-wide mb-4">Evolução mensal — valor medido pago</p>
+                      <div className="flex items-end gap-3 h-32">
+                        {ultimosMesesMedicoes.map((m, i) => (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                            <div className="w-full flex items-end justify-center h-24">
+                              <div className="w-full rounded-t-md bg-[#1fa85a]" style={{ height: `${Math.max((m.valorPago / maxMesMedicao) * 100, m.valorPago > 0 ? 4 : 0)}%` }} title={fmtMoeda(m.valorPago)} />
+                            </div>
+                            <span className="text-[10px] text-[#9a958a] font-bold uppercase">{m.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </>
         )}
       </main>

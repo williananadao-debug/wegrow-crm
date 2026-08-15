@@ -11,6 +11,12 @@ import {
   MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero,
 } from './shared';
 
+const fmtPeriodo = (periodo: string | null | undefined) => {
+  if (!periodo) return '—';
+  const [anoStr, mesStr] = periodo.split('-');
+  return `${MESES_LABEL[Number(mesStr) - 1]}/${anoStr}`;
+};
+
 export default function MidiaPage() {
   const auth = useAuth() || {};
   const authLoading = (auth as any).loading;
@@ -122,7 +128,10 @@ export default function MidiaPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
-      const res = await fetch(`/api/midia/demais-fm/site?ano=${ano}&mes=${mes}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      // Sem ano/mes na chamada de propósito: a API do Leo retorna ERRO (não vazio) quando o
+      // período pedido ainda não foi ingerido — pedindo a série toda, o fallback pro mês
+      // mais recente disponível (abaixo) sempre tem o que precisa pra funcionar.
+      const res = await fetch('/api/midia/demais-fm/site', { headers: { Authorization: `Bearer ${session.access_token}` } });
       const json = await res.json();
       if (!res.ok) throw new Error(json.erro || 'Erro ao buscar site.');
       setSiteFm(json);
@@ -132,7 +141,7 @@ export default function MidiaPage() {
     } finally {
       setCarregandoSiteFm(false);
     }
-  }, [ano, mes]);
+  }, []);
 
   const carregarAppDownloadsFm = useCallback(async () => {
     setCarregandoAppDownloadsFm(true);
@@ -177,12 +186,29 @@ export default function MidiaPage() {
   }, [temMidia, isDiretor, carregarManual, carregarInstagram, carregarYoutube, carregarAudienciaFm, carregarSiteFm, carregarAppDownloadsFm, carregarMonetizacaoFm]);
 
   const audienciaRede = audienciaFm?.dados.find(d => d.emissora === 'REDE') || null;
-  const siteMesAtual = siteFm?.dados.find(d => d.periodo === `${ano}-${String(mes).padStart(2, '0')}`) || null;
+
+  // A ingestão da Demais FM é mensal e às vezes atrasa alguns dias — se o mês selecionado
+  // (por padrão o mês corrente) ainda não tiver dado, cai pro mês mais recente disponível
+  // em vez de mostrar vazio. O rótulo mostrado usa o período real do dado, não o do seletor
+  // — mesmo padrão do painel do Leo, que rotula fixo "JULHO/2026" em vez de assumir o mês atual.
+  const periodoSelecionado = `${ano}-${String(mes).padStart(2, '0')}`;
+  const siteOrdenado = [...(siteFm?.dados || [])].sort((a, b) => b.periodo.localeCompare(a.periodo));
+  const siteMesAtual = siteOrdenado.find(d => d.periodo === periodoSelecionado) || siteOrdenado[0] || null;
+
+  // Mesma lógica pros campos manuais (YouTube da rede, Instagram Demais News) — se
+  // ninguém preencheu o mês selecionado ainda, cai pro mês mais recente que tem dado
+  // preenchido em vez de mostrar tudo zerado.
+  const historicoOrdenado = [...historico].sort((a, b) => (b.ano - a.ano) || (b.mes - a.mes));
+  const metricasEfetivas = metricas || historicoOrdenado[0] || null;
+  const metricasEhFallback = Boolean(!metricas && metricasEfetivas);
+
   // Nunca soma mensal com acumulado (o acumulado já contém os mensais — aviso do Leo) e
   // nunca soma Apple com Android num único número: a unidade pode divergir entre lojas
   // (ex: Android às vezes vem como "instalações ativas", não "downloads").
   const appDownloadsAcumulado = (appDownloadsFm?.dados || []).filter(d => d.escopo === 'acumulado');
-  const monetizacaoMesAtual = monetizacaoFm?.dados.find(d => d.escopo === 'mensal' && d.periodo === `${ano}-${String(mes).padStart(2, '0')}`) || null;
+
+  const monetizacaoOrdenada = [...(monetizacaoFm?.dados || [])].filter(d => d.escopo === 'mensal').sort((a, b) => (b.periodo || '').localeCompare(a.periodo || ''));
+  const monetizacaoMesAtual = monetizacaoOrdenada.find(d => d.periodo === periodoSelecionado) || monetizacaoOrdenada[0] || null;
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -302,15 +328,16 @@ export default function MidiaPage() {
                 ) : (
                   <>
                     <h3 className="text-2xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
-                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">acessos · {MESES_LABEL[mes - 1]}/{ano}</p>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">acessos · {fmtPeriodo(siteMesAtual.periodo)}{siteMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}</p>
                   </>
                 )}
               </div>
               <div>
                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
-                <h3 className="text-2xl font-black text-white">{fmtCompacto(metricas?.instagram_demais_news_visualizacoes)}</h3>
+                <h3 className="text-2xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
                 <p className="text-[10px] text-slate-500 font-bold mt-0.5">
-                  {fmtNumero(metricas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricas?.instagram_demais_news_seguidores)} seguidores
+                  {fmtNumero(metricasEfetivas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricasEfetivas?.instagram_demais_news_seguidores)} seguidores
+                  {metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ''}
                 </p>
               </div>
             </div>
@@ -325,9 +352,11 @@ export default function MidiaPage() {
             </div>
             <div className="flex flex-col md:flex-row md:items-end gap-5">
               <div className="flex-shrink-0">
-                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricas?.youtube_visualizacoes)}</h3>
-                <p className="text-[10px] text-slate-500 font-bold mt-1">visualizações no mês</p>
-                {metricas?.youtube_observacoes && <p className="text-[10px] text-slate-500 mt-2 italic max-w-xs">{metricas.youtube_observacoes}</p>}
+                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricasEfetivas?.youtube_visualizacoes)}</h3>
+                <p className="text-[10px] text-slate-500 font-bold mt-1">
+                  visualizações{metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ' no mês'}
+                </p>
+                {metricasEfetivas?.youtube_observacoes && <p className="text-[10px] text-slate-500 mt-2 italic max-w-xs">{metricasEfetivas.youtube_observacoes}</p>}
               </div>
               <div className="flex-1 flex items-end gap-1.5 h-16 min-w-[200px]">
                 {graficoMeses.map((m, i) => (
@@ -405,7 +434,9 @@ export default function MidiaPage() {
               ) : (
                 <>
                   <h3 className="text-3xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">receita líquida do mês · {monetizacaoMesAtual?.fonte || 'YouTube + Facebook'} · {MESES_LABEL[mes - 1]}/{ano} (não soma com o acumulado)</p>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1">
+                    receita líquida · {monetizacaoMesAtual?.fonte || 'YouTube + Facebook'} · {fmtPeriodo(monetizacaoMesAtual?.periodo)}{monetizacaoMesAtual && monetizacaoMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''} (não soma com o acumulado)
+                  </p>
                 </>
               )}
             </div>

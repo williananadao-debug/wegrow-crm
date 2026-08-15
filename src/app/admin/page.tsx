@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Building2, Plus, Edit2, X, Save, Loader2, Users, Package,
   ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
-  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon
+  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon, Target
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
@@ -237,6 +237,12 @@ export default function AdminPage() {
                 {empresas.filter(e => e.status === 'ativa').length} ativas
               </p>
             </div>
+            <Link
+              href="/admin/prospeccao"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
+              <Target size={14}/> Prospecção
+            </Link>
             <Link
               href="/admin/indicadores"
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"

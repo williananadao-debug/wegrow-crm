@@ -238,6 +238,12 @@ export default function AdminPage() {
               </p>
             </div>
             <Link
+              href="/admin/indicadores"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
+              <BarChart2 size={14}/> Indicadores
+            </Link>
+            <Link
               href="/admin/clientes-wegrow"
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
             >

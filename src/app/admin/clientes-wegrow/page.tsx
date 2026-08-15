@@ -240,6 +240,14 @@ export default function ClientesWeGrowPage() {
   const inadimplentes = clientes.filter(c => statusPgto(c.billing) === 'inadimplente');
   const semDados = clientes.filter(c => statusPgto(c.billing) === 'sem_dados');
 
+  // Custo de ferramentas escala com a base — mesma faixa usada no plano de negócio (Supabase
+  // é o único item que muda de degrau; Vercel/Claude/Docuseal/contrato ficam fixos).
+  const custoSupabase = clientes.length <= 20 ? 160 : clientes.length <= 60 ? 280 : clientes.length <= 120 ? 450 : 650;
+  const custoFerramentas = 50 + 159 + custoSupabase + 115 + 105;
+  const imposto = mrr * 0.06;
+  const lucroLiquido = mrr - imposto - custoFerramentas;
+  const arpu = clientes.length > 0 ? mrr / clientes.length : 0;
+
   const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={13}/> },
     { id: 'modulos',     label: 'Módulos',     icon: <Package size={13}/> },
@@ -267,9 +275,11 @@ export default function ClientesWeGrowPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
           {[
             { label: 'MRR', valor: `R$ ${mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cor: 'text-[#22C55E]' },
+            { label: 'ARPU', valor: `R$ ${arpu.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cor: 'text-white' },
+            { label: 'Lucro líquido (est.)', valor: `R$ ${lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, cor: lucroLiquido >= 0 ? 'text-[#22C55E]' : 'text-red-400' },
             { label: 'Clientes', valor: String(clientes.length), cor: 'text-white' },
             { label: 'Vencem em 7d', valor: String(vencendoBreve.length), cor: vencendoBreve.length > 0 ? 'text-yellow-400' : 'text-white' },
             { label: 'Vencidos', valor: String(inadimplentes.length), cor: inadimplentes.length > 0 ? 'text-red-400' : 'text-white' },
@@ -280,6 +290,7 @@ export default function ClientesWeGrowPage() {
             </div>
           ))}
         </div>
+        <p className="text-slate-600 text-[10px] mb-6">Lucro líquido = MRR − 6% Simples Nacional − custo de ferramentas (Vercel, Supabase escalado por faixa de clientes, Claude IA, Docuseal). Não inclui pró-labore, PJ contratado ou outros custos fora dessa lista.</p>
 
         {vencendoBreve.length > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4 flex items-start gap-3">

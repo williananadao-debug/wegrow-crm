@@ -403,31 +403,31 @@ export default function MidiaPage() {
 
                     {appDownloadsMensal.length > 0 && (() => {
                       const periodos = [...new Set(appDownloadsMensal.map(d => d.periodo))].sort();
-                      const r = 20, c = 2 * Math.PI * r;
+                      const r = 34, c = 2 * Math.PI * r;
                       return (
-                        <div className="flex-1 flex flex-wrap items-start gap-5 md:border-l md:border-white/5 md:pl-5">
+                        <div className="flex-1 flex flex-wrap items-start gap-7 md:border-l md:border-white/5 md:pl-6">
                           {periodos.map(p => {
                             const apple = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Apple');
                             const android = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Android');
                             const av = apple?.valor || 0, dv = android?.valor || 0, total = av + dv;
                             const appleFrac = total > 0 ? av / total : 0;
                             return (
-                              <div key={p} className="flex flex-col items-center gap-1.5">
-                                <div className="relative w-14 h-14">
-                                  <svg viewBox="0 0 60 60" width="56" height="56" className="-rotate-90">
-                                    <circle cx="30" cy="30" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="10" />
-                                    <circle cx="30" cy="30" r={r} fill="none" stroke="#fff" strokeWidth="10" strokeDasharray={`${appleFrac * c} ${c}`} strokeLinecap="butt">
+                              <div key={p} className="flex flex-col items-center gap-2">
+                                <div className="relative w-24 h-24">
+                                  <svg viewBox="0 0 90 90" width="96" height="96" className="-rotate-90">
+                                    <circle cx="45" cy="45" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="14" />
+                                    <circle cx="45" cy="45" r={r} fill="none" stroke="#fff" strokeWidth="14" strokeDasharray={`${appleFrac * c} ${c}`} strokeLinecap="butt">
                                       <title>{`Apple ${fmtNumero(av)} ${apple?.unidade || ''}`}</title>
                                     </circle>
-                                    <circle cx="30" cy="30" r={r} fill="none" stroke="#fbbf24" strokeWidth="10" strokeDasharray={`${(1 - appleFrac) * c} ${c}`} strokeDashoffset={-(appleFrac * c)} strokeLinecap="butt">
+                                    <circle cx="45" cy="45" r={r} fill="none" stroke="#fbbf24" strokeWidth="14" strokeDasharray={`${(1 - appleFrac) * c} ${c}`} strokeDashoffset={-(appleFrac * c)} strokeLinecap="butt">
                                       <title>{`Android ${fmtNumero(dv)} ${android?.unidade || ''}`}</title>
                                     </circle>
                                   </svg>
                                   <div className="absolute inset-0 flex items-center justify-center">
-                                    <span className="text-[10px] font-black text-white">{fmtCompacto(total)}</span>
+                                    <span className="text-sm font-black text-white">{fmtCompacto(total)}</span>
                                   </div>
                                 </div>
-                                <span className="text-[8px] text-slate-600 font-bold uppercase">{fmtPeriodo(p)}</span>
+                                <span className="text-[9px] text-slate-500 font-bold uppercase">{fmtPeriodo(p)}</span>
                               </div>
                             );
                           })}

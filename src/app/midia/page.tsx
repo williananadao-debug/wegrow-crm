@@ -392,40 +392,53 @@ export default function MidiaPage() {
                 <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
               ) : (
                 <>
-                  <h3 className="text-3xl font-black text-amber-400">{fmtNumero(appDownloadsAcumulado.reduce((acc, d) => acc + d.valor, 0))}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">downloads · total acumulado{appDownloadsMensal[0] ? ` até ${fmtPeriodo(appDownloadsMensal[0].periodo)}` : ''}</p>
-                  <p className="text-[10px] text-slate-400 font-bold mt-2">
-                    {appDownloadsAcumulado.map((d, i) => (<span key={d.loja}>{i > 0 ? ' · ' : ''}{d.loja} {fmtNumero(d.valor)}</span>))}
-                  </p>
+                  <div className="flex flex-col md:flex-row md:items-center gap-5">
+                    <div className="flex-shrink-0">
+                      <h3 className="text-3xl font-black text-amber-400">{fmtNumero(appDownloadsAcumulado.reduce((acc, d) => acc + d.valor, 0))}</h3>
+                      <p className="text-[10px] text-slate-500 font-bold mt-1">downloads · total acumulado{appDownloadsMensal[0] ? ` até ${fmtPeriodo(appDownloadsMensal[0].periodo)}` : ''}</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-2">
+                        {appDownloadsAcumulado.map((d, i) => (<span key={d.loja}>{i > 0 ? ' · ' : ''}{d.loja} {fmtNumero(d.valor)}</span>))}
+                      </p>
+                    </div>
 
-                  {appDownloadsMensal.length > 0 && (() => {
-                    const periodos = [...new Set(appDownloadsMensal.map(d => d.periodo))].sort();
-                    const maxMensal = Math.max(...appDownloadsMensal.map(d => d.valor), 1);
-                    return (
-                      <div className="mt-4 pt-4 border-t border-white/5">
-                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-wide mb-2">Por mês</p>
-                        <div className="flex items-end gap-4 h-20">
+                    {appDownloadsMensal.length > 0 && (() => {
+                      const periodos = [...new Set(appDownloadsMensal.map(d => d.periodo))].sort();
+                      const r = 20, c = 2 * Math.PI * r;
+                      return (
+                        <div className="flex-1 flex flex-wrap items-start gap-5 md:border-l md:border-white/5 md:pl-5">
                           {periodos.map(p => {
                             const apple = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Apple');
                             const android = appDownloadsMensal.find(d => d.periodo === p && d.loja === 'Android');
+                            const av = apple?.valor || 0, dv = android?.valor || 0, total = av + dv;
+                            const appleFrac = total > 0 ? av / total : 0;
                             return (
-                              <div key={p} className="flex flex-col items-center gap-1">
-                                <div className="flex items-end gap-1 h-14">
-                                  <div className="w-4 rounded-t bg-white/40 group" style={{ height: `${Math.max(((apple?.valor || 0) / maxMensal) * 100, 4)}%` }} title={`Apple ${fmtNumero(apple?.valor)} ${apple?.unidade || ''}`} />
-                                  <div className="w-4 rounded-t bg-amber-400" style={{ height: `${Math.max(((android?.valor || 0) / maxMensal) * 100, 4)}%` }} title={`Android ${fmtNumero(android?.valor)} ${android?.unidade || ''}`} />
+                              <div key={p} className="flex flex-col items-center gap-1.5">
+                                <div className="relative w-14 h-14">
+                                  <svg viewBox="0 0 60 60" width="56" height="56" className="-rotate-90">
+                                    <circle cx="30" cy="30" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="10" />
+                                    <circle cx="30" cy="30" r={r} fill="none" stroke="#fff" strokeWidth="10" strokeDasharray={`${appleFrac * c} ${c}`} strokeLinecap="butt">
+                                      <title>{`Apple ${fmtNumero(av)} ${apple?.unidade || ''}`}</title>
+                                    </circle>
+                                    <circle cx="30" cy="30" r={r} fill="none" stroke="#fbbf24" strokeWidth="10" strokeDasharray={`${(1 - appleFrac) * c} ${c}`} strokeDashoffset={-(appleFrac * c)} strokeLinecap="butt">
+                                      <title>{`Android ${fmtNumero(dv)} ${android?.unidade || ''}`}</title>
+                                    </circle>
+                                  </svg>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-[10px] font-black text-white">{fmtCompacto(total)}</span>
+                                  </div>
                                 </div>
                                 <span className="text-[8px] text-slate-600 font-bold uppercase">{fmtPeriodo(p)}</span>
                               </div>
                             );
                           })}
+                          <div className="flex flex-col gap-1 justify-center">
+                            <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-white" /> Apple</span>
+                            <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Android</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 mt-2">
-                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-sm bg-white/40" /> Apple</span>
-                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400" /> Android</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </div>
 
                   <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">
                     Acumulado e mensal nunca são somados entre si — o acumulado já contém os meses.

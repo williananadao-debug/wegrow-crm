@@ -243,7 +243,7 @@ export default function ClientesWeGrowPage() {
   // Custo de ferramentas escala com a base — mesma faixa usada no plano de negócio (Supabase
   // é o único item que muda de degrau; Vercel/Claude/Docuseal/contrato ficam fixos).
   const custoSupabase = clientes.length <= 20 ? 160 : clientes.length <= 60 ? 280 : clientes.length <= 120 ? 450 : 650;
-  const custoFerramentas = 50 + 159 + custoSupabase + 115 + 105;
+  const custoFerramentas = 50 + 159 + custoSupabase + 115 + 105 + 260; // + contabilidade (Contabilizei)
   const imposto = mrr * 0.06;
   const lucroLiquido = mrr - imposto - custoFerramentas;
   const arpu = clientes.length > 0 ? mrr / clientes.length : 0;
@@ -290,7 +290,7 @@ export default function ClientesWeGrowPage() {
             </div>
           ))}
         </div>
-        <p className="text-slate-600 text-[10px] mb-6">Lucro líquido = MRR − 6% Simples Nacional − custo de ferramentas (Vercel, Supabase escalado por faixa de clientes, Claude IA, Docuseal). Não inclui pró-labore, PJ contratado ou outros custos fora dessa lista.</p>
+        <p className="text-slate-600 text-[10px] mb-6">Lucro líquido = MRR − 6% Simples Nacional − custo de ferramentas (Vercel, Supabase escalado por faixa de clientes, Claude IA, Docuseal, contabilidade). Não inclui pró-labore, PJ contratado ou outros custos fora dessa lista.</p>
 
         {vencendoBreve.length > 0 && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4 flex items-start gap-3">

@@ -17,6 +17,8 @@ const CUSTO_CONTRATO = 50;
 const CUSTO_VERCEL = 159;
 const CUSTO_CLAUDE = 115;
 const CUSTO_DOCUSEAL = 105;
+const CUSTO_CONTABILIDADE = 260; // Contabilizei
+
 function custoSupabase(n: number) {
   if (n <= 20) return 160;
   if (n <= 60) return 280;
@@ -71,7 +73,7 @@ export default function IndicadoresPage() {
 
   const mrr = clientes.reduce((s, c) => s + (c.billing?.valor_mensal ?? 0), 0);
   const arpu = clientes.length > 0 ? mrr / clientes.length : 0;
-  const custoFerramentas = CUSTO_CONTRATO + CUSTO_VERCEL + custoSupabase(clientes.length) + CUSTO_CLAUDE + CUSTO_DOCUSEAL;
+  const custoFerramentas = CUSTO_CONTRATO + CUSTO_VERCEL + custoSupabase(clientes.length) + CUSTO_CLAUDE + CUSTO_DOCUSEAL + CUSTO_CONTABILIDADE;
   const imposto = mrr * 0.06;
   const lucroLiquido = mrr - imposto - custoFerramentas;
 
@@ -159,7 +161,7 @@ export default function IndicadoresPage() {
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between"><span className="text-slate-400">MRR bruto</span><span className="font-mono font-bold text-white">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">− Imposto (Simples, 6%)</span><span className="font-mono text-red-400">− R$ {imposto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">− Ferramentas (Vercel, Supabase, Claude IA, Docuseal, contrato)</span><span className="font-mono text-red-400">− R$ {custoFerramentas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">− Ferramentas (Vercel, Supabase, Claude IA, Docuseal, contrato, contabilidade)</span><span className="font-mono text-red-400">− R$ {custoFerramentas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                   <div className="border-t border-white/10 pt-2 flex justify-between"><span className="font-black text-white">= Lucro líquido</span><span className={`font-mono font-black ${lucroLiquido >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                 </div>
                 <p className="text-slate-600 text-[10px] mt-3">Supabase escala com a base ({clientes.length} clientes → R$ {custoSupabase(clientes.length)}/mês nessa faixa). Não inclui PJ contratado, pró-labore ou split entre sócios.</p>

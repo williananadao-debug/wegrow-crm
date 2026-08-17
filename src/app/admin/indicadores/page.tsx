@@ -27,9 +27,13 @@ function custoSupabase(n: number) {
   return 650;
 }
 
-type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
+type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; canal_origem?: string | null; cancelado_em?: string | null; };
 type Billing = { empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; };
 type ClienteView = Empresa & { billing: Billing | null };
+type Prospect = { id: string; canal: string | null; status: string; };
+type MrrSnapshot = { ano: number; mes: number; mrr_total: number; clientes: number; };
+
+const CANAL_LABELS: Record<string, string> = { ialto: 'IAlto', nilton: 'Nilton', organico: 'Orgânico', indicacao: 'Indicação', direto: 'Direto' };
 
 function diasParaVencer(d: string | null) { if (!d) return null; return Math.floor((new Date(d + 'T00:00:00').getTime() - Date.now()) / 86400000); }
 
@@ -40,6 +44,9 @@ export default function IndicadoresPage() {
   const isAdmin = ADMIN_EMAILS.includes(user?.email || '');
 
   const [clientes, setClientes] = useState<ClienteView[]>([]);
+  const [todasEmpresas, setTodasEmpresas] = useState<Empresa[]>([]);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [mrrSnapshots, setMrrSnapshots] = useState<MrrSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
   const [exportarGrafico, setExportarGrafico] = useState(false);
@@ -65,10 +72,19 @@ export default function IndicadoresPage() {
 
   const carregar = async () => {
     setLoading(true);
-    const res = await fetch('/api/admin/empresas', { headers: { Authorization: `Bearer ${token}` } });
+    const [res, { data: billings }, { data: prospectsData }, { data: snapshotsData }] = await Promise.all([
+      fetch('/api/admin/empresas', { headers: { Authorization: `Bearer ${token}` } }),
+      supabase.from('clientes_wegrow').select('*'),
+      supabase.from('wegrow_prospects').select('id, canal, status'),
+      supabase.from('mrr_snapshots_mensais').select('ano, mes, mrr_total, clientes').order('ano', { ascending: true }).order('mes', { ascending: true }),
+    ]);
     const empresas: Empresa[] = res.ok ? await res.json() : [];
-    const { data: billings } = await supabase.from('clientes_wegrow').select('*');
     const billingMap = Object.fromEntries((billings || []).map((b: Billing) => [b.empresa_id, b]));
+    // churn/canal precisam ver quem já cancelou também — clientes (ativos) continua
+    // filtrando suspensa pros cards de MRR/inadimplência de hoje.
+    setTodasEmpresas(empresas);
+    setProspects((prospectsData as Prospect[]) || []);
+    setMrrSnapshots((snapshotsData as MrrSnapshot[]) || []);
     const merged: ClienteView[] = empresas
       .filter(e => e.status !== 'suspensa')
       .map(e => ({ ...e, billing: billingMap[e.id] ?? null }));
@@ -112,12 +128,42 @@ export default function IndicadoresPage() {
   }));
   const maxNovas = Math.max(1, ...novasPorMes.map(m => m.count));
 
-  const NAO_INSTRUMENTADO = [
-    { titulo: 'Churn mensal', formula: 'Clientes cancelados no mês ÷ clientes no início do mês', falta: '"Vencido" hoje é inadimplência, não cancelamento — falta registrar quando uma empresa é efetivamente encerrada (data + motivo).' },
-    { titulo: 'MRR novo vs. perdido', formula: 'Diferença entre o MRR de hoje e o MRR do mês anterior', falta: 'Hoje só existe o estado atual do MRR — falta guardar um snapshot mensal pra comparar mês a mês.' },
-    { titulo: 'Taxa de conversão por canal', formula: 'Fechados ÷ oportunidades abertas, por canal (IAlto / Nilton / orgânico)', falta: 'O cadastro do cliente não registra de onde ele veio — falta o campo "canal de origem".' },
-    { titulo: 'CAC por canal', formula: 'Custo do canal (ex.: 25% recorrente IAlto) ÷ novas contas daquele canal', falta: 'Depende do campo "canal" acima, mais registrar a comissão paga por fechamento.' },
-  ];
+  // Churn mensal (mês corrente): cancelados no mês ÷ ativos no início do mês. "Ativo no
+  // início do mês" = já existia antes do mês começar e (nunca cancelou, ou cancelou só
+  // depois do início do mês).
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
+  const ativosNoInicioDoMes = todasEmpresas.filter(e => {
+    const criada = new Date(e.created_at);
+    if (criada >= inicioMes) return false;
+    if (!e.cancelado_em) return true;
+    return new Date(e.cancelado_em) >= inicioMes;
+  });
+  const canceladosNoMes = todasEmpresas.filter(e => e.cancelado_em && new Date(e.cancelado_em) >= inicioMes && new Date(e.cancelado_em) <= fimMes);
+  const churnPct = ativosNoInicioDoMes.length > 0 ? (canceladosNoMes.length / ativosNoInicioDoMes.length) * 100 : null;
+
+  // MRR novo vs. perdido: diferença entre os 2 snapshots mensais mais recentes (populados
+  // por /api/cron/snapshot-mrr todo dia 1). Só existe comparação a partir do 2º snapshot.
+  const snapshotsOrdenados = [...mrrSnapshots].sort((a, b) => (a.ano - b.ano) || (a.mes - b.mes));
+  const ultimoSnapshot = snapshotsOrdenados[snapshotsOrdenados.length - 1] || null;
+  const penultimoSnapshot = snapshotsOrdenados[snapshotsOrdenados.length - 2] || null;
+  const mrrVariacao = ultimoSnapshot && penultimoSnapshot ? ultimoSnapshot.mrr_total - penultimoSnapshot.mrr_total : null;
+
+  // Taxa de conversão por canal: fechados (status='cliente') ÷ total de prospects daquele
+  // canal, direto de wegrow_prospects — não depende do campo novo canal_origem.
+  const canaisComProspect = Array.from(new Set(prospects.map(p => p.canal).filter(Boolean))) as string[];
+  const conversaoPorCanal = canaisComProspect.map(canal => {
+    const doCanal = prospects.filter(p => p.canal === canal);
+    const convertidos = doCanal.filter(p => p.status === 'cliente');
+    return { canal, total: doCanal.length, convertidos: convertidos.length, pct: doCanal.length > 0 ? (convertidos.length / doCanal.length) * 100 : 0 };
+  }).sort((a, b) => b.total - a.total);
+
+  // CAC por canal: só IAlto tem custo recorrente modelado (25% do MRR dos clientes vindos
+  // de lá) — os outros canais não têm comissão/custo de aquisição conhecido ainda.
+  const clientesIalto = clientes.filter(c => c.canal_origem === 'ialto');
+  const mrrIalto = clientesIalto.reduce((s, c) => s + (c.billing?.valor_mensal ?? 0), 0);
+  const cacIalto = clientesIalto.length > 0 ? (mrrIalto * 0.25) / clientesIalto.length : null;
+  const clientesSemCanal = clientes.filter(c => !c.canal_origem).length;
 
   if (exportarGrafico) {
     return (
@@ -258,20 +304,64 @@ export default function IndicadoresPage() {
               </div>
             </section>
 
-            {/* Não instrumentado */}
+            {/* Churn, MRR novo/perdido, conversão e CAC por canal */}
             <section>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Wrench size={12}/> Ainda não instrumentado</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Wrench size={12}/> Retenção e aquisição por canal</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {NAO_INSTRUMENTADO.map((k, i) => (
-                  <div key={i} className="bg-[#0F172A] border border-white/5 rounded-2xl p-4 opacity-60">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-black text-slate-300">{k.titulo}</p>
-                      <span className="text-[9px] font-black uppercase text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0">Sem dado</span>
+
+                <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+                  <p className="text-xs font-black text-slate-300 mb-2">Churn mensal ({MESES_PT[hoje.getMonth()]}/{hoje.getFullYear()})</p>
+                  {churnPct === null ? (
+                    <p className="text-slate-500 text-[10px]">Sem clientes ativos no início do mês pra calcular ainda.</p>
+                  ) : (
+                    <>
+                      <p className={`text-2xl font-black ${churnPct > 0 ? 'text-red-400' : 'text-[#22C55E]'}`}>{churnPct.toFixed(1)}%</p>
+                      <p className="text-slate-500 text-[10px] mt-1">{canceladosNoMes.length} cancelado(s) de {ativosNoInicioDoMes.length} ativo(s) no início do mês.</p>
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+                  <p className="text-xs font-black text-slate-300 mb-2">MRR novo vs. perdido</p>
+                  {mrrVariacao === null ? (
+                    <p className="text-slate-500 text-[10px]">Aguardando o próximo snapshot mensal (roda todo dia 1) pra ter 2 pontos de comparação.</p>
+                  ) : (
+                    <>
+                      <p className={`text-2xl font-black ${mrrVariacao >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>{mrrVariacao >= 0 ? '+' : ''}R$ {mrrVariacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-slate-500 text-[10px] mt-1">{MESES_PT[penultimoSnapshot!.mes - 1]}/{penultimoSnapshot!.ano} → {MESES_PT[ultimoSnapshot!.mes - 1]}/{ultimoSnapshot!.ano}</p>
+                    </>
+                  )}
+                </div>
+
+                <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+                  <p className="text-xs font-black text-slate-300 mb-2">Conversão por canal</p>
+                  {conversaoPorCanal.length === 0 ? (
+                    <p className="text-slate-500 text-[10px]">Nenhum prospect com canal registrado ainda em /admin/prospeccao.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {conversaoPorCanal.map(c => (
+                        <div key={c.canal} className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-400 font-bold">{CANAL_LABELS[c.canal] || c.canal}</span>
+                          <span className="text-white font-black">{c.convertidos}/{c.total} <span className="text-slate-500 font-bold">({c.pct.toFixed(0)}%)</span></span>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-slate-500 text-[10px] mb-2 font-mono">{k.formula}</p>
-                    <p className="text-slate-600 text-[10px]">{k.falta}</p>
-                  </div>
-                ))}
+                  )}
+                </div>
+
+                <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
+                  <p className="text-xs font-black text-slate-300 mb-2">CAC por canal</p>
+                  {cacIalto === null ? (
+                    <p className="text-slate-500 text-[10px]">Nenhum cliente com canal "IAlto" definido ainda em Clientes WeGrow → aba Contrato.</p>
+                  ) : (
+                    <>
+                      <p className="text-xl font-black text-white">R$ {cacIalto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}<span className="text-[10px] text-slate-500 font-bold uppercase"> /mês · IAlto</span></p>
+                      <p className="text-slate-500 text-[10px] mt-1">25% do MRR de {clientesIalto.length} cliente(s) vindos desse canal — outros canais sem custo recorrente modelado ainda.</p>
+                    </>
+                  )}
+                  {clientesSemCanal > 0 && <p className="text-slate-600 text-[10px] mt-2 pt-2 border-t border-white/5">{clientesSemCanal} cliente(s) ativo(s) sem canal de origem definido.</p>}
+                </div>
+
               </div>
             </section>
 

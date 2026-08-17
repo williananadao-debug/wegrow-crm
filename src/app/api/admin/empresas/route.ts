@@ -59,6 +59,8 @@ export async function GET(request: Request) {
       modulos: emp?.modulos || {},
       logo_url: emp?.logo_url || null,
       created_at: emp?.created_at || null,
+      canal_origem: emp?.canal_origem || null,
+      cancelado_em: emp?.cancelado_em || null,
       total_usuarios: t.total,
       configurado: !!emp,
     };
@@ -189,6 +191,24 @@ export async function PATCH(request: Request) {
 
   const { id, ...campos } = body;
   if (!id) return NextResponse.json({ erro: 'ID obrigatório.' }, { status: 422 });
+
+  // canal_origem/cancelado_em não fazem parte da RPC admin_upsert_empresa (definida só
+  // no banco, não versionada em migration — arriscado editar a assinatura dela sem saber
+  // o corpo exato). Update direto via service role, que já ignora RLS, cobre esses dois
+  // campos sem mexer na RPC.
+  if ('canal_origem' in campos || 'cancelado_em' in campos) {
+    const patch: Record<string, any> = {};
+    if ('canal_origem' in campos) patch.canal_origem = campos.canal_origem || null;
+    if ('cancelado_em' in campos) patch.cancelado_em = campos.cancelado_em || null;
+    const { error: churnErr } = await supabaseAdmin().from('empresas').update(patch).eq('id', id);
+    if (churnErr) {
+      console.error('[admin/empresas] PATCH (canal/churn) error:', churnErr);
+      return NextResponse.json({ erro: churnErr.message }, { status: 500 });
+    }
+  }
+
+  const temCamposRpc = ['nome', 'cnpj', 'plano', 'status', 'modulos'].some(k => k in campos);
+  if (!temCamposRpc) return NextResponse.json({ ok: true });
 
   const { data, error } = await supabaseAdmin().rpc('admin_upsert_empresa', {
     p_id: id,

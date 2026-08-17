@@ -21,7 +21,15 @@ const MODULO_LABELS: Record<string, string> = {
 // como ligado (empresas criadas antes disso existir não podem perder o menu no deploy).
 const CRM_SUBMODULOS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp'] as const;
 
-type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
+type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; canal_origem?: string | null; cancelado_em?: string | null; };
+const CANAIS_ORIGEM = [
+  { valor: '', label: 'Não definido' },
+  { valor: 'ialto', label: 'IAlto' },
+  { valor: 'nilton', label: 'Nilton' },
+  { valor: 'organico', label: 'Orgânico' },
+  { valor: 'indicacao', label: 'Indicação' },
+  { valor: 'direto', label: 'Direto' },
+];
 type Billing = {
   empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; whatsapp: string | null; contato: string | null; observacao: string | null;
   razao_social?: string | null; cnpj?: string | null; endereco?: string | null;
@@ -180,6 +188,36 @@ export default function ClientesWeGrowPage() {
     setSaving(false);
     if (error) { setErroSalvar(error.message); return; }
     setEditando(null); carregar();
+  };
+
+  const [salvandoChurn, setSalvandoChurn] = useState(false);
+
+  const atualizarCanalOrigem = async (canal: string) => {
+    if (!editando) return;
+    setSalvandoChurn(true);
+    await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: editando.id, canal_origem: canal || null }),
+    });
+    setSalvandoChurn(false);
+    setEditando(prev => prev ? { ...prev, canal_origem: canal || null } : prev);
+    carregar();
+  };
+
+  const marcarCancelado = async (cancelar: boolean) => {
+    if (!editando) return;
+    if (cancelar && !confirm(`Marcar ${editando.nome} como cancelado hoje? Isso conta pro cálculo de churn.`)) return;
+    setSalvandoChurn(true);
+    const cancelado_em = cancelar ? new Date().toISOString() : null;
+    await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: editando.id, cancelado_em }),
+    });
+    setSalvandoChurn(false);
+    setEditando(prev => prev ? { ...prev, cancelado_em } : prev);
+    carregar();
   };
 
   const registrarPagamento = async (c: ClienteView) => {
@@ -498,6 +536,36 @@ export default function ClientesWeGrowPage() {
                   <div>
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Observação</label>
                     <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} placeholder="Notas internas..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Canal de origem</label>
+                      <select
+                        value={editando?.canal_origem || ''}
+                        onChange={e => atualizarCanalOrigem(e.target.value)}
+                        disabled={salvandoChurn}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
+                      >
+                        {CANAIS_ORIGEM.map(c => <option key={c.valor} value={c.valor} className="bg-[#0B1120]">{c.label}</option>)}
+                      </select>
+                      <p className="text-[9px] text-slate-600 mt-1 ml-1">Alimenta conversão e CAC por canal em Indicadores.</p>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Status de churn</label>
+                      {editando?.cancelado_em ? (
+                        <div className="flex items-center gap-2">
+                          <span className="flex-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-xs font-bold">Cancelado em {fmtData(editando.cancelado_em.substring(0, 10))}</span>
+                          <button onClick={() => marcarCancelado(false)} disabled={salvandoChurn} className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-400 hover:text-white transition-colors disabled:opacity-50" title="Desfazer cancelamento">
+                            <RefreshCw size={14}/>
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => marcarCancelado(true)} disabled={salvandoChurn} className="w-full bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50">
+                          Marcar como cancelado
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}

@@ -71,7 +71,7 @@ export default function MidiaEmissorasPage() {
 
       <div className="flex items-center gap-1 bg-[#0F172A] border border-white/10 p-1 rounded-xl mb-6 w-fit flex-wrap">
         {PRACAS.map(p => (
-          <button key={p} onClick={() => setPraca(p)} className={`px-3.5 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${praca === p ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-500 hover:text-white'}`}>
+          <button key={p} onClick={() => setPraca(p)} className={`px-3.5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${praca === p ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-500 hover:text-white'}`}>
             {p} {PRACA_CIDADE_SEDE[p]}
           </button>
         ))}

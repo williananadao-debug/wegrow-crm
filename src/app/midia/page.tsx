@@ -316,8 +316,8 @@ export default function MidiaPage() {
                   <span className="text-sm text-slate-400 font-bold">visualizações</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><h4 className="text-base font-black text-white">{fmtCompacto(redesSociais.interacoes)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
-                  <div><h4 className="text-base font-black text-white">{fmtCompacto(redesSociais.visitasPerfil)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
+                  <div><h4 className="text-xl font-black text-white">{fmtCompacto(redesSociais.interacoes)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+                  <div><h4 className="text-xl font-black text-white">{fmtCompacto(redesSociais.visitasPerfil)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
                 </div>
                 <p className="text-[12px] text-slate-600 font-semibold mt-3">
                   {redesSociais.aoVivo
@@ -348,7 +348,7 @@ export default function MidiaPage() {
                   <p className="text-[13px] text-slate-500 font-bold">Mês ainda não ingerido pela Demais FM.</p>
                 ) : (
                   <>
-                    <h3 className="text-3xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
+                    <h3 className="text-4xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
                     <p className="text-[12px] text-slate-500 font-bold mt-0.5">acessos · {fmtPeriodo(siteMesAtual.periodo)}{siteMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}</p>
                     {siteOrdenado.length > 1 && (
                       <div className="flex items-end gap-1 h-10 mt-3">
@@ -369,7 +369,7 @@ export default function MidiaPage() {
               </div>
               <div>
                 <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
-                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
+                <h3 className="text-4xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
                 <p className="text-[12px] text-slate-500 font-bold mt-0.5">
                   {fmtNumero(metricasEfetivas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricasEfetivas?.instagram_demais_news_seguidores)} seguidores
                   {metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ''}

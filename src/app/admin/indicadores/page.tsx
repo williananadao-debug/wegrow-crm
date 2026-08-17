@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   ArrowLeft, ShieldAlert, Loader2, RefreshCw, BarChart2, DollarSign,
-  Users, TrendingUp, TrendingDown, AlertTriangle, Percent, Wrench,
+  Users, TrendingUp, TrendingDown, AlertTriangle, Percent, Wrench, Printer,
 } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -111,7 +111,13 @@ export default function IndicadoresPage() {
     <div className="min-h-screen bg-[#0B1120] text-white">
       <div className="max-w-4xl mx-auto px-4 py-10">
 
-        <div className="flex items-center justify-between mb-8">
+        {/* Título só aparece impresso/exportado — a navegação normal fica escondida no print */}
+        <div className="hidden print:block mb-8">
+          <div className="text-xl font-black uppercase italic tracking-tighter">Wegrow · Indicadores</div>
+          <p className="text-xs font-bold">{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+
+        <div className="flex items-center justify-between mb-8 print:hidden">
           <div className="flex items-center gap-4">
             <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
               <ArrowLeft size={16} className="text-slate-400"/>
@@ -123,9 +129,14 @@ export default function IndicadoresPage() {
               <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Plano de negócio · painel interno</p>
             </div>
           </div>
-          <button onClick={carregar} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
-            <RefreshCw size={16} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`}/>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => window.print()} title="Gerar apresentação (imprimir / salvar PDF)" className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
+              <Printer size={16} className="text-slate-400"/>
+            </button>
+            <button onClick={carregar} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
+              <RefreshCw size={16} className={`text-slate-400 ${loading ? 'animate-spin' : ''}`}/>
+            </button>
+          </div>
         </div>
 
         {loading ? (

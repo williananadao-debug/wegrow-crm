@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   Building2, Plus, Edit2, X, Save, Loader2, Users, Package,
   ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
-  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon, Target
+  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon, Target, Printer
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
@@ -244,8 +244,14 @@ export default function AdminPage() {
     <div className="text-white p-4 md:p-8 pb-20">
       <div className="max-w-7xl mx-auto">
 
+        {/* Título só aparece impresso/exportado — o resto do header fica escondido no print */}
+        <div className="hidden print:block mb-8">
+          <div className="text-xl font-black uppercase italic tracking-tighter">Wegrow · Visão geral</div>
+          <p className="text-xs font-bold">{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6">
+        <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6 print:hidden">
           <div>
             <h1 className="text-3xl font-black uppercase italic flex items-center gap-3">
               <ShieldAlert className="text-[#22C55E]" size={32}/> God Mode
@@ -259,6 +265,13 @@ export default function AdminPage() {
                 {empresas.filter(e => e.status === 'ativa').length} ativas
               </p>
             </div>
+            <button
+              onClick={() => window.print()}
+              title="Gerar apresentação (imprimir / salvar PDF) — só a Visão geral"
+              className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 rounded-xl transition-colors"
+            >
+              <Printer size={14}/>
+            </button>
             <Link
               href="/admin/prospeccao"
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
@@ -400,7 +413,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 print:hidden">
 
           {/* Lista de Empresas */}
           <div className="lg:col-span-2 space-y-2">

@@ -130,13 +130,24 @@ export default function SettingsPage() {
   };
 
   const salvarConfiguracoes = async () => {
+    // Sem empresa_id carregado, o insert cai fora da policy de RLS (empresa_id teria que
+    // bater com meu_empresa_id()) e falha pra TODOS os itens novos de uma vez — melhor
+    // travar aqui com mensagem clara do que deixar o Supabase rejeitar tudo em silêncio.
+    if (!perfil?.empresa_id) {
+      setFeedback({ type: 'error', msg: 'Perfil ainda carregando — aguarde um instante e tente salvar de novo.' });
+      setTimeout(() => setFeedback(null), 4000);
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 
     try {
         const novos = servicos.filter(s => s.id.startsWith('temp-'));
         const existentes = servicos.filter(s => !s.id.startsWith('temp-'));
-        const promises = [];
+        // Cada promise carrega uma etiqueta ("novo: Nome" / "Nome") pra mensagem de erro
+        // conseguir apontar exatamente qual item falhou, em vez de "alguns itens".
+        const tarefas: { label: string; run: () => Promise<{ error: any; data: any }> }[] = [];
 
         if (novos.length > 0) {
             const payload = novos.map(s => ({
@@ -150,17 +161,21 @@ export default function SettingsPage() {
                 estoque_minimo: s.estoque_minimo ?? 5,
                 produto_pai_id: s.produto_pai_id ?? null,
                 variante_nome: s.variante_nome?.trim() || null,
-                empresa_id: perfil?.empresa_id
+                empresa_id: perfil.empresa_id,
             }));
-            promises.push(supabase.from('servicos').insert(payload));
+            tarefas.push({
+                label: `novo(s): ${novos.map(s => s.nome || '(sem nome)').join(', ')}`,
+                run: () => supabase.from('servicos').insert(payload),
+            });
         }
 
         existentes.forEach(s => {
             const historicoAtualizado = s.precoOriginal !== undefined && s.preco !== s.precoOriginal
                 ? [...(s.historico_precos || []), { preco_anterior: s.precoOriginal, preco_novo: s.preco, data: new Date().toISOString() }]
                 : (s.historico_precos || []);
-            promises.push(
-                supabase.from('servicos').update({
+            tarefas.push({
+                label: s.nome || `#${s.id}`,
+                run: () => supabase.from('servicos').update({
                     nome: s.nome,
                     preco: s.preco,
                     tipo: s.tipo,
@@ -171,15 +186,24 @@ export default function SettingsPage() {
                     estoque_minimo: s.estoque_minimo ?? 5,
                     variante_nome: s.variante_nome?.trim() || null,
                     historico_precos: historicoAtualizado,
-                }).eq('id', parseInt(s.id))
-            );
+                }).eq('id', parseInt(s.id)).select('id'), // .select() pra detectar update "bem-sucedido" que na
+                                                           // verdade não afetou nenhuma linha (RLS filtrou em
+                                                           // silêncio — sem .select() isso não vira erro nenhum)
+            });
         });
 
-        const results = await Promise.all(promises);
-        const errors = results.filter(r => r.error);
-        if (errors.length > 0) throw new Error("Falha ao salvar alguns itens.");
+        const results = await Promise.all(tarefas.map(t => t.run()));
+        const falhas = results
+          .map((r, i) => ({ r, label: tarefas[i].label }))
+          .filter(({ r }) => r.error || (Array.isArray(r.data) && r.data.length === 0));
 
-        await carregarDados(); 
+        if (falhas.length > 0) {
+          const detalhe = falhas.map(f => `${f.label}: ${f.r.error?.message || 'nenhuma linha afetada (sem permissão?)'}`).join(' · ');
+          console.error('[settings/salvarConfiguracoes] falhas:', falhas);
+          throw new Error(detalhe);
+        }
+
+        await carregarDados();
         setFeedback({ type: 'success', msg: 'Configurações salvas com sucesso!' });
     } catch (err: any) {
         console.error(err);

@@ -165,7 +165,10 @@ export default function SettingsPage() {
             }));
             tarefas.push({
                 label: `novo(s): ${novos.map(s => s.nome || '(sem nome)').join(', ')}`,
-                run: () => supabase.from('servicos').insert(payload),
+                // O query builder do Supabase é "thenable" mas não é um Promise de verdade
+                // (falta .catch/.finally) — sem o async/await aqui, o TS aceita na sua
+                // máquina mas o build da Vercel (next build --webpack) rejeita.
+                run: async () => { const { error, data } = await supabase.from('servicos').insert(payload); return { error, data }; },
             });
         }
 
@@ -175,20 +178,23 @@ export default function SettingsPage() {
                 : (s.historico_precos || []);
             tarefas.push({
                 label: s.nome || `#${s.id}`,
-                run: () => supabase.from('servicos').update({
-                    nome: s.nome,
-                    preco: s.preco,
-                    tipo: s.tipo,
-                    unidade: s.unidade,
-                    estoque: s.estoque ?? null,
-                    sku: s.sku?.trim() || null,
-                    preco_custo: s.preco_custo ?? null,
-                    estoque_minimo: s.estoque_minimo ?? 5,
-                    variante_nome: s.variante_nome?.trim() || null,
-                    historico_precos: historicoAtualizado,
-                }).eq('id', parseInt(s.id)).select('id'), // .select() pra detectar update "bem-sucedido" que na
-                                                           // verdade não afetou nenhuma linha (RLS filtrou em
-                                                           // silêncio — sem .select() isso não vira erro nenhum)
+                // .select() pra detectar update "bem-sucedido" que na verdade não afetou
+                // nenhuma linha (RLS filtrou em silêncio — sem .select() isso não vira erro).
+                run: async () => {
+                    const { error, data } = await supabase.from('servicos').update({
+                        nome: s.nome,
+                        preco: s.preco,
+                        tipo: s.tipo,
+                        unidade: s.unidade,
+                        estoque: s.estoque ?? null,
+                        sku: s.sku?.trim() || null,
+                        preco_custo: s.preco_custo ?? null,
+                        estoque_minimo: s.estoque_minimo ?? 5,
+                        variante_nome: s.variante_nome?.trim() || null,
+                        historico_precos: historicoAtualizado,
+                    }).eq('id', parseInt(s.id)).select('id');
+                    return { error, data };
+                },
             });
         });
 

@@ -739,9 +739,14 @@ export default function DealsPage() {
     if (editingLeadId === id) setAtividades(atividadesAtualizadas);
 
     try {
-        const { error } = await supabase.from('leads').update({ etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas }).eq('id', id);
+        // fechado_por é carimbado só na transição pra ganho (nunca sobrescrito depois) —
+        // é o que /goals usa pra atribuir a venda ao vendedor certo, diferente de user_id
+        // (responsável atual, que pode mudar se o lead for reatribuído depois de fechado).
+        const payload: Record<string, any> = { etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas };
+        if (novoStatus === 'ganho' && lead?.status !== 'ganho') payload.fechado_por = lead?.user_id ?? null;
+        const { error } = await supabase.from('leads').update(payload).eq('id', id);
         if (error) throw error;
-        
+
         if (novoStatus === 'ganho' && lead) {
             const acoes = isCDL
                 ? [gerarCobrancaFinanceira(lead)]
@@ -810,6 +815,7 @@ export default function DealsPage() {
         etapa: 4, status: 'ganho', tipo: cdlTipoAssociacao,
         contrato_inicio: cdlDataInicio, contrato_fim: cdlDataFim,
         valor_total: valorFinal, atividades: atividadesAtualizadas,
+        ...(lead.status !== 'ganho' ? { fechado_por: lead.user_id ?? null } : {}),
     }).eq('id', leadId);
 
     await gerarCobrancaFinanceira({ ...lead, valor_total: valorFinal });
@@ -830,7 +836,10 @@ export default function DealsPage() {
     const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead.atividades) ? lead.atividades : [])];
 
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, etapa: 4, status: 'ganho', atividades: atividadesAtualizadas } : l));
-    await supabase.from('leads').update({ etapa: 4, status: 'ganho', atividades: atividadesAtualizadas }).eq('id', leadId);
+    await supabase.from('leads').update({
+        etapa: 4, status: 'ganho', atividades: atividadesAtualizadas,
+        ...(lead.status !== 'ganho' ? { fechado_por: lead.user_id ?? null } : {}),
+    }).eq('id', leadId);
 
     setCdlFiliacaoModal(null);
     setToastMessage('✅ Venda fechada!');

@@ -131,7 +131,10 @@ export default function GoalsPage() {
         .gte('created_at', `${anoFiltro}-01-01`)
         .lte('created_at', `${anoFiltro}-12-31`);
 
-      if (targetUser) vendasQuery = vendasQuery.eq('user_id', targetUser);
+      // fechado_por é quem realmente fechou (carimbado 1x, nunca muda depois); user_id é
+      // "responsável atual" e pode ter sido reatribuído depois do fechamento. Pra leads
+      // antigos sem fechado_por (antes dessa coluna existir), cai pro user_id de antes.
+      if (targetUser) vendasQuery = vendasQuery.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
       const { data: vendas } = await vendasQuery;
       if (metasRequestIdRef.current !== minhaRequisicao) return; // superada por uma busca mais nova
@@ -160,7 +163,7 @@ export default function GoalsPage() {
 
     const [{ data: metasData }, { data: vendasData }] = await Promise.all([
       supabase.from('metas').select('user_id, valor_objetivo').eq('ano', ano).eq('mes', mes).eq('empresa_id', perfil.empresa_id),
-      supabase.from('leads').select('user_id, valor_total').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+      supabase.from('leads').select('user_id, fechado_por, valor_total').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
         .gte('created_at', `${ano}-${String(mes).padStart(2,'0')}-01`)
         .lte('created_at', `${ano}-${String(mes).padStart(2,'0')}-31`)
         .limit(2000),
@@ -169,8 +172,13 @@ export default function GoalsPage() {
     const metaMap: Record<string, number> = {};
     (metasData || []).forEach(m => { if (m.user_id) metaMap[m.user_id] = m.valor_objetivo; });
 
+    // fechado_por (carimbado no fechamento, nunca muda depois) manda; leads antigos sem
+    // essa coluna preenchida caem pro user_id de antes — mesmo critério das outras buscas.
     const realizadoMap: Record<string, number> = {};
-    (vendasData || []).forEach(v => { if (v.user_id) realizadoMap[v.user_id] = (realizadoMap[v.user_id] || 0) + Number(v.valor_total); });
+    (vendasData || []).forEach(v => {
+      const dono = v.fechado_por || v.user_id;
+      if (dono) realizadoMap[dono] = (realizadoMap[dono] || 0) + Number(v.valor_total);
+    });
 
     const rows = vendedores.map(v => ({
       id: v.id,
@@ -199,12 +207,12 @@ export default function GoalsPage() {
     let q1 = supabase.from('leads').select('itens, valor_total')
       .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
       .gte('created_at', `${ano}-${mesPad}-01`).lte('created_at', `${ano}-${mesPad}-31`).limit(2000);
-    if (targetUser) q1 = q1.eq('user_id', targetUser);
+    if (targetUser) q1 = q1.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
     let q2 = supabase.from('leads').select('itens')
       .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
       .gte('created_at', `${anoAntStr}-${mesAntPad}-01`).lte('created_at', `${anoAntStr}-${mesAntPad}-31`).limit(2000);
-    if (targetUser) q2 = q2.eq('user_id', targetUser);
+    if (targetUser) q2 = q2.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
     const [{ data: mesAtualData }, { data: mesAntData }] = await Promise.all([q1, q2]);
 

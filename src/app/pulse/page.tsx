@@ -80,7 +80,9 @@ export default function PulsePainelPage() {
   })();
 
   const converterEmPedido = async (orc: VendaPulse) => {
-    const { error } = await supabase.from('leads').update({ status: 'ganho', etapa: 4 }).eq('id', orc.id);
+    // fechado_por carimba quem fica com o crédito da venda em /goals — orc.user_id é o
+    // dono do orçamento; cai pro usuário logado só se por algum motivo vier sem dono.
+    const { error } = await supabase.from('leads').update({ status: 'ganho', etapa: 4, fechado_por: orc.user_id || user?.id || null }).eq('id', orc.id);
     if (error) { alert('Erro ao converter: ' + error.message); return; }
     const itens = orc.itens || [];
     await Promise.all([

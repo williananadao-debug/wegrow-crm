@@ -69,6 +69,12 @@ export function MaterialSemanal() {
     // print. Marca o body pra a regra em globals.css esconder tudo, exceto este overlay
     // (renderizado via portal direto no body, fora da árvore da página).
     document.body.classList.add('modo-exportacao-isolada');
+    // @page não pode ser condicionado por classe/seletor — injeta como <style> temporário
+    // só durante essa impressão. Paisagem porque o material vira slide de apresentação
+    // (16:9), não documento pra arquivar em pé.
+    const estiloPagina = document.createElement('style');
+    estiloPagina.textContent = '@page { size: landscape; margin: 12mm; }';
+    document.head.appendChild(estiloPagina);
     const t = setTimeout(() => window.print(), 80);
     const voltar = () => setExportando(false);
     window.addEventListener('afterprint', voltar);
@@ -76,6 +82,7 @@ export function MaterialSemanal() {
       clearTimeout(t);
       window.removeEventListener('afterprint', voltar);
       document.body.classList.remove('modo-exportacao-isolada');
+      estiloPagina.remove();
     };
   }, [exportando]);
 

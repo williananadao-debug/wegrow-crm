@@ -149,8 +149,27 @@ export async function POST(req: Request) {
     .single();
 
   if (leadErr || !lead) {
-    console.error('[docuseal/webhook] lead não encontrado para submission_id:', submissionId);
-    return NextResponse.json({ ok: false, erro: 'lead não encontrado' });
+    // Não é um contrato de veiculação (leads) — tenta como contrato de serviço WeGrow↔cliente
+    // (clientes_wegrow.contrato_submission_id). Fluxo mais simples: só marca como assinado,
+    // sem job de produção pra liberar (isso é específico do fluxo de leads/OPEC).
+    const { data: clienteWegrow, error: cwErr } = await supabase
+      .from('clientes_wegrow')
+      .select('empresa_id')
+      .eq('contrato_submission_id', submissionId)
+      .single();
+
+    if (cwErr || !clienteWegrow) {
+      console.error('[docuseal/webhook] nenhum lead nem contrato_wegrow encontrado para submission_id:', submissionId);
+      return NextResponse.json({ ok: false, erro: 'submissão não encontrada em leads nem em clientes_wegrow' });
+    }
+
+    await supabase
+      .from('clientes_wegrow')
+      .update({ contrato_status: 'assinado', contrato_assinado_em: new Date().toISOString() })
+      .eq('empresa_id', clienteWegrow.empresa_id);
+
+    console.log(`[docuseal/webhook] contrato_wegrow assinado. empresa_id: ${clienteWegrow.empresa_id}`);
+    return NextResponse.json({ ok: true, empresa_id: clienteWegrow.empresa_id, tipo: 'contrato_wegrow' });
   }
 
   // Marca lead como assinado

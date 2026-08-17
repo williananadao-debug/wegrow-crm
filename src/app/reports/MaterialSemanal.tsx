@@ -180,110 +180,133 @@ export function MaterialSemanal() {
 
   const periodoLabel = formatarPeriodo(segunda, domingo);
 
+  const blocoKpis = (
+    <div className="grid grid-cols-2 gap-3">
+      <div className={`rounded-2xl p-4 border ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
+        <p className={`text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}><Users size={11}/> Visitas</p>
+        <div className="flex items-end gap-2">
+          <h3 className={`text-2xl font-black italic tracking-tighter ${exportando ? 'text-slate-900' : 'text-white'}`}>{visitasAtual.length}</h3>
+          <span className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${visitasWoW >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
+            {visitasWoW >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(visitasWoW))}%
+          </span>
+        </div>
+        <p className={`text-[10px] mt-1 ${exportando ? 'text-slate-400' : 'text-slate-600'}`}>vs. {visitasAnterior.length} na semana anterior</p>
+      </div>
+      <div className={`rounded-2xl p-4 border ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
+        <p className={`text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}><TrendingUp size={11}/> Vendas</p>
+        <div className="flex items-end gap-2">
+          <h3 className={`text-2xl font-black italic tracking-tighter ${exportando ? 'text-slate-900' : 'text-[#22C55E]'}`}>{totalCount}</h3>
+          <span className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${vendasWoW >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
+            {vendasWoW >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(vendasWoW))}%
+          </span>
+        </div>
+        <p className={`text-[10px] mt-1 ${exportando ? 'text-slate-400' : 'text-slate-600'}`}>R$ {totalSemana.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({faturamentoWoW >= 0 ? '+' : ''}{Math.round(faturamentoWoW)}% em R$)</p>
+      </div>
+    </div>
+  );
+
+  const blocoDiario = (
+    <div className={`rounded-2xl p-5 border ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
+      <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>Volume de vendas por dia</p>
+      <div className="flex items-end gap-2 h-32">
+        {porDia.map(d => (
+          <div key={d.data} className="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
+            <span className={`text-[9px] font-black ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{d.count > 0 ? d.count : ''}</span>
+            <div className="w-full rounded-t-md bg-[#22C55E]" style={{ height: `${Math.max(3, (d.total / maxDia) * 100)}%` }} />
+            <span className={`text-[9px] font-black uppercase ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{d.label}</span>
+          </div>
+        ))}
+        <div className="flex-1 flex flex-col items-center justify-end h-full gap-1.5 pl-2 border-l border-dashed border-white/10 ml-1">
+          <span className={`text-[9px] font-black ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{totalCount}</span>
+          <div className={`w-full rounded-t-md ${exportando ? 'bg-slate-800' : 'bg-white'}`} style={{ height: `${Math.max(3, (totalSemana / maxDia) * 100)}%` }} />
+          <span className={`text-[9px] font-black uppercase ${exportando ? 'text-slate-900' : 'text-white'}`}>Total</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const blocoFilial = porFilial.length > 0 && (
+    <div className={`rounded-2xl p-5 border h-full ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
+      <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>Vendas por filial</p>
+      <div className={`flex gap-5 ${exportando ? 'flex-col items-center' : 'flex-col sm:flex-row items-center sm:items-start'}`}>
+        <div className="relative w-32 h-32 shrink-0">
+          <svg viewBox="0 0 160 160" className="w-32 h-32 -rotate-90">
+            {donutSegmentos.map(seg => (
+              <circle
+                key={seg.nome}
+                cx={80} cy={80} r={RAIO_DONUT}
+                fill="none"
+                stroke={seg.cor}
+                strokeWidth={22}
+                strokeDasharray={`${seg.comprimento} ${CIRC_DONUT - seg.comprimento}`}
+                strokeDashoffset={seg.offset}
+              />
+            ))}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`text-[8px] font-black uppercase tracking-widest ${exportando ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
+            <span className={`text-[11px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {totalSemana.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+          </div>
+        </div>
+        <div className="flex-1 w-full space-y-3">
+        {porFilial.map((f, i) => (
+          <div key={f.nome}>
+            <div className="flex items-center justify-between mb-1">
+              <span className={`text-[11px] font-bold flex items-center gap-1.5 ${exportando ? 'text-slate-700' : 'text-slate-300'}`}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
+                {f.nome}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {f.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className={`flex items-center text-[9px] font-black px-1.5 py-0.5 rounded-md ${f.variacao >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
+                  {f.variacao >= 0 ? <ArrowUpRight size={9}/> : <ArrowDownRight size={9}/>}{Math.abs(Math.round(f.variacao))}%
+                </span>
+              </div>
+            </div>
+            <div className={`w-full h-2.5 rounded-full overflow-hidden ${exportando ? 'bg-slate-100' : 'bg-white/5'}`}>
+              <div className="h-full rounded-full" style={{ width: `${(f.total / maxFilial) * 100}%`, background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
+            </div>
+          </div>
+        ))}
+        </div>
+      </div>
+    </div>
+  );
+
   const conteudo = (
     <>
-      <div className="grid grid-cols-2 gap-3">
-        <div className={`rounded-2xl p-4 border ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}><Users size={11}/> Visitas</p>
-          <div className="flex items-end gap-2">
-            <h3 className={`text-2xl font-black italic tracking-tighter ${exportando ? 'text-slate-900' : 'text-white'}`}>{visitasAtual.length}</h3>
-            <span className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${visitasWoW >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
-              {visitasWoW >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(visitasWoW))}%
-            </span>
-          </div>
-          <p className={`text-[10px] mt-1 ${exportando ? 'text-slate-400' : 'text-slate-600'}`}>vs. {visitasAnterior.length} na semana anterior</p>
-        </div>
-        <div className={`rounded-2xl p-4 border ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}><TrendingUp size={11}/> Vendas</p>
-          <div className="flex items-end gap-2">
-            <h3 className={`text-2xl font-black italic tracking-tighter ${exportando ? 'text-slate-900' : 'text-[#22C55E]'}`}>{totalCount}</h3>
-            <span className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${vendasWoW >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
-              {vendasWoW >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(vendasWoW))}%
-            </span>
-          </div>
-          <p className={`text-[10px] mt-1 ${exportando ? 'text-slate-400' : 'text-slate-600'}`}>R$ {totalSemana.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({faturamentoWoW >= 0 ? '+' : ''}{Math.round(faturamentoWoW)}% em R$)</p>
-        </div>
-      </div>
-
-      <div className={`rounded-2xl p-5 border mt-3 ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
-        <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>Volume de vendas por dia</p>
-        <div className="flex items-end gap-2 h-32">
-          {porDia.map(d => (
-            <div key={d.data} className="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
-              <span className={`text-[9px] font-black ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{d.count > 0 ? d.count : ''}</span>
-              <div className="w-full rounded-t-md bg-[#22C55E]" style={{ height: `${Math.max(3, (d.total / maxDia) * 100)}%` }} />
-              <span className={`text-[9px] font-black uppercase ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{d.label}</span>
-            </div>
-          ))}
-          <div className="flex-1 flex flex-col items-center justify-end h-full gap-1.5 pl-2 border-l border-dashed border-white/10 ml-1">
-            <span className={`text-[9px] font-black ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>{totalCount}</span>
-            <div className={`w-full rounded-t-md ${exportando ? 'bg-slate-800' : 'bg-white'}`} style={{ height: `${Math.max(3, (totalSemana / maxDia) * 100)}%` }} />
-            <span className={`text-[9px] font-black uppercase ${exportando ? 'text-slate-900' : 'text-white'}`}>Total</span>
-          </div>
-        </div>
-      </div>
-
-      {porFilial.length > 0 && (
-        <div className={`rounded-2xl p-5 border mt-3 ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
-          <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>Vendas por filial</p>
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-            <div className="relative w-32 h-32 shrink-0">
-              <svg viewBox="0 0 160 160" className="w-32 h-32 -rotate-90">
-                {donutSegmentos.map(seg => (
-                  <circle
-                    key={seg.nome}
-                    cx={80} cy={80} r={RAIO_DONUT}
-                    fill="none"
-                    stroke={seg.cor}
-                    strokeWidth={22}
-                    strokeDasharray={`${seg.comprimento} ${CIRC_DONUT - seg.comprimento}`}
-                    strokeDashoffset={seg.offset}
-                  />
-                ))}
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-[8px] font-black uppercase tracking-widest ${exportando ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
-                <span className={`text-[11px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {totalSemana.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-              </div>
-            </div>
-            <div className="flex-1 w-full space-y-3">
-            {porFilial.map((f, i) => (
-              <div key={f.nome}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-bold flex items-center gap-1.5 ${exportando ? 'text-slate-700' : 'text-slate-300'}`}>
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
-                    {f.nome}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {f.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    <span className={`flex items-center text-[9px] font-black px-1.5 py-0.5 rounded-md ${f.variacao >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
-                      {f.variacao >= 0 ? <ArrowUpRight size={9}/> : <ArrowDownRight size={9}/>}{Math.abs(Math.round(f.variacao))}%
-                    </span>
-                  </div>
-                </div>
-                <div className={`w-full h-2.5 rounded-full overflow-hidden ${exportando ? 'bg-slate-100' : 'bg-white/5'}`}>
-                  <div className="h-full rounded-full" style={{ width: `${(f.total / maxFilial) * 100}%`, background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
-                </div>
-              </div>
-            ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {blocoKpis}
+      <div className="mt-3">{blocoDiario}</div>
+      {blocoFilial && <div className="mt-3">{blocoFilial}</div>}
     </>
   );
 
   if (exportando && typeof document !== 'undefined') {
     return createPortal(
-      <div className="export-overlay-isolada fixed inset-0 z-[9999] bg-white text-slate-900 overflow-y-auto p-10 print:p-6 print:static print:overflow-visible">
+      <div className="export-overlay-isolada fixed inset-0 z-[9999] bg-white text-slate-900 overflow-y-auto p-8 print:p-6 print:static print:overflow-visible">
         <button onClick={() => setExportando(false)} className="print:hidden fixed top-4 right-4 p-2 rounded-lg hover:bg-slate-100 text-slate-500 z-10" title="Fechar">
           <X size={18}/>
         </button>
-        <div className="max-w-xl mx-auto">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{empresa?.nome || 'Wegrow'}</p>
-          <h2 className="text-lg font-black uppercase italic tracking-tighter mb-1">Material Semanal de Vendas</h2>
-          <p className="text-slate-400 text-[10px] mb-6">{periodoLabel} de {domingo.getFullYear()}</p>
-          {conteudo}
+        <div className="max-w-[1400px] mx-auto">
+          <div className="flex items-baseline justify-between mb-5">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{empresa?.nome || 'Wegrow'}</p>
+              <h2 className="text-lg font-black uppercase italic tracking-tighter">Material Semanal de Vendas</h2>
+            </div>
+            <p className="text-slate-400 text-[10px]">{periodoLabel} de {domingo.getFullYear()}</p>
+          </div>
+          {/* Paisagem: 2 colunas (KPIs+diário à esquerda, filial à direita) em vez de
+              empilhado — senão sobra papel em branco nas laterais e fica ruim colado
+              num slide 16:9. */}
+          <div className="grid grid-cols-3 gap-5 items-stretch">
+            <div className="col-span-2 space-y-5">
+              {blocoKpis}
+              {blocoDiario}
+            </div>
+            <div className="col-span-1">
+              {blocoFilial}
+            </div>
+          </div>
         </div>
       </div>,
       document.body

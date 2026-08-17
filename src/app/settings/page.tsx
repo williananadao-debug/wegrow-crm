@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -31,6 +32,7 @@ type ServicoConfig = {
   estoque_minimo?: number | null;
   produto_pai_id?: number | null;
   variante_nome?: string | null;
+  ordem?: number | null;
 };
 
 type NfseConfig = {
@@ -101,7 +103,7 @@ export default function SettingsPage() {
     setLoading(true);
     const { data: emp } = await supabase.from('empresas').select('modulos, nfse_config').eq('id', perfil?.empresa_id).single();
     if (emp?.nfse_config) setNfseConfig({ ...NFSE_CONFIG_VAZIA, ...emp.nfse_config });
-    const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('id', { ascending: true });
+    const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('ordem', { ascending: true, nullsFirst: false }).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
 
@@ -121,6 +123,7 @@ export default function SettingsPage() {
         estoque_minimo: item.estoque_minimo ?? 5,
         produto_pai_id: item.produto_pai_id ?? null,
         variante_nome: item.variante_nome ?? null,
+        ordem: item.ordem ?? null,
       }));
       setServicos(formatados);
     } else {
@@ -262,15 +265,48 @@ export default function SettingsPage() {
     setServicos(prev => prev.map(s => s.id === servico.id ? { ...s, variante_nome: valor, nome: valor ? `${nomeBase} - ${valor}` : nomeBase } : s));
   };
 
-  const servicosOrdenados = (() => {
+  // Grupos = produto (pai ou avulso) + suas variantes. O arraste reordena grupos inteiros
+  // — variante nunca se solta do pai, ela só acompanha a posição dele na lista.
+  const gruposProdutos = (() => {
     const paisEAvulsos = servicos.filter(s => !s.produto_pai_id);
     const porPai: Record<string, ServicoConfig[]> = {};
     servicos.filter(s => s.produto_pai_id).forEach(s => {
       const chave = String(s.produto_pai_id);
       (porPai[chave] ||= []).push(s);
     });
-    return paisEAvulsos.flatMap(p => [p, ...(porPai[p.id] || [])]);
+    return paisEAvulsos.map(pai => ({ pai, variantes: porPai[pai.id] || [] }));
   })();
+
+  const onDragEndProdutos = async (result: DropResult) => {
+    const { destination, source } = result;
+    if (!destination || destination.index === source.index) return;
+
+    const reordenados = Array.from(gruposProdutos);
+    const [movido] = reordenados.splice(source.index, 1);
+    reordenados.splice(destination.index, 0, movido);
+
+    const novaOrdemPorId = new Map(reordenados.map((g, idx) => [g.pai.id, idx]));
+    const alterados = gruposProdutos.filter(g => novaOrdemPorId.get(g.pai.id) !== g.pai.ordem);
+
+    setServicos(prev => {
+      const comNovaOrdem = prev.map(s => novaOrdemPorId.has(s.id) ? { ...s, ordem: novaOrdemPorId.get(s.id)! } : s);
+      // Reordena o array de estado pra bater com o arraste visual (senão, ao recarregar
+      // sem passar pelo servidor, a próxima renderização usaria a ordem antiga do array).
+      const paisReordenados = reordenados.map(g => comNovaOrdem.find(s => s.id === g.pai.id)!);
+      const variantesPorPai: Record<string, ServicoConfig[]> = {};
+      comNovaOrdem.filter(s => s.produto_pai_id).forEach(s => {
+        const chave = String(s.produto_pai_id);
+        (variantesPorPai[chave] ||= []).push(s);
+      });
+      return paisReordenados.flatMap(p => [p, ...(variantesPorPai[p.id] || [])]);
+    });
+
+    await Promise.all(
+      alterados
+        .filter(g => !g.pai.id.startsWith('temp-'))
+        .map(g => supabase.from('servicos').update({ ordem: novaOrdemPorId.get(g.pai.id) }).eq('id', parseInt(g.pai.id)))
+    );
+  };
 
   const removerServico = async (id: string) => {
     if (!id.startsWith('temp-')) {
@@ -425,49 +461,14 @@ export default function SettingsPage() {
     }
   };
 
-  return (
-    <div className="p-4 md:p-8 pb-20 animate-in fade-in duration-500">
-      
-      <header className="mb-8">
-        <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
-            <Package size={32} className="text-[#22C55E]"/> Configurações
-        </h1>
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gerencie seus produtos e tabela de preços por filial</p>
-      </header>
+  const renderProdutoRow = (servico: ServicoConfig, dragHandleProps?: any) => (
+                <div key={servico.id} className={`relative grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border group hover:border-white/10 transition-all hover:bg-white/[0.04] ${servico.produto_pai_id ? 'border-l-2 border-l-blue-500/40 border-y-white/5 border-r-white/5 ml-4 md:ml-8' : 'border-white/5'}`}>
 
-      <div className="max-w-6xl bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl relative">
-        
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/5 pb-6 mb-6 gap-4">
-          <div className="flex items-center gap-3 text-slate-300">
-            <Info size={18} className="text-blue-500" />
-            <h2 className="font-bold text-sm uppercase tracking-wide">Catálogo de Serviços</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={importarCSV} />
-            <button onClick={() => csvInputRef.current?.click()} className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
-              <Upload size={14} /> Importar CSV
-            </button>
-            <button onClick={adicionarServico} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
-              <Plus size={14} strokeWidth={3} /> Adicionar Item
-            </button>
-          </div>
-        </div>
-
-        {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                <Loader2 className="animate-spin mb-2" size={32}/>
-                <span className="text-xs font-bold uppercase">Carregando catálogo...</span>
-            </div>
-        ) : (
-            <div className="space-y-3">
-            {servicos.length === 0 && (
-                <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
-                    <p className="text-slate-500 text-sm font-medium">Nenhum serviço cadastrado.</p>
-                </div>
-            )}
-            
-            {servicosOrdenados.map((servico) => (
-                <div key={servico.id} className={`grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border group hover:border-white/10 transition-all hover:bg-white/[0.04] ${servico.produto_pai_id ? 'border-l-2 border-l-blue-500/40 border-y-white/5 border-r-white/5 ml-4 md:ml-8' : 'border-white/5'}`}>
+                    {dragHandleProps && (
+                        <div {...dragHandleProps} className="absolute -left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-lg cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-colors touch-none" style={{ touchAction: 'none' }} title="Arrastar para reordenar">
+                            <GripVertical size={14} />
+                        </div>
+                    )}
 
                     <div className="col-span-2 md:col-span-1 flex justify-center md:justify-start pl-0 md:pl-2">
                         {temPulse && !servico.id.startsWith('temp-') ? (
@@ -487,7 +488,7 @@ export default function SettingsPage() {
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="col-span-10 md:col-span-3">
                         {servico.produto_pai_id ? (
                             <div className="flex items-center gap-2">
@@ -511,7 +512,7 @@ export default function SettingsPage() {
 
                     <div className="col-span-12 md:col-span-3 relative flex items-center bg-[#0F172A] rounded-lg px-3 py-1.5 border border-white/5 focus-within:border-blue-500 transition-colors">
                         <Building2 size={14} className="text-slate-500 mr-2 shrink-0"/>
-                        <select 
+                        <select
                             value={servico.unidade}
                             onChange={(e) => atualizarServico(servico.id, 'unidade', e.target.value)}
                             className="w-full bg-transparent text-slate-300 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none truncate"
@@ -525,9 +526,9 @@ export default function SettingsPage() {
 
                     <div className="col-span-6 md:col-span-2 flex items-center gap-2 bg-[#0F172A] rounded-lg px-3 py-2 border border-white/5 focus-within:border-[#22C55E] transition-colors">
                         <span className="text-[10px] font-black text-slate-500">R$</span>
-                        <input 
+                        <input
                             type="number"
-                            value={servico.preco} 
+                            value={servico.preco}
                             onChange={(e) => atualizarServico(servico.id, 'preco', Number(e.target.value))}
                             className="w-full bg-transparent text-white font-bold outline-none text-sm"
                             placeholder="0.00"
@@ -626,8 +627,71 @@ export default function SettingsPage() {
                         </div>
                     )}
                 </div>
-            ))}
+  );
+
+  return (
+    <div className="p-4 md:p-8 pb-20 animate-in fade-in duration-500">
+      
+      <header className="mb-8">
+        <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
+            <Package size={32} className="text-[#22C55E]"/> Configurações
+        </h1>
+        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gerencie seus produtos e tabela de preços por filial</p>
+      </header>
+
+      <div className="max-w-6xl bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl relative">
+        
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/5 pb-6 mb-6 gap-4">
+          <div className="flex items-center gap-3 text-slate-300">
+            <Info size={18} className="text-blue-500" />
+            <h2 className="font-bold text-sm uppercase tracking-wide">Catálogo de Serviços</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={importarCSV} />
+            <button onClick={() => csvInputRef.current?.click()} className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+              <Upload size={14} /> Importar CSV
+            </button>
+            <button onClick={adicionarServico} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+              <Plus size={14} strokeWidth={3} /> Adicionar Item
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                <Loader2 className="animate-spin mb-2" size={32}/>
+                <span className="text-xs font-bold uppercase">Carregando catálogo...</span>
             </div>
+        ) : (
+            <DragDropContext onDragEnd={onDragEndProdutos}>
+            <Droppable droppableId="produtos">
+              {(providedDrop) => (
+                <div ref={providedDrop.innerRef} {...providedDrop.droppableProps} className="space-y-3">
+                {servicos.length === 0 && (
+                    <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
+                        <p className="text-slate-500 text-sm font-medium">Nenhum serviço cadastrado.</p>
+                    </div>
+                )}
+
+                {gruposProdutos.map((grupo, index) => (
+                    <Draggable key={grupo.pai.id} draggableId={grupo.pai.id} index={index}>
+                      {(providedDrag, snapshot) => (
+                        <div
+                          ref={providedDrag.innerRef}
+                          {...providedDrag.draggableProps}
+                          className={`space-y-3 ${snapshot.isDragging ? 'opacity-90' : ''}`}
+                        >
+                          {renderProdutoRow(grupo.pai, providedDrag.dragHandleProps)}
+                          {grupo.variantes.map(v => renderProdutoRow(v))}
+                        </div>
+                      )}
+                    </Draggable>
+                ))}
+                {providedDrop.placeholder}
+                </div>
+              )}
+            </Droppable>
+            </DragDropContext>
         )}
 
         <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">

@@ -6,9 +6,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
 import {
-  MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario, LeadCrmResumo,
+  MidiaAniversarioMunicipio, MidiaAniversarioResultado, StatusVendaAniversario, LeadCrmResumo, DemaisFmAniversarioItem,
   STATUS_VENDA_LABELS, STATUS_VENDA_CORES, PRACAS, MESES_LABEL, diasAteProximaOcorrencia, fmtMoeda, normalizarNomeCidade,
 } from '../shared';
+
+// status da API do Leo → status interno do CRM (mesmo vocabulário, nomes iguais)
+const STATUS_LEO_PARA_CRM: Record<string, StatusVendaAniversario> = {
+  vendido: 'vendido', nao_vendido: 'nao_vendido', vendido_sem_valor: 'vendido_sem_valor', sem_registro: 'sem_registro',
+};
 
 const DIAS_ALERTA_ANIVERSARIO = 5;
 
@@ -25,6 +30,10 @@ export default function MidiaAniversariosPage() {
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [resultados, setResultados] = useState<MidiaAniversarioResultado[]>([]);
   const [leadsGanhos, setLeadsGanhos] = useState<LeadCrmResumo[]>([]);
+  // 🔒 Dado confidencial do Leo (receita + nome de anunciante em `detalhe`) — só busca e
+  // usa se for diretor/gerente; a API já bloqueia sozinha, isso aqui é defesa extra pra
+  // nunca nem tentar carregar esse dado pra quem não devia ver.
+  const [leoAniversarios, setLeoAniversarios] = useState<DemaisFmAniversarioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<number | null>(null);
   const [form, setForm] = useState<{ status: StatusVendaAniversario; valor: string; observacao: string }>({ status: 'sem_registro', valor: '', observacao: '' });
@@ -50,7 +59,22 @@ export default function MidiaAniversariosPage() {
     setLoading(false);
   }, [perfil?.empresa_id, temMidia, ano]);
 
+  const carregarLeoAniversarios = useCallback(async () => {
+    if (!isLideranca) { setLeoAniversarios([]); return; }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/midia/demais-fm/aniversarios?ano=${ano}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) { setLeoAniversarios([]); return; }
+      const json = await res.json();
+      setLeoAniversarios(json.dados || []);
+    } catch {
+      setLeoAniversarios([]);
+    }
+  }, [isLideranca, ano]);
+
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { carregarLeoAniversarios(); }, [carregarLeoAniversarios]);
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -90,6 +114,27 @@ export default function MidiaAniversariosPage() {
     const r = resultadoDe(aniversarioId);
     setForm({ status: r?.status || 'sem_registro', valor: r?.valor?.toString() || '', observacao: r?.observacao || '' });
     setEditando(aniversarioId);
+  };
+
+  // 🔒 item.detalhe traz nome de anunciante — só usado dentro do form de edição, que já é
+  // isLideranca-only; nunca renderizado nos cards de resumo (visíveis a qualquer usuário
+  // do módulo mídia).
+  const leoDe = (a: MidiaAniversarioMunicipio): DemaisFmAniversarioItem | null => {
+    const alvo = normalizarNomeCidade(a.municipio);
+    return leoAniversarios.find(item => item.mes === a.mes && normalizarNomeCidade(item.cidade) === alvo && (a.praca || '').includes(item.emissora)) || null;
+  };
+
+  const usarDadoDoLeo = (a: MidiaAniversarioMunicipio) => {
+    const item = leoDe(a);
+    if (!item) return;
+    // receita_liquida null = sem registro (não confundir com "0.00" = confirmado zero) —
+    // aviso explícito do Leo, respeitado aqui em vez de tratar null como 0.
+    setForm({
+      status: STATUS_LEO_PARA_CRM[item.status] || 'sem_registro',
+      valor: item.receita_liquida != null ? item.receita_liquida : '',
+      observacao: item.detalhe || '',
+    });
+    setEditando(a.id);
   };
 
   const usarValorDoCrm = (a: MidiaAniversarioMunicipio) => {
@@ -203,6 +248,8 @@ export default function MidiaAniversariosPage() {
                         const leadsCrm = leadsDoMunicipio(a);
                         const totalCrm = leadsCrm.reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
                         const crmDivergeDoResultado = leadsCrm.length > 0 && (status !== 'vendido' || Number(r?.valor || 0) !== totalCrm);
+                        const leo = leoDe(a);
+                        const leoDivergeDoResultado = leo && (STATUS_LEO_PARA_CRM[leo.status] !== status || (leo.receita_liquida != null && Number(leo.receita_liquida) !== Number(r?.valor || 0)));
                         return (
                           <div key={a.id}>
                             {mostrarMes && <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1.5">{MESES_LABEL[a.mes - 1]}</p>}
@@ -218,6 +265,15 @@ export default function MidiaAniversariosPage() {
                                 <div className="mt-2 bg-blue-500/10 border border-blue-500/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
                                   <p className="text-[9px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {fmtMoeda(totalCrm)} em {leadsCrm.length} venda(s) de {MESES_LABEL[a.mes - 1]}/{ano}</p>
                                   {isLideranca && <button onClick={() => usarValorDoCrm(a)} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 whitespace-nowrap">Usar valor →</button>}
+                                </div>
+                              )}
+
+                              {isLideranca && leoDivergeDoResultado && (
+                                <div className="mt-2 bg-[#22C55E]/10 border border-[#22C55E]/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
+                                  <p className="text-[9px] text-[#22C55E] font-bold flex items-center gap-1">
+                                    <Search size={10} /> IAlto: {STATUS_VENDA_LABELS[STATUS_LEO_PARA_CRM[leo!.status]]}{leo!.receita_liquida != null ? ` · ${fmtMoeda(Number(leo!.receita_liquida))}` : ''}
+                                  </p>
+                                  <button onClick={() => usarDadoDoLeo(a)} className="text-[9px] font-black uppercase text-[#22C55E] hover:text-white whitespace-nowrap">Usar dado →</button>
                                 </div>
                               )}
 

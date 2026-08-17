@@ -53,16 +53,54 @@ export type DemaisFmMonetizacaoResposta = {
   dados: DemaisFmMonetizacaoItem[];
 };
 
-// Ainda não existe no lado do Leo — preparado aqui pra ligar assim que ele expuser o
-// endpoint (mesmo contrato dos outros 4: soma Instagram+Facebook das três emissoras,
-// que já é um número pronto no painel dele, só falta a API servir). Ver pedido técnico
-// em docs/max/pedido-api-redes-sociais-leo.md.
+// Contrato v2 (docs/max/spec-api-demais-fm-comercial-v2.md) — campos "sim" em Null?
+// vêm sempre presentes na resposta, nunca omitidos e nunca convertidos em 0.
+export type DemaisFmRedesSociaisItem = {
+  periodo: string; // "YYYY-MM"
+  emissora: string; // "107.9" | "104.7" | "101.1" | "REDE"
+  escopo: 'emissora' | 'rede';
+  plataforma: string; // "Instagram" | "Facebook" | "Instagram Demais News"
+  visualizacoes: number | null;
+  interacoes: number | null;
+  visitas: number | null;
+  seguidores: number | null; // não somar entre emissoras — mesma pessoa pode seguir vários perfis
+  tipo_dado: 'medido' | 'estimado';
+};
+
+export type DemaisFmRedesSociaisTotalRede = {
+  periodo: string;
+  plataforma: string;
+  visualizacoes: number | null;
+  interacoes: number | null;
+  visitas: number | null;
+  emissoras_somadas: number;
+};
+
 export type DemaisFmRedesSociaisResposta = {
-  periodo: string | null; // "YYYY-MM"
-  visualizacoes: number;
-  interacoes: number;
-  visitas_perfil: number;
-  atualizado_em: string;
+  dados: DemaisFmRedesSociaisItem[];
+  totais_rede: DemaisFmRedesSociaisTotalRede[];
+};
+
+// 🔒 Classe "interno" — receita_liquida/receita_bruta/detalhe nunca podem chegar a tela
+// de cliente/anunciante/terceiro. Uso restrito à operação comercial interna da rádio
+// (mesmo público que já vê a página /midia/aniversarios hoje, com "Uso Interno").
+export type DemaisFmAniversarioItem = {
+  periodo: string;
+  ano: number;
+  mes: number;
+  emissora: string; // "107.9" | "104.7" | "101.1"
+  cidade: string;
+  status: 'vendido' | 'nao_vendido' | 'vendido_sem_valor' | 'sem_registro';
+  receita_liquida: string | null; // decimal string; "0.00" = confirmado zero, null = sem registro
+  receita_bruta: string | null;
+  moeda: string;
+  detalhe: string | null; // 🔒 nome de anunciante + valor contratado
+};
+
+export type DemaisFmAniversariosResposta = {
+  classe: 'interno';
+  granularidade: 'mensal';
+  dados: DemaisFmAniversarioItem[];
 };
 
 export type DemaisFmErro = {
@@ -110,9 +148,20 @@ export function buscarMonetizacao() {
   return chamar<DemaisFmMonetizacaoResposta>('/monetizacao');
 }
 
-// Endpoint ainda não existe no backend do Leo (ver comentário no tipo acima) — quando ele
-// subir, essa função já funciona sem precisar mexer em mais nada além de confirmar o
-// caminho exato (aqui assumido /redes-sociais, mesmo padrão dos outros).
-export function buscarRedesSociais() {
-  return chamar<DemaisFmRedesSociaisResposta>('/redes-sociais');
+export function buscarRedesSociais(ano?: number, mes?: number, emissora?: string) {
+  const params = new URLSearchParams();
+  if (ano) params.set('ano', String(ano));
+  if (mes) params.set('mes', String(mes));
+  if (emissora) params.set('emissora', emissora);
+  const qs = params.toString();
+  return chamar<DemaisFmRedesSociaisResposta>(`/redes-sociais${qs ? `?${qs}` : ''}`);
+}
+
+// 🔒 Confidencial — só chamar a partir de rota restrita a diretor/gerente.
+export function buscarAniversarios(ano?: number, mes?: number) {
+  const params = new URLSearchParams();
+  if (ano) params.set('ano', String(ano));
+  if (mes) params.set('mes', String(mes));
+  const qs = params.toString();
+  return chamar<DemaisFmAniversariosResposta>(`/aniversarios${qs ? `?${qs}` : ''}`);
 }

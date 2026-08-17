@@ -70,7 +70,7 @@ export default function MidiaPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const res = await fetch('/api/midia/demais-fm/redes-sociais', { headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (!res.ok) { setRedesSociaisFm(null); return; } // 501 esperado enquanto o Leo não expõe — fica no manual
+      if (!res.ok) { setRedesSociaisFm(null); return; } // sem config/erro — cai pro manual
       setRedesSociaisFm(await res.json());
     } catch {
       setRedesSociaisFm(null);
@@ -195,11 +195,24 @@ export default function MidiaPage() {
   const metricasEfetivas = metricas || historicoOrdenado[0] || null;
   const metricasEhFallback = Boolean(!metricas && metricasEfetivas);
 
+  // totais_rede já vem só com as 3 emissoras somadas (Instagram Demais News fica de fora
+  // de propósito, ver spec 2.3) — some Instagram+Facebook aqui só pra virar 1 número de
+  // "redes sociais da rede" no card. Cai pro mês mais recente disponível se o selecionado
+  // ainda não tiver ingestão, mesmo padrão usado pros outros dados do Leo nesta página.
+  const periodosRedesDisponiveis = Array.from(new Set((redesSociaisFm?.totais_rede || []).map(t => t.periodo))).sort();
+  const periodoRedesEfetivo = periodosRedesDisponiveis.includes(periodoSelecionado)
+    ? periodoSelecionado
+    : periodosRedesDisponiveis[periodosRedesDisponiveis.length - 1];
+  const totaisDoPeriodoRedes = (redesSociaisFm?.totais_rede || []).filter(t => t.periodo === periodoRedesEfetivo);
+  const somarSeAlgumNaoNulo = (campo: 'visualizacoes' | 'interacoes' | 'visitas') => {
+    const valores = totaisDoPeriodoRedes.map(t => t[campo]).filter((v): v is number => v != null);
+    return valores.length > 0 ? valores.reduce((a, b) => a + b, 0) : null;
+  };
+
   // Prefere o dado ao vivo do Leo assim que ele existir; até lá cai pro manual sem
-  // ninguém precisar mudar nada na tela — o dia que o endpoint ligar, isso vira
-  // automático sozinho.
-  const redesSociais = redesSociaisFm
-    ? { visualizacoes: redesSociaisFm.visualizacoes, interacoes: redesSociaisFm.interacoes, visitasPerfil: redesSociaisFm.visitas_perfil, periodo: redesSociaisFm.periodo, aoVivo: true }
+  // ninguém precisar mudar nada na tela.
+  const redesSociais = redesSociaisFm && periodoRedesEfetivo
+    ? { visualizacoes: somarSeAlgumNaoNulo('visualizacoes'), interacoes: somarSeAlgumNaoNulo('interacoes'), visitasPerfil: somarSeAlgumNaoNulo('visitas'), periodo: periodoRedesEfetivo, aoVivo: true }
     : metricasEfetivas?.redes_sociais_visualizacoes != null
       ? { visualizacoes: metricasEfetivas.redes_sociais_visualizacoes, interacoes: metricasEfetivas.redes_sociais_interacoes, visitasPerfil: metricasEfetivas.redes_sociais_visitas_perfil, periodo: `${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`, aoVivo: false }
       : null;

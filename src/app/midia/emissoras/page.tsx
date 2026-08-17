@@ -4,7 +4,7 @@ import { Loader2, Radio, Megaphone, Instagram, Facebook, RefreshCw, AlertTriangl
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
-import { DemaisFmAudienciaResposta, PRACAS, PRACA_CIDADE_SEDE, fmtNumero } from '../shared';
+import { DemaisFmAudienciaResposta, DemaisFmRedesSociaisResposta, PRACAS, PRACA_CIDADE_SEDE, fmtNumero, fmtCompacto } from '../shared';
 
 export default function MidiaEmissorasPage() {
   const auth = useAuth() || {};
@@ -14,6 +14,7 @@ export default function MidiaEmissorasPage() {
 
   const [praca, setPraca] = useState<string>(PRACAS[0]);
   const [audiencia, setAudiencia] = useState<DemaisFmAudienciaResposta | null>(null);
+  const [redesSociais, setRedesSociais] = useState<DemaisFmRedesSociaisResposta | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,10 +24,14 @@ export default function MidiaEmissorasPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
-      const res = await fetch('/api/midia/demais-fm/audiencia', { headers: { Authorization: `Bearer ${session.access_token}` } });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.erro || 'Erro ao buscar audiência.');
-      setAudiencia(json);
+      const [resAud, resRedes] = await Promise.all([
+        fetch('/api/midia/demais-fm/audiencia', { headers: { Authorization: `Bearer ${session.access_token}` } }),
+        fetch('/api/midia/demais-fm/redes-sociais', { headers: { Authorization: `Bearer ${session.access_token}` } }),
+      ]);
+      const jsonAud = await resAud.json();
+      if (!resAud.ok) throw new Error(jsonAud.erro || 'Erro ao buscar audiência.');
+      setAudiencia(jsonAud);
+      setRedesSociais(resRedes.ok ? await resRedes.json() : null);
     } catch (err: any) {
       setAudiencia(null);
       setErro(err?.message || 'Erro ao buscar audiência.');
@@ -51,6 +56,14 @@ export default function MidiaEmissorasPage() {
   }
 
   const d = audiencia?.dados.find(x => x.emissora === praca);
+
+  // Escopo "emissora" só (ver spec 2.3) — o perfil de nível rede (Instagram Demais News)
+  // fica de fora de propósito, essa tela é por praça.
+  const daPracaRedes = (redesSociais?.dados || []).filter(x => x.emissora === praca && x.escopo === 'emissora');
+  const periodosRedes = Array.from(new Set(daPracaRedes.map(x => x.periodo))).sort();
+  const periodoRedesRecente = periodosRedes[periodosRedes.length - 1];
+  const instagramPraca = daPracaRedes.find(x => x.periodo === periodoRedesRecente && x.plataforma === 'Instagram');
+  const facebookPraca = daPracaRedes.find(x => x.periodo === periodoRedesRecente && x.plataforma === 'Facebook');
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
@@ -110,20 +123,47 @@ export default function MidiaEmissorasPage() {
             {d && <p className="text-[9px] text-slate-600 font-bold mt-3 pt-3 border-t border-white/5">Fonte: {d.fonte} · atualizado em {audiencia?.atualizado_em ? new Date(audiencia.atualizado_em).toLocaleDateString('pt-BR') : '—'}</p>}
           </div>
 
-          {/* Redes sociais por praça — sem dado ainda */}
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5 opacity-60">
+          {/* Redes sociais por praça */}
+          <div className={`bg-[#0B1120] border border-white/10 rounded-2xl p-5 ${!periodoRedesRecente ? 'opacity-60' : ''}`}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais — {new Date().getFullYear()}</p>
-              <span className="text-[9px] font-black uppercase text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Sem dado</span>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{periodoRedesRecente ? ` — ${periodoRedesRecente}` : ''}</p>
+              {periodoRedesRecente ? (
+                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Ao vivo</span>
+              ) : (
+                <span className="text-[9px] font-black uppercase text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Sem dado</span>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-dashed border-white/10 rounded-xl p-4 flex items-center gap-2 text-slate-600">
-                <Instagram size={14} /><p className="text-[11px] font-bold">Instagram por praça — precisa de uma conta Meta por emissora.</p>
+            {!periodoRedesRecente ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-dashed border-white/10 rounded-xl p-4 flex items-center gap-2 text-slate-600">
+                  <Instagram size={14} /><p className="text-[11px] font-bold">Instagram por praça — aguardando primeira ingestão do Leo.</p>
+                </div>
+                <div className="border border-dashed border-white/10 rounded-xl p-4 flex items-center gap-2 text-slate-600">
+                  <Facebook size={14} /><p className="text-[11px] font-bold">Facebook — aguardando primeira ingestão do Leo.</p>
+                </div>
               </div>
-              <div className="border border-dashed border-white/10 rounded-xl p-4 flex items-center gap-2 text-slate-600">
-                <Facebook size={14} /><p className="text-[11px] font-bold">Facebook — ainda não integrado em nenhuma praça.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-white/5 bg-white/[0.02] rounded-xl p-4">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide flex items-center gap-1.5 mb-2"><Instagram size={12}/> Instagram</p>
+                  <h4 className="text-lg font-black text-white">{fmtCompacto(instagramPraca?.visualizacoes)}</h4>
+                  <p className="text-[9px] text-slate-500 font-bold">visualizações</p>
+                  <div className="flex gap-3 mt-2 text-[10px] text-slate-400 font-bold">
+                    <span>{fmtCompacto(instagramPraca?.interacoes)} interações</span>
+                    <span>{fmtCompacto(instagramPraca?.seguidores)} seguidores</span>
+                  </div>
+                </div>
+                <div className="border border-white/5 bg-white/[0.02] rounded-xl p-4">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide flex items-center gap-1.5 mb-2"><Facebook size={12}/> Facebook</p>
+                  <h4 className="text-lg font-black text-white">{fmtCompacto(facebookPraca?.visualizacoes)}</h4>
+                  <p className="text-[9px] text-slate-500 font-bold">visualizações</p>
+                  <div className="flex gap-3 mt-2 text-[10px] text-slate-400 font-bold">
+                    <span>{fmtCompacto(facebookPraca?.interacoes)} interações</span>
+                    <span>{fmtCompacto(facebookPraca?.seguidores)} seguidores</span>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Formato que mais gera resultado — sem dado ainda */}

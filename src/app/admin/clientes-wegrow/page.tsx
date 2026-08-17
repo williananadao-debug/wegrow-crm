@@ -24,6 +24,7 @@ const CRM_SUBMODULOS = ['cdl', 'opec', 'ia', 'financeiro', 'whatsapp'] as const;
 type Empresa = { id: string; nome: string; plano: string; status: string; modulos: Record<string, any>; created_at: string; };
 type Billing = {
   empresa_id: string; valor_mensal: number; proximo_vencimento: string | null; whatsapp: string | null; contato: string | null; observacao: string | null;
+  razao_social?: string | null; cnpj?: string | null; endereco?: string | null;
   contrato_template_id?: string | null; contrato_edit_url?: string | null; contrato_submission_id?: string | null;
   contrato_status?: string | null; contrato_signer_nome?: string | null; contrato_signer_email?: string | null;
   contrato_sign_url?: string | null; contrato_enviado_em?: string | null; contrato_assinado_em?: string | null;
@@ -88,13 +89,11 @@ export default function ClientesWeGrowPage() {
   const [copiado, setCopiado] = useState<string | null>(null);
 
   // Aba Contrato
-  const [contratoPdfNome, setContratoPdfNome] = useState('');
-  const [contratoPdfBase64, setContratoPdfBase64] = useState('');
-  const [criandoTemplate, setCriandoTemplate] = useState(false);
   const [signerNome, setSignerNome] = useState('');
   const [signerEmail, setSignerEmail] = useState('');
   const [enviandoContrato, setEnviandoContrato] = useState(false);
   const [erroContrato, setErroContrato] = useState<string | null>(null);
+  const [contratoForm, setContratoForm] = useState({ razao_social: '', cnpj: '', endereco: '', dia_vencimento: '10', data_inicio: '' });
 
   useEffect(() => {
     if (!user) return;
@@ -141,9 +140,16 @@ export default function ClientesWeGrowPage() {
       contato: c.billing?.contato ?? '',
       observacao: c.billing?.observacao ?? '',
     });
-    setContratoPdfNome(''); setContratoPdfBase64(''); setErroContrato(null);
+    setErroContrato(null);
     setSignerNome(c.billing?.contrato_signer_nome ?? c.billing?.contato ?? '');
     setSignerEmail(c.billing?.contrato_signer_email ?? '');
+    setContratoForm({
+      razao_social: c.billing?.razao_social ?? c.nome ?? '',
+      cnpj: c.billing?.cnpj ?? '',
+      endereco: c.billing?.endereco ?? '',
+      dia_vencimento: c.billing?.proximo_vencimento ? String(new Date(c.billing.proximo_vencimento + 'T00:00:00').getDate()) : '10',
+      data_inicio: new Date().toISOString().substring(0, 10),
+    });
   };
 
   const carregarPortais = async (empresa_id: string) => {
@@ -246,44 +252,30 @@ export default function ClientesWeGrowPage() {
   };
 
   // Contrato
-  const selecionarPdf = (file: File) => {
-    setContratoPdfNome(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(',')[1] || '';
-      setContratoPdfBase64(base64);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const criarTemplateContrato = async () => {
-    if (!editando || !contratoPdfBase64) return;
-    setCriandoTemplate(true); setErroContrato(null);
+  const gerarEEnviarContrato = async () => {
+    if (!editando || !signerNome.trim() || !signerEmail.trim()) return;
+    if (!contratoForm.razao_social.trim() || !contratoForm.cnpj.trim() || !contratoForm.endereco.trim()) return;
+    setEnviandoContrato(true); setErroContrato(null);
     const res = await fetch('/api/admin/contrato', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ empresa_id: editando.id, pdf_base64: contratoPdfBase64, nome_arquivo: contratoPdfNome, nome_empresa: editando.nome }),
-    });
-    const json = await res.json().catch(() => ({}));
-    setCriandoTemplate(false);
-    if (!res.ok) { setErroContrato(json.erro || 'Erro ao criar template.'); return; }
-    carregar();
-    setEditando(prev => prev ? { ...prev, billing: { ...(prev.billing ?? BILLING_VAZIO(prev.id)), contrato_template_id: json.template_id, contrato_edit_url: json.edit_url, contrato_status: 'rascunho' } } : prev);
-  };
-
-  const enviarContrato = async () => {
-    if (!editando || !signerNome.trim() || !signerEmail.trim()) return;
-    setEnviandoContrato(true); setErroContrato(null);
-    const res = await fetch('/api/admin/contrato', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ empresa_id: editando.id, signer_nome: signerNome.trim(), signer_email: signerEmail.trim() }),
+      body: JSON.stringify({
+        empresa_id: editando.id,
+        cliente_razao: contratoForm.razao_social.trim(),
+        cliente_cnpj: contratoForm.cnpj.trim(),
+        cliente_endereco: contratoForm.endereco.trim(),
+        valor_mensal: editando.billing?.valor_mensal || Number(form.valor_mensal) || 0,
+        dia_vencimento: contratoForm.dia_vencimento,
+        data_inicio: contratoForm.data_inicio,
+        signer_nome: signerNome.trim(),
+        signer_email: signerEmail.trim(),
+      }),
     });
     const json = await res.json().catch(() => ({}));
     setEnviandoContrato(false);
-    if (!res.ok) { setErroContrato(json.erro || 'Erro ao enviar.'); return; }
+    if (!res.ok) { setErroContrato(json.erro || 'Erro ao gerar/enviar contrato.'); return; }
     carregar();
-    setEditando(prev => prev ? { ...prev, billing: { ...(prev.billing ?? BILLING_VAZIO(prev.id)), contrato_status: 'enviado', contrato_sign_url: json.sign_url } } : prev);
+    setEditando(prev => prev ? { ...prev, billing: { ...(prev.billing ?? BILLING_VAZIO(prev.id)), razao_social: contratoForm.razao_social, cnpj: contratoForm.cnpj, endereco: contratoForm.endereco, contrato_status: 'enviado', contrato_sign_url: json.sign_url } } : prev);
   };
 
   if (authLoading) return null;
@@ -680,40 +672,32 @@ export default function ClientesWeGrowPage() {
                         <a href={editando.billing.contrato_sign_url} target="_blank" rel="noopener noreferrer" className="text-[#22C55E] text-xs font-bold flex items-center gap-1 mt-2 hover:underline"><ExternalLink size={12}/> Ver link de assinatura</a>
                       )}
                     </div>
-                  ) : editando.billing?.contrato_template_id ? (
-                    <>
-                      <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-                        <p className="text-slate-300 text-xs font-bold mb-2">1. Posicione os campos de assinatura</p>
-                        <p className="text-slate-500 text-xs mb-3">O template já foi criado no Docuseal — abra o editor e arraste o campo de assinatura pra cima do bloco de assinatura do PDF (leva ~30 segundos).</p>
-                        {editando.billing?.contrato_edit_url && (
-                          <a href={editando.billing.contrato_edit_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
-                            <ExternalLink size={12}/> Abrir editor do Docuseal
-                          </a>
-                        )}
-                      </div>
-                      <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-                        <p className="text-slate-300 text-xs font-bold mb-3">2. Envie pra assinatura</p>
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <input value={signerNome} onChange={e => setSignerNome(e.target.value)} placeholder="Nome do responsável" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-                          <input value={signerEmail} onChange={e => setSignerEmail(e.target.value)} placeholder="e-mail@cliente.com" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-                        </div>
-                        <button onClick={enviarContrato} disabled={enviandoContrato || !signerNome.trim() || !signerEmail.trim()} className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                          {enviandoContrato ? <Loader2 size={13} className="animate-spin"/> : <PenLine size={13}/>}
-                          Enviar pra assinatura
-                        </button>
-                      </div>
-                    </>
                   ) : (
-                    <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-                      <p className="text-slate-300 text-xs font-bold mb-3">Suba o PDF do contrato</p>
-                      <label className="flex items-center justify-center gap-2 border border-dashed border-white/15 rounded-xl py-6 cursor-pointer hover:border-white/30 transition-colors">
-                        <input type="file" accept="application/pdf" className="hidden" onChange={e => e.target.files?.[0] && selecionarPdf(e.target.files[0])}/>
-                        <span className="text-slate-400 text-xs font-bold">{contratoPdfNome || 'Clique pra escolher o PDF'}</span>
-                      </label>
-                      <button onClick={criarTemplateContrato} disabled={criandoTemplate || !contratoPdfBase64} className="w-full mt-3 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                        {criandoTemplate ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>}
-                        Criar template no Docuseal
+                    <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-3">
+                      <p className="text-slate-300 text-xs font-bold">Dados do cliente (pra gerar o contrato)</p>
+                      <input value={contratoForm.razao_social} onChange={e => setContratoForm({ ...contratoForm, razao_social: e.target.value })} placeholder="Razão social" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={contratoForm.cnpj} onChange={e => setContratoForm({ ...contratoForm, cnpj: e.target.value })} placeholder="CNPJ" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                        <input value={contratoForm.dia_vencimento} onChange={e => setContratoForm({ ...contratoForm, dia_vencimento: e.target.value })} placeholder="Dia vencimento (ex: 10)" type="number" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                      </div>
+                      <input value={contratoForm.endereco} onChange={e => setContratoForm({ ...contratoForm, endereco: e.target.value })} placeholder="Endereço completo" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                      <input value={contratoForm.data_inicio} onChange={e => setContratoForm({ ...contratoForm, data_inicio: e.target.value })} type="date" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors"/>
+
+                      <p className="text-slate-300 text-xs font-bold pt-2 border-t border-white/5">Quem vai assinar pelo cliente</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={signerNome} onChange={e => setSignerNome(e.target.value)} placeholder="Nome do responsável" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                        <input value={signerEmail} onChange={e => setSignerEmail(e.target.value)} placeholder="e-mail@cliente.com" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+                      </div>
+
+                      <button
+                        onClick={gerarEEnviarContrato}
+                        disabled={enviandoContrato || !signerNome.trim() || !signerEmail.trim() || !contratoForm.razao_social.trim() || !contratoForm.cnpj.trim() || !contratoForm.endereco.trim()}
+                        className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {enviandoContrato ? <Loader2 size={13} className="animate-spin"/> : <PenLine size={13}/>}
+                        Gerar e enviar contrato
                       </button>
+                      <p className="text-slate-600 text-[10px]">O PDF é gerado automaticamente com esses dados e os módulos contratados — sem precisar subir arquivo nem posicionar campo de assinatura na mão.</p>
                     </div>
                   )}
                 </div>

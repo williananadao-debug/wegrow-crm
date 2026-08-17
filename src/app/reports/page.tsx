@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonPage } from '@/components/Skeleton';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { MaterialSemanal } from './MaterialSemanal';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
@@ -508,6 +509,8 @@ export default function ReportsPage() {
             )}
         </div>
       </div>
+
+      <MaterialSemanal />
 
       {/* COMPARATIVOS KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">

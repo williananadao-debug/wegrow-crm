@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ChevronLeft, ChevronRight, Download, X, CalendarDays, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
@@ -19,6 +20,10 @@ function segundaDaSemanaDe(date: Date) {
 }
 
 const DIAS_LABEL = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+// Verde primeiro (marca), depois cores que ainda leem bem tanto no card escuro quanto
+// no PDF fundo branco — cicla se tiver mais filiais do que cores.
+const CORES_FILIAL = ['#22C55E', '#3B82F6', '#F59E0B', '#A855F7', '#EF4444', '#06B6D4', '#EC4899', '#84CC16'];
 
 function formatarPeriodo(inicio: Date, fim: Date) {
   const mesmoMes = inicio.getMonth() === fim.getMonth();
@@ -59,10 +64,19 @@ export function MaterialSemanal() {
 
   useEffect(() => {
     if (!exportando) return;
+    // MaterialSemanal é um componente filho dentro de /reports — só esconder o próprio
+    // conteúdo não basta, a barra de filtros da página-mãe continua no DOM e vaza pro
+    // print. Marca o body pra a regra em globals.css esconder tudo, exceto este overlay
+    // (renderizado via portal direto no body, fora da árvore da página).
+    document.body.classList.add('modo-exportacao-isolada');
     const t = setTimeout(() => window.print(), 80);
     const voltar = () => setExportando(false);
     window.addEventListener('afterprint', voltar);
-    return () => { clearTimeout(t); window.removeEventListener('afterprint', voltar); };
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('afterprint', voltar);
+      document.body.classList.remove('modo-exportacao-isolada');
+    };
   }, [exportando]);
 
   useEffect(() => { if (user && perfil) carregar(); }, [user, perfil, segunda]);
@@ -140,6 +154,19 @@ export function MaterialSemanal() {
   const maxDia = Math.max(1, ...porDia.map(d => d.total), totalSemana / 7);
   const maxFilial = Math.max(1, ...porFilial.map(f => f.total));
 
+  const RAIO_DONUT = 60;
+  const CIRC_DONUT = 2 * Math.PI * RAIO_DONUT;
+  const donutSegmentos = useMemo(() => {
+    let acumulado = 0;
+    return porFilial.map((f, i) => {
+      const fracao = totalSemana > 0 ? f.total / totalSemana : 0;
+      const comprimento = fracao * CIRC_DONUT;
+      const seg = { nome: f.nome, cor: CORES_FILIAL[i % CORES_FILIAL.length], comprimento, offset: -acumulado, pct: fracao * 100 };
+      acumulado += comprimento;
+      return seg;
+    });
+  }, [porFilial, totalSemana]);
+
   const visitasWoW = pctVar(visitasAtual.length, visitasAnterior.length);
   const vendasWoW = pctVar(totalCount, vendasAnterior.length);
   const faturamentoWoW = pctVar(totalSemana, faturamentoAnterior);
@@ -192,11 +219,34 @@ export function MaterialSemanal() {
       {porFilial.length > 0 && (
         <div className={`rounded-2xl p-5 border mt-3 ${exportando ? 'bg-slate-50 border-slate-200' : 'bg-[#0F172A] border-white/5'}`}>
           <p className={`text-[9px] font-black uppercase tracking-widest mb-4 ${exportando ? 'text-slate-500' : 'text-slate-500'}`}>Vendas por filial</p>
-          <div className="space-y-3">
-            {porFilial.map(f => (
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+            <div className="relative w-32 h-32 shrink-0">
+              <svg viewBox="0 0 160 160" className="w-32 h-32 -rotate-90">
+                {donutSegmentos.map(seg => (
+                  <circle
+                    key={seg.nome}
+                    cx={80} cy={80} r={RAIO_DONUT}
+                    fill="none"
+                    stroke={seg.cor}
+                    strokeWidth={22}
+                    strokeDasharray={`${seg.comprimento} ${CIRC_DONUT - seg.comprimento}`}
+                    strokeDashoffset={seg.offset}
+                  />
+                ))}
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-[8px] font-black uppercase tracking-widest ${exportando ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
+                <span className={`text-[11px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {totalSemana.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+              </div>
+            </div>
+            <div className="flex-1 w-full space-y-3">
+            {porFilial.map((f, i) => (
               <div key={f.nome}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-bold ${exportando ? 'text-slate-700' : 'text-slate-300'}`}>{f.nome}</span>
+                  <span className={`text-[11px] font-bold flex items-center gap-1.5 ${exportando ? 'text-slate-700' : 'text-slate-300'}`}>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
+                    {f.nome}
+                  </span>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-black ${exportando ? 'text-slate-900' : 'text-white'}`}>R$ {f.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     <span className={`flex items-center text-[9px] font-black px-1.5 py-0.5 rounded-md ${f.variacao >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`}>
@@ -205,19 +255,20 @@ export function MaterialSemanal() {
                   </div>
                 </div>
                 <div className={`w-full h-2.5 rounded-full overflow-hidden ${exportando ? 'bg-slate-100' : 'bg-white/5'}`}>
-                  <div className="h-full bg-[#22C55E] rounded-full" style={{ width: `${(f.total / maxFilial) * 100}%` }} />
+                  <div className="h-full rounded-full" style={{ width: `${(f.total / maxFilial) * 100}%`, background: CORES_FILIAL[i % CORES_FILIAL.length] }} />
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       )}
     </>
   );
 
-  if (exportando) {
-    return (
-      <div className="min-h-screen bg-white text-slate-900 p-10 print:p-6">
+  if (exportando && typeof document !== 'undefined') {
+    return createPortal(
+      <div className="export-overlay-isolada fixed inset-0 z-[9999] bg-white text-slate-900 overflow-y-auto p-10 print:p-6 print:static print:overflow-visible">
         <button onClick={() => setExportando(false)} className="print:hidden fixed top-4 right-4 p-2 rounded-lg hover:bg-slate-100 text-slate-500 z-10" title="Fechar">
           <X size={18}/>
         </button>
@@ -227,7 +278,8 @@ export function MaterialSemanal() {
           <p className="text-slate-400 text-[10px] mb-6">{periodoLabel} de {domingo.getFullYear()}</p>
           {conteudo}
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 

@@ -63,4 +63,9 @@ body {
     print-color-adjust: exact !important;
   }
   main { padding: 0 !important; }
+
+  /* Export isolado de um card específico (ex: Material Semanal em /reports) via portal
+     direto no body — esconde tudo que não seja o overlay, senão o resto da página (barra
+     de filtros, outras seções) continua no DOM normal e vaza pro PDF junto. */
+  body.modo-exportacao-isolada > :not(.export-overlay-isolada) { display: none !important; }
 }

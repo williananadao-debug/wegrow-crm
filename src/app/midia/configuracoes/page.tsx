@@ -7,8 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026 } from '../shared';
 
-const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]";
-const LABEL = "text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block";
+const CAMPO = "w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-base font-bold outline-none focus:border-[#22C55E]";
+const LABEL = "text-[12px] font-black uppercase text-slate-500 ml-2 mb-1 block";
 
 export default function MidiaConfiguracoesPage() {
   return (
@@ -261,7 +261,7 @@ function MidiaConfiguracoesContent() {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
-          <p className="text-slate-400 font-bold text-sm">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor ou gerente pode acessar essa área.'}</p>
+          <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor ou gerente pode acessar essa área.'}</p>
         </div>
       </div>
     );
@@ -269,11 +269,11 @@ function MidiaConfiguracoesContent() {
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white max-w-3xl mx-auto">
-      <Link href="/midia" className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest mb-6">
+      <Link href="/midia" className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-sm font-black uppercase tracking-widest mb-6">
         <ArrowLeft size={14} /> Voltar
       </Link>
 
-      <h1 className="text-2xl font-black uppercase italic tracking-tighter mb-6">Configurações — Demais FM Comercial</h1>
+      <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-6">Configurações — Demais FM Comercial</h1>
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
@@ -282,8 +282,8 @@ function MidiaConfiguracoesContent() {
 
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
-              <h2 className="text-sm font-black uppercase flex items-center gap-2 text-[#22C55E]"><Instagram size={16} /> Instagram (Meta Graph API)</h2>
-              <p className="text-[11px] text-slate-500 font-semibold">
+              <h2 className="text-base font-black uppercase flex items-center gap-2 text-[#22C55E]"><Instagram size={16} /> Instagram (Meta Graph API)</h2>
+              <p className="text-[13px] text-slate-500 font-semibold">
                 Precisa de uma conta Instagram Business/Creator vinculada a uma Página do Facebook, um app criado em developers.facebook.com,
                 e um token de acesso de longa duração com permissão de leitura de insights. Visível só pra diretor.
               </p>
@@ -300,8 +300,8 @@ function MidiaConfiguracoesContent() {
                 <input type="password" className={CAMPO} value={metaConfig.access_token} onChange={e => setMetaConfig({ ...metaConfig, access_token: e.target.value })} placeholder="EAAG..." />
               </div>
 
-              <h2 className="text-sm font-black uppercase flex items-center gap-2 text-red-400 pt-2 border-t border-white/5"><Youtube size={16} /> YouTube (Data API)</h2>
-              <p className="text-[11px] text-slate-500 font-semibold">
+              <h2 className="text-base font-black uppercase flex items-center gap-2 text-red-400 pt-2 border-t border-white/5"><Youtube size={16} /> YouTube (Data API)</h2>
+              <p className="text-[13px] text-slate-500 font-semibold">
                 Só precisa do Channel ID do canal — a chave de API é configurada uma vez só no servidor (YOUTUBE_API_KEY), não por empresa.
                 Traz inscritos e visualizações totais históricas.
               </p>
@@ -310,18 +310,18 @@ function MidiaConfiguracoesContent() {
                 <input className={CAMPO} value={metaConfig.youtube_channel_id} onChange={e => setMetaConfig({ ...metaConfig, youtube_channel_id: e.target.value })} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" />
               </div>
 
-              <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+              <button onClick={salvarMetaConfig} disabled={salvandoMeta} className="bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest flex items-center gap-2">
                 {salvandoMeta ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
               </button>
 
               <div className="pt-3 border-t border-white/5">
-                <p className="text-[11px] text-slate-500 font-semibold mb-2">
+                <p className="text-[13px] text-slate-500 font-semibold mb-2">
                   Visualização <strong>por mês</strong> real (não só total histórico) exige autorização do dono do canal via Google — conecta uma vez, renova sozinho depois.
                 </p>
                 {youtubeConectadoEm ? (
-                  <p className="text-[10px] text-[#22C55E] font-bold flex items-center gap-1.5"><CheckCircle2 size={13} /> Conectado desde {new Date(youtubeConectadoEm).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-[12px] text-[#22C55E] font-bold flex items-center gap-1.5"><CheckCircle2 size={13} /> Conectado desde {new Date(youtubeConectadoEm).toLocaleDateString('pt-BR')}</p>
                 ) : (
-                  <button onClick={conectarGoogle} disabled={conectandoGoogle} className="inline-flex items-center gap-2 bg-white text-[#0B1120] hover:bg-slate-200 disabled:opacity-50 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">
+                  <button onClick={conectarGoogle} disabled={conectandoGoogle} className="inline-flex items-center gap-2 bg-white text-[#0B1120] hover:bg-slate-200 disabled:opacity-50 px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest">
                     {conectandoGoogle ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />} Conectar com Google
                   </button>
                 )}
@@ -330,7 +330,7 @@ function MidiaConfiguracoesContent() {
           )}
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-4">
-            <p className="text-[11px] text-slate-400 font-semibold">
+            <p className="text-[13px] text-slate-400 font-semibold">
               Audiência, site, downloads do app e monetização vêm ao vivo da API da Demais FM Comercial (Leo). YouTube da rede vem automático do Google
               (canal conectado). Só redes sociais (rede) e Instagram do Demais News continuam manuais abaixo — redes sociais aguardando o Leo expor
               esse dado na API dele.
@@ -339,12 +339,12 @@ function MidiaConfiguracoesContent() {
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="text-sm font-black uppercase text-amber-400">Dados manuais do mês</h2>
+              <h2 className="text-base font-black uppercase text-amber-400">Dados manuais do mês</h2>
               <div className="flex items-center gap-2">
-                <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
+                <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm font-bold uppercase text-white outline-none">
                   {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
                 </select>
-                <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase text-white outline-none">
+                <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm font-bold uppercase text-white outline-none">
                   {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
@@ -362,7 +362,7 @@ function MidiaConfiguracoesContent() {
               <div>
                 <label className={LABEL}>Redes sociais (rede) — visitas ao perfil</label>
                 <input type="number" className={CAMPO} value={metricas.redes_sociais_visitas_perfil} onChange={e => setMetricas({ ...metricas, redes_sociais_visitas_perfil: e.target.value })} placeholder="Ex: 81000" />
-                <p className="text-[9px] text-slate-600 font-bold mt-1">Soma Instagram + Facebook das três emissoras — vem pronto do painel do Leo/IAlto, mesmo número do card "Redes sociais" dele.</p>
+                <p className="text-[11px] text-slate-600 font-bold mt-1">Soma Instagram + Facebook das três emissoras — vem pronto do painel do Leo/IAlto, mesmo número do card "Redes sociais" dele.</p>
               </div>
               <div>
                 <label className={LABEL}>Visualizações YouTube da rede</label>
@@ -370,14 +370,14 @@ function MidiaConfiguracoesContent() {
                 {youtubeConectadoEm && (
                   <div className="flex items-center gap-2 mt-1.5">
                     {carregandoViewsOauth ? (
-                      <span className="text-[9px] font-black uppercase text-blue-400 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Buscando real de {MESES_LABEL[mes - 1]}/{ano}…</span>
+                      <span className="text-[11px] font-black uppercase text-blue-400 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Buscando real de {MESES_LABEL[mes - 1]}/{ano}…</span>
                     ) : (
-                      <span className="text-[9px] font-black uppercase text-[#22C55E] flex items-center gap-1"><Youtube size={10} /> Automático — real de {MESES_LABEL[mes - 1]}/{ano}</span>
+                      <span className="text-[11px] font-black uppercase text-[#22C55E] flex items-center gap-1"><Youtube size={10} /> Automático — real de {MESES_LABEL[mes - 1]}/{ano}</span>
                     )}
                     <button type="button" onClick={buscarViewsOauth} disabled={carregandoViewsOauth} className="text-slate-500 hover:text-white transition-colors">
                       <RefreshCw size={11} className={carregandoViewsOauth ? 'animate-spin' : ''} />
                     </button>
-                    {erroViewsOauth && <span className="text-[9px] text-amber-400 font-bold">{erroViewsOauth} — preencha manualmente abaixo</span>}
+                    {erroViewsOauth && <span className="text-[11px] text-amber-400 font-bold">{erroViewsOauth} — preencha manualmente abaixo</span>}
                   </div>
                 )}
               </div>
@@ -399,24 +399,24 @@ function MidiaConfiguracoesContent() {
               </div>
             </div>
 
-            <button onClick={salvarMetricas} disabled={salvandoMetricas} className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+            <button onClick={salvarMetricas} disabled={salvandoMetricas} className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest flex items-center gap-2">
               {salvandoMetricas ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar {MESES_LABEL[mes - 1]}/{ano}
             </button>
           </div>
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2"><Cake size={16} /> Aniversários de Município</h2>
+              <h2 className="text-base font-black uppercase text-emerald-400 flex items-center gap-2"><Cake size={16} /> Aniversários de Município</h2>
               <div className="flex items-center gap-2">
-                <button onClick={carregarSugestao} disabled={carregandoSugestao} className="inline-flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                <button onClick={carregarSugestao} disabled={carregandoSugestao} className="inline-flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest disabled:opacity-50">
                   {carregandoSugestao ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar sugestão (24 cidades)
                 </button>
-                <button onClick={carregarResultados2026} disabled={carregandoResultados} className="inline-flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                <button onClick={carregarResultados2026} disabled={carregandoResultados} className="inline-flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest disabled:opacity-50">
                   {carregandoResultados ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Carregar resultados de vendas 2026
                 </button>
               </div>
             </div>
-            <p className="text-[11px] text-slate-500 font-semibold">
+            <p className="text-[13px] text-slate-500 font-semibold">
               Alerta dispara 5 dias antes da data. Algumas cidades têm dia não confirmado (só o mês bate com o painel real de vendas) — confira as com observação antes de usar pra vender.
             </p>
 
@@ -425,8 +425,8 @@ function MidiaConfiguracoesContent() {
                 {aniversarios.map(a => (
                   <div key={a.id} className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{a.municipio}{a.uf ? `/${a.uf}` : ''} <span className="text-slate-500 font-normal">— {String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')}</span></p>
-                      {(a.praca || a.observacao) && <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{a.praca}{a.observacao ? ` · ${a.observacao}` : ''}</p>}
+                      <p className="text-sm font-bold text-white truncate">{a.municipio}{a.uf ? `/${a.uf}` : ''} <span className="text-slate-500 font-normal">— {String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')}</span></p>
+                      {(a.praca || a.observacao) && <p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">{a.praca}{a.observacao ? ` · ${a.observacao}` : ''}</p>}
                     </div>
                     <button onClick={() => excluirAniversario(a.id)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-white/5 rounded-lg flex-shrink-0"><Trash2 size={13} /></button>
                   </div>
@@ -456,12 +456,12 @@ function MidiaConfiguracoesContent() {
                 <input type="number" min={1} max={12} className={CAMPO} value={novoAniversario.mes} onChange={e => setNovoAniversario({ ...novoAniversario, mes: e.target.value })} />
               </div>
             </div>
-            <button onClick={adicionarAniversario} disabled={salvandoAniversario} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50">
+            <button onClick={adicionarAniversario} disabled={salvandoAniversario} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest disabled:opacity-50">
               {salvandoAniversario ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Adicionar cidade
             </button>
           </div>
 
-          {toast && <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white">{toast}</div>}
+          {toast && <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white">{toast}</div>}
         </div>
       )}
     </div>

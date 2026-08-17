@@ -83,7 +83,7 @@ export default function MidiaAniversariosPage() {
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
+          <p className="text-slate-400 font-bold text-base">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
         </div>
       </div>
     );
@@ -164,7 +164,7 @@ export default function MidiaAniversariosPage() {
       <MidiaTabs />
 
       <div className="flex justify-end mb-6">
-        <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
+        <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold uppercase text-white outline-none focus:border-[#22C55E]">
           {[hoje.getFullYear() + 1, hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
@@ -174,15 +174,15 @@ export default function MidiaAniversariosPage() {
       ) : ordenados.length === 0 ? (
         <div className="bg-[#0B1120] border border-white/10 rounded-3xl p-10 text-center">
           <Cake size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm mb-3">Nenhuma cidade cadastrada ainda.</p>
-          {isLideranca && <Link href="/midia/configuracoes" className="inline-block bg-[#22C55E] hover:bg-[#22C55E] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">Cadastrar em Configurações</Link>}
+          <p className="text-slate-400 font-bold text-base mb-3">Nenhuma cidade cadastrada ainda.</p>
+          {isLideranca && <Link href="/midia/configuracoes" className="inline-block bg-[#22C55E] hover:bg-[#22C55E] text-white px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest">Cadastrar em Configurações</Link>}
         </div>
       ) : (
         <>
           {urgentes.length > 0 && (
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap mb-4">
               <Bell size={16} className="text-emerald-400 shrink-0 animate-pulse" />
-              <p className="text-emerald-300 text-xs font-black uppercase tracking-wide flex-1">
+              <p className="text-emerald-300 text-sm font-black uppercase tracking-wide flex-1">
                 {urgentes.length} aniversário{urgentes.length > 1 ? 's' : ''} de município nos próximos {DIAS_ALERTA_ANIVERSARIO} dias:
                 <span className="text-white ml-2">
                   {urgentes.map(a => `${a.municipio} (${a.diasRestantes === 0 ? 'hoje' : `${a.diasRestantes}d`})`).join(' · ')}
@@ -201,16 +201,16 @@ export default function MidiaAniversariosPage() {
               return (
                 <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
-                    <span className="text-[8px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Uso Interno</span>
+                    <span className="text-sm font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <span className="text-[10px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Uso Interno</span>
                   </div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita de aniversários ({ano})</p>
-                  <h3 className="text-2xl font-black text-white mt-0.5">{fmtMoeda(receita)}</h3>
+                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Receita de aniversários ({ano})</p>
+                  <h3 className="text-3xl font-black text-white mt-0.5">{fmtMoeda(receita)}</h3>
                   <div className="border-t border-white/5 mt-3 pt-3 space-y-1">
-                    <div className="flex justify-between text-[10px]"><span className="text-slate-500 font-bold">Não vendido</span><span className="text-slate-300 font-black">{contagem('nao_vendido')}</span></div>
-                    <div className="flex justify-between text-[10px]"><span className="text-slate-500 font-bold">Sem registro</span><span className="text-slate-300 font-black">{contagem('sem_registro')}</span></div>
-                    <div className="flex justify-between text-[10px]"><span className="text-[#22C55E] font-bold">Vendido</span><span className="text-[#22C55E] font-black">{contagem('vendido')}</span></div>
-                    <div className="flex justify-between text-[10px]"><span className="text-blue-400 font-bold">Vendido s/ valor</span><span className="text-blue-400 font-black">{contagem('vendido_sem_valor')}</span></div>
+                    <div className="flex justify-between text-[12px]"><span className="text-slate-500 font-bold">Não vendido</span><span className="text-slate-300 font-black">{contagem('nao_vendido')}</span></div>
+                    <div className="flex justify-between text-[12px]"><span className="text-slate-500 font-bold">Sem registro</span><span className="text-slate-300 font-black">{contagem('sem_registro')}</span></div>
+                    <div className="flex justify-between text-[12px]"><span className="text-[#22C55E] font-bold">Vendido</span><span className="text-[#22C55E] font-black">{contagem('vendido')}</span></div>
+                    <div className="flex justify-between text-[12px]"><span className="text-blue-400 font-bold">Vendido s/ valor</span><span className="text-blue-400 font-black">{contagem('vendido_sem_valor')}</span></div>
                   </div>
                 </div>
               );
@@ -220,7 +220,7 @@ export default function MidiaAniversariosPage() {
           {vendidosSemValor.length > 0 && (
             <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex items-start gap-3 mb-6">
               <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-amber-200 text-xs font-semibold">
+              <p className="text-amber-200 text-sm font-semibold">
                 {vendidosSemValor.length} aniversário{vendidosSemValor.length > 1 ? 's estão registrados' : ' está registrado'} como vendido sem valor informado
                 ({vendidosSemValor.map(({ a }) => a.municipio).join(', ')}). Os totais acima são, portanto, um piso — a receita real foi maior.
               </p>
@@ -234,8 +234,8 @@ export default function MidiaAniversariosPage() {
               return (
                 <div key={praca} className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="text-xs font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
-                    <h3 className="text-sm font-black text-white">Aniversários {ano}</h3>
+                    <span className="text-sm font-black uppercase text-[#22C55E] bg-[#22C55E]/10 px-2.5 py-1 rounded-full">{praca} FM</span>
+                    <h3 className="text-base font-black text-white">Aniversários {ano}</h3>
                   </div>
                   <div className="space-y-4">
                     {(() => {
@@ -252,49 +252,49 @@ export default function MidiaAniversariosPage() {
                         const leoDivergeDoResultado = leo && (STATUS_LEO_PARA_CRM[leo.status] !== status || (leo.receita_liquida != null && Number(leo.receita_liquida) !== Number(r?.valor || 0)));
                         return (
                           <div key={a.id}>
-                            {mostrarMes && <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1.5">{MESES_LABEL[a.mes - 1]}</p>}
+                            {mostrarMes && <p className="text-[11px] font-black text-slate-600 uppercase tracking-widest mb-1.5">{MESES_LABEL[a.mes - 1]}</p>}
                             <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3">
                               <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-bold text-white truncate">{a.municipio}</p>
-                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS_VENDA_CORES[status]}`}>{STATUS_VENDA_LABELS[status]}</span>
+                                <p className="text-base font-bold text-white truncate">{a.municipio}</p>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS_VENDA_CORES[status]}`}>{STATUS_VENDA_LABELS[status]}</span>
                               </div>
-                              {status === 'vendido' && <p className="text-sm font-black text-[#22C55E] mt-1">{fmtMoeda(r?.valor)}</p>}
-                              {r?.observacao && <p className="text-[10px] text-slate-500 mt-1">{r.observacao}</p>}
+                              {status === 'vendido' && <p className="text-base font-black text-[#22C55E] mt-1">{fmtMoeda(r?.valor)}</p>}
+                              {r?.observacao && <p className="text-[12px] text-slate-500 mt-1">{r.observacao}</p>}
 
                               {crmDivergeDoResultado && (
                                 <div className="mt-2 bg-blue-500/10 border border-blue-500/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
-                                  <p className="text-[9px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {fmtMoeda(totalCrm)} em {leadsCrm.length} venda(s) de {MESES_LABEL[a.mes - 1]}/{ano}</p>
-                                  {isLideranca && <button onClick={() => usarValorDoCrm(a)} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 whitespace-nowrap">Usar valor →</button>}
+                                  <p className="text-[11px] text-blue-300 font-bold flex items-center gap-1"><Search size={10} /> CRM: {fmtMoeda(totalCrm)} em {leadsCrm.length} venda(s) de {MESES_LABEL[a.mes - 1]}/{ano}</p>
+                                  {isLideranca && <button onClick={() => usarValorDoCrm(a)} className="text-[11px] font-black uppercase text-blue-400 hover:text-blue-300 whitespace-nowrap">Usar valor →</button>}
                                 </div>
                               )}
 
                               {isLideranca && leoDivergeDoResultado && (
                                 <div className="mt-2 bg-[#22C55E]/10 border border-[#22C55E]/25 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
-                                  <p className="text-[9px] text-[#22C55E] font-bold flex items-center gap-1">
+                                  <p className="text-[11px] text-[#22C55E] font-bold flex items-center gap-1">
                                     <Search size={10} /> IAlto: {STATUS_VENDA_LABELS[STATUS_LEO_PARA_CRM[leo!.status]]}{leo!.receita_liquida != null ? ` · ${fmtMoeda(Number(leo!.receita_liquida))}` : ''}
                                   </p>
-                                  <button onClick={() => usarDadoDoLeo(a)} className="text-[9px] font-black uppercase text-[#22C55E] hover:text-white whitespace-nowrap">Usar dado →</button>
+                                  <button onClick={() => usarDadoDoLeo(a)} className="text-[11px] font-black uppercase text-[#22C55E] hover:text-white whitespace-nowrap">Usar dado →</button>
                                 </div>
                               )}
 
                               {isLideranca && editando !== a.id && (
-                                <button onClick={() => iniciarEdicao(a.id)} className="text-[9px] font-black uppercase text-slate-600 hover:text-[#22C55E] mt-2">Editar resultado</button>
+                                <button onClick={() => iniciarEdicao(a.id)} className="text-[11px] font-black uppercase text-slate-600 hover:text-[#22C55E] mt-2">Editar resultado</button>
                               )}
 
                               {editando === a.id && (
                                 <div className="mt-2 pt-2 border-t border-white/5 space-y-2">
-                                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as StatusVendaAniversario })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase text-white outline-none">
+                                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as StatusVendaAniversario })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] font-bold uppercase text-white outline-none">
                                     {Object.entries(STATUS_VENDA_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                   </select>
                                   {form.status === 'vendido' && (
-                                    <input type="number" step="0.01" placeholder="Valor R$" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-white outline-none" />
+                                    <input type="number" step="0.01" placeholder="Valor R$" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] font-bold text-white outline-none" />
                                   )}
-                                  <textarea placeholder="Observação (opcional)" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white outline-none resize-none" />
+                                  <textarea placeholder="Observação (opcional)" value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className="w-full bg-[#0B1120] border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] text-white outline-none resize-none" />
                                   <div className="flex gap-1.5">
-                                    <button onClick={() => salvarResultado(a.id)} disabled={salvando} className="flex-1 bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1">
+                                    <button onClick={() => salvarResultado(a.id)} disabled={salvando} className="flex-1 bg-[#22C55E] hover:bg-[#22C55E] disabled:opacity-50 text-white py-1.5 rounded-lg text-[11px] font-black uppercase flex items-center justify-center gap-1">
                                       {salvando ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar
                                     </button>
-                                    <button onClick={() => setEditando(null)} className="px-3 bg-white/5 hover:bg-white/10 text-slate-400 py-1.5 rounded-lg text-[9px] font-black uppercase"><X size={11} /></button>
+                                    <button onClick={() => setEditando(null)} className="px-3 bg-white/5 hover:bg-white/10 text-slate-400 py-1.5 rounded-lg text-[11px] font-black uppercase"><X size={11} /></button>
                                   </div>
                                 </div>
                               )}
@@ -303,7 +303,7 @@ export default function MidiaAniversariosPage() {
                         );
                       });
                     })()}
-                    {daPraca.length === 0 && <p className="text-[10px] text-slate-600 font-bold">Nenhuma cidade cadastrada pra essa praça.</p>}
+                    {daPraca.length === 0 && <p className="text-[12px] text-slate-600 font-bold">Nenhuma cidade cadastrada pra essa praça.</p>}
                   </div>
                 </div>
               );

@@ -234,7 +234,7 @@ export default function MidiaPage() {
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
+          <p className="text-slate-400 font-bold text-base">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
         </div>
       </div>
     );
@@ -252,14 +252,14 @@ export default function MidiaPage() {
 
       <div className="flex items-end justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h2 className="text-lg font-black text-white">Visão Geral</h2>
-          <p className="text-[11px] text-slate-500 font-bold mt-0.5">Indicadores de rede — audiência, redes sociais e prestação de contas do mês.</p>
+          <h2 className="text-xl font-black text-white">Visão Geral</h2>
+          <p className="text-[13px] text-slate-500 font-bold mt-0.5">Indicadores de rede — audiência, redes sociais e prestação de contas do mês.</p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
+          <select value={mes} onChange={e => setMes(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold uppercase text-white outline-none focus:border-[#22C55E]">
             {MESES_LABEL.map((l, i) => <option key={i} value={i + 1}>{l}</option>)}
           </select>
-          <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold uppercase text-white outline-none focus:border-[#22C55E]">
+          <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold uppercase text-white outline-none focus:border-[#22C55E]">
             {[hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -273,25 +273,25 @@ export default function MidiaPage() {
           {/* REDE EM CADEIA — estimado */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Radio size={13} /> Rede em cadeia</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Radio size={13} /> Rede em cadeia</p>
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Estimado</span>
+                <span className="text-[11px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Estimado</span>
                 <button onClick={carregarAudienciaFm} disabled={carregandoAudienciaFm} className="text-slate-500 hover:text-white transition-colors">
                   <RefreshCw size={12} className={carregandoAudienciaFm ? 'animate-spin' : ''} />
                 </button>
               </div>
             </div>
             {erroAudienciaFm ? (
-              <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAudienciaFm}</p>
+              <p className="text-[13px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAudienciaFm}</p>
             ) : (
               <>
                 <div className="flex items-baseline gap-2">
-                  <h3 className="text-3xl font-black text-amber-400">{fmtNumero(audienciaRede?.ouvintes_por_minuto)}</h3>
-                  <span className="text-xs text-slate-400 font-bold">ouvintes por minuto</span>
+                  <h3 className="text-4xl font-black text-amber-400">{fmtNumero(audienciaRede?.ouvintes_por_minuto)}</h3>
+                  <span className="text-sm text-slate-400 font-bold">ouvintes por minuto</span>
                 </div>
-                <p className="text-[10px] text-slate-500 font-semibold mt-2">Cálculo por parâmetros médios de mercado, apenas população das cidades sede — com cidades vizinhas o alcance é maior.</p>
+                <p className="text-[12px] text-slate-500 font-semibold mt-2">Cálculo por parâmetros médios de mercado, apenas população das cidades sede — com cidades vizinhas o alcance é maior.</p>
                 {audienciaFm && (
-                  <p className="text-[9px] text-slate-600 font-bold mt-2">Fonte: {audienciaRede?.fonte || '—'} · atualizado em {audienciaFm.atualizado_em ? new Date(audienciaFm.atualizado_em).toLocaleDateString('pt-BR') : '—'}</p>
+                  <p className="text-[11px] text-slate-600 font-bold mt-2">Fonte: {audienciaRede?.fonte || '—'} · atualizado em {audienciaFm.atualizado_em ? new Date(audienciaFm.atualizado_em).toLocaleDateString('pt-BR') : '—'}</p>
                 )}
               </>
             )}
@@ -300,26 +300,26 @@ export default function MidiaPage() {
           {/* REDES SOCIAIS — ao vivo assim que o Leo expuser o endpoint; manual até lá */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{redesSociais?.periodo ? ` — ${fmtPeriodo(redesSociais.periodo)}` : ''}</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{redesSociais?.periodo ? ` — ${fmtPeriodo(redesSociais.periodo)}` : ''}</p>
               {redesSociais?.aoVivo ? (
-                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Ao vivo</span>
+                <span className="text-[11px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Ao vivo</span>
               ) : (
-                <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
+                <span className="text-[11px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
               )}
             </div>
             {!redesSociais ? (
-              <p className="text-[11px] text-slate-500 font-bold">Sem dados — cadastre em Configurações.</p>
+              <p className="text-[13px] text-slate-500 font-bold">Sem dados — cadastre em Configurações.</p>
             ) : (
               <>
                 <div className="flex items-baseline gap-2 mb-3">
-                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(redesSociais.visualizacoes)}</h3>
-                  <span className="text-xs text-slate-400 font-bold">visualizações</span>
+                  <h3 className="text-4xl font-black text-[#22C55E]">{fmtCompacto(redesSociais.visualizacoes)}</h3>
+                  <span className="text-sm text-slate-400 font-bold">visualizações</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(redesSociais.interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(redesSociais.visitasPerfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
+                  <div><h4 className="text-base font-black text-white">{fmtCompacto(redesSociais.interacoes)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+                  <div><h4 className="text-base font-black text-white">{fmtCompacto(redesSociais.visitasPerfil)}</h4><p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
                 </div>
-                <p className="text-[10px] text-slate-600 font-semibold mt-3">
+                <p className="text-[12px] text-slate-600 font-semibold mt-3">
                   {redesSociais.aoVivo
                     ? 'Soma de Instagram + Facebook das três emissoras — ao vivo da API Demais FM Comercial.'
                     : 'Soma de Instagram + Facebook das três emissoras — número pronto do painel do Leo/IAlto, digitado manualmente aqui por enquanto.'}
@@ -331,25 +331,25 @@ export default function MidiaPage() {
           {/* DEMAIS NEWS — site + instagram próprio, split */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={13} /> Demais News</p>
-              <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Medido</span>
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Newspaper size={13} /> Demais News</p>
+              <span className="text-[11px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Medido</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:border-r md:border-white/5 md:pr-5">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Site</p>
+                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide">Site</p>
                   <button onClick={carregarSiteFm} disabled={carregandoSiteFm} className="text-slate-500 hover:text-white transition-colors">
                     <RefreshCw size={11} className={carregandoSiteFm ? 'animate-spin' : ''} />
                   </button>
                 </div>
                 {erroSiteFm ? (
-                  <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroSiteFm}</p>
+                  <p className="text-[13px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={12} /> {erroSiteFm}</p>
                 ) : siteMesAtual?.visitas == null ? (
-                  <p className="text-[11px] text-slate-500 font-bold">Mês ainda não ingerido pela Demais FM.</p>
+                  <p className="text-[13px] text-slate-500 font-bold">Mês ainda não ingerido pela Demais FM.</p>
                 ) : (
                   <>
-                    <h3 className="text-2xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
-                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">acessos · {fmtPeriodo(siteMesAtual.periodo)}{siteMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}</p>
+                    <h3 className="text-3xl font-black text-white">{fmtNumero(siteMesAtual.visitas)}</h3>
+                    <p className="text-[12px] text-slate-500 font-bold mt-0.5">acessos · {fmtPeriodo(siteMesAtual.periodo)}{siteMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}</p>
                     {siteOrdenado.length > 1 && (
                       <div className="flex items-end gap-1 h-10 mt-3">
                         {[...siteOrdenado].reverse().map(d => {
@@ -358,7 +358,7 @@ export default function MidiaPage() {
                           return (
                             <div key={d.periodo} className="flex-1 flex flex-col items-center gap-0.5 group">
                               <div className="w-full rounded-t bg-[#22C55E]/50 group-hover:bg-[#22C55E] transition-all" style={{ height: `${Math.max((v / maxSite) * 100, v > 0 ? 4 : 0)}%` }} title={`${fmtPeriodo(d.periodo)}: ${fmtNumero(v)}`} />
-                              <span className="text-[6px] text-slate-600 font-bold uppercase">{MESES_LABEL[Number(d.periodo.split('-')[1]) - 1]}</span>
+                              <span className="text-[8px] text-slate-600 font-bold uppercase">{MESES_LABEL[Number(d.periodo.split('-')[1]) - 1]}</span>
                             </div>
                           );
                         })}
@@ -368,36 +368,36 @@ export default function MidiaPage() {
                 )}
               </div>
               <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
-                <h3 className="text-2xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
-                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
+                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
+                <p className="text-[12px] text-slate-500 font-bold mt-0.5">
                   {fmtNumero(metricasEfetivas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricasEfetivas?.instagram_demais_news_seguidores)} seguidores
                   {metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ''}
                 </p>
               </div>
             </div>
-            <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">O Demais News é propriedade distinta das três emissoras — esses números não entram na soma do card de redes sociais acima.</p>
+            <p className="text-[11px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">O Demais News é propriedade distinta das três emissoras — esses números não entram na soma do card de redes sociais acima.</p>
           </div>
 
           {/* YOUTUBE DA REDE — automático (Google, canal conectado) + canal ao vivo + mini gráfico */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Youtube size={13} /> YouTube da Rede — {MESES_LABEL[mes - 1]}/{ano}</p>
-              <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Automático</span>
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Youtube size={13} /> YouTube da Rede — {MESES_LABEL[mes - 1]}/{ano}</p>
+              <span className="text-[11px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Automático</span>
             </div>
             <div className="flex flex-col md:flex-row md:items-end gap-5">
               <div className="flex-shrink-0">
-                <h3 className="text-3xl font-black text-white">{fmtCompacto(metricasEfetivas?.youtube_visualizacoes)}</h3>
-                <p className="text-[10px] text-slate-500 font-bold mt-1">
+                <h3 className="text-4xl font-black text-white">{fmtCompacto(metricasEfetivas?.youtube_visualizacoes)}</h3>
+                <p className="text-[12px] text-slate-500 font-bold mt-1">
                   visualizações{metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ' no mês'}
                 </p>
-                {metricasEfetivas?.youtube_observacoes && <p className="text-[10px] text-slate-500 mt-2 italic max-w-xs">{metricasEfetivas.youtube_observacoes}</p>}
+                {metricasEfetivas?.youtube_observacoes && <p className="text-[12px] text-slate-500 mt-2 italic max-w-xs">{metricasEfetivas.youtube_observacoes}</p>}
               </div>
               <div className="flex-1 flex items-end gap-1.5 h-16 min-w-[200px]">
                 {graficoMeses.map((m, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
                     <div className="w-full rounded-t bg-[#22C55E]/50 group-hover:bg-[#22C55E] transition-all" style={{ height: `${Math.max((m.valor / maxGrafico) * 100, m.valor > 0 ? 4 : 0)}%` }} title={`${m.label}: ${fmtNumero(m.valor)}`} />
-                    <span className="text-[7px] text-slate-600 font-bold uppercase">{m.label}</span>
+                    <span className="text-[9px] text-slate-600 font-bold uppercase">{m.label}</span>
                   </div>
                 ))}
               </div>
@@ -405,17 +405,17 @@ export default function MidiaPage() {
 
             <div className="border-t border-white/5 mt-3 pt-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Canal ao vivo</span>
+                <span className="text-[11px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Canal ao vivo</span>
                 <button onClick={carregarYoutube} disabled={carregandoYoutube} className="text-slate-500 hover:text-white transition-colors">
                   <RefreshCw size={12} className={carregandoYoutube ? 'animate-spin' : ''} />
                 </button>
               </div>
               {erroYoutube ? (
-                <p className="text-[10px] text-amber-400 font-bold flex items-center gap-1"><AlertTriangle size={11} /> {erroYoutube}</p>
+                <p className="text-[12px] text-amber-400 font-bold flex items-center gap-1"><AlertTriangle size={11} /> {erroYoutube}</p>
               ) : youtube ? (
-                <p className="text-[11px] text-slate-400 font-bold">{fmtNumero(youtube.inscritos)} inscritos · {fmtCompacto(youtube.visualizacoesTotais)} views totais (histórico do canal)</p>
+                <p className="text-[13px] text-slate-400 font-bold">{fmtNumero(youtube.inscritos)} inscritos · {fmtCompacto(youtube.visualizacoesTotais)} views totais (histórico do canal)</p>
               ) : (
-                <p className="text-[10px] text-slate-600 font-bold">Carregando...</p>
+                <p className="text-[12px] text-slate-600 font-bold">Carregando...</p>
               )}
             </div>
           </div>
@@ -424,25 +424,25 @@ export default function MidiaPage() {
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Smartphone size={13} /> Downloads do App</p>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Smartphone size={13} /> Downloads do App</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
+                  <span className="text-[11px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
                   <button onClick={carregarAppDownloadsFm} disabled={carregandoAppDownloadsFm} className="text-slate-500 hover:text-white transition-colors">
                     <RefreshCw size={12} className={carregandoAppDownloadsFm ? 'animate-spin' : ''} />
                   </button>
                 </div>
               </div>
               {erroAppDownloadsFm ? (
-                <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAppDownloadsFm}</p>
+                <p className="text-[13px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroAppDownloadsFm}</p>
               ) : appDownloadsAcumulado.length === 0 ? (
-                <p className="text-[11px] text-slate-500 font-bold">Sem dados.</p>
+                <p className="text-[13px] text-slate-500 font-bold">Sem dados.</p>
               ) : (
                 <>
                   <div className="flex flex-col md:flex-row md:items-center gap-5">
                     <div className="flex-shrink-0">
-                      <h3 className="text-3xl font-black text-amber-400">{fmtNumero(appDownloadsAcumulado.reduce((acc, d) => acc + d.valor, 0))}</h3>
-                      <p className="text-[10px] text-slate-500 font-bold mt-1">downloads · total acumulado{appDownloadsMensal[0] ? ` até ${fmtPeriodo(appDownloadsMensal[0].periodo)}` : ''}</p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-2">
+                      <h3 className="text-4xl font-black text-amber-400">{fmtNumero(appDownloadsAcumulado.reduce((acc, d) => acc + d.valor, 0))}</h3>
+                      <p className="text-[12px] text-slate-500 font-bold mt-1">downloads · total acumulado{appDownloadsMensal[0] ? ` até ${fmtPeriodo(appDownloadsMensal[0].periodo)}` : ''}</p>
+                      <p className="text-[12px] text-slate-400 font-bold mt-2">
                         {appDownloadsAcumulado.map((d, i) => (<span key={d.loja}>{i > 0 ? ' · ' : ''}{d.loja} {fmtNumero(d.valor)}</span>))}
                       </p>
                     </div>
@@ -470,23 +470,23 @@ export default function MidiaPage() {
                                     </circle>
                                   </svg>
                                   <div className="absolute inset-0 flex items-center justify-center">
-                                    <span className="text-sm font-black text-white">{fmtCompacto(total)}</span>
+                                    <span className="text-base font-black text-white">{fmtCompacto(total)}</span>
                                   </div>
                                 </div>
-                                <span className="text-[9px] text-slate-500 font-bold uppercase">{fmtPeriodo(p)}</span>
+                                <span className="text-[11px] text-slate-500 font-bold uppercase">{fmtPeriodo(p)}</span>
                               </div>
                             );
                           })}
                           <div className="flex flex-col gap-1 justify-center">
-                            <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-white" /> Apple</span>
-                            <span className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Android</span>
+                            <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-white" /> Apple</span>
+                            <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Android</span>
                           </div>
                         </div>
                       );
                     })()}
                   </div>
 
-                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">
+                  <p className="text-[11px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">
                     Acumulado e mensal nunca são somados entre si — o acumulado já contém os meses.
                     {appDownloadsMensal.some(d => d.unidade !== 'downloads') ? ' Atenção: pelo menos um mês veio como unidade diferente de "downloads" (ex: "instalações ativas") — confira antes de comparar meses.' : ''}
                   </p>
@@ -499,33 +499,33 @@ export default function MidiaPage() {
           {isDiretor && (
             <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><DollarSign size={13} /> Monetização Digital</p>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><DollarSign size={13} /> Monetização Digital</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
+                  <span className="text-[11px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Uso Interno</span>
                   <button onClick={carregarMonetizacaoFm} disabled={carregandoMonetizacaoFm} className="text-slate-500 hover:text-white transition-colors">
                     <RefreshCw size={12} className={carregandoMonetizacaoFm ? 'animate-spin' : ''} />
                   </button>
                 </div>
               </div>
               {erroMonetizacaoFm ? (
-                <p className="text-[11px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroMonetizacaoFm}</p>
+                <p className="text-[13px] text-amber-400 font-bold flex items-center gap-1.5"><AlertTriangle size={13} /> {erroMonetizacaoFm}</p>
               ) : (
                 <>
                   <div className="flex items-end gap-6 flex-wrap">
                     <div>
-                      <h3 className="text-3xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
-                      <p className="text-[10px] text-slate-500 font-bold mt-1">
+                      <h3 className="text-4xl font-black text-red-400">{fmtMoeda(monetizacaoMesAtual ? Number(monetizacaoMesAtual.valor) : null)}</h3>
+                      <p className="text-[12px] text-slate-500 font-bold mt-1">
                         receita líquida do mês · {fmtPeriodo(monetizacaoMesAtual?.periodo)}{monetizacaoMesAtual && monetizacaoMesAtual.periodo !== periodoSelecionado ? ' (mais recente disponível)' : ''}
                       </p>
                     </div>
                     {monetizacaoAcumulado && (
                       <div>
-                        <h4 className="text-lg font-black text-white">{fmtMoeda(Number(monetizacaoAcumulado.valor))}</h4>
-                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Acumulado</p>
+                        <h4 className="text-xl font-black text-white">{fmtMoeda(Number(monetizacaoAcumulado.valor))}</h4>
+                        <p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Acumulado</p>
                       </div>
                     )}
                   </div>
-                  <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Fonte: {monetizacaoMesAtual?.fonte || monetizacaoAcumulado?.fonte || 'YouTube + Facebook'} · mês e acumulado nunca são somados entre si.</p>
+                  <p className="text-[11px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">Fonte: {monetizacaoMesAtual?.fonte || monetizacaoAcumulado?.fonte || 'YouTube + Facebook'} · mês e acumulado nunca são somados entre si.</p>
                 </>
               )}
             </div>
@@ -536,9 +536,9 @@ export default function MidiaPage() {
 
       {!metricas && !loading && (
         <div className="mt-6 bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex items-center justify-between gap-3">
-          <p className="text-amber-300 text-xs font-bold">Nenhum dado manual cadastrado pra {MESES_LABEL[mes - 1]}/{ano} ainda.</p>
+          <p className="text-amber-300 text-sm font-bold">Nenhum dado manual cadastrado pra {MESES_LABEL[mes - 1]}/{ano} ainda.</p>
           {(perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente') && (
-            <Link href="/midia/configuracoes" className="bg-amber-500 hover:bg-amber-400 text-[#0B1120] px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Cadastrar</Link>
+            <Link href="/midia/configuracoes" className="bg-amber-500 hover:bg-amber-400 text-[#0B1120] px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest whitespace-nowrap">Cadastrar</Link>
           )}
         </div>
       )}

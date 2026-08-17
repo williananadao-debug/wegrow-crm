@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   ArrowLeft, ShieldAlert, Loader2, RefreshCw, BarChart2, DollarSign,
   Users, TrendingUp, TrendingDown, AlertTriangle, Percent, Wrench, Printer,
+  Download, X,
 } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -41,6 +42,17 @@ export default function IndicadoresPage() {
   const [clientes, setClientes] = useState<ClienteView[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
+  const [exportarGrafico, setExportarGrafico] = useState(false);
+
+  // Fundo branco isolado (só o gráfico, sem o app em volta) pra colar direto numa
+  // apresentação — dispara o PDF sozinho e volta pro painel quando fecha a impressão.
+  useEffect(() => {
+    if (!exportarGrafico) return;
+    const t = setTimeout(() => window.print(), 80);
+    const voltar = () => setExportarGrafico(false);
+    window.addEventListener('afterprint', voltar);
+    return () => { clearTimeout(t); window.removeEventListener('afterprint', voltar); };
+  }, [exportarGrafico]);
 
   useEffect(() => {
     if (!user) return;
@@ -106,6 +118,32 @@ export default function IndicadoresPage() {
     { titulo: 'Taxa de conversão por canal', formula: 'Fechados ÷ oportunidades abertas, por canal (IAlto / Nilton / orgânico)', falta: 'O cadastro do cliente não registra de onde ele veio — falta o campo "canal de origem".' },
     { titulo: 'CAC por canal', formula: 'Custo do canal (ex.: 25% recorrente IAlto) ÷ novas contas daquele canal', falta: 'Depende do campo "canal" acima, mais registrar a comissão paga por fechamento.' },
   ];
+
+  if (exportarGrafico) {
+    return (
+      <div className="min-h-screen bg-white text-slate-900 p-10 print:p-0">
+        <button onClick={() => setExportarGrafico(false)} className="print:hidden absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100 text-slate-500" title="Fechar">
+          <X size={16}/>
+        </button>
+        <div className="max-w-xl mx-auto">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wegrow · Indicadores</p>
+          <h2 className="text-lg font-black uppercase italic tracking-tighter mb-1">Aquisição — novas contas por mês</h2>
+          <p className="text-slate-400 text-[10px] mb-6">{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+          <div className="space-y-3">
+            {novasPorMes.map((m, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-[11px] font-black text-slate-500 uppercase w-10 shrink-0">{m.label}</span>
+                <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#22C55E] rounded-full" style={{ width: `${(m.count / maxNovas) * 100}%` }}/>
+                </div>
+                <span className="text-sm font-black text-slate-900 w-6 text-right shrink-0">{m.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-white">
@@ -198,7 +236,12 @@ export default function IndicadoresPage() {
 
             {/* Aquisição */}
             <section>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><TrendingUp size={12}/> Aquisição — novas contas por mês</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><TrendingUp size={12}/> Aquisição — novas contas por mês</p>
+                <button onClick={() => setExportarGrafico(true)} title="Exportar só este gráfico (PDF, fundo branco)" className="p-1.5 rounded-lg hover:bg-white/5 text-slate-600 hover:text-slate-300 transition-colors">
+                  <Download size={13}/>
+                </button>
+              </div>
               <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5">
                 <div className="space-y-2.5">
                   {novasPorMes.map((m, i) => (

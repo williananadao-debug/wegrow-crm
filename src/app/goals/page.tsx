@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -21,8 +21,13 @@ export default function GoalsPage() {
   type MetaMensal = { mes: number; valor_objetivo: number };
   type ComparativoRow = { id: string; nome: string; meta: number; realizado: number; perc: number };
   const [loading, setLoading] = useState(true);
+  const metasRequestIdRef = useRef(0);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [vendedorSelecionado, setVendedorSelecionado] = useState<string>('global');
+  // null = ainda não sabemos se é diretor (vê 'global') ou vendedor comum (vê só a própria
+  // meta) — só busca dado depois de resolver isso. Antes começava em 'global' e corrigia
+  // depois num efeito separado, e o fetch de 'global' às vezes voltava DEPOIS do fetch já
+  // escopado pro vendedor, sobrescrevendo o resultado certo com o total de todo mundo.
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
   
   // NAVEGAÇÃO DE PERÍODO
   const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
@@ -53,12 +58,14 @@ export default function GoalsPage() {
   const isDirector = perfil?.cargo === 'diretor';
 
   useEffect(() => {
-    if (user) {
+    // Espera o perfil carregar antes de decidir o escopo — resolver os dois (diretor E
+    // vendedor comum) aqui, de uma vez, evita a janela em que vendedorSelecionado fica
+    // 'global' por padrão enquanto isDirector ainda não é conhecido.
+    if (user && perfil) {
       fetchVendedores();
-      // Vendedor comum só vê a própria meta
-      if (!isDirector) setVendedorSelecionado(user.id);
+      setVendedorSelecionado(isDirector ? 'global' : user.id);
     }
-  }, [user, perfil]);
+  }, [user, perfil, isDirector]);
 
   useEffect(() => {
     if (user && vendedorSelecionado) fetchMetasERealizado();
@@ -96,6 +103,9 @@ export default function GoalsPage() {
   }
 
   async function fetchMetasERealizado() {
+    // Guarda de corrida: se o vendedor/ano mudar de novo antes desta busca terminar, uma
+    // resposta antiga não pode mais sobrescrever o resultado de uma busca mais nova.
+    const minhaRequisicao = ++metasRequestIdRef.current;
     setLoading(true);
     try {
       const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
@@ -105,6 +115,8 @@ export default function GoalsPage() {
       else metaQuery = metaQuery.is('user_id', null);
 
       const { data: metasData } = await metaQuery;
+      if (metasRequestIdRef.current !== minhaRequisicao) return; // superada por uma busca mais nova
+
       const metasMensaisData = metasData?.filter(m => m.mes !== null) || [];
       const metaAnualSalva = metasData?.find(m => m.mes === null)?.valor_objetivo || 0;
       const somaMeses = metasMensaisData.reduce((acc, m) => acc + Number(m.valor_objetivo || 0), 0);
@@ -122,7 +134,8 @@ export default function GoalsPage() {
       if (targetUser) vendasQuery = vendasQuery.eq('user_id', targetUser);
 
       const { data: vendas } = await vendasQuery;
-      
+      if (metasRequestIdRef.current !== minhaRequisicao) return; // superada por uma busca mais nova
+
       const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
       setRealizadoAno(totalAno);
 
@@ -135,7 +148,7 @@ export default function GoalsPage() {
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
     } finally {
-      setLoading(false);
+      if (metasRequestIdRef.current === minhaRequisicao) setLoading(false);
     }
   }
 

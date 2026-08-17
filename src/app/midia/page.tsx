@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from './MidiaTabs';
 import {
   MidiaMetricasMensais, YoutubeInsightsResposta,
-  DemaisFmAudienciaResposta, DemaisFmSiteResposta, DemaisFmAppDownloadsResposta, DemaisFmMonetizacaoResposta,
+  DemaisFmAudienciaResposta, DemaisFmSiteResposta, DemaisFmAppDownloadsResposta, DemaisFmMonetizacaoResposta, DemaisFmRedesSociaisResposta,
   MESES_LABEL, fmtCompacto, fmtMoeda, fmtNumero,
 } from './shared';
 
@@ -48,6 +48,10 @@ export default function MidiaPage() {
   const [monetizacaoFm, setMonetizacaoFm] = useState<DemaisFmMonetizacaoResposta | null>(null);
   const [erroMonetizacaoFm, setErroMonetizacaoFm] = useState<string | null>(null);
   const [carregandoMonetizacaoFm, setCarregandoMonetizacaoFm] = useState(false);
+  // Endpoint ainda não existe no Leo (ver src/lib/demais-fm-api.ts) — 501 é esperado hoje,
+  // por isso não guarda erro nem mostra nada de "falha": cai quieto pro dado manual, que
+  // continua sendo salvo normalmente em Configurações até isso ligar de verdade.
+  const [redesSociaisFm, setRedesSociaisFm] = useState<DemaisFmRedesSociaisResposta | null>(null);
 
   const carregarManual = useCallback(async () => {
     if (!perfil?.empresa_id) return;
@@ -60,6 +64,18 @@ export default function MidiaPage() {
     setHistorico((hist as MidiaMetricasMensais[]) || []);
     setLoading(false);
   }, [perfil?.empresa_id, ano, mes]);
+
+  const carregarRedesSociaisFm = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/midia/demais-fm/redes-sociais', { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!res.ok) { setRedesSociaisFm(null); return; } // 501 esperado enquanto o Leo não expõe — fica no manual
+      setRedesSociaisFm(await res.json());
+    } catch {
+      setRedesSociaisFm(null);
+    }
+  }, []);
 
   const carregarYoutube = useCallback(async () => {
     setCarregandoYoutube(true);
@@ -158,9 +174,9 @@ export default function MidiaPage() {
 
   useEffect(() => {
     if (!temMidia) return;
-    carregarManual(); carregarYoutube(); carregarAudienciaFm(); carregarSiteFm();
+    carregarManual(); carregarYoutube(); carregarAudienciaFm(); carregarSiteFm(); carregarRedesSociaisFm();
     if (isDiretor) { carregarAppDownloadsFm(); carregarMonetizacaoFm(); }
-  }, [temMidia, isDiretor, carregarManual, carregarYoutube, carregarAudienciaFm, carregarSiteFm, carregarAppDownloadsFm, carregarMonetizacaoFm]);
+  }, [temMidia, isDiretor, carregarManual, carregarYoutube, carregarAudienciaFm, carregarSiteFm, carregarRedesSociaisFm, carregarAppDownloadsFm, carregarMonetizacaoFm]);
 
   const audienciaRede = audienciaFm?.dados.find(d => d.emissora === 'REDE') || null;
 
@@ -178,6 +194,15 @@ export default function MidiaPage() {
   const historicoOrdenado = [...historico].sort((a, b) => (b.ano - a.ano) || (b.mes - a.mes));
   const metricasEfetivas = metricas || historicoOrdenado[0] || null;
   const metricasEhFallback = Boolean(!metricas && metricasEfetivas);
+
+  // Prefere o dado ao vivo do Leo assim que ele existir; até lá cai pro manual sem
+  // ninguém precisar mudar nada na tela — o dia que o endpoint ligar, isso vira
+  // automático sozinho.
+  const redesSociais = redesSociaisFm
+    ? { visualizacoes: redesSociaisFm.visualizacoes, interacoes: redesSociaisFm.interacoes, visitasPerfil: redesSociaisFm.visitas_perfil, periodo: redesSociaisFm.periodo, aoVivo: true }
+    : metricasEfetivas?.redes_sociais_visualizacoes != null
+      ? { visualizacoes: metricasEfetivas.redes_sociais_visualizacoes, interacoes: metricasEfetivas.redes_sociais_interacoes, visitasPerfil: metricasEfetivas.redes_sociais_visitas_perfil, periodo: `${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`, aoVivo: false }
+      : null;
 
   // Nunca soma mensal com acumulado (o acumulado já contém os mensais — aviso do Leo) e
   // nunca soma Apple com Android num único número: a unidade pode divergir entre lojas
@@ -259,25 +284,33 @@ export default function MidiaPage() {
             )}
           </div>
 
-          {/* REDES SOCIAIS — manual, número pronto do painel do Leo (IG+FB das 3 emissoras) */}
+          {/* REDES SOCIAIS — ao vivo assim que o Leo expuser o endpoint; manual até lá */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{metricasEfetivas ? ` — ${fmtPeriodo(`${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`)}` : ''}</p>
-              <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Instagram size={13} /> Redes sociais{redesSociais?.periodo ? ` — ${fmtPeriodo(redesSociais.periodo)}` : ''}</p>
+              {redesSociais?.aoVivo ? (
+                <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Ao vivo</span>
+              ) : (
+                <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
+              )}
             </div>
-            {metricasEfetivas?.redes_sociais_visualizacoes == null ? (
+            {!redesSociais ? (
               <p className="text-[11px] text-slate-500 font-bold">Sem dados — cadastre em Configurações.</p>
             ) : (
               <>
                 <div className="flex items-baseline gap-2 mb-3">
-                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(metricasEfetivas.redes_sociais_visualizacoes)}</h3>
+                  <h3 className="text-3xl font-black text-[#22C55E]">{fmtCompacto(redesSociais.visualizacoes)}</h3>
                   <span className="text-xs text-slate-400 font-bold">visualizações</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(metricasEfetivas.redes_sociais_interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
-                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(metricasEfetivas.redes_sociais_visitas_perfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(redesSociais.interacoes)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Interações</p></div>
+                  <div><h4 className="text-sm font-black text-white">{fmtCompacto(redesSociais.visitasPerfil)}</h4><p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Visitas ao perfil</p></div>
                 </div>
-                <p className="text-[10px] text-slate-600 font-semibold mt-3">Soma de Instagram + Facebook das três emissoras — número pronto do painel do Leo/IAlto, digitado manualmente aqui por enquanto.</p>
+                <p className="text-[10px] text-slate-600 font-semibold mt-3">
+                  {redesSociais.aoVivo
+                    ? 'Soma de Instagram + Facebook das três emissoras — ao vivo da API Demais FM Comercial.'
+                    : 'Soma de Instagram + Facebook das três emissoras — número pronto do painel do Leo/IAlto, digitado manualmente aqui por enquanto.'}
+                </p>
               </>
             )}
           </div>
@@ -333,11 +366,11 @@ export default function MidiaPage() {
             <p className="text-[9px] text-slate-600 font-semibold mt-3 pt-3 border-t border-white/5">O Demais News é propriedade distinta das três emissoras — esses números não entram na soma do card de redes sociais acima.</p>
           </div>
 
-          {/* YOUTUBE DA REDE — manual + canal ao vivo + mini gráfico */}
+          {/* YOUTUBE DA REDE — automático (Google, canal conectado) + canal ao vivo + mini gráfico */}
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Youtube size={13} /> YouTube da Rede — {MESES_LABEL[mes - 1]}/{ano}</p>
-              <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Manual</span>
+              <span className="text-[9px] font-black uppercase text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 px-2 py-0.5 rounded-full">Automático</span>
             </div>
             <div className="flex flex-col md:flex-row md:items-end gap-5">
               <div className="flex-shrink-0">

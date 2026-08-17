@@ -10,6 +10,7 @@ export type {
   DemaisFmAppDownloadsResposta,
   DemaisFmMonetizacaoItem,
   DemaisFmMonetizacaoResposta,
+  DemaisFmRedesSociaisResposta,
 } from '@/lib/demais-fm-api';
 
 export type MidiaMetricasMensais = {

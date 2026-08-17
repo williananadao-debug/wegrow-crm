@@ -53,6 +53,18 @@ export type DemaisFmMonetizacaoResposta = {
   dados: DemaisFmMonetizacaoItem[];
 };
 
+// Ainda não existe no lado do Leo — preparado aqui pra ligar assim que ele expuser o
+// endpoint (mesmo contrato dos outros 4: soma Instagram+Facebook das três emissoras,
+// que já é um número pronto no painel dele, só falta a API servir). Ver pedido técnico
+// em docs/max/pedido-api-redes-sociais-leo.md.
+export type DemaisFmRedesSociaisResposta = {
+  periodo: string | null; // "YYYY-MM"
+  visualizacoes: number;
+  interacoes: number;
+  visitas_perfil: number;
+  atualizado_em: string;
+};
+
 export type DemaisFmErro = {
   erro: { codigo: string; mensagem: string; http_status: number };
 };
@@ -96,4 +108,11 @@ export function buscarAppDownloads() {
 
 export function buscarMonetizacao() {
   return chamar<DemaisFmMonetizacaoResposta>('/monetizacao');
+}
+
+// Endpoint ainda não existe no backend do Leo (ver comentário no tipo acima) — quando ele
+// subir, essa função já funciona sem precisar mexer em mais nada além de confirmar o
+// caminho exato (aqui assumido /redes-sociais, mesmo padrão dos outros).
+export function buscarRedesSociais() {
+  return chamar<DemaisFmRedesSociaisResposta>('/redes-sociais');
 }

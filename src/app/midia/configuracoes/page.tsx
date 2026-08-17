@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube, LinkIcon, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Instagram, KeyRound, Cake, Plus, Trash2, Sparkles, Youtube, LinkIcon, CheckCircle2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MidiaMetaConfig, MidiaMetricasMensais, MESES_LABEL, MidiaAniversarioMunicipio, SUGESTOES_ANIVERSARIOS_DEMAIS_FM, SUGESTOES_RESULTADOS_ANIVERSARIOS_2026 } from '../shared';
@@ -127,6 +127,9 @@ function MidiaConfiguracoesContent() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.erro || 'Erro ao buscar views.');
       setViewsOauthMes(json.visualizacoes);
+      // Antes exigia clicar "usar este valor" pra copiar pro campo — o número já vem
+      // real do Google, não faz sentido pedir confirmação manual de um dado automático.
+      setMetricas(prev => ({ ...prev, youtube_visualizacoes: String(json.visualizacoes) }));
     } catch (err: any) {
       setViewsOauthMes(null);
       setErroViewsOauth(err?.message || 'Erro ao buscar views.');
@@ -134,6 +137,14 @@ function MidiaConfiguracoesContent() {
       setCarregandoViewsOauth(false);
     }
   };
+
+  // Antes só buscava quando clicava no botão — com o canal já conectado, não tem motivo
+  // pra não vir automático toda vez que abre a tela ou troca o mês selecionado.
+  useEffect(() => {
+    if (!youtubeConectadoEm) return;
+    buscarViewsOauth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [youtubeConectadoEm, ano, mes]);
 
   const carregarSugestao = async () => {
     if (!perfil?.empresa_id) return;
@@ -320,8 +331,9 @@ function MidiaConfiguracoesContent() {
 
           <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-4">
             <p className="text-[11px] text-slate-400 font-semibold">
-              Audiência, site, downloads do app e monetização agora vêm ao vivo da API da Demais FM Comercial (Leo) — não precisam mais ser digitados aqui.
-              Só o YouTube da rede e o Instagram do Demais News continuam manuais/abaixo.
+              Audiência, site, downloads do app e monetização vêm ao vivo da API da Demais FM Comercial (Leo). YouTube da rede vem automático do Google
+              (canal conectado). Só redes sociais (rede) e Instagram do Demais News continuam manuais abaixo — redes sociais aguardando o Leo expor
+              esse dado na API dele.
             </p>
           </div>
 
@@ -354,18 +366,18 @@ function MidiaConfiguracoesContent() {
               </div>
               <div>
                 <label className={LABEL}>Visualizações YouTube da rede</label>
-                <input type="number" className={CAMPO} value={metricas.youtube_visualizacoes} onChange={e => setMetricas({ ...metricas, youtube_visualizacoes: e.target.value })} />
+                <input type="number" className={CAMPO} value={metricas.youtube_visualizacoes} onChange={e => setMetricas({ ...metricas, youtube_visualizacoes: e.target.value })} readOnly={Boolean(youtubeConectadoEm) && !erroViewsOauth} />
                 {youtubeConectadoEm && (
                   <div className="flex items-center gap-2 mt-1.5">
-                    <button type="button" onClick={buscarViewsOauth} disabled={carregandoViewsOauth} className="text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 disabled:opacity-50 flex items-center gap-1">
-                      {carregandoViewsOauth ? <Loader2 size={10} className="animate-spin" /> : <Youtube size={10} />} Buscar real de {MESES_LABEL[mes - 1]}/{ano}
-                    </button>
-                    {erroViewsOauth && <span className="text-[9px] text-amber-400 font-bold">{erroViewsOauth}</span>}
-                    {viewsOauthMes !== null && (
-                      <button type="button" onClick={() => setMetricas({ ...metricas, youtube_visualizacoes: String(viewsOauthMes) })} className="text-[9px] font-black uppercase text-[#22C55E] hover:underline">
-                        {viewsOauthMes.toLocaleString('pt-BR')} — usar este valor
-                      </button>
+                    {carregandoViewsOauth ? (
+                      <span className="text-[9px] font-black uppercase text-blue-400 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Buscando real de {MESES_LABEL[mes - 1]}/{ano}…</span>
+                    ) : (
+                      <span className="text-[9px] font-black uppercase text-[#22C55E] flex items-center gap-1"><Youtube size={10} /> Automático — real de {MESES_LABEL[mes - 1]}/{ano}</span>
                     )}
+                    <button type="button" onClick={buscarViewsOauth} disabled={carregandoViewsOauth} className="text-slate-500 hover:text-white transition-colors">
+                      <RefreshCw size={11} className={carregandoViewsOauth ? 'animate-spin' : ''} />
+                    </button>
+                    {erroViewsOauth && <span className="text-[9px] text-amber-400 font-bold">{erroViewsOauth} — preencha manualmente abaixo</span>}
                   </div>
                 )}
               </div>

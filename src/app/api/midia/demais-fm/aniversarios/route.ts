@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // 🔒 Confidencial (classe "interno" na spec do Leo) — receita e nome de anunciante em
 // `detalhe` nunca podem chegar a tela de cliente/anunciante/terceiro. Restrito a
-// diretor/gerente, mesmo público que já vê /midia/aniversarios hoje.
+// diretor por enquanto (módulo Demais FM Comercial inteiro em teste, 19/08) — mesmo
+// público que já vê /midia/aniversarios hoje.
 
 function supabaseAdmin() {
   return createClient(
@@ -23,7 +24,7 @@ async function verificarLideranca(request: Request) {
   const { data: { user } } = await db.auth.getUser(token);
   if (!user) return null;
   const { data: perfil } = await db.from('profiles').select('empresa_id, cargo').eq('id', user.id).single();
-  if (!perfil?.empresa_id || (perfil.cargo !== 'diretor' && perfil.cargo !== 'gerente')) return null;
+  if (!perfil?.empresa_id || perfil.cargo !== 'diretor') return null;
   return { user, empresa_id: perfil.empresa_id };
 }
 

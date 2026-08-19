@@ -668,6 +668,14 @@ export default function ClientesWeGrowPage() {
                       {Boolean(modulosEdit.midia) && <CheckCircle2 size={12} className="ml-auto"/>}
                     </button>
                   </div>
+
+                  <div>
+                    <button type="button" onClick={() => toggleModulo('advocacia')}
+                      className={`w-full flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${Boolean(modulosEdit.advocacia) ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:border-white/20'}`}>
+                      <Package size={12}/> Advocacia (CRM jurídico)
+                      {Boolean(modulosEdit.advocacia) && <CheckCircle2 size={12} className="ml-auto"/>}
+                    </button>
+                  </div>
                 </div>
               )}
 

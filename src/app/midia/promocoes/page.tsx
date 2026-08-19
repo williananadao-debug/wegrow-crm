@@ -14,14 +14,16 @@ const STATUS_COR: Record<string, string> = {
 export default function MidiaPromocoesPage() {
   const auth = useAuth() || {};
   const empresa = auth.empresa;
+  const perfil = auth.perfil;
   const temMidia = Boolean(empresa?.modulos?.midia);
+  const isDiretor = perfil?.cargo === 'diretor';
 
-  if (!temMidia) {
+  if (!temMidia || !isDiretor) {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-sm">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
+          <p className="text-slate-400 font-bold text-sm">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
         </div>
       </div>
     );

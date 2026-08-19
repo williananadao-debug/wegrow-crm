@@ -10,7 +10,9 @@ export default function MidiaEmissorasPage() {
   const auth = useAuth() || {};
   const authLoading = (auth as any).loading;
   const empresa = auth.empresa;
+  const perfil = auth.perfil;
   const temMidia = Boolean(empresa?.modulos?.midia);
+  const isDiretor = perfil?.cargo === 'diretor';
 
   const [praca, setPraca] = useState<string>(PRACAS[0]);
   const [audiencia, setAudiencia] = useState<DemaisFmAudienciaResposta | null>(null);
@@ -40,16 +42,16 @@ export default function MidiaEmissorasPage() {
     }
   }, []);
 
-  useEffect(() => { if (temMidia) carregar(); }, [temMidia, carregar]);
+  useEffect(() => { if (temMidia && isDiretor) carregar(); }, [temMidia, isDiretor, carregar]);
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
-  if (!temMidia) {
+  if (!temMidia || !isDiretor) {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-bold text-base">O módulo Demais FM Comercial não está ativo pra sua empresa ainda.</p>
+          <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
         </div>
       </div>
     );

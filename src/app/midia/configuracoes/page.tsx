@@ -25,7 +25,6 @@ function MidiaConfiguracoesContent() {
   const empresa = auth.empresa;
   const temMidia = Boolean(empresa?.modulos?.midia);
   const isDiretor = perfil?.cargo === 'diretor';
-  const isLideranca = isDiretor || perfil?.cargo === 'gerente';
 
   const hoje = new Date();
   const [loading, setLoading] = useState(true);
@@ -257,11 +256,11 @@ function MidiaConfiguracoesContent() {
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
-  if (!temMidia || !isLideranca) {
+  if (!temMidia || !isDiretor) {
     return (
       <div className="p-4 md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
-          <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor ou gerente pode acessar essa área.'}</p>
+          <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
         </div>
       </div>
     );

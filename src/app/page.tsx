@@ -6,7 +6,8 @@ import {
   BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
   TrendingUp, MapPin, Mail, ChevronRight,
   Check, MessageCircle, PenLine, Wallet, ChevronDown,
-  Loader2, Send, Factory, Building2, Brain, Activity, Bot, LayoutGrid, Link2
+  Loader2, Send, Factory, Building2, Brain, Activity, Bot, LayoutGrid, Link2,
+  Radar, HardHat, Megaphone, Scale
 } from 'lucide-react';
 
 const STATS = [
@@ -120,36 +121,181 @@ const PRODUTOS = [
   {
     nome: 'CRM',
     tagline: 'A base de todo mundo',
-    desc: 'Funil visual, propostas, contratos com assinatura eletrônica e metas por vendedor. O motor de vendas que toda empresa usa, do jeito que seu processo já funciona.',
+    desc: 'O motor de vendas que toda empresa usa, do jeito que seu processo já funciona.',
     icon: <LayoutGrid size={22} />,
     cor: 'text-[#22C55E] bg-[#22C55E]/10',
     borda: 'border-[#22C55E]/20',
+    hex: '#22C55E',
+    features: [
+      'Funil visual (kanban) por etapas customizáveis',
+      'Propostas e contratos com assinatura eletrônica',
+      'Metas por vendedor e por equipe',
+      'Semáforo de risco de crédito via CNPJ',
+    ],
   },
   {
     nome: 'Nexus',
     tagline: 'Pra quem não vive de funil',
-    desc: 'Memória de cliente pesquisável: fotos, documentos, layouts e histórico de manutenção. Pra times que atendem por telefone e WhatsApp, sem etapa de pipeline.',
+    desc: 'Memória de cliente pesquisável, pra times que atendem por telefone e WhatsApp, sem etapa de pipeline.',
     icon: <Brain size={22} />,
     cor: 'text-indigo-400 bg-indigo-400/10',
     borda: 'border-indigo-500/20',
+    hex: '#818cf8',
+    features: [
+      'Fotos, documentos e layouts por cliente',
+      'Histórico de manutenção pesquisável',
+      'Atendimento direto, sem etapa de pipeline',
+      'Busca central por telefone, nome ou documento',
+    ],
   },
   {
     nome: 'Pulse',
     tagline: 'Venda rápida, com estoque',
-    desc: 'Pedido chegou, fecha na hora. Catálogo com foto, controle de estoque, entrada de mercadoria lendo a nota fiscal por IA e rota do dia pro time de campo.',
+    desc: 'Pedido chegou, fecha na hora — com catálogo, estoque e rota de entrega no mesmo lugar.',
     icon: <Activity size={22} />,
     cor: 'text-amber-400 bg-amber-400/10',
     borda: 'border-amber-500/20',
+    hex: '#fbbf24',
+    features: [
+      'Catálogo com foto e controle de estoque',
+      'Entrada de mercadoria lendo a nota fiscal por IA',
+      'Rota do dia pro time de campo',
+      'Venda fecha na hora, sem passar por funil',
+    ],
   },
   {
     nome: 'THOR',
     tagline: 'Sua IA de vendas',
-    desc: 'Assistente que gera sozinha lista de clientes pra resgatar e lê nota fiscal de fornecedor por foto — tudo num chat, sem sair do sistema.',
+    desc: 'Assistente que trabalha por você — tudo num chat, sem sair do sistema.',
     icon: <Bot size={22} />,
     cor: 'text-purple-400 bg-purple-400/10',
     borda: 'border-purple-500/20',
+    hex: '#c084fc',
+    features: [
+      'Gera sozinha lista de clientes pra resgatar',
+      'Lê nota fiscal de fornecedor por foto',
+      'Monta catálogo de vendas pra imprimir/exportar',
+      'Tudo em chat, sem sair do sistema',
+    ],
   },
 ];
+
+// Diferente de PRODUTOS (horizontais, servem qualquer segmento), estes são módulos
+// verticais — construídos pra um tipo de negócio específico, ativados só pra quem precisa.
+const VERTICAIS = [
+  {
+    nome: 'Argus',
+    tagline: 'Licitações públicas',
+    desc: 'Torre de controle de licitações, do edital ao contrato assinado.',
+    icon: <Radar size={22} />,
+    cor: 'text-yellow-400 bg-yellow-400/10',
+    borda: 'border-yellow-500/20',
+    hex: '#facc15',
+    features: [
+      'Sincroniza ao vivo com o PNCP',
+      'Alerta automático de prazo de proposta',
+      'Contratos e financeiro por edital',
+      'Agente de IA busca oportunidades novas',
+    ],
+  },
+  {
+    nome: 'Obras',
+    tagline: 'Construção e engenharia',
+    desc: 'Do canteiro ao financeiro, sem planilha solta.',
+    icon: <HardHat size={22} />,
+    cor: 'text-orange-400 bg-orange-400/10',
+    borda: 'border-orange-500/20',
+    hex: '#fb923c',
+    features: [
+      'Cronograma e diário de obra',
+      'Medições e contratados',
+      'Controle de suprimentos e estoque',
+      'Financeiro por obra',
+    ],
+  },
+  {
+    nome: 'Mídia',
+    tagline: 'Rádio e broadcasting',
+    desc: 'Painel comercial pra emissoras, direto da API do parceiro de mídia.',
+    icon: <Megaphone size={22} />,
+    cor: 'text-pink-400 bg-pink-400/10',
+    borda: 'border-pink-500/20',
+    hex: '#f472b6',
+    features: [
+      'Audiência e redes sociais em tempo real',
+      'Aniversário de cidade — oportunidade por praça',
+      'Painel por emissora e por rede',
+      'Indicadores comerciais por canal',
+    ],
+  },
+  {
+    nome: 'Advocacia',
+    tagline: 'CRM jurídico',
+    desc: 'Funil de processos e financeiro pra escritórios de advocacia.',
+    icon: <Scale size={22} />,
+    cor: 'text-amber-500 bg-amber-500/10',
+    borda: 'border-amber-500/20',
+    hex: '#f59e0b',
+    features: [
+      'Funil de processos, do lead ao contrato fechado',
+      'Honorário fixo, recorrente ou êxito',
+      'Contas a receber e fluxo de caixa',
+      'IA narra os números do mês em português',
+    ],
+  },
+];
+
+// Logo WeGrow no centro, os 8 módulos ao redor — a imagem literal do "ecossistema, não um
+// CRM só". Posições calculadas por trigonometria (ângulo igual entre os nós), não por
+// grid — é o que permite qualquer quantidade de módulos sem reformatar o layout à mão.
+const ECOSSISTEMA_NODOS = [...PRODUTOS, ...VERTICAIS];
+
+function EcossistemaDiagrama() {
+  const n = ECOSSISTEMA_NODOS.length;
+  const raio = 36;
+  const posicao = (i: number) => {
+    const angulo = (i / n) * 2 * Math.PI - Math.PI / 2;
+    return { x: 50 + raio * Math.cos(angulo), y: 50 + raio * Math.sin(angulo) };
+  };
+
+  return (
+    <div className="relative mx-auto mb-20 w-full max-w-[560px] aspect-square">
+      <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {ECOSSISTEMA_NODOS.map((m, i) => {
+          const { x, y } = posicao(i);
+          return <line key={m.nome} x1="50" y1="50" x2={x} y2={y} stroke={m.hex} strokeOpacity="0.3" strokeWidth="0.4" />;
+        })}
+      </svg>
+
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#22C55E] rounded-3xl flex items-center justify-center font-black text-[#0F172A] text-3xl sm:text-4xl shadow-[0_0_60px_rgba(34,197,94,0.55)]">
+          W
+        </div>
+        <span className="mt-2.5 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">WeGrow</span>
+      </div>
+
+      {ECOSSISTEMA_NODOS.map((m, i) => {
+        const { x, y } = posicao(i);
+        const corTexto = m.cor.split(' ')[0];
+        return (
+          <div
+            key={m.nome}
+            className="absolute z-10 flex flex-col items-center gap-1.5"
+            style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
+          >
+            <div
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border bg-[#020617] ${m.borda} ${corTexto}`}
+              style={{ boxShadow: `0 0 18px ${m.hex}25` }}
+            >
+              {m.icon}
+            </div>
+            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-wide text-white whitespace-nowrap">{m.nome}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const ADDONS = [
   { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', cor: 'text-green-400 bg-green-400/10' },
@@ -332,28 +478,74 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* PRODUCT SUITE */}
+      {/* ECOSSISTEMA WEGROW */}
       <section className="py-24 px-6" id="produtos">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Um ecossistema, não um CRM só</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">O ecossistema WeGrow</div>
             <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
-              Quatro produtos. Um login.
+              Todos os seus módulos. Um login.
             </h2>
             <p className="text-slate-400 text-sm font-medium max-w-2xl mx-auto">
-              Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Ative só o que faz sentido pro seu time, e integre com os sistemas que você já usa (ERP, financeiro, WhatsApp, o que for) via API.
+              Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Mesma base, mesmo login, mesmo banco de clientes: você ativa só o que faz sentido pro seu time, e integra com os sistemas que já usa (ERP, financeiro, WhatsApp, o que for) via API.
             </p>
           </div>
 
+          <EcossistemaDiagrama />
+
+          <div className="flex items-center gap-3 mb-6 max-w-7xl">
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/80 whitespace-nowrap">Core · toda empresa usa</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {PRODUTOS.map((p) => (
-              <div key={p.nome} className={`bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${p.borda}`}>
+              <div key={p.nome} className={`flex flex-col bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${p.borda}`}>
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${p.cor}`}>
                   {p.icon}
                 </div>
                 <h3 className="text-xl font-black text-white uppercase italic mb-1">{p.nome}</h3>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{p.tagline}</p>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed">{p.desc}</p>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-4">{p.desc}</p>
+                <ul className="mt-auto pt-4 border-t border-white/5 space-y-2">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-[12.5px] text-slate-400 font-medium leading-snug">
+                      <CheckCircle size={13} className="text-[#22C55E] mt-0.5 flex-shrink-0" /> {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* CONECTOR */}
+          <div className="flex flex-col items-center gap-3 my-14">
+            <span className="h-10 w-px bg-gradient-to-b from-white/20 to-white/5" />
+            <span className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <Zap size={11} className="text-[#22C55E]" /> Mais módulos, mesmo login
+            </span>
+            <span className="h-10 w-px bg-gradient-to-b from-white/5 to-white/20" />
+          </div>
+
+          <div className="flex items-center gap-3 mb-6 max-w-7xl">
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/80 whitespace-nowrap">Módulos · por segmento</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {VERTICAIS.map((v) => (
+              <div key={v.nome} className={`flex flex-col bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${v.borda}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${v.cor}`}>
+                  {v.icon}
+                </div>
+                <h3 className="text-xl font-black text-white uppercase italic mb-1">{v.nome}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{v.tagline}</p>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-4">{v.desc}</p>
+                <ul className="mt-auto pt-4 border-t border-white/5 space-y-2">
+                  {v.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-[12.5px] text-slate-400 font-medium leading-snug">
+                      <CheckCircle size={13} className="text-[#22C55E] mt-0.5 flex-shrink-0" /> {f}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>

@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     ];
 
     const primeira = await chatComRetry(groq, {
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       max_tokens: 1500,
       temperature: 0.3,
       messages: historico,
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     }
 
     const segunda = await chatComRetry(groq, {
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       max_tokens: 1000,
       temperature: 0.3,
       messages: historico,

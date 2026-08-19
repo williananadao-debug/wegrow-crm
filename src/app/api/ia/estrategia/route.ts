@@ -189,7 +189,7 @@ ${JSON.stringify(candidatos, null, 2)}
 Selecione os ${limite} melhores candidatos e para cada um monte um pacote de produtos do catálogo acima.`;
 
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       max_tokens: 3000,
       temperature: 0.2,
       messages: [

@@ -5,6 +5,7 @@ import { Plus, X, Loader2, Clock, Scale, User, Tag, Flame, Trash2 } from 'lucide
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import AdvocaciaTopNav from '../AdvocaciaTopNav';
+import DocumentosPanel from '../DocumentosPanel';
 import {
   ADVOCACIA_STAGES, ADVOCACIA_STAGE_GANHO, ADVOCACIA_STAGE_PERDIDO,
   AREAS_JURIDICAS, TIPO_HONORARIO_LABELS, fmtMoeda, fmtData, diasDesde, DIAS_LEAD_ESFRIANDO,
@@ -18,6 +19,8 @@ type LeadAdvocacia = {
   status: string;
   origem?: string | null;
   telefone?: string | null;
+  cnpj?: string | null;
+  endereco?: string | null;
   followup_em?: string | null;
   created_at: string;
   advocacia_area_juridica?: string | null;
@@ -48,7 +51,7 @@ export default function AdvocaciaProcessosPage() {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     const [{ data: leadsData }, { data: perfisData }] = await Promise.all([
-      supabase.from('leads').select('id, empresa, valor_total, etapa, status, origem, telefone, followup_em, created_at, advocacia_area_juridica, advocacia_advogado_id')
+      supabase.from('leads').select('id, empresa, valor_total, etapa, status, origem, telefone, cnpj, endereco, followup_em, created_at, advocacia_area_juridica, advocacia_advogado_id')
         .eq('empresa_id', perfil.empresa_id).order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id),
     ]);
@@ -69,14 +72,41 @@ export default function AdvocaciaProcessosPage() {
     return mapa;
   }, [leads]);
 
-  // Ao entrar em "Contrato fechado", garante que exista um advocacia_processos pra esse lead
-  // (é o que alimenta Financeiro/Inteligência) — se já existir, não duplica.
+  // Ao entrar em "Contrato fechado": garante um advocacia_processos (alimenta
+  // Financeiro/Inteligência) E liga esse processo a um cliente de verdade da tabela
+  // `clientes` (mesma usada em /customers) — busca por CNPJ/CPF, senão por nome exato,
+  // senão cria um novo. Documentos já enviados no lead (intake) seguem pro cliente junto,
+  // via backfill — não precisa duplicar arquivo nem criar join complicado depois.
   const garantirProcesso = async (lead: LeadAdvocacia) => {
     const { data: existente } = await supabase.from('advocacia_processos').select('id').eq('lead_id', lead.id).maybeSingle();
-    if (existente) return;
+    if (existente || !perfil?.empresa_id) return;
+
+    let clientId: number | null = null;
+    const cnpjDigitos = (lead.cnpj || '').replace(/\D/g, '');
+    if (cnpjDigitos) {
+      const { data: porCnpj } = await supabase.from('clientes').select('id').eq('empresa_id', perfil.empresa_id).eq('cnpj', lead.cnpj).maybeSingle();
+      clientId = porCnpj?.id || null;
+    }
+    if (!clientId) {
+      const { data: porNome } = await supabase.from('clientes').select('id').eq('empresa_id', perfil.empresa_id).ilike('nome_empresa', lead.empresa).maybeSingle();
+      clientId = porNome?.id || null;
+    }
+    if (!clientId) {
+      const { data: novoCliente } = await supabase.from('clientes').insert([{
+        empresa_id: perfil.empresa_id,
+        nome_empresa: lead.empresa,
+        telefone: lead.telefone || null,
+        cnpj: lead.cnpj || null,
+        endereco: lead.endereco || null,
+        status: 'ativo',
+      }]).select('id').single();
+      clientId = novoCliente?.id || null;
+    }
+
     await supabase.from('advocacia_processos').insert([{
-      empresa_id: perfil?.empresa_id,
+      empresa_id: perfil.empresa_id,
       lead_id: lead.id,
+      client_id: clientId,
       cliente_nome: lead.empresa,
       advogado_responsavel_id: lead.advocacia_advogado_id || null,
       area_juridica: lead.advocacia_area_juridica || 'Outro',
@@ -84,6 +114,10 @@ export default function AdvocaciaProcessosPage() {
       honorario_fixo: lead.valor_total || 0,
       status: 'ativo',
     }]);
+
+    if (clientId) {
+      await supabase.from('advocacia_documentos').update({ client_id: clientId }).eq('lead_id', lead.id).is('client_id', null);
+    }
   };
 
   const onDragEnd = useCallback(async (result: DropResult) => {
@@ -214,7 +248,7 @@ export default function AdvocaciaProcessosPage() {
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalAberto(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[16px] font-bold text-[#241c14] flex items-center gap-2"><Scale size={16} className="text-[#d9861c]" /> {editando ? 'Editar lead' : 'Novo lead'}</h2>
               <button onClick={() => setModalAberto(false)} className="text-[#9a958a] hover:text-[#241c14]"><X size={18} /></button>
@@ -259,6 +293,11 @@ export default function AdvocaciaProcessosPage() {
                 <input value={form.origem} onChange={e => setForm(f => ({ ...f, origem: e.target.value }))}
                   className="w-full mt-1 border border-[#e5e0d5] rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#d9861c]" placeholder="Instagram, Google, Indicação..." />
               </div>
+              {editando && (
+                <div className="pt-3 border-t border-[#e5e0d5]">
+                  <DocumentosPanel leadId={editando.id} />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-5">
               {editando && (

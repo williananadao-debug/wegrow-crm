@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
-  Scale, LayoutGrid, GitBranch, DollarSign, Sparkles,
+  Scale, LayoutGrid, GitBranch, DollarSign, Sparkles, Users,
   Grid3x3, ChevronDown, Activity, Bot, Radio,
 } from 'lucide-react';
 
@@ -43,6 +43,7 @@ export default function AdvocaciaTopNav({ nomeEmpresa }: { nomeEmpresa?: string 
   const itens = [
     { href: '/advocacia', label: 'Painel', icon: LayoutGrid, mostrar: true },
     { href: '/advocacia/processos', label: 'Processos', icon: GitBranch, mostrar: true },
+    { href: '/advocacia/clientes', label: 'Clientes', icon: Users, mostrar: true },
     { href: '/advocacia/financeiro', label: 'Financeiro', icon: DollarSign, mostrar: true },
     { href: '/advocacia/inteligencia', label: 'Inteligência', icon: Sparkles, mostrar: true },
   ].filter(i => i.mostrar);

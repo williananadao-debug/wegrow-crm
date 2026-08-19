@@ -6,6 +6,7 @@ export type AdvocaciaProcesso = {
   id: number;
   empresa_id: string;
   lead_id: number | null;
+  client_id: number | null;
   cliente_nome: string;
   advogado_responsavel_id: string | null;
   area_juridica: string;
@@ -30,6 +31,70 @@ export type AdvocaciaCanalCusto = {
   mes: number;
   valor_investido: number;
 };
+
+export type AdvocaciaDocumento = {
+  id: number;
+  empresa_id: string;
+  client_id: number | null;
+  lead_id: number | null;
+  processo_id: number | null;
+  categoria: 'procuracao' | 'documento_pessoal' | 'contrato' | 'peticao' | 'comprovante' | 'outro';
+  titulo: string;
+  arquivo_url: string | null;
+  arquivo_path: string;
+  tamanho_bytes: number | null;
+  responsavel_nome: string | null;
+  user_id: string | null;
+  created_at: string;
+};
+
+export const CATEGORIA_DOCUMENTO_LABELS: Record<AdvocaciaDocumento['categoria'], string> = {
+  procuracao: 'Procuração',
+  documento_pessoal: 'Documento pessoal (RG/CPF)',
+  contrato: 'Contrato',
+  peticao: 'Petição',
+  comprovante: 'Comprovante',
+  outro: 'Outro',
+};
+
+// Mesma tabela `clientes` usada em src/app/customers/page.tsx — Advocacia não duplica
+// cadastro de cliente, só desenha uma casca visual própria por cima.
+export type Cliente = {
+  id: number;
+  nome_empresa: string;
+  nome_fantasia: string | null;
+  telefone: string | null;
+  email: string | null;
+  cnpj: string | null;
+  status: 'ativo' | 'inativo';
+  cidade: string | null;
+  endereco: string | null;
+  created_at: string;
+};
+
+export function validarCNPJ(cnpj: string): boolean {
+  const s = cnpj.replace(/\D/g, '');
+  if (s.length !== 14 || /^(\d)\1+$/.test(s)) return false;
+  const calc = (x: string, len: number) => {
+    let sum = 0, pos = len - 7;
+    for (let i = len; i >= 1; i--) { sum += parseInt(x[len - i]) * pos--; if (pos < 2) pos = 9; }
+    const r = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    return r === parseInt(x[len]);
+  };
+  return calc(s, 12) && calc(s, 13);
+}
+
+export function validarCPF(cpf: string): boolean {
+  const s = cpf.replace(/\D/g, '');
+  if (s.length !== 11 || /^(\d)\1+$/.test(s)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += parseInt(s[i]) * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    return (r === 10 ? 0 : r) === parseInt(s[len]);
+  };
+  return calc(9) && calc(10);
+}
 
 // Mesmo padrão de CDL_STAGES em src/app/deals/page.tsx — rótulos de etapa por tenant.
 export const ADVOCACIA_STAGES: Record<number, string> = {

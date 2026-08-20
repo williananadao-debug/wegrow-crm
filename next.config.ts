@@ -21,6 +21,13 @@ const nextConfig = {
       { protocol: 'https' as const, hostname: 'dzlahpfdgjaqecikkqye.supabase.co' },
     ],
   },
+  // docs/max/template-proposta.pptx é lido via fs.readFileSync em runtime (não é import),
+  // o tracer automático do Next não enxerga esse acesso — sem isso o arquivo não vai pro
+  // bundle da function e o fs.readFileSync quebra em produção (funciona local só por acaso,
+  // porque o repo inteiro tá em disco).
+  outputFileTracingIncludes: {
+    '/api/max/proposta': ['./docs/max/template-proposta.pptx'],
+  },
 };
 
 export default withPWA(nextConfig);

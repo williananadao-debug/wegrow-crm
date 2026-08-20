@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Radio, Send, Sparkles, CheckCircle2, ExternalLink, Trash2, MessageCircle } from 'lucide-react';
+import { Loader2, Radio, Send, Sparkles, CheckCircle2, ExternalLink, Trash2, MessageCircle, Download } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -33,6 +33,8 @@ export default function MaxPage() {
   const [telefonesCliente, setTelefonesCliente] = useState<Record<number, string>>({});
   const [clientesExistentes, setClientesExistentes] = useState<ClienteInfo[]>([]);
   const [confirmacao, setConfirmacao] = useState<Record<string, { sugerido: ClienteInfo | null; escolha: number | 'novo' | null }>>({});
+  const [baixandoPptx, setBaixandoPptx] = useState<number | null>(null);
+  const [erroPptx, setErroPptx] = useState<string | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fimRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensagens, enviando]);
@@ -160,6 +162,44 @@ export default function MaxPage() {
     }
   };
 
+  // O .pptx traz as duas propostas no mesmo slide (é como o template do Leo foi montado) —
+  // por isso é 1 download por mensagem, não 1 por card de proposta.
+  const baixarPptx = async (msgIndex: number) => {
+    const msg = mensagens[msgIndex];
+    if (!msg.propostas || msg.propostas.length === 0) return;
+    setErroPptx(null);
+    setBaixandoPptx(msgIndex);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/max/proposta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          empresa: msg.empresa,
+          propostas: msg.propostas.map(p => ({ titulo: p.titulo, corpo: p.corpo })),
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.erro || 'Erro ao gerar o arquivo.');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Proposta - ${msg.empresa || 'Cliente'}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setErroPptx(err?.message || 'Erro ao gerar o arquivo.');
+    } finally {
+      setBaixandoPptx(null);
+    }
+  };
+
   const enviarPropostaWhatsapp = (msgIndex: number, prop: PropostaResposta, empresaNome?: string | null) => {
     const telefone = (telefonesCliente[msgIndex] || '').replace(/\D/g, '');
     if (!telefone) return;
@@ -213,6 +253,17 @@ export default function MaxPage() {
 
               {m.propostas && m.propostas.length > 0 && (
                 <div className="mt-4 space-y-3">
+                  <button
+                    onClick={() => baixarPptx(mi)}
+                    disabled={baixandoPptx === mi}
+                    className="w-full flex items-center justify-center gap-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors"
+                  >
+                    {baixandoPptx === mi ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                    Baixar proposta em PPTX
+                  </button>
+                  {erroPptx && baixandoPptx === null && (
+                    <p className="text-red-400 text-[10px] font-bold">{erroPptx}</p>
+                  )}
                   <div>
                     <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">WhatsApp do cliente (pra enviar a proposta)</label>
                     <input

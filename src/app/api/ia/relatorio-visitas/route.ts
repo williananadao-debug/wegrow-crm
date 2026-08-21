@@ -123,10 +123,17 @@ export async function POST(req: NextRequest) {
 
 ${listaClientes}`;
 
+    // openai/gpt-oss-120b é modelo de "raciocínio" — por padrão gasta parte do orçamento de
+    // tokens "pensando" antes de responder, e sem isso configurado esse raciocínio podia
+    // vazar pra dentro de message.content (quebrando o parse de JSON) ou consumir tokens
+    // demais e truncar o JSON final antes de fechar. reasoning_effort:'low' +
+    // include_reasoning:false mantêm o content só com a resposta final.
     const response = await groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
       max_tokens: 2000,
       temperature: 0.2,
+      reasoning_effort: 'low',
+      include_reasoning: false,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

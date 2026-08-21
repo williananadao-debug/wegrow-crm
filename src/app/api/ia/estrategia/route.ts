@@ -192,6 +192,8 @@ Selecione os ${limite} melhores candidatos e para cada um monte um pacote de pro
       model: 'openai/gpt-oss-120b',
       max_tokens: 3000,
       temperature: 0.2,
+      reasoning_effort: 'low',
+      include_reasoning: false,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },

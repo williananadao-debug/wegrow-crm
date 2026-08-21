@@ -71,6 +71,8 @@ export async function GET(req: NextRequest) {
         model: 'openai/gpt-oss-120b',
         max_tokens: 200,
         temperature: 0.6,
+        reasoning_effort: 'low',
+        include_reasoning: false,
         messages: [
           {
             role: 'system',

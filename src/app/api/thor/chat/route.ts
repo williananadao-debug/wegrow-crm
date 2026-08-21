@@ -78,6 +78,8 @@ export async function POST(req: NextRequest) {
       model: 'openai/gpt-oss-120b',
       max_tokens: 1500,
       temperature: 0.3,
+      reasoning_effort: 'low',
+      include_reasoning: false,
       messages: historico,
       tools: TOOLS,
     });
@@ -135,6 +137,8 @@ export async function POST(req: NextRequest) {
       model: 'openai/gpt-oss-120b',
       max_tokens: 1000,
       temperature: 0.3,
+      reasoning_effort: 'low',
+      include_reasoning: false,
       messages: historico,
     });
 

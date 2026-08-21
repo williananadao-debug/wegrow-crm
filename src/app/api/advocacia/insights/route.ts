@@ -103,6 +103,8 @@ export async function GET(request: NextRequest) {
         { role: 'user', content: `Números do mês:\n${JSON.stringify(resumo, null, 2)}` },
       ],
       temperature: 0.4,
+      reasoning_effort: 'low',
+      include_reasoning: false,
     });
     const narrativa = completion.choices[0]?.message?.content?.trim() || 'Não consegui gerar o resumo agora.';
     return NextResponse.json({ narrativa, resumo });

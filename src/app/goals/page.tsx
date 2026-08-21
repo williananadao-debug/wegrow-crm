@@ -56,6 +56,10 @@ export default function GoalsPage() {
   const [realizadoMensalMapUnidade, setRealizadoMensalMapUnidade] = useState<Record<number, number>>({});
 
   const isDirector = perfil?.cargo === 'diretor';
+  // Gerente vê a meta de cada vendedor da própria unidade (não da empresa toda, isso
+  // continua exclusivo do diretor) — mesma ideia do isDirector, mas escopado.
+  const isManager = perfil?.cargo === 'gerente';
+  const podeVerEquipe = isDirector || isManager;
 
   useEffect(() => {
     // Espera o perfil carregar antes de decidir o escopo — resolver os dois (diretor E
@@ -96,8 +100,14 @@ export default function GoalsPage() {
   }, [perfil?.empresa_id, unidadeSelecionadaMeta, anoFiltro]);
 
   async function fetchVendedores() {
+    // Gerente sem unidade cadastrada não cai pra "vê todo mundo" — cai pra "não vê
+    // ninguém" (lista vazia). Sem essa guarda, um gerente sem unidade setada em
+    // Minha Equipe acabaria com acesso igual ao de diretor, o que não é a intenção.
+    if (isManager && !isDirector && !perfil?.unidade) { setVendedores([]); return; }
+
     let query = supabase.from('profiles').select('id, nome').neq('cargo', 'diretor');
     if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
+    if (isManager && !isDirector && perfil?.unidade) query = query.eq('unidade', perfil.unidade);
     const { data } = await query;
     setVendedores(data || []);
   }
@@ -156,7 +166,7 @@ export default function GoalsPage() {
   }
 
   async function fetchComparativo() {
-    if (!isDirector || !perfil?.empresa_id) return;
+    if (!podeVerEquipe || !perfil?.empresa_id) return;
     const hoje = new Date();
     const ano = hoje.getFullYear();
     const mes = hoje.getMonth() + 1;
@@ -430,7 +440,7 @@ export default function GoalsPage() {
           metaAno, realizadoAno, percentAno,
           metaMesAtual, realizadoMesAtual, esperadoAteHoje, ritmoOk, deltaRitmo, projecaoFechamento,
           diaAtual, diasNoMes, nomeMes,
-          ranking: isDirector ? comparativo : [],
+          ranking: podeVerEquipe ? comparativo : [],
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -452,10 +462,12 @@ export default function GoalsPage() {
       
       {/* SELETORES SUPERIORES */}
       <div className="flex flex-col md:flex-row justify-between gap-4">
-          {/* Seletor de Perfil (Só Diretor) */}
-          {isDirector && (
+          {/* Seletor de Perfil (Diretor vê todo mundo; Gerente vê só a própria unidade) */}
+          {podeVerEquipe && (
             <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar flex-1">
-              <button onClick={() => setVendedorSelecionado('global')} className={`px-6 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border ${vendedorSelecionado === 'global' ? 'bg-white text-black' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}>Global Empresa</button>
+              {isDirector && (
+                <button onClick={() => setVendedorSelecionado('global')} className={`px-6 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex-shrink-0 ${vendedorSelecionado === 'global' ? 'bg-white text-black' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}>Global Empresa</button>
+              )}
               {vendedores.map(v => (
                 <button key={v.id} onClick={() => setVendedorSelecionado(v.id)} className={`px-6 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 ${vendedorSelecionado === v.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/5 text-slate-500 hover:border-white/20'}`}><UserIcon size={12} /> {v.nome}</button>
               ))}
@@ -726,7 +738,7 @@ export default function GoalsPage() {
       )}
 
       {/* COMPARATIVO DE VENDEDORES */}
-      {isDirector && comparativo.length > 0 && (
+      {podeVerEquipe && comparativo.length > 0 && (
         <div className="bg-[#0B1120] border border-white/10 rounded-[32px] p-6 shadow-xl">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-9 h-9 bg-purple-500/20 rounded-xl flex items-center justify-center"><Zap size={18} className="text-purple-400"/></div>

@@ -59,13 +59,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Busca as visitas direto do banco (nunca confia em dados de visita vindos do corpo da
-    // requisição) — sempre filtrando pela empresa do solicitante.
+    // requisição) — sempre filtrando pela empresa do solicitante. Mais recentes primeiro:
+    // se precisar cortar por limite de tamanho do prompt, corta as mais antigas, não as
+    // mais relevantes pro momento atual.
     const { data: visitas, error: visitasError } = await supabaseAdmin
       .from('visitas')
       .select('empresa, cidade, observacao, created_at')
       .eq('empresa_id', empresa_id)
       .in('id', visitaIds)
       .not('observacao', 'is', null)
+      .order('created_at', { ascending: false })
       .limit(150);
 
     if (visitasError) throw new Error('Erro ao buscar visitas: ' + visitasError.message);
@@ -75,6 +78,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhuma das visitas selecionadas tem observação registrada pra analisar.' }, { status: 400 });
     }
 
+    // Groq no tier gratuito limita TPM (tokens por minuto) — 8000 no modelo atual, contando
+    // prompt + max_tokens reservado. Um lote grande de observações estourava isso (erro 413
+    // "Request too large"). Trunca cada observação individualmente E corta o prompt inteiro
+    // por orçamento de caracteres, sempre priorizando as visitas mais recentes (já ordenadas
+    // acima) — em vez de falhar, entrega um relatório sobre o que couber e avisa quantas
+    // visitas/clientes entraram de fato (visitasAnalisadas/clientesAnalisados, abaixo).
+    const MAX_OBSERVACAO_CHARS = 500;
+    const MAX_PROMPT_CHARS = 14000;
+    const truncarObservacao = (texto: string) =>
+      texto.length > MAX_OBSERVACAO_CHARS ? texto.slice(0, MAX_OBSERVACAO_CHARS) + '…' : texto;
+
     // Agrupa por cliente (em vez de mandar visitas soltas) — dá pra IA ver o histórico
     // completo de cada cliente de uma vez, não comentários isolados sem contexto.
     const porCliente = new Map<string, { cidade: string; visitas: { data: string; observacao: string }[] }>();
@@ -83,24 +97,35 @@ export async function POST(req: NextRequest) {
       if (!porCliente.has(chave)) porCliente.set(chave, { cidade: v.cidade || '', visitas: [] });
       const entry = porCliente.get(chave)!;
       if (!entry.cidade && v.cidade) entry.cidade = v.cidade;
-      entry.visitas.push({ data: new Date(v.created_at).toLocaleDateString('pt-BR'), observacao: v.observacao! });
+      entry.visitas.push({ data: new Date(v.created_at).toLocaleDateString('pt-BR'), observacao: truncarObservacao(v.observacao!) });
     }
 
     const cidadePorCliente = new Map<string, string>();
     porCliente.forEach((v, cliente) => { if (v.cidade) cidadePorCliente.set(normalizarNome(cliente), v.cidade); });
 
-    const listaClientes = Array.from(porCliente.entries()).map(([cliente, info]) => {
+    // Monta bloco a bloco (1 por cliente) até estourar o orçamento de caracteres — o que
+    // não coube fica de fora, mas os contadores abaixo refletem só o que foi de fato incluído.
+    let orcamentoRestante = MAX_PROMPT_CHARS;
+    let visitasIncluidas = 0;
+    const blocosClientes: string[] = [];
+    for (const [cliente, info] of porCliente.entries()) {
       const historico = info.visitas.map(v => `  [${v.data}] "${v.observacao}"`).join('\n');
-      return `CLIENTE: ${cliente}${info.cidade ? ` (${info.cidade})` : ''}\n${historico}`;
-    }).join('\n\n');
+      const bloco = `CLIENTE: ${cliente}${info.cidade ? ` (${info.cidade})` : ''}\n${historico}`;
+      if (bloco.length > orcamentoRestante && blocosClientes.length > 0) break;
+      blocosClientes.push(bloco);
+      orcamentoRestante -= bloco.length;
+      visitasIncluidas += info.visitas.length;
+    }
+    const clientesIncluidos = blocosClientes.length;
+    const listaClientes = blocosClientes.join('\n\n');
 
-    const userPrompt = `TOTAL DE CLIENTES COM OBSERVAÇÃO A ANALISAR: ${porCliente.size} (${comObservacao.length} visitas no total)
+    const userPrompt = `TOTAL DE CLIENTES COM OBSERVAÇÃO A ANALISAR: ${clientesIncluidos} (${visitasIncluidas} visitas no total)
 
 ${listaClientes}`;
 
     const response = await groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
-      max_tokens: 4000,
+      max_tokens: 2000,
       temperature: 0.2,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -141,8 +166,9 @@ ${listaClientes}`;
 
     return NextResponse.json({
       relatorio,
-      visitasAnalisadas: comObservacao.length,
-      clientesAnalisados: porCliente.size,
+      visitasAnalisadas: visitasIncluidas,
+      clientesAnalisados: clientesIncluidos,
+      totalVisitasSelecionadas: comObservacao.length,
     });
 
   } catch (err: any) {

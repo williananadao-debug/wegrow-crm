@@ -68,6 +68,7 @@ export default function ArgusTopNav({ nomeEmpresa }: { nomeEmpresa?: string }) {
     { href: '/argus/dashboard', label: 'Dashboard', icon: LayoutDashboard, mostrar: modulos.crm !== false },
     { href: '/argus/vendas', label: 'Vendas', icon: Car, mostrar: true },
     { href: '/argus/comissoes', label: 'Comissões', icon: Percent, mostrar: true },
+    { href: '/argus/financeiro-veiculos', label: 'Gestão Financeira', icon: DollarSign, mostrar: true },
     { href: '/argus/marketing', label: 'Marketing', icon: Megaphone, mostrar: true },
   ];
 

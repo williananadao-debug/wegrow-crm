@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, ChevronRight, Car, TrendingUp, Percent } from 'lucide-react';
+import { Loader2, ChevronRight, Car, TrendingUp, Percent, DollarSign } from 'lucide-react';
 import ArgusTopNav from './ArgusTopNav';
 import { fmtMoeda, fmtMoedaCompacta } from './shared';
 
@@ -71,7 +71,7 @@ export default function ArgusPainelVeiculos() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-6 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
           <Link href="/argus/vendas" className="bg-white border border-[#e0e0e0] hover:border-[#171717]/40 rounded-2xl p-5 transition-all flex items-center justify-between">
             <div>
               <p className="text-sm font-bold text-[#171717] flex items-center gap-2"><Car size={16} className="text-[#171717]" /> Vendas</p>
@@ -83,6 +83,13 @@ export default function ArgusPainelVeiculos() {
             <div>
               <p className="text-sm font-bold text-[#171717] flex items-center gap-2"><Percent size={16} className="text-[#171717]" /> Comissões</p>
               <p className="text-[12px] text-[#8a8a8a] font-semibold mt-1">{ganhos.length} venda(s) fechada(s)</p>
+            </div>
+            <ChevronRight size={16} className="text-[#c9c9c9]" />
+          </Link>
+          <Link href="/argus/financeiro-veiculos" className="bg-white border border-[#e0e0e0] hover:border-[#171717]/40 rounded-2xl p-5 transition-all flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-[#171717] flex items-center gap-2"><DollarSign size={16} className="text-[#171717]" /> Gestão Financeira</p>
+              <p className="text-[12px] text-[#8a8a8a] font-semibold mt-1">Custo, margem e lucro por veículo</p>
             </div>
             <ChevronRight size={16} className="text-[#c9c9c9]" />
           </Link>

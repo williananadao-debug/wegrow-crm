@@ -119,7 +119,13 @@ export async function POST(request: Request) {
   await db.from('profiles').upsert({ id: novoUsuario.user!.id, nome: diretorNome, cargo: 'diretor', empresa_id: empresa.id });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
-  if (process.env.RESEND_API_KEY) {
+  let emailErro: string | null = null;
+  // Falha de e-mail (ex: domínio do Resend em modo sandbox, que só manda pro próprio e-mail
+  // verificado da conta) não pode derrubar a criação da empresa — usuário e empresa já
+  // existem nesse ponto. Sem o try/catch, uma exceção aqui travava a tela pra sempre: o
+  // fetch do front nunca recebia resposta JSON válida e "saving" nunca voltava a false.
+  try {
+    if (process.env.RESEND_API_KEY) {
     const { Resend } = await import('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
@@ -175,10 +181,14 @@ export async function POST(request: Request) {
   </table>
 </body>
 </html>`,
-    });
+      });
+    }
+  } catch (err: any) {
+    console.error('[admin/empresas] falha ao enviar e-mail de boas-vindas:', err);
+    emailErro = err?.message || 'Falha ao enviar e-mail de boas-vindas.';
   }
 
-  return NextResponse.json({ ...empresa, diretorEmail, senhaTemp }, { status: 201 });
+  return NextResponse.json({ ...empresa, diretorEmail, senhaTemp, emailErro }, { status: 201 });
 }
 
 // PATCH — upsert por id (cria registro na tabela empresas se ainda não existir para esse tenant)

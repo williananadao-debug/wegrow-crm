@@ -4,30 +4,23 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
-  Building2, Plus, Edit2, X, Save, Loader2, Users, Package,
-  ShieldAlert, ToggleLeft, ToggleRight, Trash2, ChevronRight,
-  BarChart2, TrendingUp, Clock, Activity, Upload, Image as ImageIcon, Target, Printer
+  Building2, Plus, X, Loader2, Users, Package,
+  ShieldAlert, ChevronRight, Search,
+  BarChart2, TrendingUp, Clock, Activity, Target, Printer, LogIn,
+  DollarSign, Globe, PenLine, Edit2, AlertTriangle, XCircle, MessageCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
+import { Empresa, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
+import AbaGeral from './abas/AbaGeral';
+import AbaModulos from './abas/AbaModulos';
+import AbaUnidades from './abas/AbaUnidades';
+import AbaMetricas from './abas/AbaMetricas';
+import AbaFaturamento from './abas/AbaFaturamento';
+import AbaPortais from './abas/AbaPortais';
+import AbaContrato from './abas/AbaContrato';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
-
-type Empresa = {
-  id: string; nome: string; cnpj?: string; plano: string;
-  status: string; modulos: Record<string, boolean>; created_at: string;
-  total_usuarios?: number; logo_url?: string | null;
-};
-type Unidade = {
-  id: string; nome: string; razao_social?: string;
-  cnpj?: string; endereco?: string; cidade?: string; estado?: string;
-};
-
-const PLANOS = ['essencial', 'pro', 'enterprise'];
-const STATUS_OPTS = ['trial', 'ativa', 'suspensa'];
-// "crm" é o macro-toggle: liga/desliga o produto inteiro de pipeline/vendas de uma vez.
-// Ausente no JSON (empresas criadas antes disso existir) conta como ligado — só desliga
-// se alguém marcar explicitamente crm:false, senão o deploy apagaria o menu de quem já usa.
-const CRM_SUBMODULOS = ['opec', 'ia', 'financeiro', 'whatsapp', 'assinatura'];
 
 const COR_STATUS: Record<string, string> = {
   ativa: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -53,35 +46,42 @@ function tempoRelativo(iso: string): string {
   return `há ${d}d`;
 }
 
+type Aba = 'geral' | 'modulos' | 'unidades' | 'faturamento' | 'portais' | 'contrato' | 'metricas';
+const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
+  { id: 'geral', label: 'Geral', icon: <Edit2 size={13}/> },
+  { id: 'modulos', label: 'Módulos', icon: <Package size={13}/> },
+  { id: 'unidades', label: 'Unidades', icon: <Building2 size={13}/> },
+  { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={13}/> },
+  { id: 'portais', label: 'Portais', icon: <Globe size={13}/> },
+  { id: 'contrato', label: 'Contrato', icon: <PenLine size={13}/> },
+  { id: 'metricas', label: 'Métricas', icon: <BarChart2 size={13}/> },
+];
+
+const STATUS_PGTO_CFG = {
+  ativo:        { label: 'Em dia',         cor: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/30',    icon: <CheckCircle2 size={10}/> },
+  vencendo:     { label: 'Vence em breve', cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: <Clock size={10}/> },
+  inadimplente: { label: 'Vencido',        cor: 'bg-red-500/20 text-red-400 border-red-500/30',           icon: <AlertTriangle size={10}/> },
+  sem_dados:    { label: 'Sem faturamento',cor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',    icon: <XCircle size={10}/> },
+};
+
 export default function AdminPage() {
-  const { user, perfil, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [token, setToken] = useState('');
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Empresa | null>(null);
-  const [unidades, setUnidades] = useState<Unidade[]>([]);
-  const [metrics, setMetrics] = useState<any>(null);
+  const [abaAtiva, setAbaAtiva] = useState<Aba>('geral');
   const [atividade, setAtividade] = useState<{
     leads_mes: number; usuarios_ativos_7d: number;
     ultimos_logins: { nome: string; empresa: string; ultimo_acesso: string }[];
     por_empresa: { id: string; nome: string; status: string; total_usuarios: number; usuarios_ativos_7d: number; leads_mes: number; leads_total: number; ultimo_acesso: string | null }[];
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [entrandoComoId, setEntrandoComoId] = useState<string | null>(null);
 
-  // Form empresa selecionada
-  const [editNome, setEditNome] = useState('');
-  const [editPlano, setEditPlano] = useState('');
-  const [editStatus, setEditStatus] = useState('');
-  const [editModulos, setEditModulos] = useState<Record<string, boolean | string>>({});
-  const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-
-  // Form nova unidade
-  const [novaUnidadeNome, setNovaUnidadeNome] = useState('');
-  const [novaUnidadeRazao, setNovaUnidadeRazao] = useState('');
-  const [novaUnidadeCnpj, setNovaUnidadeCnpj] = useState('');
-  const [novaUnidadeEndereco, setNovaUnidadeEndereco] = useState('');
-  const [novaUnidadeCidade, setNovaUnidadeCidade] = useState('');
+  const [modoLista, setModoLista] = useState<'empresas' | 'cobranca'>('empresas');
+  const [busca, setBusca] = useState('');
+  const [registrandoPgtoId, setRegistrandoPgtoId] = useState<string | null>(null);
 
   // Form nova empresa
   const [showNovaEmpresa, setShowNovaEmpresa] = useState(false);
@@ -89,6 +89,7 @@ export default function AdminPage() {
   const [novaEmpresaCnpj, setNovaEmpresaCnpj] = useState('');
   const [novaEmpresaDiretorNome, setNovaEmpresaDiretorNome] = useState('');
   const [novaEmpresaDiretorEmail, setNovaEmpresaDiretorEmail] = useState('');
+  const [novaEmpresaDemo, setNovaEmpresaDemo] = useState(false);
   const [novaEmpresaFeedback, setNovaEmpresaFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
@@ -104,129 +105,91 @@ export default function AdminPage() {
     if (token) carregarEmpresas();
   }, [token]);
 
-  const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` });
+  const headers = () => headersAuth(token);
 
   const carregarEmpresas = async () => {
     setLoading(true);
-    const [resEmpresas, resAtividade] = await Promise.all([
+    const [resEmpresas, resAtividade, resBillings] = await Promise.all([
       fetch('/api/admin/empresas', { headers: headers() }),
       fetch('/api/admin/atividade', { headers: headers() }),
+      supabase.from('clientes_wegrow').select('*'),
     ]);
-    if (resEmpresas.ok) setEmpresas(await resEmpresas.json());
+    const empresasData = resEmpresas.ok ? await resEmpresas.json() : [];
+    const billingMap = Object.fromEntries((resBillings.data || []).map((b: any) => [b.empresa_id, b]));
+    setEmpresas(empresasData.map((e: any) => ({ ...e, billing: billingMap[e.id] ?? null })));
     if (resAtividade.ok) setAtividade(await resAtividade.json());
     setLoading(false);
-  };
-
-  const abrirEmpresa = async (e: Empresa) => {
-    setEmpresaSelecionada(e);
-    setEditNome(e.nome);
-    setEditPlano(e.plano);
-    setEditStatus(e.status);
-    setEditModulos({ ...e.modulos });
-    setEditLogoUrl(e.logo_url || null);
-    setMetrics(null);
-
-    const [resUnidades, resMetrics] = await Promise.all([
-      fetch(`/api/admin/unidades?empresa_id=${e.id}`, { headers: headers() }),
-      fetch(`/api/admin/metrics?empresa_id=${e.id}`, { headers: headers() }),
-    ]);
-
-    if (resUnidades.ok) setUnidades(await resUnidades.json());
-    else setUnidades([]);
-
-    if (resMetrics.ok) setMetrics(await resMetrics.json());
-  };
-
-  const salvarEmpresa = async () => {
-    if (!empresaSelecionada) return;
-    if (!editNome.trim()) { alert('O nome da empresa não pode ficar vazio.'); return; }
-    setSaving(true);
-    // Mescla módulos atuais com os editados para não perder campos não-boolean (ex: tokens de integração)
-    const modulosMesclados = { ...empresaSelecionada.modulos, ...editModulos };
-    await fetch('/api/admin/empresas', {
-      method: 'PATCH',
-      headers: headers(),
-      body: JSON.stringify({ id: empresaSelecionada.id, nome: editNome.trim(), plano: editPlano, status: editStatus, modulos: modulosMesclados }),
+    // mantém a empresa selecionada em sincronia com os dados recarregados
+    setEmpresaSelecionada(prev => {
+      if (!prev) return prev;
+      const atualizada = empresasData.find((e: any) => e.id === prev.id);
+      return atualizada ? { ...atualizada, billing: billingMap[atualizada.id] ?? null } : prev;
     });
-    await carregarEmpresas();
-    setSaving(false);
   };
 
-  const uploadLogo = async (file: File) => {
-    if (!empresaSelecionada) return;
-    setUploadingLogo(true);
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const ext = file.name.split('.').pop() || 'png';
-      const res = await fetch('/api/admin/empresas/logo', {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ empresaId: empresaSelecionada.id, imagemBase64: base64, extensao: ext }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) { alert(json.erro || `Erro ao subir logo (HTTP ${res.status}).`); return; }
-      setEditLogoUrl(json.logoUrl);
-      await carregarEmpresas();
-    } catch (err: any) {
-      alert('Erro ao subir logo: ' + (err?.message || 'erro desconhecido.'));
-    } finally {
-      setUploadingLogo(false);
-    }
+  const abrirEmpresa = (e: Empresa, aba: Aba = 'geral') => {
+    setEmpresaSelecionada(e);
+    setAbaAtiva(aba);
   };
 
   const criarEmpresa = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setNovaEmpresaFeedback(null);
-    const res = await fetch('/api/admin/empresas', {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ nome: novaEmpresaNome, cnpj: novaEmpresaCnpj, diretorNome: novaEmpresaDiretorNome, diretorEmail: novaEmpresaDiretorEmail }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setNovaEmpresaFeedback({ tipo: 'erro', msg: json.erro || 'Erro ao criar empresa.' });
+    try {
+      const res = await fetch('/api/admin/empresas', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          nome: novaEmpresaNome, cnpj: novaEmpresaCnpj, diretorNome: novaEmpresaDiretorNome, diretorEmail: novaEmpresaDiretorEmail,
+          modulos: novaEmpresaDemo ? { demo: true } : undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNovaEmpresaFeedback({ tipo: 'erro', msg: json.erro || `Erro ao criar empresa (HTTP ${res.status}).` });
+        return;
+      }
+      const avisoEmail = json.emailErro ? ` (e-mail de boas-vindas não saiu: ${json.emailErro} — passe o login manualmente)` : '';
+      setNovaEmpresaFeedback({ tipo: json.emailErro ? 'erro' : 'sucesso', msg: `Empresa criada! Login: ${json.diretorEmail} · Senha temporária: ${json.senhaTemp}${avisoEmail}` });
+      setNovaEmpresaNome(''); setNovaEmpresaCnpj(''); setNovaEmpresaDiretorNome(''); setNovaEmpresaDiretorEmail(''); setNovaEmpresaDemo(false);
+      await carregarEmpresas();
+      // já abre a empresa recém-criada no painel de abas — sem precisar caçar ela na lista
+      setEmpresaSelecionada({ ...json, billing: null });
+      setAbaAtiva('geral');
+      setShowNovaEmpresa(false);
+    } catch (err: any) {
+      setNovaEmpresaFeedback({ tipo: 'erro', msg: 'Erro de rede ao criar empresa: ' + (err?.message || 'desconhecido') });
+    } finally {
       setSaving(false);
-      return;
     }
-    setNovaEmpresaFeedback({ tipo: 'sucesso', msg: `Empresa criada! Login: ${json.diretorEmail} · Senha temporária: ${json.senhaTemp}` });
-    setNovaEmpresaNome(''); setNovaEmpresaCnpj(''); setNovaEmpresaDiretorNome(''); setNovaEmpresaDiretorEmail('');
-    await carregarEmpresas();
-    setSaving(false);
   };
 
-  const adicionarUnidade = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!empresaSelecionada) return;
-    setSaving(true);
-    await fetch('/api/admin/unidades', {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({
-        empresa_id: empresaSelecionada.id,
-        nome: novaUnidadeNome,
-        razao_social: novaUnidadeRazao || null,
-        cnpj: novaUnidadeCnpj || null,
-        endereco: novaUnidadeEndereco || null,
-        cidade: novaUnidadeCidade || null,
-      }),
-    });
-    setNovaUnidadeNome(''); setNovaUnidadeRazao(''); setNovaUnidadeCnpj('');
-    setNovaUnidadeEndereco(''); setNovaUnidadeCidade('');
-    const res = await fetch(`/api/admin/unidades?empresa_id=${empresaSelecionada.id}`, { headers: headers() });
-    if (res.ok) setUnidades(await res.json());
-    setSaving(false);
+  const entrarComoEmpresa = async (empresaId: string) => {
+    setEntrandoComoId(empresaId);
+    try {
+      const res = await fetch('/api/admin/entrar-como', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ empresa_id: empresaId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.link) { alert(json.erro || 'Erro ao gerar acesso.'); return; }
+      window.open(json.link, '_blank');
+    } finally {
+      setEntrandoComoId(null);
+    }
   };
 
-  const removerUnidade = async (id: string) => {
-    if (!confirm('Remover esta unidade?')) return;
-    await fetch(`/api/admin/unidades?id=${id}`, { method: 'DELETE', headers: headers() });
-    setUnidades(prev => prev.filter(u => u.id !== id));
+  const registrarPagamentoRapido = async (e: Empresa) => {
+    setRegistrandoPgtoId(e.id);
+    const atual = e.billing?.proximo_vencimento ?? new Date().toISOString().substring(0, 10);
+    await supabase.from('clientes_wegrow').upsert(
+      { ...BILLING_VAZIO(e.id), ...(e.billing ?? {}), empresa_id: e.id, proximo_vencimento: proximoMes(atual) },
+      { onConflict: 'empresa_id' }
+    );
+    setRegistrandoPgtoId(null);
+    carregarEmpresas();
   };
 
   if (authLoading) return <div className="p-4 md:p-8"><SkeletonPage /></div>;
@@ -239,6 +202,27 @@ export default function AdminPage() {
       </div>
     </div>
   );
+
+  const empresasAtivas = empresas.filter(e => e.status !== 'suspensa');
+  const mrr = empresasAtivas.reduce((s, c) => s + (c.billing?.valor_mensal ?? 0), 0);
+  const vencendoBreve = empresasAtivas.filter(c => statusPgto(c.billing) === 'vencendo');
+  const inadimplentes = empresasAtivas.filter(c => statusPgto(c.billing) === 'inadimplente');
+  const semDados = empresasAtivas.filter(c => statusPgto(c.billing) === 'sem_dados');
+  const custoSupabase = empresasAtivas.length <= 20 ? 160 : empresasAtivas.length <= 60 ? 280 : empresasAtivas.length <= 120 ? 450 : 650;
+  const custoFerramentas = 50 + 159 + custoSupabase + 115 + 105 + 260;
+  const lucroLiquido = mrr - mrr * 0.06 - custoFerramentas;
+  const arpu = empresasAtivas.length > 0 ? mrr / empresasAtivas.length : 0;
+
+  const listaBase = modoLista === 'cobranca'
+    ? [...empresasAtivas].sort((a, b) => {
+        const da = diasParaVencer(a.billing?.proximo_vencimento ?? null);
+        const db = diasParaVencer(b.billing?.proximo_vencimento ?? null);
+        if (da === null && db === null) return 0;
+        if (da === null) return 1; if (db === null) return -1;
+        return da - db;
+      })
+    : empresas;
+  const listaFiltrada = listaBase.filter(e => !busca.trim() || e.nome.toLowerCase().includes(busca.toLowerCase()));
 
   return (
     <div className="text-white p-4 md:p-8 pb-20">
@@ -283,12 +267,6 @@ export default function AdminPage() {
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
             >
               <BarChart2 size={14}/> Indicadores
-            </Link>
-            <Link
-              href="/admin/clientes-wegrow"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <TrendingUp size={14}/> Assinaturas
             </Link>
             <button
               onClick={() => setShowNovaEmpresa(true)}
@@ -416,317 +394,152 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 print:hidden">
 
           {/* Lista de Empresas */}
-          <div className="lg:col-span-2 space-y-2">
+          <div className="lg:col-span-2 space-y-3">
+
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-1">
+              <button onClick={() => setModoLista('empresas')} className={`flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${modoLista === 'empresas' ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>Empresas</button>
+              <button onClick={() => setModoLista('cobranca')} className={`flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${modoLista === 'cobranca' ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>Cobrança</button>
+            </div>
+
+            <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2 gap-2">
+              <Search size={14} className="text-slate-500"/>
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa..." className="flex-1 bg-transparent outline-none text-sm text-white"/>
+            </div>
+
+            {modoLista === 'cobranca' && (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">MRR</p>
+                    <p className="text-sm font-black text-[#22C55E]">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">ARPU</p>
+                    <p className="text-sm font-black text-white">R$ {arpu.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Lucro líq.</p>
+                    <p className={`text-sm font-black ${lucroLiquido >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
+                {vencendoBreve.length > 0 && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-start gap-2">
+                    <Clock size={12} className="text-yellow-400 shrink-0 mt-0.5"/>
+                    <p className="text-slate-300 text-[11px]">{vencendoBreve.map(c => `${c.nome} (${diasParaVencer(c.billing?.proximo_vencimento ?? null)}d)`).join(' · ')}</p>
+                  </div>
+                )}
+                {inadimplentes.length > 0 && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={12} className="text-red-400 shrink-0 mt-0.5"/>
+                    <p className="text-slate-300 text-[11px]">{inadimplentes.map(c => c.nome).join(' · ')}</p>
+                  </div>
+                )}
+                {semDados.length > 0 && (
+                  <p className="text-slate-500 text-[10px] px-1">{semDados.map(c => c.nome).join(', ')} — sem dados de faturamento.</p>
+                )}
+              </>
+            )}
+
             {loading ? (
               <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-white/[0.03] border border-white/5 rounded-2xl animate-pulse"/>)}</div>
-            ) : empresas.map(e => (
-              <button
-                key={e.id}
-                onClick={() => abrirEmpresa(e)}
-                className={`w-full text-left bg-[#0F172A] border rounded-2xl p-4 transition-all hover:border-white/20 flex items-center justify-between gap-3 ${empresaSelecionada?.id === e.id ? 'border-[#22C55E]/50 bg-[#22C55E]/5' : 'border-white/5'}`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
-                    <Building2 size={18} className="text-slate-400"/>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-black text-sm truncate">{e.nome}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[9px] font-black uppercase ${COR_PLANO[e.plano]}`}>{e.plano}</span>
-                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${COR_STATUS[e.status]}`}>{e.status}</span>
+            ) : modoLista === 'empresas' ? (
+              listaFiltrada.map(e => (
+                <button
+                  key={e.id}
+                  onClick={() => abrirEmpresa(e)}
+                  className={`w-full text-left bg-[#0F172A] border rounded-2xl p-4 transition-all hover:border-white/20 flex items-center justify-between gap-3 ${empresaSelecionada?.id === e.id ? 'border-[#22C55E]/50 bg-[#22C55E]/5' : 'border-white/5'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
+                      <Building2 size={18} className="text-slate-400"/>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-black text-sm truncate">{e.nome}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[9px] font-black uppercase ${COR_PLANO[e.plano]}`}>{e.plano}</span>
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${COR_STATUS[e.status]}`}>{e.status}</span>
+                        {Boolean((e.modulos as any)?.demo) && (
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-dashed border-purple-400/40 text-purple-300 bg-purple-500/10">Demo</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-slate-500 text-[10px] flex items-center gap-1"><Users size={10}/>{e.total_usuarios}</span>
-                  <ChevronRight size={14} className="text-slate-600"/>
-                </div>
-              </button>
-            ))}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-slate-500 text-[10px] flex items-center gap-1"><Users size={10}/>{e.total_usuarios}</span>
+                    <ChevronRight size={14} className="text-slate-600"/>
+                  </div>
+                </button>
+              ))
+            ) : (
+              listaFiltrada.map(e => {
+                const sp = statusPgto(e.billing);
+                const cfg = STATUS_PGTO_CFG[sp];
+                const dias = diasParaVencer(e.billing?.proximo_vencimento ?? null);
+                return (
+                  <div key={e.id} className={`bg-[#0F172A] border rounded-2xl p-4 transition-all ${sp === 'vencendo' ? 'border-yellow-500/30' : sp === 'inadimplente' ? 'border-red-500/30' : 'border-white/5'}`}>
+                    <button onClick={() => abrirEmpresa(e, 'faturamento')} className="w-full text-left mb-3">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <h3 className="font-black text-white text-sm truncate">{e.nome}</h3>
+                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.cor}`}>{cfg.icon} {cfg.label}</span>
+                        {dias !== null && dias >= 0 && dias <= 7 && <span className="text-[9px] font-black text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase">Vence em {dias}d</span>}
+                        {dias !== null && dias < 0 && <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase">Vencido há {Math.abs(dias)}d</span>}
+                      </div>
+                      <p className="text-[11px] text-slate-500">Vence {fmtData(e.billing?.proximo_vencimento ?? null)} · R$ {(e.billing?.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</p>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => registrarPagamentoRapido(e)} disabled={registrandoPgtoId === e.id} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all disabled:opacity-50">
+                        {registrandoPgtoId === e.id ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Pgto recebido
+                      </button>
+                      {e.billing?.whatsapp && (
+                        <a href={`https://wa.me/55${e.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${e.billing.contato ? ' ' + e.billing.contato : ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${(e.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(e.billing.proximo_vencimento)}.`)}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-1.5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all">
+                          <MessageCircle size={10}/> Cobrar
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          {/* Painel de Edição */}
+          {/* Painel da empresa selecionada */}
           {empresaSelecionada && (
-            <div className="lg:col-span-3 space-y-4">
-
-              {/* Plano e Status */}
-              <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6">
-                <div className="flex items-center justify-between mb-5">
+            <div className="lg:col-span-3">
+              <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+                <div className="flex items-center justify-between p-6 border-b border-white/10">
                   <h2 className="font-black uppercase text-sm flex items-center gap-2">
                     <Edit2 size={14} className="text-[#22C55E]"/> {empresaSelecionada.nome}
+                    {Boolean((empresaSelecionada.modulos as any)?.demo) && (
+                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-dashed border-purple-400/40 text-purple-300 bg-purple-500/10">Demo</span>
+                    )}
                   </h2>
-                  <button onClick={salvarEmpresa} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2">
-                    {saving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
+                  <button onClick={() => entrarComoEmpresa(empresaSelecionada.id)} disabled={entrandoComoId === empresaSelecionada.id}
+                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
+                    {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
                   </button>
                 </div>
 
-                <div className="mb-5">
-                  <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Nome da Empresa</label>
-                  <input value={editNome} onChange={e => setEditNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                </div>
-
-                <div className="mb-5">
-                  <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Logo (aparece no menu lateral do cliente)</label>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {editLogoUrl ? <img src={editLogoUrl} alt="Logo" className="w-full h-full object-contain"/> : <ImageIcon size={18} className="text-slate-600"/>}
-                    </div>
-                    <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black uppercase text-slate-400 hover:text-white cursor-pointer transition-all">
-                      {uploadingLogo ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-                      {uploadingLogo ? 'Enviando...' : 'Subir logo'}
-                      <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}/>
-                    </label>
-                  </div>
-                  <p className="text-[9px] text-slate-600 mt-1.5">Sem logo, o menu mostra um quadrado com a inicial do nome.</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-5">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Plano</label>
-                    <select value={editPlano} onChange={e => setEditPlano(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
-                      {PLANOS.map(p => <option key={p} value={p} className="bg-[#0B1120] capitalize">{p}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Status</label>
-                    <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
-                      {STATUS_OPTS.map(s => <option key={s} value={s} className="bg-[#0B1120] capitalize">{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-5">
-                  <label className="text-[10px] font-black uppercase text-slate-500 block">Módulos Ativos</label>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, crm: prev.crm !== false ? false : true }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.crm !== false ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      CRM
-                      {editModulos.crm !== false ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                <div className="flex border-b border-white/10 overflow-x-auto">
+                  {ABAS.map(a => (
+                    <button key={a.id} onClick={() => setAbaAtiva(a.id)}
+                      className={`flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap ${abaAtiva === a.id ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>
+                      {a.icon} {a.label}
                     </button>
-                    <div className={`grid grid-cols-2 gap-2 mt-2 ml-2 pl-3 border-l border-white/10 transition-opacity ${editModulos.crm === false ? 'opacity-40 pointer-events-none' : ''}`}>
-                      {CRM_SUBMODULOS.map(mod => (
-                        <button
-                          key={mod}
-                          type="button"
-                          onClick={() => setEditModulos(prev => ({ ...prev, [mod]: !prev[mod] }))}
-                          className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos[mod] ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                        >
-                          {mod.replace('_', ' ')}
-                          {editModulos[mod] ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, nexus: !prev.nexus }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.nexus ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Nexus
-                      {editModulos.nexus ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, pulse: !prev.pulse }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.pulse ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Pulse
-                      {editModulos.pulse ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, thor: !prev.thor }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.thor ? 'bg-purple-500/10 border-purple-500/40 text-purple-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      THOR
-                      {editModulos.thor ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, max: !prev.max }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.max ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Max
-                      {editModulos.max ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, obras: !prev.obras }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.obras ? 'bg-orange-500/10 border-orange-500/40 text-orange-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Obras
-                      {editModulos.obras ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, argus: !prev.argus }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.argus ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Argus (torre de controle)
-                      {editModulos.argus ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                    {editModulos.argus && (
-                      <select
-                        value={String(editModulos.argus_vertical || 'licitacao')}
-                        onChange={e => setEditModulos(prev => ({ ...prev, argus_vertical: e.target.value }))}
-                        className="w-full mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold uppercase text-slate-300 outline-none"
-                      >
-                        <option value="licitacao" className="bg-[#0B1120]">Vertical: Licitações</option>
-                        <option value="veiculos" className="bg-[#0B1120]">Vertical: Veículos (loja de automóveis)</option>
-                      </select>
-                    )}
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, veiculos: !prev.veiculos }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.veiculos ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Veículos (referência no lead)
-                      {editModulos.veiculos ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, midia: !prev.midia }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.midia ? 'bg-pink-500/10 border-pink-500/40 text-pink-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Demais FM Comercial
-                      {editModulos.midia ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditModulos(prev => ({ ...prev, advocacia: !prev.advocacia }))}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${editModulos.advocacia ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      Advocacia (CRM jurídico)
-                      {editModulos.advocacia ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-white/5">
-                  <p className="text-[10px] text-slate-600 font-mono">ID: {empresaSelecionada.id}</p>
-                </div>
-              </div>
-
-              {/* Métricas */}
-              <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6">
-                <h3 className="font-black uppercase text-sm flex items-center gap-2 mb-5">
-                  <BarChart2 size={14} className="text-orange-400"/> Métricas do Tenant
-                </h3>
-
-                {!metrics ? (
-                  <div className="flex justify-center py-6"><Loader2 className="animate-spin text-slate-600" size={20}/></div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                      {[
-                        { label: 'Leads Total', value: metrics.total_leads, icon: TrendingUp, color: 'text-blue-400' },
-                        { label: 'Leads no Mês', value: metrics.leads_mes, icon: Activity, color: 'text-orange-400' },
-                        { label: 'Ganhos no Mês', value: metrics.leads_ganhos_mes, icon: TrendingUp, color: 'text-[#22C55E]' },
-                        { label: 'Usuários Ativos', value: `${metrics.usuarios_ativos}/${metrics.total_usuarios}`, icon: Users, color: 'text-purple-400' },
-                      ].map(({ label, value, icon: Icon, color }) => (
-                        <div key={label} className="bg-[#0B1120] border border-white/5 rounded-2xl p-3 text-center">
-                          <Icon size={14} className={`${color} mx-auto mb-1`}/>
-                          <p className={`text-xl font-black ${color}`}>{value}</p>
-                          <p className="text-[8px] text-slate-500 uppercase font-black mt-0.5">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Logs de acesso */}
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 mb-3"><Clock size={10}/> Último Acesso por Usuário</p>
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-                        {[...(metrics.profiles || [])].sort((a: any, b: any) =>
-                          (b.ultimo_acesso || '').localeCompare(a.ultimo_acesso || '')
-                        ).map((p: any) => (
-                          <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.ativo_recente ? 'bg-[#22C55E]' : 'bg-slate-600'}`}/>
-                              <p className="text-xs font-black truncate">{p.nome || p.email}</p>
-                              <span className="text-[8px] text-slate-600 uppercase font-bold shrink-0">{p.cargo}</span>
-                            </div>
-                            <p className="text-[9px] text-slate-500 font-mono shrink-0 ml-2">
-                              {p.ultimo_acesso
-                                ? new Date(p.ultimo_acesso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-                                : 'nunca'}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Unidades/Filiais */}
-              <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6">
-                <h3 className="font-black uppercase text-sm flex items-center gap-2 mb-5">
-                  <Package size={14} className="text-blue-400"/> Unidades / Filiais
-                </h3>
-
-                <div className="space-y-2 mb-5 max-h-52 overflow-y-auto">
-                  {unidades.length === 0 && (
-                    <p className="text-slate-600 text-xs text-center py-4">Nenhuma unidade cadastrada.</p>
-                  )}
-                  {unidades.map(u => (
-                    <div key={u.id} className="flex items-center justify-between bg-white/5 border border-white/5 rounded-xl px-4 py-3 group">
-                      <div>
-                        <p className="font-black text-sm">{u.nome}</p>
-                        {u.razao_social && <p className="text-[10px] text-slate-500 font-mono">{u.razao_social} · {u.cnpj}</p>}
-                        {u.cidade && <p className="text-[10px] text-slate-600">{u.cidade}, {u.estado}</p>}
-                      </div>
-                      <button onClick={() => removerUnidade(u.id)} className="text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2">
-                        <Trash2 size={14}/>
-                      </button>
-                    </div>
                   ))}
                 </div>
 
-                <form onSubmit={adicionarUnidade} className="border-t border-white/5 pt-5 space-y-3">
-                  <p className="text-[10px] font-black uppercase text-slate-500">Nova Unidade</p>
-                  <input required placeholder="Nome da unidade *" value={novaUnidadeNome} onChange={e => setNovaUnidadeNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input placeholder="Razão Social" value={novaUnidadeRazao} onChange={e => setNovaUnidadeRazao(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                    <input placeholder="CNPJ" value={novaUnidadeCnpj} onChange={e => setNovaUnidadeCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                    <input placeholder="Cidade" value={novaUnidadeCidade} onChange={e => setNovaUnidadeCidade(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                    <input placeholder="Endereço" value={novaUnidadeEndereco} onChange={e => setNovaUnidadeEndereco(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                  </div>
-                  <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                    {saving ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>} Adicionar Unidade
-                  </button>
-                </form>
+                <div className="p-6">
+                  {abaAtiva === 'geral' && <AbaGeral empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'modulos' && <AbaModulos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'unidades' && <AbaUnidades empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'faturamento' && <AbaFaturamento empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'portais' && <AbaPortais empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'contrato' && <AbaContrato empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'metricas' && <AbaMetricas empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                </div>
               </div>
-
             </div>
           )}
         </div>
@@ -748,6 +561,10 @@ export default function AdminPage() {
                 <input required placeholder="Nome do diretor *" value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] mb-3"/>
                 <input required type="email" placeholder="E-mail do diretor *" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
               </div>
+              <label className="flex items-center gap-2.5 px-1 py-1 cursor-pointer">
+                <input type="checkbox" checked={novaEmpresaDemo} onChange={e => setNovaEmpresaDemo(e.target.checked)} className="w-4 h-4 accent-purple-400"/>
+                <span className="text-[11px] font-bold text-slate-400">Empresa demo <span className="text-slate-600 font-normal">(dado fake, uso comercial — não é cliente pagante)</span></span>
+              </label>
               {novaEmpresaFeedback && (
                 <div className={`text-xs font-bold p-3 rounded-xl ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
                   {novaEmpresaFeedback.msg}

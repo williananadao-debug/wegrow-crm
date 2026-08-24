@@ -110,13 +110,20 @@ export async function POST(request: Request) {
   });
 
   if (createError) {
+    // Status fora da faixa 200-299 de propósito — 207 fazia o front-end (que só olha
+    // res.ok) tratar isso como sucesso, escondendo o aviso. A empresa ficava criada em
+    // "empresas" mas sem nenhum profile, e como a listagem do God Mode é montada a
+    // partir de profiles (não de empresas), ela nunca aparecia — sem erro nenhum visível.
     const msg = createError.message.toLowerCase().includes('already') || createError.message.toLowerCase().includes('registered')
-      ? `Empresa "${nome}" criada, mas esse e-mail já tem conta em outro lugar — convide o diretor manualmente em Minha Equipe.`
+      ? `Empresa "${nome}" criada, mas esse e-mail já tem conta em outro lugar — convide o diretor manualmente em Minha Equipe (ou use outro e-mail).`
       : `Empresa "${nome}" criada, mas falhou ao criar o diretor: ${createError.message}`;
-    return NextResponse.json({ erro: msg, empresa }, { status: 207 });
+    return NextResponse.json({ erro: msg, empresa }, { status: 409 });
   }
 
-  await db.from('profiles').upsert({ id: novoUsuario.user!.id, nome: diretorNome, cargo: 'diretor', empresa_id: empresa.id });
+  const { error: profileError } = await db.from('profiles').upsert({ id: novoUsuario.user!.id, nome: diretorNome, cargo: 'diretor', empresa_id: empresa.id });
+  if (profileError) {
+    return NextResponse.json({ erro: `Empresa "${nome}" e usuário criados, mas falhou ao vincular o perfil: ${profileError.message} — por isso ela não aparece na lista.` }, { status: 409 });
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
   let emailErro: string | null = null;

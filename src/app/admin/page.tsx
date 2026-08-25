@@ -111,13 +111,18 @@ export default function AdminPage() {
   }, [user]);
 
   useEffect(() => {
-    if (token) carregarEmpresas();
+    if (token) carregarEmpresas(true);
   }, [token]);
 
   const headers = () => headersAuth(token);
 
-  const carregarEmpresas = async () => {
-    setLoading(true);
+  // mostrarLoading=false (padrão) é o caso comum: salvar algo numa aba já aberta chama
+  // isso só pra manter a lista/empresaSelecionada em sincronia com o banco — não pode
+  // piscar a lista inteira em skeleton de loading a cada clique de toggle, senão parece
+  // que "a tela muda"/perde o que acabou de ser marcado. Só a carga inicial (token pronto)
+  // passa true de propósito.
+  const carregarEmpresas = async (mostrarLoading = false) => {
+    if (mostrarLoading) setLoading(true);
     const [resEmpresas, resAtividade, resBillings] = await Promise.all([
       fetch('/api/admin/empresas', { headers: headers() }),
       fetch('/api/admin/atividade', { headers: headers() }),

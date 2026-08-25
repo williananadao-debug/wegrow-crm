@@ -15,16 +15,25 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
   useEffect(() => { setModulos(empresa.modulos || {}); }, [empresa.id]);
 
   const setModulo = async (chave: string, valor: boolean | string) => {
-    const novo = { ...modulos, [chave]: valor };
-    setModulos(novo);
+    // atualização funcional — se clicar em 2 toggles rápido, o segundo clique não pode
+    // ler um "modulos" desatualizado (fechado no clique anterior) e perder a mudança dele.
+    let novo: Record<string, any> = {};
+    setModulos(prev => { novo = { ...prev, [chave]: valor }; return novo; });
     setSalvando(true);
-    await fetch('/api/admin/empresas', {
-      method: 'PATCH',
-      headers: headersAuth(token),
-      body: JSON.stringify({ id: empresa.id, modulos: { ...empresa.modulos, ...novo } }),
-    });
-    setSalvando(false);
-    onAtualizado();
+    try {
+      const res = await fetch('/api/admin/empresas', {
+        method: 'PATCH',
+        headers: headersAuth(token),
+        body: JSON.stringify({ id: empresa.id, modulos: { ...empresa.modulos, ...novo } }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        alert(json.erro || 'Erro ao salvar módulo.');
+      }
+    } finally {
+      setSalvando(false);
+      onAtualizado();
+    }
   };
 
   const Toggle = ({ label, chave, corAtivo, sufixo }: { label: string; chave: string; corAtivo: string; sufixo?: React.ReactNode }) => {

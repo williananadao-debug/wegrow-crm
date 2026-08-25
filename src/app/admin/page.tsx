@@ -91,6 +91,8 @@ export default function AdminPage() {
   const [novaEmpresaDiretorEmail, setNovaEmpresaDiretorEmail] = useState('');
   const [novaEmpresaDemo, setNovaEmpresaDemo] = useState(false);
   const [novaEmpresaFeedback, setNovaEmpresaFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
+  const [novaEmpresaCredenciais, setNovaEmpresaCredenciais] = useState<{ email: string; senha: string } | null>(null);
+  const [credenciaisCopiadas, setCredenciaisCopiadas] = useState(false);
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -152,12 +154,21 @@ export default function AdminPage() {
       }
       const avisoEmail = json.emailErro ? ` (e-mail de boas-vindas não saiu: ${json.emailErro} — passe o login manualmente)` : '';
       setNovaEmpresaFeedback({ tipo: json.emailErro ? 'erro' : 'sucesso', msg: `Empresa criada! Login: ${json.diretorEmail} · Senha temporária: ${json.senhaTemp}${avisoEmail}` });
+      setNovaEmpresaCredenciais({ email: json.diretorEmail, senha: json.senhaTemp });
       setNovaEmpresaNome(''); setNovaEmpresaCnpj(''); setNovaEmpresaDiretorNome(''); setNovaEmpresaDiretorEmail(''); setNovaEmpresaDemo(false);
       await carregarEmpresas();
       // já abre a empresa recém-criada no painel de abas — sem precisar caçar ela na lista
       setEmpresaSelecionada({ ...json, billing: null });
       setAbaAtiva('geral');
-      setShowNovaEmpresa(false);
+      // fica registrado na aba Faturamento (Observação) — a senha só aparece 1x nesta
+      // tela e some pra sempre depois; se o usuário fechar o modal antes de copiar, sem
+      // isso o login vira inacessível (Supabase não guarda a senha em texto puro).
+      await supabase.from('clientes_wegrow').upsert(
+        { empresa_id: json.id, observacao: `Login inicial: ${json.diretorEmail} · Senha temporária: ${json.senhaTemp} (gerada em ${new Date().toLocaleDateString('pt-BR')})` },
+        { onConflict: 'empresa_id' }
+      );
+      // NÃO fecha o modal sozinho — some rápido demais pro usuário copiar a senha.
+      // Fecha só quando ele clicar em "Continuar" (abaixo).
     } catch (err: any) {
       setNovaEmpresaFeedback({ tipo: 'erro', msg: 'Erro de rede ao criar empresa: ' + (err?.message || 'desconhecido') });
     } finally {
@@ -550,30 +561,66 @@ export default function AdminPage() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="font-black uppercase text-sm">Nova Empresa</h3>
-              <button onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); }} className="text-slate-500 hover:text-white"><X size={16}/></button>
-            </div>
-            <form onSubmit={criarEmpresa} className="space-y-3">
-              <input required placeholder="Nome da empresa *" value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-              <input placeholder="CNPJ" value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-              <div className="border-t border-white/10 pt-3 mt-1">
-                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Primeiro diretor (obrigatório — sem isso a empresa fica invisível)</p>
-                <input required placeholder="Nome do diretor *" value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] mb-3"/>
-                <input required type="email" placeholder="E-mail do diretor *" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-              </div>
-              <label className="flex items-center gap-2.5 px-1 py-1 cursor-pointer">
-                <input type="checkbox" checked={novaEmpresaDemo} onChange={e => setNovaEmpresaDemo(e.target.checked)} className="w-4 h-4 accent-purple-400"/>
-                <span className="text-[11px] font-bold text-slate-400">Empresa demo <span className="text-slate-600 font-normal">(dado fake, uso comercial — não é cliente pagante)</span></span>
-              </label>
-              {novaEmpresaFeedback && (
-                <div className={`text-xs font-bold p-3 rounded-xl ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
-                  {novaEmpresaFeedback.msg}
-                </div>
+              <h3 className="font-black uppercase text-sm">{novaEmpresaCredenciais ? 'Empresa criada' : 'Nova Empresa'}</h3>
+              {!novaEmpresaCredenciais && (
+                <button onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); }} className="text-slate-500 hover:text-white"><X size={16}/></button>
               )}
-              <button type="submit" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
-                {saving ? 'Criando...' : 'Criar Empresa'}
-              </button>
-            </form>
+            </div>
+
+            {novaEmpresaCredenciais ? (
+              <div className="space-y-3">
+                {novaEmpresaFeedback?.tipo === 'erro' && (
+                  <div className="text-xs font-bold p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+                    {novaEmpresaFeedback.msg}
+                  </div>
+                )}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Login</p>
+                  <p className="text-sm font-bold text-white break-all">{novaEmpresaCredenciais.email}</p>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest pt-2">Senha temporária</p>
+                  <p className="text-lg font-black text-[#22C55E] font-mono tracking-wide">{novaEmpresaCredenciais.senha}</p>
+                </div>
+                <p className="text-[10px] text-slate-500">Essa senha só aparece agora — copia antes de fechar. Também já ficou salva na aba <span className="text-slate-300 font-bold">Faturamento → Observação</span> dessa empresa, e o botão <span className="text-slate-300 font-bold">Entrar como</span> dispensa senha completamente.</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`Login: ${novaEmpresaCredenciais.email}\nSenha temporária: ${novaEmpresaCredenciais.senha}`);
+                    setCredenciaisCopiadas(true);
+                    setTimeout(() => setCredenciaisCopiadas(false), 2500);
+                  }}
+                  className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl font-black uppercase text-xs transition-all"
+                >
+                  {credenciaisCopiadas ? 'Copiado!' : 'Copiar login e senha'}
+                </button>
+                <button
+                  onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); setNovaEmpresaCredenciais(null); }}
+                  className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs"
+                >
+                  Continuar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={criarEmpresa} className="space-y-3">
+                <input required placeholder="Nome da empresa *" value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+                <input placeholder="CNPJ" value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+                <div className="border-t border-white/10 pt-3 mt-1">
+                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Primeiro diretor (obrigatório — sem isso a empresa fica invisível)</p>
+                  <input required placeholder="Nome do diretor *" value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] mb-3"/>
+                  <input required type="email" placeholder="E-mail do diretor *" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+                </div>
+                <label className="flex items-center gap-2.5 px-1 py-1 cursor-pointer">
+                  <input type="checkbox" checked={novaEmpresaDemo} onChange={e => setNovaEmpresaDemo(e.target.checked)} className="w-4 h-4 accent-purple-400"/>
+                  <span className="text-[11px] font-bold text-slate-400">Empresa demo <span className="text-slate-600 font-normal">(dado fake, uso comercial — não é cliente pagante)</span></span>
+                </label>
+                {novaEmpresaFeedback && (
+                  <div className={`text-xs font-bold p-3 rounded-xl ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
+                    {novaEmpresaFeedback.msg}
+                  </div>
+                )}
+                <button type="submit" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
+                  {saving ? 'Criando...' : 'Criar Empresa'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

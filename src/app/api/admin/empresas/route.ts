@@ -221,14 +221,42 @@ export async function PATCH(request: Request) {
   }
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true });
 
-  const { data, error } = await supabaseAdmin()
-    .from('empresas')
-    .upsert({ id, ...patch }, { onConflict: 'id' })
-    .select()
-    .single();
+  const db = supabaseAdmin();
+  const { data: existente } = await db.from('empresas').select('id').eq('id', id).maybeSingle();
+
+  if (existente) {
+    // Caso comum: linha já existe — UPDATE simples, só toca nas colunas que vieram no
+    // corpo. Nunca passa pelo caminho de INSERT do upsert, então nunca esbarra em NOT
+    // NULL de coluna que essa chamada específica não mandou (ex: "nome" quando só se quis
+    // trocar "modulos").
+    const { data, error } = await db.from('empresas').update(patch).eq('id', id).select().single();
+    if (error) {
+      console.error('[admin/empresas] PATCH (update) error:', error);
+      return NextResponse.json({ erro: error.message }, { status: 500 });
+    }
+    return NextResponse.json(data);
+  }
+
+  // Linha ainda não existe (profile com empresa_id órfão, sem registro em "empresas" —
+  // cenário que a antiga RPC também cobria). Aqui sim é INSERT de verdade, então precisa
+  // de nome — sem ele o banco rejeita (NOT NULL), e sem esse aviso o erro cru do Postgres
+  // não deixa claro o motivo.
+  if (!patch.nome) {
+    return NextResponse.json({ erro: 'Essa empresa ainda não tem registro criado — informe o nome antes de editar outro campo (abre a aba Geral e salva o nome primeiro).' }, { status: 422 });
+  }
+  const { data, error } = await db.from('empresas').insert({
+    id,
+    nome: patch.nome,
+    cnpj: patch.cnpj ?? null,
+    plano: patch.plano ?? 'essencial',
+    status: patch.status ?? 'trial',
+    modulos: patch.modulos ?? {},
+    ...('canal_origem' in patch ? { canal_origem: patch.canal_origem } : {}),
+    ...('cancelado_em' in patch ? { cancelado_em: patch.cancelado_em } : {}),
+  }).select().single();
 
   if (error) {
-    console.error('[admin/empresas] PATCH error:', error);
+    console.error('[admin/empresas] PATCH (insert) error:', error);
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
   return NextResponse.json(data);

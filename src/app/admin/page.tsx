@@ -589,8 +589,8 @@ export default function AdminPage() {
                       {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
                     </button>
                     <button onClick={() => { setExcluindoEmpresa(empresaSelecionada); setConfirmarNomeExcluir(''); setErroExcluir(null); }}
-                      className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all">
-                      <Trash2 size={12}/>
+                      className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all">
+                      <Trash2 size={12}/> Excluir
                     </button>
                   </div>
                 </div>

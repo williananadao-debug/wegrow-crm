@@ -162,8 +162,8 @@ export default function MaxPage() {
     }
   };
 
-  // O .pptx traz as duas propostas no mesmo slide (é como o template do Leo foi montado) —
-  // por isso é 1 download por mensagem, não 1 por card de proposta.
+  // O .pptx traz até 4 propostas (1/2 no slide 7, 3/4 no slide 8 — o slide 8 some do
+  // pacote quando são só 1 ou 2) — por isso é 1 download por mensagem, não 1 por card.
   const baixarPptx = async (msgIndex: number) => {
     const msg = mensagens[msgIndex];
     if (!msg.propostas || msg.propostas.length === 0) return;
@@ -183,6 +183,13 @@ export default function MaxPage() {
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.erro || 'Erro ao gerar o arquivo.');
+      }
+      const avisosHeader = res.headers.get('X-Pptx-Avisos');
+      if (avisosHeader) {
+        try {
+          const avisos: string[] = JSON.parse(decodeURIComponent(avisosHeader));
+          if (avisos.length > 0) alert(avisos.join('\n\n'));
+        } catch { /* ignora header malformado — não impede o download */ }
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

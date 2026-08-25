@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const { data: { user }, error: authError } = await db.auth.getUser(accessToken);
   if (authError || !user) return NextResponse.json({ erro: 'Token inválido.' }, { status: 401 });
 
-  const { data: perfil } = await db.from('profiles').select('empresa_id').eq('id', user.id).single();
+  const { data: perfil } = await db.from('profiles').select('empresa_id, nome').eq('id', user.id).single();
   if (!perfil?.empresa_id) return NextResponse.json({ erro: 'Empresa não identificada.' }, { status: 400 });
 
   const { data: empresaRow } = await db.from('empresas').select('modulos').eq('id', perfil.empresa_id).single();
@@ -38,7 +38,14 @@ export async function POST(req: NextRequest) {
       corpo: String(p?.corpo || ''),
     }));
 
-    const buffer = await gerarPropostaPptxBuffer(empresaNome, propostas);
+    // Contato do vendedor entra no fim do corpo da última proposta preenchida — se o
+    // chamador não mandar um explícito, usa nome do vendedor + e-mail (já temos os dois
+    // sem precisar de UI nova pra digitar isso).
+    const vendedorContato: string = body?.vendedorContato
+      ? String(body.vendedorContato)
+      : `Contato: ${perfil.nome || 'Equipe comercial'} — ${user.email}`;
+
+    const { buffer, avisos } = await gerarPropostaPptxBuffer(empresaNome, propostas, vendedorContato);
     const nomeArquivo = `Proposta - ${empresaNome}.pptx`.replace(/[\\/:*?"<>|]/g, '');
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -46,6 +53,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'Content-Disposition': `attachment; filename="${nomeArquivo}"`,
+        'X-Pptx-Avisos': encodeURIComponent(JSON.stringify(avisos)),
       },
     });
   } catch (err: any) {

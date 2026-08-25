@@ -8,7 +8,7 @@ import {
   ShieldAlert, ChevronRight, Search,
   BarChart2, TrendingUp, Clock, Activity, Target, Printer, LogIn,
   DollarSign, Globe, PenLine, Edit2, AlertTriangle, XCircle, MessageCircle,
-  CheckCircle2,
+  CheckCircle2, KeyRound,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Empresa, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
@@ -78,6 +78,9 @@ export default function AdminPage() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [entrandoComoId, setEntrandoComoId] = useState<string | null>(null);
+  const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null);
+  const [senhaResetada, setSenhaResetada] = useState<{ email: string; senha: string } | null>(null);
+  const [senhaResetadaCopiada, setSenhaResetadaCopiada] = useState(false);
 
   const [modoLista, setModoLista] = useState<'empresas' | 'cobranca'>('empresas');
   const [busca, setBusca] = useState('');
@@ -189,6 +192,31 @@ export default function AdminPage() {
       window.open(json.link, '_blank');
     } finally {
       setEntrandoComoId(null);
+    }
+  };
+
+  const resetarSenha = async (empresaId: string) => {
+    setResetandoSenhaId(empresaId);
+    try {
+      const res = await fetch('/api/admin/resetar-senha', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ empresa_id: empresaId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.senha) { alert(json.erro || 'Erro ao resetar senha.'); return; }
+      setSenhaResetada({ email: json.email, senha: json.senha });
+      // acrescenta na observação em vez de sobrescrever — empresa já existente pode ter
+      // anotações de faturamento/contato ali que não podem se perder.
+      const notaAnterior = empresas.find(e => e.id === empresaId)?.billing?.observacao;
+      const novaNota = `Senha resetada: ${json.email} · Nova senha: ${json.senha} (gerada em ${new Date().toLocaleDateString('pt-BR')})`;
+      await supabase.from('clientes_wegrow').upsert(
+        { empresa_id: empresaId, observacao: notaAnterior ? `${notaAnterior}\n\n${novaNota}` : novaNota },
+        { onConflict: 'empresa_id' }
+      );
+      carregarEmpresas();
+    } finally {
+      setResetandoSenhaId(null);
     }
   };
 
@@ -526,10 +554,16 @@ export default function AdminPage() {
                       <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-dashed border-purple-400/40 text-purple-300 bg-purple-500/10">Demo</span>
                     )}
                   </h2>
-                  <button onClick={() => entrarComoEmpresa(empresaSelecionada.id)} disabled={entrandoComoId === empresaSelecionada.id}
-                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
-                    {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => resetarSenha(empresaSelecionada.id)} disabled={resetandoSenhaId === empresaSelecionada.id}
+                      className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
+                      {resetandoSenhaId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <KeyRound size={12}/>} Gerar nova senha
+                    </button>
+                    <button onClick={() => entrarComoEmpresa(empresaSelecionada.id)} disabled={entrandoComoId === empresaSelecionada.id}
+                      className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
+                      {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex border-b border-white/10 overflow-x-auto">
@@ -555,6 +589,39 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Modal Senha Resetada */}
+      {senhaResetada && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-black uppercase text-sm flex items-center gap-2"><KeyRound size={14} className="text-[#22C55E]"/> Nova senha gerada</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Login</p>
+                <p className="text-sm font-bold text-white break-all">{senhaResetada.email}</p>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest pt-2">Nova senha</p>
+                <p className="text-lg font-black text-[#22C55E] font-mono tracking-wide">{senhaResetada.senha}</p>
+              </div>
+              <p className="text-[10px] text-slate-500">Essa senha só aparece agora — copia antes de fechar. A senha anterior parou de funcionar. Também já ficou salva na aba <span className="text-slate-300 font-bold">Faturamento → Observação</span> dessa empresa.</p>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`Login: ${senhaResetada.email}\nSenha: ${senhaResetada.senha}`);
+                  setSenhaResetadaCopiada(true);
+                  setTimeout(() => setSenhaResetadaCopiada(false), 2500);
+                }}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl font-black uppercase text-xs transition-all"
+              >
+                {senhaResetadaCopiada ? 'Copiado!' : 'Copiar login e senha'}
+              </button>
+              <button onClick={() => setSenhaResetada(null)} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nova Empresa */}
       {showNovaEmpresa && (

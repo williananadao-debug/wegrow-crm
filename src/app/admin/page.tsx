@@ -8,7 +8,7 @@ import {
   ShieldAlert, ChevronRight, Search,
   BarChart2, TrendingUp, Clock, Activity, Target, Printer, LogIn,
   DollarSign, Globe, PenLine, Edit2, AlertTriangle, XCircle, MessageCircle,
-  CheckCircle2, KeyRound,
+  CheckCircle2, KeyRound, Trash2,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Empresa, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
@@ -81,6 +81,10 @@ export default function AdminPage() {
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null);
   const [senhaResetada, setSenhaResetada] = useState<{ email: string; senha: string } | null>(null);
   const [senhaResetadaCopiada, setSenhaResetadaCopiada] = useState(false);
+  const [excluindoEmpresa, setExcluindoEmpresa] = useState<Empresa | null>(null);
+  const [confirmarNomeExcluir, setConfirmarNomeExcluir] = useState('');
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
   const [modoLista, setModoLista] = useState<'empresas' | 'cobranca'>('empresas');
   const [busca, setBusca] = useState('');
@@ -217,6 +221,27 @@ export default function AdminPage() {
       carregarEmpresas();
     } finally {
       setResetandoSenhaId(null);
+    }
+  };
+
+  const confirmarExclusao = async () => {
+    if (!excluindoEmpresa) return;
+    setExcluindo(true);
+    setErroExcluir(null);
+    try {
+      const res = await fetch('/api/admin/empresas/excluir', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ empresa_id: excluindoEmpresa.id, confirmarNome: confirmarNomeExcluir }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroExcluir(json.erro || 'Erro ao excluir empresa.'); return; }
+      setExcluindoEmpresa(null);
+      setConfirmarNomeExcluir('');
+      setEmpresaSelecionada(null);
+      await carregarEmpresas();
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -563,6 +588,10 @@ export default function AdminPage() {
                       className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
                       {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
                     </button>
+                    <button onClick={() => { setExcluindoEmpresa(empresaSelecionada); setConfirmarNomeExcluir(''); setErroExcluir(null); }}
+                      className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all">
+                      <Trash2 size={12}/>
+                    </button>
                   </div>
                 </div>
 
@@ -589,6 +618,34 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Modal Excluir Empresa */}
+      {excluindoEmpresa && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-black uppercase text-sm flex items-center gap-2 text-red-400"><Trash2 size={14}/> Excluir empresa</h3>
+              <button onClick={() => setExcluindoEmpresa(null)} className="text-slate-500 hover:text-white"><X size={16}/></button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">Isso apaga <span className="font-black text-white">{excluindoEmpresa.nome}</span> e todos os logins vinculados a ela — <span className="text-red-400 font-bold">sem volta</span>. Dados que já existirem em outras tabelas (leads, clientes etc.) não são varridos, mas ficam inacessíveis pra sempre já que ninguém mais loga nessa empresa.</p>
+              <p className="text-[11px] text-slate-500">Digite <span className="font-black text-white">{excluindoEmpresa.nome}</span> pra confirmar:</p>
+              <input value={confirmarNomeExcluir} onChange={e => setConfirmarNomeExcluir(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-red-500/50"/>
+              {erroExcluir && (
+                <div className="text-xs font-bold p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">{erroExcluir}</div>
+              )}
+              <button
+                onClick={confirmarExclusao}
+                disabled={excluindo || confirmarNomeExcluir.trim() !== excluindoEmpresa.nome}
+                className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all"
+              >
+                {excluindo ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
+                {excluindo ? 'Excluindo...' : 'Excluir de verdade'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Senha Resetada */}
       {senhaResetada && (

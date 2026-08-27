@@ -1,10 +1,9 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
-import DashboardPage from '@/app/dashboard/page';
 import { ArgusEdital, ArgusContrato, fmtMoeda, fmtMoedaCompacta } from '../shared';
 import { Obra, Medicao } from '@/app/obras/shared';
 
@@ -22,17 +21,215 @@ export default function ArgusDashboardWrapperPage() {
   return <ArgusDashboardLicitacao />;
 }
 
-// Veículos não tem reclamação de visual/insight ainda — continua reaproveitando o
-// Dashboard padrão do CRM (mesma decisão original, ver histórico do módulo).
+type LeadVeiculo = {
+  id: number;
+  empresa: string;
+  valor_total: number;
+  status: string;
+  etapa: number;
+  veiculo_referencia: string | null;
+  veiculo_placa: string | null;
+  veiculo_fipe_valor: number | null;
+  veiculo_valor_compra: number | null;
+  veiculo_data_compra: string | null;
+  veiculo_data_venda: string | null;
+  vendedor_nome: string | null;
+  created_at: string;
+};
+
+type CustoItem = { id: number; lead_id: number; descricao: string; valor: number; data: string };
+
 function ArgusDashboardVeiculos() {
   const auth = useAuth() || {};
+  const perfil = auth.perfil;
   const empresa = auth.empresa;
+
+  const [leads, setLeads] = useState<LeadVeiculo[]>([]);
+  const [custos, setCustos] = useState<CustoItem[]>([]);
+  const [percentualComissao, setPercentualComissao] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const carregar = useCallback(async () => {
+    if (!perfil?.empresa_id) return;
+    setLoading(true);
+    const [{ data: leadsData }, { data: custosData }, { data: comissaoConfig }] = await Promise.all([
+      supabase.from('leads')
+        .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, created_at')
+        .eq('empresa_id', perfil.empresa_id)
+        .order('created_at', { ascending: false }),
+      supabase.from('leads_veiculo_custos').select('id, lead_id, descricao, valor, data').eq('empresa_id', perfil.empresa_id),
+      supabase.from('argus_comissao_config').select('percentual').eq('empresa_id', perfil.empresa_id).maybeSingle(),
+    ]);
+    setLeads((leadsData as LeadVeiculo[]) || []);
+    setCustos((custosData as CustoItem[]) || []);
+    setPercentualComissao(Number(comissaoConfig?.percentual || 0));
+    setLoading(false);
+  }, [perfil?.empresa_id]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const custosPorLead = useMemo(() => {
+    const map: Record<number, CustoItem[]> = {};
+    for (const c of custos) { if (!map[c.lead_id]) map[c.lead_id] = []; map[c.lead_id].push(c); }
+    return map;
+  }, [custos]);
+  const totalCustos = useCallback((leadId: number) => (custosPorLead[leadId] || []).reduce((s, c) => s + Number(c.valor || 0), 0), [custosPorLead]);
+  const calc = useCallback((l: LeadVeiculo) => {
+    const custosLead = totalCustos(l.id);
+    const compra = Number(l.veiculo_valor_compra || 0);
+    const vendido = l.status === 'ganho';
+    const lucroLiquido = vendido ? Number(l.valor_total || 0) - compra - custosLead : null;
+    return { custosLead, lucroLiquido, vendido };
+  }, [totalCustos]);
+
+  const abertos = leads.filter(l => l.status === 'aberto');
+  const ganhos = leads.filter(l => l.status === 'ganho');
+  const perdidos = leads.filter(l => l.status === 'perdido');
+  const valorEmAberto = abertos.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+  const valorGanhoTotal = ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+  const valorPerdido = perdidos.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+  const finalizados = ganhos.length + perdidos.length;
+  const taxaConversao = finalizados > 0 ? Math.round((ganhos.length / finalizados) * 100) : 0;
+  const ticketMedio = ganhos.length > 0 ? valorGanhoTotal / ganhos.length : 0;
+
+  const hoje = new Date();
+  const mesRef = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const vendidosMes = ganhos.filter(l => (l.veiculo_data_venda || '').slice(0, 7) === mesRef);
+  const faturamentoMes = vendidosMes.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+  const lucroMes = vendidosMes.reduce((s, l) => s + (calc(l).lucroLiquido || 0), 0);
+
+  const historico6meses = useMemo(() => {
+    const meses: { label: string; bruto: number; lucro: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const doMes = leads.filter(l => (l.veiculo_data_venda || '').slice(0, 7) === chave);
+      const bruto = doMes.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+      const lucro = doMes.reduce((s, l) => s + (calc(l).lucroLiquido || 0), 0);
+      meses.push({ label: `${MESES_LABEL[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, bruto, lucro });
+    }
+    return meses;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, custos]);
+  const maxHistorico = Math.max(1, ...historico6meses.map(m => Math.max(m.bruto, m.lucro)));
+
+  const porVendedor = Object.values(ganhos.reduce((acc: Record<string, { nome: string; valor: number; qtd: number }>, l) => {
+    const nome = l.vendedor_nome || 'Sem vendedor';
+    if (!acc[nome]) acc[nome] = { nome, valor: 0, qtd: 0 };
+    acc[nome].valor += Number(l.valor_total || 0);
+    acc[nome].qtd += 1;
+    return acc;
+  }, {})).sort((a, b) => b.valor - a.valor).slice(0, 5);
+  const maxVendedor = Math.max(1, ...porVendedor.map(v => v.valor));
+
+  const porStatus = [
+    { label: 'Em aberto', qtd: abertos.length, valor: valorEmAberto, cor: 'bg-[#1d6fd9]' },
+    { label: 'Ganho', qtd: ganhos.length, valor: valorGanhoTotal, cor: 'bg-[#1fa85a]' },
+    { label: 'Perdido', qtd: perdidos.length, valor: valorPerdido, cor: 'bg-[#d63f3f]' },
+  ];
+  const maxStatusQtd = Math.max(1, ...porStatus.map(s => s.qtd));
+
   return (
     <div>
       <ArgusTopNav nomeEmpresa={empresa?.nome} />
-      <div className="bg-[#0B1120] min-h-screen p-4 md:p-8">
-        <DashboardPage />
-      </div>
+      <main className="max-w-[1400px] mx-auto px-6 py-8">
+        <h1 className="text-2xl font-bold text-[#171717] mb-6" style={{ fontFamily: 'var(--font-argus-serif)' }}>Dashboard</h1>
+
+        {loading ? (
+          <div className="p-8 flex justify-center"><Loader2 size={22} className="animate-spin text-[#171717]" /></div>
+        ) : leads.length === 0 ? (
+          <div className="bg-white border border-[#e0e0e0] rounded-2xl p-10 text-center">
+            <p className="text-[#5c5c5c] font-semibold text-sm">Nenhum lead cadastrado ainda — os gráficos aparecem assim que houver dado.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <p className="text-[11px] font-bold text-[#8a8a8a] uppercase tracking-wide mb-1">Vendido este mês</p>
+                <p className="text-2xl font-bold text-[#171717]">{fmtMoedaCompacta(faturamentoMes)}</p>
+                <p className="text-[12px] text-[#8a8a8a] font-semibold mt-1">{vendidosMes.length} veículo(s)</p>
+              </div>
+              <div className="bg-[#171717] rounded-2xl p-5">
+                <p className="text-[11px] font-bold text-white/60 uppercase tracking-wide mb-1">Lucro líquido este mês</p>
+                <p className="text-2xl font-bold text-white">{fmtMoedaCompacta(lucroMes)}</p>
+              </div>
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <p className="text-[11px] font-bold text-[#8a8a8a] uppercase tracking-wide mb-1">Taxa de conversão</p>
+                <p className="text-2xl font-bold text-[#171717]">{taxaConversao}%</p>
+              </div>
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <p className="text-[11px] font-bold text-[#8a8a8a] uppercase tracking-wide mb-1">Ticket médio</p>
+                <p className="text-2xl font-bold text-[#171717]">{fmtMoedaCompacta(ticketMedio)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <p className="text-[12px] font-bold text-[#8a8a8a] uppercase tracking-wide mb-4">Funil por status</p>
+                <div className="space-y-3">
+                  {porStatus.map(s => (
+                    <div key={s.label}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[12px] font-bold text-[#171717]">{s.label}</span>
+                        <span className="text-[12px] font-bold text-[#8a8a8a]">{s.qtd} · {fmtMoedaCompacta(s.valor)}</span>
+                      </div>
+                      <div className="h-2.5 bg-[#f0ede6] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${s.cor}`} style={{ width: `${Math.max((s.qtd / maxStatusQtd) * 100, s.qtd > 0 ? 3 : 0)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[12px] font-bold text-[#8a8a8a] uppercase tracking-wide">Faturamento x lucro líquido — últimos 6 meses</p>
+                  <div className="flex items-center gap-3 text-[11px] font-semibold text-[#8a8a8a]">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#d9d9d9] inline-block" /> Bruto</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#1fa85a] inline-block" /> Lucro</span>
+                  </div>
+                </div>
+                <div className="flex items-end gap-3 h-28">
+                  {historico6meses.map(m => (
+                    <div key={m.label} className="flex-1 flex flex-col items-center justify-end gap-1.5">
+                      <div className="flex items-end gap-1 h-20">
+                        <div className="w-3.5 bg-[#d9d9d9] rounded-t-sm" style={{ height: `${Math.max(2, (m.bruto / maxHistorico) * 78)}px` }} title={fmtMoeda(m.bruto)} />
+                        <div className="w-3.5 bg-[#1fa85a] rounded-t-sm" style={{ height: `${Math.max(2, (m.lucro / maxHistorico) * 78)}px` }} title={fmtMoeda(m.lucro)} />
+                      </div>
+                      <span className="text-[10px] text-[#9a958a]">{m.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {porVendedor.length > 0 && (
+              <div className="bg-white border border-[#e0e0e0] rounded-2xl p-5">
+                <p className="text-[12px] font-bold text-[#8a8a8a] uppercase tracking-wide mb-4">
+                  Ranking de vendedores{percentualComissao > 0 ? ` · comissão ${percentualComissao}%` : ''}
+                </p>
+                <div className="space-y-3">
+                  {porVendedor.map((v, i) => (
+                    <div key={v.nome} className="flex items-center gap-3">
+                      <span className="text-[12px] font-bold text-[#8a8a8a] w-5">{String(i + 1).padStart(2, '0')}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[13px] font-bold text-[#171717] truncate">{v.nome}</span>
+                          <span className="text-[12px] text-[#8a8a8a] font-semibold flex-shrink-0">{v.qtd} venda(s)</span>
+                        </div>
+                        <div className="h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-[#171717]" style={{ width: `${Math.max((v.valor / maxVendedor) * 100, 3)}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-[#171717] flex-shrink-0 w-24 text-right">{fmtMoeda(v.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </main>
     </div>
   );
 }

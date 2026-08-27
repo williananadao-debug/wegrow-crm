@@ -11,6 +11,7 @@ export type ContratoData = {
   emissora_cidade?: string;
   emissora_estado?: string;
   cliente: string;
+  cliente_razao_social?: string;
   cnpj: string;
   endereco?: string;
   inscricao_estadual: string;
@@ -164,7 +165,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       };
 
       doc.font('Helvetica-Bold').fontSize(8).text('CLIENTE: ', 50, doc.y);
-      linha('Razão Social: ', data.cliente.toUpperCase());
+      linha('Razão Social: ', (data.cliente_razao_social || data.cliente).toUpperCase());
       linha('Nome Fantasia: ', data.cliente.toUpperCase());
 
       const y1 = doc.y;

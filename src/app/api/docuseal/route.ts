@@ -72,6 +72,7 @@ export async function POST(req: Request) {
         emissora_cidade: emissora.cidade,
         emissora_estado: emissora.estado,
         cliente: deal.empresa || signers[0]?.name || '',
+        cliente_razao_social: deal.razao_social || '',
         cnpj: deal.cnpj || '',
         endereco: deal.endereco || '',
         inscricao_estadual: deal.inscricao_estadual || '',

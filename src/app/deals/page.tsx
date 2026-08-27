@@ -266,6 +266,9 @@ export default function DealsPage() {
   const [motivoPerda, setMotivoPerda] = useState('');
   
   const [novaEmpresa, setNovaEmpresa] = useState('');
+  // Razão social separada do "nome" (novaEmpresa, que na prática é o nome fantasia/comercial)
+  // — sem isso o contrato de rádio imprimia "Razão Social" e "Nome Fantasia" com o mesmo valor.
+  const [novaRazaoSocial, setNovaRazaoSocial] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false); 
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
@@ -1297,6 +1300,7 @@ export default function DealsPage() {
         deal: {
           id: editingLeadId,
           empresa: novaEmpresa,
+          razao_social: novaRazaoSocial,
           cnpj: novoCnpj,
           endereco: novoEndereco,
           inscricao_estadual: novoIE,
@@ -1766,7 +1770,7 @@ export default function DealsPage() {
         // atual do cliente vinculado e sobrescreve o formulário com os dados mais recentes.
         if (lead.client_id) {
             supabase.from('clientes')
-                .select('telefone, cnpj, inscricao_estadual, endereco, cidade')
+                .select('telefone, cnpj, inscricao_estadual, endereco, cidade, razao_social')
                 .eq('id', lead.client_id)
                 .single()
                 .then(({ data: clienteAtual }) => {
@@ -1776,11 +1780,13 @@ export default function DealsPage() {
                     if (clienteAtual.inscricao_estadual) setNovoIE(clienteAtual.inscricao_estadual);
                     if (clienteAtual.endereco) setNovoEndereco(clienteAtual.endereco);
                     if (clienteAtual.cidade) setNovaCidade(clienteAtual.cidade);
+                    setNovaRazaoSocial(clienteAtual.razao_social || '');
                 });
         }
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
+        setNovaRazaoSocial('');
         setNovoTelefone('');
         setNovaUnidade(perfil?.unidade || '');
         setNovaCidade('');

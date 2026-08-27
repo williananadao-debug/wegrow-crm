@@ -33,6 +33,7 @@ export default function ArgusPainelVeiculos() {
     supabase.from('leads')
       .select('id, empresa, valor_total, status, etapa, veiculo_referencia, vendedor_nome, created_at')
       .eq('empresa_id', perfil.empresa_id)
+      .not('veiculo_placa', 'is', null)
       .gte('created_at', inicioMes)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setLeads((data as LeadVeiculo[]) || []); setLoading(false); });

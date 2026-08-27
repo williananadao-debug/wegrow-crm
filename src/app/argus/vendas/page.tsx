@@ -17,6 +17,7 @@ type LeadVeiculo = {
   veiculo_fipe_valor?: number | null;
   veiculo_valor_compra?: number | null;
   veiculo_data_compra?: string | null;
+  veiculo_data_venda?: string | null;
   vendedor_nome: string | null;
   cidade: string | null;
   telefone: string | null;
@@ -49,8 +50,9 @@ export default function ArgusVendasVeiculosPage() {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     supabase.from('leads')
-      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, vendedor_nome, cidade, telefone, created_at')
+      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, cidade, telefone, created_at')
       .eq('empresa_id', perfil.empresa_id)
+      .not('veiculo_placa', 'is', null)
       .order('created_at', { ascending: false })
       .limit(500)
       .then(({ data }) => { setLeads((data as LeadVeiculo[]) || []); setLoading(false); });
@@ -60,7 +62,7 @@ export default function ArgusVendasVeiculosPage() {
 
   const criarVenda = async () => {
     if (!perfil?.empresa_id) return;
-    if (!form.empresa.trim() || !form.valor_total) { setErro('Cliente e valor são obrigatórios.'); return; }
+    if (!form.empresa.trim() || !form.valor_total || !form.veiculo_placa.trim()) { setErro('Cliente, placa e valor são obrigatórios.'); return; }
     setSalvando(true);
     setErro('');
     const { error } = await supabase.from('leads').insert([{
@@ -98,6 +100,17 @@ export default function ArgusVendasVeiculosPage() {
   const ganhos = leads.filter(l => l.status === 'ganho').length;
   const perdidos = leads.filter(l => l.status === 'perdido').length;
   const valorGanho = leads.filter(l => l.status === 'ganho').reduce((acc, l) => acc + Number(l.valor_total || 0), 0);
+
+  const valorEtapa = (l: LeadVeiculo) => l.status === 'ganho' ? 'ganho' : l.status === 'perdido' ? 'perdido' : `aberto-${l.etapa}`;
+
+  const moverLead = async (lead: LeadVeiculo, opcao: string) => {
+    const patch: Partial<LeadVeiculo> & { status: string } =
+      opcao === 'ganho' ? { status: 'ganho', veiculo_data_venda: lead.veiculo_data_venda || new Date().toISOString().slice(0, 10) } :
+      opcao === 'perdido' ? { status: 'perdido' } :
+      { status: 'aberto', etapa: Number(opcao.split('-')[1]) };
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...patch } : l));
+    await supabase.from('leads').update(patch).eq('id', lead.id);
+  };
 
   return (
     <div>
@@ -169,9 +182,18 @@ export default function ArgusVendasVeiculosPage() {
                     <td className="px-4 py-3 text-[#5c5c5c]">{l.veiculo_referencia || '—'}</td>
                     <td className="px-4 py-3 text-[#5c5c5c]">{l.vendedor_nome || '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${l.status === 'ganho' ? 'text-[#1fa85a] bg-[#d9f2e3] border-[#1fa85a]/20' : l.status === 'perdido' ? 'text-red-600 bg-red-50 border-red-200' : 'text-[#1d6fd9] bg-[#e8f0fd] border-[#1d6fd9]/20'}`}>
-                        {l.status === 'ganho' ? 'Ganho' : l.status === 'perdido' ? 'Perdido' : ETAPA_LABEL[l.etapa] || 'Aberto'}
-                      </span>
+                      <select
+                        value={valorEtapa(l)}
+                        onChange={e => moverLead(l, e.target.value)}
+                        className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full border outline-none cursor-pointer ${l.status === 'ganho' ? 'text-[#1fa85a] bg-[#d9f2e3] border-[#1fa85a]/20' : l.status === 'perdido' ? 'text-red-600 bg-red-50 border-red-200' : 'text-[#1d6fd9] bg-[#e8f0fd] border-[#1d6fd9]/20'}`}
+                      >
+                        <option value="aberto-0">Novo</option>
+                        <option value="aberto-1">Contato</option>
+                        <option value="aberto-2">Proposta</option>
+                        <option value="aberto-3">Negociação</option>
+                        <option value="ganho">Ganho</option>
+                        <option value="perdido">Perdido</option>
+                      </select>
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-[#171717]">{fmtMoeda(l.valor_total)}</td>
                     <td className="px-4 py-3 text-right text-[#8a8a8a] text-[12px]">{fmtData(l.created_at)}</td>
@@ -215,7 +237,7 @@ export default function ArgusVendasVeiculosPage() {
                   <input value={form.veiculo_referencia} onChange={e => setForm({ ...form, veiculo_referencia: e.target.value })} placeholder="Ex: HB20 2022 Sense" className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Placa</label>
+                  <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Placa *</label>
                   <input value={form.veiculo_placa} onChange={e => setForm({ ...form, veiculo_placa: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717] uppercase" />
                 </div>
               </div>

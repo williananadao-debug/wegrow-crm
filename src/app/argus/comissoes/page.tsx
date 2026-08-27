@@ -32,7 +32,7 @@ export default function ArgusComissoesPage() {
     setLoading(true);
     const [{ data: leadsData }, { data: config }] = await Promise.all([
       supabase.from('leads').select('id, empresa, valor_total, vendedor_nome, veiculo_referencia, created_at')
-        .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho').order('created_at', { ascending: false }).limit(500),
+        .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho').not('veiculo_placa', 'is', null).order('created_at', { ascending: false }).limit(500),
       supabase.from('argus_comissao_config').select('percentual').eq('empresa_id', perfil.empresa_id).maybeSingle(),
     ]);
     setLeads((leadsData as LeadGanho[]) || []);

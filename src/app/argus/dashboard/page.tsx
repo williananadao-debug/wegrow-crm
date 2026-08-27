@@ -56,6 +56,7 @@ function ArgusDashboardVeiculos() {
       supabase.from('leads')
         .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, created_at')
         .eq('empresa_id', perfil.empresa_id)
+        .not('veiculo_placa', 'is', null)
         .order('created_at', { ascending: false }),
       supabase.from('leads_veiculo_custos').select('id, lead_id, descricao, valor, data').eq('empresa_id', perfil.empresa_id),
       supabase.from('argus_comissao_config').select('percentual').eq('empresa_id', perfil.empresa_id).maybeSingle(),

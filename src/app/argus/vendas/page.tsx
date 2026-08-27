@@ -43,6 +43,9 @@ const FORM_VAZIO = {
   veiculo_fipe_valor: '', veiculo_valor_compra: '', veiculo_data_compra: '',
 };
 
+type FipeOpcao = { codigo: string | number; nome: string };
+const FIPE_API = 'https://parallelum.com.br/fipe/api/v1/carros';
+
 export default function ArgusVendasVeiculosPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
@@ -57,6 +60,64 @@ export default function ArgusVendasVeiculosPage() {
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+
+  const [fipeMarcas, setFipeMarcas] = useState<FipeOpcao[]>([]);
+  const [fipeModelos, setFipeModelos] = useState<FipeOpcao[]>([]);
+  const [fipeAnos, setFipeAnos] = useState<FipeOpcao[]>([]);
+  const [fipeMarcaSel, setFipeMarcaSel] = useState('');
+  const [fipeModeloSel, setFipeModeloSel] = useState('');
+  const [fipeAnoSel, setFipeAnoSel] = useState('');
+  const [buscandoFipe, setBuscandoFipe] = useState<'marcas' | 'modelos' | 'anos' | 'valor' | null>(null);
+
+  const carregarMarcasFipe = async () => {
+    if (fipeMarcas.length > 0) return;
+    setBuscandoFipe('marcas');
+    try {
+      const data = await fetch(`${FIPE_API}/marcas`).then(r => r.json());
+      setFipeMarcas(Array.isArray(data) ? data : []);
+    } catch { /* API pública fora do ar — usuário ainda pode digitar a FIPE manualmente */ }
+    setBuscandoFipe(null);
+  };
+
+  const resetarSelecaoFipe = () => { setFipeMarcaSel(''); setFipeModeloSel(''); setFipeAnoSel(''); setFipeModelos([]); setFipeAnos([]); };
+
+  const selecionarMarcaFipe = async (codigo: string) => {
+    setFipeMarcaSel(codigo); setFipeModeloSel(''); setFipeAnoSel(''); setFipeModelos([]); setFipeAnos([]);
+    if (!codigo) return;
+    setBuscandoFipe('modelos');
+    try {
+      const data = await fetch(`${FIPE_API}/marcas/${codigo}/modelos`).then(r => r.json());
+      setFipeModelos(data?.modelos || []);
+    } catch { /* segue disponível a digitação manual da FIPE */ }
+    setBuscandoFipe(null);
+  };
+
+  const selecionarModeloFipe = async (codigo: string) => {
+    setFipeModeloSel(codigo); setFipeAnoSel(''); setFipeAnos([]);
+    if (!codigo || !fipeMarcaSel) return;
+    setBuscandoFipe('anos');
+    try {
+      const data = await fetch(`${FIPE_API}/marcas/${fipeMarcaSel}/modelos/${codigo}/anos`).then(r => r.json());
+      setFipeAnos(Array.isArray(data) ? data : []);
+    } catch { /* segue disponível a digitação manual da FIPE */ }
+    setBuscandoFipe(null);
+  };
+
+  const selecionarAnoFipe = async (codigo: string) => {
+    setFipeAnoSel(codigo);
+    if (!codigo || !fipeMarcaSel || !fipeModeloSel) return;
+    setBuscandoFipe('valor');
+    try {
+      const data = await fetch(`${FIPE_API}/marcas/${fipeMarcaSel}/modelos/${fipeModeloSel}/anos/${codigo}`).then(r => r.json());
+      const valorNumero = Number(String(data?.Valor || '').replace(/[R$\s.]/g, '').replace(',', '.'));
+      setForm(f => ({
+        ...f,
+        veiculo_fipe_valor: valorNumero ? String(valorNumero) : f.veiculo_fipe_valor,
+        veiculo_referencia: f.veiculo_referencia || `${data?.Modelo || ''} ${data?.AnoModelo || ''}`.trim(),
+      }));
+    } catch { /* usuário ainda pode preencher a FIPE na mão */ }
+    setBuscandoFipe(null);
+  };
 
   const carregar = useCallback(() => {
     if (!perfil?.empresa_id) return;
@@ -105,9 +166,11 @@ export default function ArgusVendasVeiculosPage() {
     await supabase.from('leads').update(patch).eq('id', leadId);
   }, [leads]);
 
-  const abrirNovo = () => { setEditando(null); setForm(FORM_VAZIO); setErro(''); setModalAberto(true); };
+  const abrirNovo = () => { setEditando(null); setForm(FORM_VAZIO); setErro(''); resetarSelecaoFipe(); carregarMarcasFipe(); setModalAberto(true); };
   const abrirEdicao = (lead: LeadVeiculo) => {
     setEditando(lead);
+    resetarSelecaoFipe();
+    carregarMarcasFipe();
     setForm({
       empresa: lead.empresa, telefone: lead.telefone || '', cidade: lead.cidade || '',
       vendedor_nome: lead.vendedor_nome || '', veiculo_referencia: lead.veiculo_referencia || '',
@@ -307,10 +370,31 @@ export default function ArgusVendasVeiculosPage() {
                 <input type="number" value={form.valor_total} onChange={e => setForm({ ...form, valor_total: e.target.value })} placeholder="0,00" className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
               </div>
               <p className="text-[11px] font-bold text-[#8a8a8a] uppercase tracking-wide pt-2 border-t border-[#f0f0f0]">Dados de compra (opcional, alimenta a Gestão Financeira)</p>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1 flex items-center gap-1.5">
+                  Buscar valor na tabela FIPE {buscandoFipe && <Loader2 size={11} className="animate-spin" />}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <select value={fipeMarcaSel} onChange={e => selecionarMarcaFipe(e.target.value)} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-2.5 py-2.5 text-xs font-semibold text-[#171717] outline-none focus:border-[#171717]">
+                    <option value="">Marca...</option>
+                    {fipeMarcas.map(m => <option key={m.codigo} value={m.codigo}>{m.nome}</option>)}
+                  </select>
+                  <select value={fipeModeloSel} onChange={e => selecionarModeloFipe(e.target.value)} disabled={!fipeMarcaSel} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-2.5 py-2.5 text-xs font-semibold text-[#171717] outline-none focus:border-[#171717] disabled:opacity-50">
+                    <option value="">Modelo...</option>
+                    {fipeModelos.map(m => <option key={m.codigo} value={m.codigo}>{m.nome}</option>)}
+                  </select>
+                  <select value={fipeAnoSel} onChange={e => selecionarAnoFipe(e.target.value)} disabled={!fipeModeloSel} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-2.5 py-2.5 text-xs font-semibold text-[#171717] outline-none focus:border-[#171717] disabled:opacity-50">
+                    <option value="">Ano...</option>
+                    {fipeAnos.map(a => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">FIPE</label>
-                  <input type="number" value={form.veiculo_fipe_valor} onChange={e => setForm({ ...form, veiculo_fipe_valor: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
+                  <input type="number" value={form.veiculo_fipe_valor} onChange={e => setForm({ ...form, veiculo_fipe_valor: e.target.value })} placeholder="Automático ou manual" className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Valor de compra</label>

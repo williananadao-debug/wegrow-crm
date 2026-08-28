@@ -608,7 +608,10 @@ export default function CustomersPage() {
         }
       }
       if (editingId) setIsModalOpen(false);
-    } catch (error: any) { alert("Erro ao salvar. Verifique os dados e tente novamente."); }
+    } catch (error: any) {
+      console.error('[customers/salvar]', error);
+      alert(`Erro ao salvar: ${error?.message || 'motivo desconhecido'}. Verifique os dados e tente novamente.`);
+    }
   };
 
   const handleSaveUnit = async (e: React.FormEvent) => {

@@ -43,6 +43,11 @@ export default function PulseEstoquePage() {
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
 
+  // Separado por tipo — matéria-prima e produto acabado misturados na mesma lista
+  // confundia (ex: fábrica de trailer via chapa de aço junto com o trailer pronto).
+  const materiaPrima = produtosComEstoque.filter(s => s.tipo === 'Matéria-prima');
+  const produtosFinais = produtosComEstoque.filter(s => s.tipo !== 'Matéria-prima');
+
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const atual = s.estoque || 0;
     const novo = Math.max(0, atual + delta);
@@ -64,6 +69,31 @@ export default function PulseEstoquePage() {
     const { data } = await supabase.from('estoque_movimentacoes').select('*').eq('servico_id', s.id).order('created_at', { ascending: false });
     setMovimentacoes((data || []) as Movimentacao[]);
     setCarregandoHistorico(false);
+  };
+
+  const renderLinhaEstoque = (s: ServicoConfig) => {
+    const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
+    const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
+    return (
+      <div key={s.id} className="flex items-center gap-3 p-4">
+        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} className="text-slate-600" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold text-sm truncate">{s.nome}</p>
+          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+            <p className="text-slate-500 text-[10px]">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{s.unidade ? ` /${s.unidade}` : ''}</p>
+            {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{s.tipo}</span>}
+            <span className="text-[9px] text-slate-600">· R$ {valorEmEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em estoque</span>
+          </div>
+        </div>
+        <button onClick={() => abrirHistorico(s)} title="Histórico de entradas" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-purple-400 flex-shrink-0"><History size={13} /></button>
+        <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
+        <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
+        <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
+        {baixo && <span className="text-[9px] font-black text-red-400 uppercase ml-1">baixo</span>}
+      </div>
+    );
   };
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -108,44 +138,40 @@ export default function PulseEstoquePage() {
         </div>
       </div>
 
-      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-4">
         <div className="p-5 border-b border-white/5">
-          <h3 className="font-black uppercase text-sm text-slate-300">Produtos com controle de estoque ({produtosComEstoque.length})</h3>
-          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Pra cadastrar foto/preço ou ligar o controle num produto novo, vai em Configurações → Catálogo</p>
+          <h3 className="font-black uppercase text-sm text-slate-300">Produtos acabados ({produtosFinais.length})</h3>
+          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">O que é vendido/entregue ao cliente — sobe via Produção ou ajuste manual</p>
         </div>
         {loadingServicos ? (
           <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-        ) : produtosComEstoque.length === 0 ? (
+        ) : produtosFinais.length === 0 ? (
           <div className="p-10 text-center">
             <Boxes size={28} className="text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-500 text-sm font-bold">Nenhum produto com estoque controlado ainda.</p>
+            <p className="text-slate-500 text-sm font-bold">Nenhum produto acabado com estoque controlado ainda.</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {[...produtosComEstoque].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(s => {
-              const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
-              const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
-              return (
-                <div key={s.id} className="flex items-center gap-3 p-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} className="text-slate-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-bold text-sm truncate">{s.nome}</p>
-                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                      <p className="text-slate-500 text-[10px]">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{s.unidade ? ` /${s.unidade}` : ''}</p>
-                      {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{s.tipo}</span>}
-                      <span className="text-[9px] text-slate-600">· R$ {valorEmEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em estoque</span>
-                    </div>
-                  </div>
-                  <button onClick={() => abrirHistorico(s)} title="Histórico de entradas" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-purple-400 flex-shrink-0"><History size={13} /></button>
-                  <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
-                  <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
-                  <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
-                  {baixo && <span className="text-[9px] font-black text-red-400 uppercase ml-1">baixo</span>}
-                </div>
-              );
-            })}
+            {[...produtosFinais].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+        <div className="p-5 border-b border-white/5">
+          <h3 className="font-black uppercase text-sm text-slate-300">Matéria-prima ({materiaPrima.length})</h3>
+          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Insumos consumidos na Produção — pra cadastrar novo item, vai em Configurações → Catálogo</p>
+        </div>
+        {loadingServicos ? (
+          <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
+        ) : materiaPrima.length === 0 ? (
+          <div className="p-10 text-center">
+            <Boxes size={28} className="text-slate-600 mx-auto mb-2" />
+            <p className="text-slate-500 text-sm font-bold">Nenhuma matéria-prima cadastrada ainda.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {[...materiaPrima].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
           </div>
         )}
       </div>

@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Loader2, Save, Upload, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Save, Upload, Image as ImageIcon, Palette } from 'lucide-react';
 import { AbaProps, headersAuth } from './types';
+import { extrairCorDominante } from '@/lib/extrair-cor-logo';
 
 const PLANOS = ['essencial', 'pro', 'enterprise'];
 const STATUS_OPTS = ['trial', 'ativa', 'suspensa'];
@@ -12,6 +13,9 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
   const [status, setStatus] = useState(empresa.status);
   const [logoUrl, setLogoUrl] = useState<string | null>(empresa.logo_url || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [extraindoCor, setExtraindoCor] = useState(false);
+  const [corPrimaria, setCorPrimaria] = useState<string>(empresa.cor_primaria || '#22C55E');
+  const [corSugerida, setCorSugerida] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -19,6 +23,8 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
     setPlano(empresa.plano);
     setStatus(empresa.status);
     setLogoUrl(empresa.logo_url || null);
+    setCorPrimaria(empresa.cor_primaria || '#22C55E');
+    setCorSugerida(false);
   }, [empresa.id]);
 
   const salvar = async () => {
@@ -27,7 +33,7 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
     await fetch('/api/admin/empresas', {
       method: 'PATCH',
       headers: headersAuth(token),
-      body: JSON.stringify({ id: empresa.id, nome: nome.trim(), plano, status, modulos: empresa.modulos }),
+      body: JSON.stringify({ id: empresa.id, nome: nome.trim(), plano, status, modulos: empresa.modulos, cor_primaria: corPrimaria }),
     });
     setSaving(false);
     onAtualizado();
@@ -52,6 +58,13 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
       if (!res.ok) { alert(json.erro || `Erro ao subir logo (HTTP ${res.status}).`); return; }
       setLogoUrl(json.logoUrl);
       onAtualizado();
+
+      // Extrai a cor dominante da logo recém-enviada e sugere — não salva sozinho, só
+      // preenche o campo pra quem está no God Mode confirmar (ou ajustar) antes de "Salvar".
+      setExtraindoCor(true);
+      const cor = await extrairCorDominante(base64);
+      if (cor) { setCorPrimaria(cor); setCorSugerida(true); }
+      setExtraindoCor(false);
     } catch (err: any) {
       alert('Erro ao subir logo: ' + (err?.message || 'erro desconhecido.'));
     } finally {
@@ -79,6 +92,21 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
           </label>
         </div>
         <p className="text-[9px] text-slate-600 mt-1.5">Sem logo, o menu mostra um quadrado com a inicial do nome.</p>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block flex items-center gap-1.5">
+          <Palette size={11} /> Cor de marca (aplicada no menu do cliente)
+        </label>
+        <div className="flex items-center gap-3">
+          <input type="color" value={corPrimaria} onChange={e => { setCorPrimaria(e.target.value); setCorSugerida(false); }}
+            className="w-12 h-10 rounded-lg bg-white/5 border border-white/10 cursor-pointer" />
+          <input value={corPrimaria} onChange={e => { setCorPrimaria(e.target.value); setCorSugerida(false); }}
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-mono outline-none focus:border-[#22C55E]" />
+        </div>
+        <p className="text-[9px] text-slate-600 mt-1.5">
+          {extraindoCor ? 'Extraindo cor dominante da logo...' : corSugerida ? 'Sugerida automaticamente a partir da logo — ajuste se quiser antes de salvar.' : 'Some das cores em todo o menu lateral do cliente.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

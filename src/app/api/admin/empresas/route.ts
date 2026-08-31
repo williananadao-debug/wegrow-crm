@@ -214,7 +214,7 @@ export async function PATCH(request: Request) {
   // vezes não salvavam sem erro nenhum aparecer (bug opaco, impossível de debugar sem ver
   // o corpo da função). Só entra no patch a chave que realmente veio no corpo, pra nunca
   // zerar um campo que o chamador não mandou (ex: AbaGeral não manda cnpj).
-  const CAMPOS_PERMITIDOS = ['nome', 'cnpj', 'plano', 'status', 'modulos', 'canal_origem', 'cancelado_em'];
+  const CAMPOS_PERMITIDOS = ['nome', 'cnpj', 'plano', 'status', 'modulos', 'canal_origem', 'cancelado_em', 'cor_primaria'];
   const patch: Record<string, any> = {};
   for (const campo of CAMPOS_PERMITIDOS) {
     if (campo in campos) patch[campo] = campos[campo] ?? null;

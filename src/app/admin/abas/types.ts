@@ -29,6 +29,7 @@ export type Empresa = {
   created_at: string;
   total_usuarios?: number;
   logo_url?: string | null;
+  cor_primaria?: string | null;
   canal_origem?: string | null;
   cancelado_em?: string | null;
   billing: Billing | null;

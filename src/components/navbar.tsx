@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -62,6 +62,7 @@ export default function Navbar() {
   const mostrarMax = Boolean(modulos.max);
   const mostrarObras = Boolean(modulos.obras);
   const mostrarArgus = Boolean(modulos.argus);
+  const mostrarRedesSociais = Boolean(modulos.redes_sociais);
   // Temporário — restrito a diretor enquanto o módulo está em teste (18/08).
   const mostrarMidia = Boolean(modulos.midia) && isDirector;
   const mostrarAdvocacia = Boolean(modulos.advocacia);
@@ -119,6 +120,7 @@ export default function Navbar() {
   const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
   const midiaItem = { name: 'Demais FM Comercial', icon: <Megaphone size={20} />, href: '/midia' };
+  const redesSociaisItem = { name: 'Redes Sociais', icon: <TrendingUp size={20} />, href: '/marketing' };
   const advocaciaItem = { name: 'Advocacia', icon: <Scale size={20} />, href: '/advocacia' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
@@ -137,6 +139,7 @@ export default function Navbar() {
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
       ...(mostrarArgus ? [argusItem] : []),
+      ...(mostrarRedesSociais ? [redesSociaisItem] : []),
       ...(mostrarMidia ? [midiaItem] : []),
       ...(mostrarAdvocacia ? [advocaciaItem] : []),
   ];
@@ -266,6 +269,12 @@ export default function Navbar() {
           {mostrarArgus && (
             <Link href={argusItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {argusItem.icon} {argusItem.name}
+            </Link>
+          )}
+
+          {mostrarRedesSociais && (
+            <Link href={redesSociaisItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(redesSociaisItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {redesSociaisItem.icon} {redesSociaisItem.name}
             </Link>
           )}
 
@@ -418,6 +427,13 @@ export default function Navbar() {
                     <Link href={argusItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{argusItem.icon}</div>
                       <span className="text-sm font-semibold">{argusItem.name}</span>
+                    </Link>
+                  )}
+
+                  {mostrarRedesSociais && (
+                    <Link href={redesSociaisItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(redesSociaisItem.href) ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{redesSociaisItem.icon}</div>
+                      <span className="text-sm font-semibold">{redesSociaisItem.name}</span>
                     </Link>
                   )}
 

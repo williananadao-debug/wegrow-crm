@@ -6,7 +6,10 @@ import { AbaProps, headersAuth } from './types';
 // "crm" é o macro-toggle: liga/desliga o produto inteiro de pipeline/vendas de uma vez.
 // Ausente no JSON (empresas criadas antes disso existir) conta como ligado — só desliga
 // se alguém marcar explicitamente crm:false, senão o deploy apagaria o menu de quem já usa.
-const CRM_SUBMODULOS = ['opec', 'ia', 'financeiro', 'whatsapp', 'assinatura'];
+// "financeiro" saiu daqui: já é vendável sozinho (ex: cliente só quer controle de
+// contas a pagar/receber, sem funil de vendas) e ficava travado quando CRM estava
+// desligado — o bloco de submódulos vira opacity-40 + pointer-events-none junto com CRM.
+const CRM_SUBMODULOS = ['opec', 'ia', 'whatsapp', 'assinatura'];
 
 export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
   const [modulos, setModulos] = useState<Record<string, any>>(empresa.modulos || {});
@@ -77,6 +80,8 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
         </div>
       </div>
 
+      <Toggle label="Financeiro" chave="financeiro" corAtivo="bg-emerald-500/10 border-emerald-500/40 text-emerald-400" />
+      <Toggle label="Redes Sociais" chave="redes_sociais" corAtivo="bg-fuchsia-500/10 border-fuchsia-500/40 text-fuchsia-400" />
       <Toggle label="Nexus" chave="nexus" corAtivo="bg-indigo-500/10 border-indigo-500/40 text-indigo-400" />
       <Toggle label="Pulse" chave="pulse" corAtivo="bg-amber-500/10 border-amber-500/40 text-amber-400" />
       <Toggle label="THOR" chave="thor" corAtivo="bg-purple-500/10 border-purple-500/40 text-purple-400" />

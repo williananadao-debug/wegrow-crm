@@ -67,6 +67,7 @@ export default function PulseNovaVendaPage() {
   }, [clienteQuery, perfil?.empresa_id]);
 
   const servicosFiltrados = servicos.filter(s => {
+    if (s.tipo === 'Matéria-prima') return false; // não vende matéria-prima direto pro cliente
     if (s.unidade && s.unidade !== unidadeSel) return false;
     if (!busca.trim()) return true;
     return s.nome.toLowerCase().includes(busca.trim().toLowerCase());

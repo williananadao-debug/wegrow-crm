@@ -30,13 +30,18 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
   const salvar = async () => {
     if (!nome.trim()) { alert('O nome da empresa não pode ficar vazio.'); return; }
     setSaving(true);
-    await fetch('/api/admin/empresas', {
-      method: 'PATCH',
-      headers: headersAuth(token),
-      body: JSON.stringify({ id: empresa.id, nome: nome.trim(), plano, status, modulos: empresa.modulos, cor_primaria: corPrimaria }),
-    });
-    setSaving(false);
-    onAtualizado();
+    try {
+      const res = await fetch('/api/admin/empresas', {
+        method: 'PATCH',
+        headers: headersAuth(token),
+        body: JSON.stringify({ id: empresa.id, nome: nome.trim(), plano, status, modulos: empresa.modulos, cor_primaria: corPrimaria }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(json.erro || `Erro ao salvar (HTTP ${res.status}).`); return; }
+      onAtualizado();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const uploadLogo = async (file: File) => {

@@ -63,6 +63,11 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
         {salvando && <Loader2 size={14} className="animate-spin text-slate-500"/>}
       </div>
 
+      {/* Só marca o badge "Demo" na lista — não é módulo de produto, é rótulo interno.
+          Antes só dava pra ligar na criação da empresa (checkbox), sem jeito de desligar
+          depois quando um cliente demo vira cliente de verdade. */}
+      <Toggle label="Demo (conta de teste interna)" chave="demo" corAtivo="bg-purple-500/10 border-purple-500/40 text-purple-300" />
+
       <div>
         <Toggle label="CRM" chave="crm" corAtivo="bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]" />
         <div className={`grid grid-cols-2 gap-2 mt-2 ml-2 pl-3 border-l border-white/10 transition-opacity ${modulos.crm === false ? 'opacity-40 pointer-events-none' : ''}`}>

@@ -64,8 +64,9 @@ export default function ArgusFinanceiroVeiculosPage() {
         .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_renavam, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, email, created_at')
         .eq('empresa_id', perfil.empresa_id)
         .not('veiculo_placa', 'is', null)
-        .order('created_at', { ascending: false }),
-      supabase.from('leads_veiculo_custos').select('id, lead_id, descricao, valor, data').eq('empresa_id', perfil.empresa_id),
+        .order('created_at', { ascending: false })
+        .limit(1000),
+      supabase.from('leads_veiculo_custos').select('id, lead_id, descricao, valor, data').eq('empresa_id', perfil.empresa_id).limit(2000),
     ]);
     setLeads((leadsData as LeadVeiculo[]) || []);
     setCustos((custosData as CustoItem[]) || []);
@@ -99,12 +100,18 @@ export default function ArgusFinanceiroVeiculosPage() {
   const hoje = new Date();
   const mesRef = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 
-  const emEstoque = leads.filter(l => l.status !== 'ganho' && l.status !== 'perdido');
-  const totalInvestidoEstoque = emEstoque.reduce((s, l) => s + Number(l.veiculo_valor_compra || 0) + totalCustos(l.id), 0);
-
-  const vendidosMes = leads.filter(l => (l.veiculo_data_venda || '').slice(0, 7) === mesRef);
-  const faturamentoMes = vendidosMes.reduce((s, l) => s + Number(l.valor_total || 0), 0);
-  const lucroMes = vendidosMes.reduce((s, l) => s + (calc(l).lucroLiquido || 0), 0);
+  // useMemo aqui porque leads/custos podem chegar a centenas de linhas — sem isso, digitar
+  // em UM campo de edição de UM veículo (estado local do componente pai) recalculava esses
+  // filter/reduce sobre a lista inteira a cada tecla.
+  const { emEstoque, totalInvestidoEstoque, vendidosMes, faturamentoMes, lucroMes } = useMemo(() => {
+    const emEstoque = leads.filter(l => l.status !== 'ganho' && l.status !== 'perdido');
+    const totalInvestidoEstoque = emEstoque.reduce((s, l) => s + Number(l.veiculo_valor_compra || 0) + totalCustos(l.id), 0);
+    const vendidosMes = leads.filter(l => (l.veiculo_data_venda || '').slice(0, 7) === mesRef);
+    const faturamentoMes = vendidosMes.reduce((s, l) => s + Number(l.valor_total || 0), 0);
+    const lucroMes = vendidosMes.reduce((s, l) => s + (calc(l).lucroLiquido || 0), 0);
+    return { emEstoque, totalInvestidoEstoque, vendidosMes, faturamentoMes, lucroMes };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, custos, mesRef]);
 
   const historico6meses = useMemo(() => {
     const meses: { label: string; bruto: number; lucro: number }[] = [];
@@ -121,7 +128,7 @@ export default function ArgusFinanceiroVeiculosPage() {
   }, [leads, custos]);
   const maxHistorico = Math.max(1, ...historico6meses.map(m => Math.max(m.bruto, m.lucro)));
 
-  const filtrados = leads.filter(l => {
+  const filtrados = useMemo(() => leads.filter(l => {
     if (!busca.trim()) return true;
     const alvo = busca.toLowerCase();
     return (
@@ -130,7 +137,7 @@ export default function ArgusFinanceiroVeiculosPage() {
       l.veiculo_referencia?.toLowerCase().includes(alvo) ||
       l.vendedor_nome?.toLowerCase().includes(alvo)
     );
-  });
+  }), [leads, busca]);
 
   const statusLabel = (l: LeadVeiculo) => l.status === 'ganho' ? 'Vendido' : l.status === 'perdido' ? 'Perdido' : 'Em estoque';
   const statusCor = (l: LeadVeiculo) => l.status === 'ganho' ? 'text-[#1fa85a] bg-[#d9f2e3] border-[#1fa85a]/20' : l.status === 'perdido' ? 'text-red-600 bg-red-50 border-red-200' : 'text-[#1d6fd9] bg-[#e8f0fd] border-[#1d6fd9]/20';

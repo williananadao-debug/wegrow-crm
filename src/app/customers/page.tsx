@@ -140,9 +140,21 @@ export default function CustomersPage() {
   const [duplicados, setDuplicados] = useState<Cliente[][]>([]);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
-  const cnpjIndexRef = useRef<Map<string, { id: number; nome_empresa: string; status: string }>>(new Map());
   const [cnpjDuplicado, setCnpjDuplicado] = useState<{ id: number; nome_empresa: string; status: string } | null>(null);
   const [verificandoCnpjExistente, setVerificandoCnpjExistente] = useState(false);
+
+  // Checagem pontual e indexada (eq('cnpj', ...)) em vez de baixar a tabela `clientes`
+  // inteira pra montar um índice em memória — antes rodava um loop de range() de 1000 em
+  // 1000 a cada carregamento da página, mesmo sem ninguém abrir o formulário de cadastro.
+  const verificarCnpjDuplicado = async (valorFormatado: string, digitos: string, excluirId: number | null): Promise<{ id: number; nome_empresa: string; status: string } | null> => {
+    if (!perfil?.empresa_id) return null;
+    // Cobre tanto registros salvos com máscara (fluxo normal deste formulário) quanto
+    // registros só com dígitos (ex: importação via CSV, que não passa por handleCnpjChange).
+    const { data } = await supabase.from('clientes').select('id, nome_empresa, status')
+      .eq('empresa_id', perfil.empresa_id).or(`cnpj.eq.${valorFormatado},cnpj.eq.${digitos}`).limit(1).maybeSingle();
+    if (!data || data.id === excluirId) return null;
+    return data as any;
+  };
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDirector = perfil?.cargo === 'diretor';
@@ -169,31 +181,7 @@ export default function CustomersPage() {
         .limit(20);
       if (data) setContratosVencendo(data as any);
     }
-    async function fetchCnpjIndex() {
-      if (!perfil?.empresa_id) return;
-      setVerificandoCnpjExistente(true);
-      let all: { id: number; nome_empresa: string; cnpj: string | null; status: string }[] = [];
-      let from = 0;
-      const step = 1000;
-      while (true) {
-        const { data } = await supabase.from('clientes')
-          .select('id, nome_empresa, cnpj, status')
-          .eq('empresa_id', perfil.empresa_id)
-          .range(from, from + step - 1);
-        if (!data || data.length === 0) break;
-        all = all.concat(data as any);
-        if (data.length < step) break;
-        from += step;
-      }
-      const map = new Map<string, { id: number; nome_empresa: string; status: string }>();
-      all.forEach(c => {
-        const digits = (c.cnpj || '').replace(/\D/g, '');
-        if ((digits.length === 14 || digits.length === 11) && !map.has(digits)) map.set(digits, { id: c.id, nome_empresa: c.nome_empresa, status: c.status });
-      });
-      cnpjIndexRef.current = map;
-      setVerificandoCnpjExistente(false);
-    }
-    if (perfil) { fetchSellers(); fetchContratosVencendo(); fetchCnpjIndex(); }
+    if (perfil) { fetchSellers(); fetchContratosVencendo(); }
   }, [perfil]);
 
   useEffect(() => { if (user && perfil) resetAndFetch(); }, [user, perfil, statusFilter, riscoFilter]);
@@ -315,7 +303,7 @@ export default function CustomersPage() {
     }
   };
 
-  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCnpjChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (tipoPessoa === 'fisica') {
       let v = e.target.value.replace(/\D/g, '').substring(0, 11);
       let masked = v;
@@ -325,8 +313,10 @@ export default function CustomersPage() {
       setFormData({ ...formData, cnpj: masked });
 
       if (v.length === 11) {
-        const match = cnpjIndexRef.current.get(v);
-        setCnpjDuplicado(match && match.id !== editingId ? match : null);
+        setVerificandoCnpjExistente(true);
+        const match = await verificarCnpjDuplicado(masked, v, editingId);
+        setCnpjDuplicado(match);
+        setVerificandoCnpjExistente(false);
       } else {
         setCnpjDuplicado(null);
       }
@@ -342,8 +332,10 @@ export default function CustomersPage() {
     setFormData({ ...formData, cnpj: masked });
 
     if (v.length === 14) {
-      const match = cnpjIndexRef.current.get(v);
-      setCnpjDuplicado(match && match.id !== editingId ? match : null);
+      setVerificandoCnpjExistente(true);
+      const match = await verificarCnpjDuplicado(masked, v, editingId);
+      setCnpjDuplicado(match);
+      setVerificandoCnpjExistente(false);
     } else {
       setCnpjDuplicado(null);
     }
@@ -575,7 +567,7 @@ export default function CustomersPage() {
       if (!valido) return alert(`${docNome} inválido. Verifique os dígitos verificadores.`);
     }
     if (!editingId && cnpjDigits.length === docLen) {
-      const existente = cnpjIndexRef.current.get(cnpjDigits);
+      const existente = await verificarCnpjDuplicado(formData.cnpj || '', cnpjDigits, null);
       if (existente) return alert(`Esse ${docNome} já está cadastrado para "${existente.nome_empresa}". Abra o cadastro existente em vez de criar um novo.`);
     }
 
@@ -595,14 +587,12 @@ export default function CustomersPage() {
       if (editingId) {
         const { error } = await supabase.from('clientes').update(payload).eq('id', editingId);
         if (error) throw error;
-        if (cnpjDigits.length === docLen) cnpjIndexRef.current.set(cnpjDigits, { id: editingId, nome_empresa: formData.nome_empresa, status: formData.status });
         resetAndFetch();
       } else {
         const { data, error } = await supabase.from('clientes').insert([payload]).select();
         if (error) throw error;
         if (data) {
             setEditingId(data[0].id);
-            if (cnpjDigits.length === docLen) cnpjIndexRef.current.set(cnpjDigits, { id: data[0].id, nome_empresa: formData.nome_empresa, status: formData.status });
             resetAndFetch();
             alert(isCDL ? "Associado salvo com sucesso!" : "Cliente salvo com sucesso!");
         }
@@ -632,7 +622,6 @@ export default function CustomersPage() {
     if (!confirm(isCDL ? "Excluir associado e todo seu histórico?" : "Excluir cliente e todo seu histórico?")) return;
     const { error } = await supabase.from('clientes').delete().eq('id', id);
     if (!error) {
-      for (const [cnpj, c] of cnpjIndexRef.current) { if (c.id === id) { cnpjIndexRef.current.delete(cnpj); break; } }
       resetAndFetch();
       setIsModalOpen(false);
     }
@@ -960,7 +949,7 @@ export default function CustomersPage() {
                                         </button>
                                     )}
                                 </div>
-                                {verificandoCnpjExistente && <p className="text-[9px] text-slate-600 font-bold uppercase mt-1 ml-2">Carregando base para checagem de duplicados...</p>}
+                                {verificandoCnpjExistente && <p className="text-[9px] text-slate-600 font-bold uppercase mt-1 ml-2">Verificando duplicidade...</p>}
                             </div>
 
                             {/* CAIXA DE ALERTA DE RISCO */}

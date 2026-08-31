@@ -28,24 +28,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   const db = supabaseAdmin();
-  const agora = new Date();
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
   const ha7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const [
     { data: profiles },
     { data: empresasData },
-    { data: leadsData },
+    { data: leadsStats },
     { data: authData },
   ] = await Promise.all([
     db.from('profiles').select('id, nome, email, empresa_id'),
     db.from('empresas').select('id, nome, status'),
-    db.from('leads').select('empresa_id, created_at'),
+    db.rpc('admin_leads_stats'),
     db.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   const authMap = new Map((authData?.users || []).map(u => [u.id, u]));
   const empresaNomeMap = new Map((empresasData || []).map(e => [e.id, e.nome]));
+  const leadsStatsMap = new Map<string, { total: number; mes: number }>(
+    (leadsStats || []).map((s: any) => [s.empresa_id, { total: Number(s.leads_total), mes: Number(s.leads_mes) }])
+  );
 
   const comLogin = (profiles || [])
     .map(p => {
@@ -65,16 +66,16 @@ export async function GET(request: Request) {
   // Quebra por empresa
   const porEmpresa = (empresasData || []).map(e => {
     const usuariosDaEmpresa = comLogin.filter(p => p.empresa_id === e.id);
-    const leadsDaEmpresa = (leadsData || []).filter(l => l.empresa_id === e.id);
     const totalUsuariosEmpresa = (profiles || []).filter(p => p.empresa_id === e.id).length;
+    const stats = leadsStatsMap.get(e.id);
     return {
       id: e.id,
       nome: e.nome,
       status: e.status,
       total_usuarios: totalUsuariosEmpresa,
       usuarios_ativos_7d: usuariosDaEmpresa.filter(p => new Date(p.ultimo_acesso!) >= new Date(ha7dias)).length,
-      leads_mes: leadsDaEmpresa.filter(l => l.created_at >= inicioMes).length,
-      leads_total: leadsDaEmpresa.length,
+      leads_mes: stats?.mes || 0,
+      leads_total: stats?.total || 0,
       ultimo_acesso: usuariosDaEmpresa[0]?.ultimo_acesso ?? null,
     };
   }).sort((a, b) => {
@@ -84,8 +85,10 @@ export async function GET(request: Request) {
     return new Date(b.ultimo_acesso).getTime() - new Date(a.ultimo_acesso).getTime();
   });
 
+  const leadsMesTotal = Array.from(leadsStatsMap.values()).reduce((s, v) => s + v.mes, 0);
+
   return NextResponse.json({
-    leads_mes: (leadsData || []).filter(l => l.created_at >= inicioMes).length,
+    leads_mes: leadsMesTotal,
     usuarios_ativos_7d: usuariosAtivos7d,
     ultimos_logins: comLogin.slice(0, 8),
     por_empresa: porEmpresa,

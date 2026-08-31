@@ -1,15 +1,24 @@
 "use client";
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Factory, Plus, Trash2, History } from 'lucide-react';
+import { Loader2, Factory, Plus, Trash2, History, Hammer, CheckCircle2, PackageCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 
 type ItemProducao = { servicoId: number | ''; quantidade: string };
+type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
   id: number; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
+  status: StatusProducao;
 };
+
+const ETAPAS: { status: StatusProducao; label: string; icon: any; cor: string }[] = [
+  { status: 'em_producao', label: 'Em produção', icon: Hammer, cor: 'text-amber-400 bg-amber-500/10' },
+  { status: 'concluida', label: 'Concluída', icon: CheckCircle2, cor: 'text-blue-400 bg-blue-500/10' },
+  { status: 'entregue', label: 'Entregue', icon: PackageCheck, cor: 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' },
+];
+const PROXIMA_ETAPA: Record<StatusProducao, StatusProducao | null> = { em_producao: 'concluida', concluida: 'entregue', entregue: null };
 
 // Ficha técnica simples: 1 produto final consome N matérias-primas de uma vez. Não é um
 // MRP completo (sem múltiplos níveis de montagem, sem apontamento de mão de obra) — cobre
@@ -31,7 +40,7 @@ function PulseProducaoContent() {
     setLoading(true);
     const [{ data: servicosData }, { data: producoesData }] = await Promise.all([
       supabase.from('servicos').select('*').order('nome', { ascending: true }),
-      supabase.from('pulse_producoes').select('id, produto_final_nome, quantidade_produzida, custo_total, created_at').order('created_at', { ascending: false }).limit(30),
+      supabase.from('pulse_producoes').select('id, produto_final_nome, quantidade_produzida, custo_total, created_at, status').order('created_at', { ascending: false }).limit(30),
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
@@ -125,6 +134,13 @@ function PulseProducaoContent() {
     } finally {
       setSalvando(false);
     }
+  };
+
+  const avancarEtapa = async (p: Producao) => {
+    const proxima = PROXIMA_ETAPA[p.status];
+    if (!proxima) return;
+    setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, status: proxima } : x));
+    await supabase.from('pulse_producoes').update({ status: proxima }).eq('id', p.id);
   };
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -223,18 +239,32 @@ function PulseProducaoContent() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {producoes.map(p => (
-              <div key={p.id} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="text-white font-bold text-sm">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
-                  <p className="text-slate-500 text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+            {producoes.map(p => {
+              const etapa = ETAPAS.find(e => e.status === p.status) || ETAPAS[0];
+              const Icon = etapa.icon;
+              const proxima = PROXIMA_ETAPA[p.status];
+              const proximaInfo = proxima ? ETAPAS.find(e => e.status === proxima) : null;
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-3 p-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white font-bold text-sm truncate">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
+                    <p className="text-slate-500 text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                  </div>
+                  <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 rounded-full flex-shrink-0 ${etapa.cor}`}>
+                    <Icon size={11} /> {etapa.label}
+                  </span>
+                  {proximaInfo && (
+                    <button onClick={() => avancarEtapa(p)} className="flex-shrink-0 flex items-center gap-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 text-[9px] font-black text-slate-300 hover:text-white uppercase tracking-widest transition-all">
+                      Marcar {proximaInfo.label}
+                    </button>
+                  )}
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[var(--cor-primaria)] font-black text-sm">R$ {p.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-slate-500 text-[10px]">R$ {(p.custo_total / p.quantidade_produzida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[var(--cor-primaria)] font-black text-sm">R$ {p.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <p className="text-slate-500 text-[10px]">R$ {(p.custo_total / p.quantidade_produzida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

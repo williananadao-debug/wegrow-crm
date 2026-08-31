@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -29,6 +29,12 @@ export default function PulseEstoquePage() {
   const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+
+  const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
+  const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
+  const [ajusteQtd, setAjusteQtd] = useState('');
+  const [ajusteMotivo, setAjusteMotivo] = useState('');
+  const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const fetchServicos = async () => {
     setLoadingServicos(true);
@@ -63,6 +69,31 @@ export default function PulseEstoquePage() {
     }
   };
 
+  const abrirAjuste = (s: ServicoConfig) => {
+    setAjusteServico(s); setAjusteTipo('entrada'); setAjusteQtd(''); setAjusteMotivo('');
+  };
+
+  const confirmarAjuste = async () => {
+    if (!ajusteServico) return;
+    const qtd = Number(ajusteQtd);
+    if (!qtd || qtd < 0) return;
+    setSalvandoAjuste(true);
+    const atual = ajusteServico.estoque || 0;
+    const novo = ajusteTipo === 'entrada' ? atual + qtd : ajusteTipo === 'saida' ? Math.max(0, atual - qtd) : Math.max(0, qtd);
+    const deltaReal = novo - atual;
+    setServicos(prev => prev.map(x => x.id === ajusteServico.id ? { ...x, estoque: novo } : x));
+    await supabase.from('servicos').update({ estoque: novo }).eq('id', ajusteServico.id);
+    if (deltaReal !== 0) {
+      await supabase.from('estoque_movimentacoes').insert([{
+        empresa_id: perfil?.empresa_id, servico_id: ajusteServico.id, quantidade: deltaReal,
+        tipo: 'ajuste', user_id: user?.id, observacao: ajusteMotivo.trim() || null,
+      }]);
+      alertarEstoqueBaixoSeCruzou(ajusteServico.id, atual, novo, ajusteServico.estoque_minimo ?? 5);
+    }
+    setSalvandoAjuste(false);
+    setAjusteServico(null);
+  };
+
   const abrirHistorico = async (s: ServicoConfig) => {
     setHistoricoServico(s);
     setCarregandoHistorico(true);
@@ -88,6 +119,7 @@ export default function PulseEstoquePage() {
           </div>
         </div>
         <button onClick={() => abrirHistorico(s)} title="Histórico de entradas" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-purple-400 flex-shrink-0"><History size={13} /></button>
+        <button onClick={() => abrirAjuste(s)} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={13} /></button>
         <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
         <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
         <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
@@ -213,6 +245,41 @@ export default function PulseEstoquePage() {
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {ajusteServico && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAjusteServico(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Pencil size={16} className="text-amber-400" /> Ajuste manual</h3>
+              <button onClick={() => setAjusteServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <p className="text-slate-400 text-xs font-bold mb-4">{ajusteServico.nome} — atual: {ajusteServico.estoque}</p>
+
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {(['entrada', 'saida', 'definir'] as const).map(t => (
+                <button key={t} onClick={() => setAjusteTipo(t)} className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${ajusteTipo === t ? 'bg-amber-500 text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+                  {t === 'entrada' ? 'Entrada (+)' : t === 'saida' ? 'Saída (−)' : 'Definir valor'}
+                </button>
+              ))}
+            </div>
+
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+              {ajusteTipo === 'definir' ? 'Novo valor exato' : 'Quantidade'}
+            </label>
+            <input type="number" value={ajusteQtd} onChange={e => setAjusteQtd(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-3" placeholder="0" autoFocus />
+
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo (opcional)</label>
+            <input value={ajusteMotivo} onChange={e => setAjusteMotivo(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-5" placeholder="Ex: contagem física, perda, devolução..." />
+
+            <button onClick={confirmarAjuste} disabled={salvandoAjuste || !ajusteQtd}
+              className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              {salvandoAjuste ? <Loader2 size={14} className="animate-spin" /> : <Pencil size={14} />} Confirmar ajuste
+            </button>
           </div>
         </div>
       )}

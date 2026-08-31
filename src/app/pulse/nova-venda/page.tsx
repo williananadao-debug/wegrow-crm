@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -31,6 +31,27 @@ export default function PulseNovaVendaPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [vendaConcluida, setVendaConcluida] = useState<any>(null);
+
+  const [mostrarHistorico, setMostrarHistorico] = useState(false);
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+
+  const carregarHistorico = async () => {
+    if (!perfil?.empresa_id) return;
+    setCarregandoHistorico(true);
+    const { data } = await supabase.from('leads')
+      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento')
+      .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
+      .order('created_at', { ascending: false }).limit(30);
+    setHistorico(data || []);
+    setCarregandoHistorico(false);
+  };
+
+  const toggleHistorico = () => {
+    const abrindo = !mostrarHistorico;
+    setMostrarHistorico(abrindo);
+    if (abrindo && historico.length === 0) carregarHistorico();
+  };
 
   useEffect(() => {
     if (!unidadeSel) setUnidadeSel(perfil?.unidade || unidades[0]?.nome || '');
@@ -186,6 +207,7 @@ export default function PulseNovaVendaPage() {
       }
 
       setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload, status: modo === 'pedido' ? 'ganho' : 'orcamento' });
+      if (mostrarHistorico) carregarHistorico();
     } catch (err: any) {
       setErro(err?.message || 'Erro ao salvar.');
     } finally {
@@ -245,12 +267,51 @@ export default function PulseNovaVendaPage() {
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
-      <header className="mb-6">
-        <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
-          <ShoppingBag size={32} /> Nova Venda
-        </h1>
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Monte o pedido e feche na hora — ou salve como orçamento</p>
+      <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
+            <ShoppingBag size={32} /> Nova Venda
+          </h1>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Monte o pedido e feche na hora — ou salve como orçamento</p>
+        </div>
+        <button onClick={toggleHistorico} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
+          <History size={14} /> Histórico de vendas {mostrarHistorico ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
       </header>
+
+      {mostrarHistorico && (
+        <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-5">
+          <div className="p-5 border-b border-white/5">
+            <h3 className="font-black uppercase text-sm text-slate-300">Vendas e orçamentos recentes</h3>
+          </div>
+          {carregandoHistorico ? (
+            <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
+          ) : historico.length === 0 ? (
+            <div className="p-8 text-center"><p className="text-slate-500 text-sm font-bold">Nenhuma venda registrada ainda por aqui.</p></div>
+          ) : (
+            <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
+              {historico.map(h => {
+                const ehOrc = h.status === 'orcamento';
+                const itens = Array.isArray(h.itens) ? h.itens : [];
+                return (
+                  <div key={h.id} className="flex items-center gap-3 p-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-bold text-sm truncate">{formatId(h.id)} · {h.empresa}</p>
+                      <p className="text-slate-500 text-[10px] truncate">
+                        {itens.map((it: any) => `${it.quantidade}x ${it.servico}`).join(', ')} · {new Date(h.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full flex-shrink-0 ${ehOrc ? 'text-purple-400 bg-purple-500/10' : 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]'}`}>
+                      {ehOrc ? 'Orçamento' : 'Venda'}
+                    </span>
+                    <span className="text-white font-black text-sm flex-shrink-0 w-24 text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">

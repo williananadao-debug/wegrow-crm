@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -214,6 +215,20 @@ export default function PulseNovaVendaPage() {
           <p className="text-slate-400 text-sm mt-1">{formatId(vendaConcluida.id)} · {vendaConcluida.empresa}</p>
           <p className={`text-3xl font-black mt-4 ${ehOrcamento ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`}>R$ {vendaConcluida.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           {ehOrcamento && <p className="text-slate-500 text-[10px] mt-2">Sem efeito no estoque/financeiro ainda — converte em pedido no Painel quando o cliente aprovar.</p>}
+
+          {!ehOrcamento && carrinho.length > 0 && (
+            <div className="mt-5 pt-5 border-t border-white/5 space-y-2">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left">Precisa fabricar algum item deste pedido?</p>
+              {carrinho.map(i => (
+                <Link key={i.servicoId} href={`/pulse/producao?produtoFinalId=${i.servicoId}&quantidade=${i.quantidade}`}
+                  className="w-full flex items-center justify-between gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2.5 text-left transition-all">
+                  <span className="text-white text-xs font-bold truncate">{i.nome} <span className="text-slate-500 font-semibold">× {i.quantidade}</span></span>
+                  <span className="flex items-center gap-1 text-[10px] font-black text-[var(--cor-primaria)] uppercase flex-shrink-0"><Factory size={12} /> Produção</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-2 mt-6">
             <button onClick={() => imprimirReciboOuOrcamento(vendaConcluida, unidades.find(u => u.nome === unidadeSel))} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Printer size={14} /> {ehOrcamento ? 'Orçamento' : 'Recibo'}

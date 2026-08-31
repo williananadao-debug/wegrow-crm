@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical } from 'lucide-react';
+import Link from 'next/link';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -624,6 +625,11 @@ export default function SettingsPage() {
                                 <span className="text-[9px] font-black text-red-400 uppercase">estoque baixo</span>
                             )}
                             <span className="text-[9px] text-slate-600">deixe em branco pra não controlar estoque desse item</span>
+                            {!servico.id.startsWith('temp-') && servico.estoque !== null && servico.estoque !== undefined && (
+                                <Link href="/pulse/estoque" className="ml-auto flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1 text-[9px] font-black text-slate-300 hover:text-white uppercase tracking-widest transition-all">
+                                    <Boxes size={11} /> Ver estoque
+                                </Link>
+                            )}
                         </div>
                     )}
                 </div>

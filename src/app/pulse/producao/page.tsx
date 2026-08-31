@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Factory, Plus, Trash2, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
@@ -13,8 +14,9 @@ type Producao = {
 // Ficha técnica simples: 1 produto final consome N matérias-primas de uma vez. Não é um
 // MRP completo (sem múltiplos níveis de montagem, sem apontamento de mão de obra) — cobre
 // o caso real de fábrica que falta hoje no Pulse (que só modela revenda 1:1).
-export default function PulseProducaoPage() {
+function PulseProducaoContent() {
   const { authLoading, temPulse, user, perfil } = usePulseAccess();
+  const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [producoes, setProducoes] = useState<Producao[]>([]);
@@ -38,6 +40,16 @@ export default function PulseProducaoPage() {
 
   useEffect(() => { carregar(); }, []);
 
+  // Vem da Nova Venda ("Registrar produção" no pedido fechado) — pré-preenche o produto
+  // final e a quantidade vendida, pra quem vai construir não ter que selecionar de novo.
+  useEffect(() => {
+    const produtoParam = searchParams.get('produtoFinalId');
+    const qtdParam = searchParams.get('quantidade');
+    if (produtoParam) setProdutoFinalId(Number(produtoParam));
+    if (qtdParam) setQuantidadeProduzida(qtdParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const servicoPorId = useMemo(() => new Map(servicos.map(s => [s.id, s])), [servicos]);
 
   const custoTotal = useMemo(() => itens.reduce((s, i) => {
@@ -55,10 +67,9 @@ export default function PulseProducaoPage() {
     setErro('');
     const qtdProduzida = Number(quantidadeProduzida);
     const itensValidos = itens.filter(i => i.servicoId && Number(i.quantidade) > 0);
-    if (!produtoFinalId || !qtdProduzida || itensValidos.length === 0) {
-      setErro('Preencha o produto final, a quantidade produzida e ao menos uma matéria-prima.');
-      return;
-    }
+    if (!produtoFinalId) { setErro('Selecione o produto final.'); return; }
+    if (!qtdProduzida) { setErro('Informe a quantidade produzida (maior que zero).'); return; }
+    if (itensValidos.length === 0) { setErro('Adicione ao menos uma matéria-prima com quantidade maior que zero — selecione o item E preencha a quantidade em cada linha.'); return; }
     setSalvando(true);
     try {
       const custo = itensValidos.reduce((s, i) => s + Number(i.quantidade) * (servicoPorId.get(i.servicoId as number)?.preco_custo || 0), 0);
@@ -217,5 +228,13 @@ export default function PulseProducaoPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PulseProducaoPage() {
+  return (
+    <Suspense fallback={<div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>}>
+      <PulseProducaoContent />
+    </Suspense>
   );
 }

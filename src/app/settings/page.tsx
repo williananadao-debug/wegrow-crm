@@ -524,7 +524,7 @@ export default function SettingsPage() {
                         </select>
                     </div>
 
-                    <div className="col-span-6 md:col-span-2 flex items-center gap-2 bg-[#0F172A] rounded-lg px-3 py-2 border border-white/5 focus-within:border-[#22C55E] transition-colors">
+                    <div className="col-span-6 md:col-span-2 flex items-center gap-2 bg-[#0F172A] rounded-lg px-3 py-2 border border-white/5 focus-within:border-[var(--cor-primaria)] transition-colors">
                         <span className="text-[10px] font-black text-slate-500">R$</span>
                         <input
                             type="number"
@@ -601,7 +601,7 @@ export default function SettingsPage() {
                                 type="number"
                                 value={servico.estoque ?? ''}
                                 onChange={(e) => atualizarServico(servico.id, 'estoque', e.target.value === '' ? null : Number(e.target.value))}
-                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[#22C55E] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) ? 'border-red-500/40' : 'border-white/5'}`}
+                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[var(--cor-primaria)] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) ? 'border-red-500/40' : 'border-white/5'}`}
                                 placeholder="não controla"
                             />
                             <button
@@ -634,7 +634,7 @@ export default function SettingsPage() {
       
       <header className="mb-8">
         <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
-            <Package size={32} className="text-[#22C55E]"/> Configurações
+            <Package size={32} className="text-[var(--cor-primaria)]"/> Configurações
         </h1>
         <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gerencie seus produtos e tabela de preços por filial</p>
       </header>
@@ -697,7 +697,7 @@ export default function SettingsPage() {
         <div className="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="h-6">
             {feedback && (
-                <div className={`flex items-center gap-2 text-xs font-bold uppercase animate-in slide-in-from-left-2 ${feedback.type === 'success' ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                <div className={`flex items-center gap-2 text-xs font-bold uppercase animate-in slide-in-from-left-2 ${feedback.type === 'success' ? 'text-[var(--cor-primaria)]' : 'text-red-500'}`}>
                     {feedback.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
                     {feedback.msg}
                 </div>
@@ -707,7 +707,7 @@ export default function SettingsPage() {
           <button 
             onClick={salvarConfiguracoes}
             disabled={saving}
-            className="w-full md:w-auto bg-[#22C55E] hover:bg-[#1ea850] text-[#0F172A] px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full md:w-auto bg-[var(--cor-primaria)] hover:bg-[#1ea850] text-[#0F172A] px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgb(var(--cor-primaria-rgb)/30%)] hover:shadow-[0_0_30px_rgb(var(--cor-primaria-rgb)/50%)] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16} />} 
             {saving ? 'Salvando...' : 'Salvar Alterações'}
@@ -784,7 +784,7 @@ export default function SettingsPage() {
           <div className="mt-6 pt-5 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="h-6">
               {feedbackOpec && (
-                <div className={`flex items-center gap-2 text-xs font-bold uppercase animate-in slide-in-from-left-2 ${feedbackOpec.type === 'success' ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                <div className={`flex items-center gap-2 text-xs font-bold uppercase animate-in slide-in-from-left-2 ${feedbackOpec.type === 'success' ? 'text-[var(--cor-primaria)]' : 'text-red-500'}`}>
                   {feedbackOpec.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
                   {feedbackOpec.msg}
                 </div>
@@ -818,7 +818,7 @@ export default function SettingsPage() {
               value={nfseConfig.municipalServiceCode}
               onChange={e => setNfseConfig(c => ({ ...c, municipalServiceCode: e.target.value }))}
               placeholder="Ex: 107 (varia por município)"
-              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
             />
           </div>
           <div>
@@ -827,13 +827,13 @@ export default function SettingsPage() {
               value={nfseConfig.municipalServiceName}
               onChange={e => setNfseConfig(c => ({ ...c, municipalServiceName: e.target.value }))}
               placeholder="Ex: Veiculação de publicidade"
-              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
             />
           </div>
         </div>
 
         <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mb-5">
-          <input type="checkbox" checked={nfseConfig.retainIss} onChange={e => setNfseConfig(c => ({ ...c, retainIss: e.target.checked }))} className="accent-[#22C55E]" />
+          <input type="checkbox" checked={nfseConfig.retainIss} onChange={e => setNfseConfig(c => ({ ...c, retainIss: e.target.checked }))} className="accent-[var(--cor-primaria)]" />
           Reter ISS na fonte
         </label>
 
@@ -849,7 +849,7 @@ export default function SettingsPage() {
                 step="0.01"
                 value={nfseConfig[campo]}
                 onChange={e => setNfseConfig(c => ({ ...c, [campo]: Number(e.target.value) }))}
-                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
               />
             </div>
           ))}
@@ -857,7 +857,7 @@ export default function SettingsPage() {
 
         <div className="flex flex-col md:flex-row items-center gap-4">
           {feedbackNfse && (
-            <div className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl ${feedbackNfse.type === 'success' ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-400'}`}>
+            <div className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl ${feedbackNfse.type === 'success' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'bg-red-500/10 text-red-400'}`}>
               {feedbackNfse.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
               {feedbackNfse.msg}
             </div>
@@ -891,7 +891,7 @@ export default function SettingsPage() {
                     <p className="text-white text-sm font-black mt-0.5">
                       R$ {h.preco_anterior.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       <span className="text-slate-500 mx-2">→</span>
-                      <span className="text-[#22C55E]">R$ {h.preco_novo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-[var(--cor-primaria)]">R$ {h.preco_novo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </p>
                   </div>
                   <span className={`text-[9px] font-black uppercase px-2 py-1 rounded ${h.preco_novo > h.preco_anterior ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>

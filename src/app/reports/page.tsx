@@ -517,14 +517,14 @@ export default function ReportsPage() {
 
         {/* CARD FATURAMENTO — com breakdown bruto / desconto / líquido */}
         <div className="bg-[#0B1120] border border-white/5 p-6 rounded-[32px] shadow-2xl relative overflow-hidden group hover:border-white/10 transition-all">
-          <TrendingUp className="absolute -right-4 -top-4 w-20 h-20 opacity-5 text-[#22C55E]" />
+          <TrendingUp className="absolute -right-4 -top-4 w-20 h-20 opacity-5 text-[var(--cor-primaria)]" />
           <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Faturamento Selecionado</p>
           <div className="flex items-end gap-2 mb-3">
-            <h3 className="text-2xl font-black italic tracking-tighter text-[#22C55E]">
+            <h3 className="text-2xl font-black italic tracking-tighter text-[var(--cor-primaria)]">
               R$ {(currentMonth.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             {(() => { const growth = getGrowth(currentMonth.faturamento, lastMonth.faturamento); return (
-              <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
+              <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
                 {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(growth))}%
               </div>
             ); })()}
@@ -540,8 +540,8 @@ export default function ReportsPage() {
                 <span className="text-[10px] font-black text-red-400">- R$ {(currentMonth.fatDesconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center border-t border-white/5 pt-1">
-                <span className="text-[9px] font-bold uppercase text-[#22C55E]">Líquido</span>
-                <span className="text-[10px] font-black text-[#22C55E]">R$ {(currentMonth.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-[9px] font-bold uppercase text-[var(--cor-primaria)]">Líquido</span>
+                <span className="text-[10px] font-black text-[var(--cor-primaria)]">R$ {(currentMonth.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           )}
@@ -565,7 +565,7 @@ export default function ReportsPage() {
                 <h3 className={`text-2xl font-black italic tracking-tighter ${item.color}`}>
                   {item.prefix}{(item.current || 0).toLocaleString('pt-BR', {minimumFractionDigits: item.prefix === 'R$ ' ? 2 : 0, maximumFractionDigits: item.prefix === 'R$ ' ? 2 : 0})}{item.suffix}
                 </h3>
-                <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
+                <div className={`flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg mb-1 ${growth >= 0 ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'bg-red-500/10 text-red-500'}`} title="Comparado ao período idêntico anterior">
                   {growth >= 0 ? <ArrowUpRight size={10}/> : <ArrowDownRight size={10}/>}{Math.abs(Math.round(growth))}%
                 </div>
               </div>
@@ -598,7 +598,7 @@ export default function ReportsPage() {
                       <div className="absolute flex flex-col items-center gap-0.5" style={{ bottom: `calc(${altura}% + 6px)` }}>
                         <span className="text-[9px] font-black text-white whitespace-nowrap">R$ {(m.valor / 1000).toFixed(0)}k</span>
                         {variacao !== null && (
-                          <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                          <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-500'}`}>
                             {variacao >= 0 ? '+' : ''}{Math.round(variacao)}%
                           </span>
                         )}
@@ -733,7 +733,7 @@ export default function ReportsPage() {
                             </span>
                           );
                         })()}
-                        <span className="text-[#22C55E] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
+                        <span className="text-[var(--cor-primaria)] font-black text-[10px] whitespace-nowrap">R$ {vendTotal.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })}</span>
                       </div>
                     </div>
                     <ProgressBar value={vendTotal} max={maxVendTotal} color="bg-purple-600" />
@@ -753,7 +753,7 @@ export default function ReportsPage() {
         <div className="lg:col-span-2 bg-[#0B1120] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl flex flex-col">
           <div className="p-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
             <h3 className="text-white font-black uppercase italic flex items-center gap-2">
-              <BarChart3 size={20} className="text-[#22C55E]" /> ROI de Estratégias (Premissas)
+              <BarChart3 size={20} className="text-[var(--cor-primaria)]" /> ROI de Estratégias (Premissas)
             </h3>
           </div>
           <div className="overflow-x-auto flex-1">
@@ -773,7 +773,7 @@ export default function ReportsPage() {
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
                           {est.titulo?.includes('Resgate') || est.titulo?.includes('Outras') ? <Sparkles size={14} className="text-purple-500"/> : <Crosshair size={14} className="text-blue-500"/>}
-                          <span className="text-white font-bold text-sm uppercase italic group-hover:text-[#22C55E] transition-colors">{est.titulo}</span>
+                          <span className="text-white font-bold text-sm uppercase italic group-hover:text-[var(--cor-primaria)] transition-colors">{est.titulo}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
@@ -782,13 +782,13 @@ export default function ReportsPage() {
                     <td className="px-8 py-5 text-center text-white font-black">{est.gerados || 0}</td>
                     <td className="px-8 py-5 text-center">
                       <div className="flex flex-col items-center">
-                          <span className={`text-[10px] font-black uppercase cursor-help ${(est.conversao || 0) >= 10 ? 'text-[#22C55E]' : 'text-slate-500'}`} title="Leads ganhos ÷ leads gerados por esta campanha/estratégia × 100.">{Math.round(est.conversao || 0)}%</span>
+                          <span className={`text-[10px] font-black uppercase cursor-help ${(est.conversao || 0) >= 10 ? 'text-[var(--cor-primaria)]' : 'text-slate-500'}`} title="Leads ganhos ÷ leads gerados por esta campanha/estratégia × 100.">{Math.round(est.conversao || 0)}%</span>
                           <div className="w-12 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
-                              <div className="h-full bg-[#22C55E]" style={{ width: `${est.conversao || 0}%` }} />
+                              <div className="h-full bg-[var(--cor-primaria)]" style={{ width: `${est.conversao || 0}%` }} />
                           </div>
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-right text-[#22C55E] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td className="px-8 py-5 text-right text-[var(--cor-primaria)] font-black italic">R$ {(est.faturamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                   </tr>
                 )) : (
                   <tr>
@@ -975,7 +975,7 @@ export default function ReportsPage() {
                           {item.diasVencido}d
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right text-xs font-black text-[#22C55E]">R$ {item.valor.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td>
+                      <td className="px-4 py-3 text-right text-xs font-black text-[var(--cor-primaria)]">R$ {item.valor.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td>
                     </tr>
                   ))}
                 </tbody>

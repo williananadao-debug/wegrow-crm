@@ -737,9 +737,9 @@ export default function VisitasPage() {
           <div className="text-2xl font-black text-white">{totalVisitas}</div>
           <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</div>
         </div>
-        <div className="bg-[#0B1120] border border-[#22C55E]/20 rounded-xl p-3 text-center">
-          <div className="text-2xl font-black text-[#22C55E]">{comLead}</div>
-          <div className="text-[9px] font-black uppercase tracking-widest text-[#22C55E]/70">Com Lead</div>
+        <div className="bg-[#0B1120] border border-[rgb(var(--cor-primaria-rgb)/20%)] rounded-xl p-3 text-center">
+          <div className="text-2xl font-black text-[var(--cor-primaria)]">{comLead}</div>
+          <div className="text-[9px] font-black uppercase tracking-widest text-[rgb(var(--cor-primaria-rgb)/70%)]">Com Lead</div>
         </div>
         <div className="bg-[#0B1120] border border-orange-500/20 rounded-xl p-3 text-center">
           <div className="text-2xl font-black text-orange-400">{semLead}</div>
@@ -830,21 +830,21 @@ export default function VisitasPage() {
               key={visita.id}
               onClick={() => setVisitaDetalhe(visita)}
               className={`bg-[#0B1120] border rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3 transition-all hover:border-white/20 cursor-pointer ${
-                visita.lead_id ? 'border-[#22C55E]/20' : 'border-white/10'
+                visita.lead_id ? 'border-[rgb(var(--cor-primaria-rgb)/20%)]' : 'border-white/10'
               }`}
             >
               {/* ÍCONE + DADOS */}
               <div className="flex items-start gap-3 flex-1 min-w-0">
                 <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center ${
-                  visita.lead_id ? 'bg-[#22C55E]/10 border border-[#22C55E]/30' : 'bg-blue-500/10 border border-blue-500/30'
+                  visita.lead_id ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)]' : 'bg-blue-500/10 border border-blue-500/30'
                 }`}>
-                  <MapPin size={18} className={visita.lead_id ? 'text-[#22C55E]' : 'text-blue-400'} />
+                  <MapPin size={18} className={visita.lead_id ? 'text-[var(--cor-primaria)]' : 'text-blue-400'} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-white font-black text-sm truncate">{visita.empresa}</span>
                     {visita.lead_id ? (
-                      <span className="bg-[#22C55E]/15 border border-[#22C55E]/40 text-[#22C55E] text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="bg-[rgb(var(--cor-primaria-rgb)/15%)] border border-[rgb(var(--cor-primaria-rgb)/40%)] text-[var(--cor-primaria)] text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
                         <CheckCircle2 size={9} /> Lead no Pipeline
                       </span>
                     ) : (
@@ -903,7 +903,7 @@ export default function VisitasPage() {
                 {visita.lead_id ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); router.push('/deals'); }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#22C55E]/20 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] transition-colors"
                   >
                     <Zap size={12} /> Ver Pipeline
                   </button>
@@ -1132,7 +1132,7 @@ export default function VisitasPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-black text-white">{visitaDetalhe.empresa}</h2>
                 {visitaDetalhe.lead_id ? (
-                  <span className="bg-[#22C55E]/15 border border-[#22C55E]/40 text-[#22C55E] text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="bg-[rgb(var(--cor-primaria-rgb)/15%)] border border-[rgb(var(--cor-primaria-rgb)/40%)] text-[var(--cor-primaria)] text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1">
                     <CheckCircle2 size={9} /> Lead no Pipeline
                   </span>
                 ) : (
@@ -1215,7 +1215,7 @@ export default function VisitasPage() {
               {visitaDetalhe.lead_id ? (
                 <button
                   onClick={() => { setVisitaDetalhe(null); router.push('/deals'); }}
-                  className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/20 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] transition-all flex items-center justify-center gap-2"
                 >
                   <Zap size={14} /> Ver Pipeline
                 </button>
@@ -1273,20 +1273,20 @@ export default function VisitasPage() {
                   )}
 
                   <div>
-                    <h3 className="flex items-center gap-2 text-xs font-black text-[#22C55E] uppercase tracking-widest mb-3">
+                    <h3 className="flex items-center gap-2 text-xs font-black text-[var(--cor-primaria)] uppercase tracking-widest mb-3">
                       <TrendingUp size={14}/> Sinais de Compra {relatorioIA.sinais_compra?.length ? `(${relatorioIA.sinais_compra.length})` : ''}
                     </h3>
                     {relatorioIA.sinais_compra && relatorioIA.sinais_compra.length > 0 ? (
                       <div className="space-y-2">
                         {relatorioIA.sinais_compra.map((s, i) => (
-                          <div key={i} className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-3">
+                          <div key={i} className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] rounded-xl p-3">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-white text-xs font-black uppercase">{s.cliente}</p>
                               {s.cidade && <span className="text-[8px] text-slate-500 font-bold uppercase flex items-center gap-0.5 flex-shrink-0"><Map size={8}/> {s.cidade}</span>}
                             </div>
-                            <p className="text-[#22C55E] text-xs font-bold mt-0.5">{s.sinal}</p>
+                            <p className="text-[var(--cor-primaria)] text-xs font-bold mt-0.5">{s.sinal}</p>
                             <p className="text-slate-500 text-[10px] italic mt-1">&quot;{s.comentario_origem}&quot;</p>
-                            {s.recomendacao && <p className="text-white/80 text-[10px] font-bold mt-2 flex items-start gap-1"><Zap size={10} className="text-[#22C55E] mt-0.5 flex-shrink-0"/> {s.recomendacao}</p>}
+                            {s.recomendacao && <p className="text-white/80 text-[10px] font-bold mt-2 flex items-start gap-1"><Zap size={10} className="text-[var(--cor-primaria)] mt-0.5 flex-shrink-0"/> {s.recomendacao}</p>}
                           </div>
                         ))}
                       </div>
@@ -1344,7 +1344,7 @@ export default function VisitasPage() {
                           <div key={i} className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-center justify-between">
                             <p className="text-white text-xs font-black uppercase">{c.cidade}</p>
                             <div className="flex items-center gap-3">
-                              {c.oportunidades > 0 && <span className="text-[10px] text-[#22C55E] font-black">{c.oportunidades} oportunidade{c.oportunidades === 1 ? '' : 's'}</span>}
+                              {c.oportunidades > 0 && <span className="text-[10px] text-[var(--cor-primaria)] font-black">{c.oportunidades} oportunidade{c.oportunidades === 1 ? '' : 's'}</span>}
                               {c.riscos > 0 && <span className="text-[10px] text-red-400 font-black">{c.riscos} risco{c.riscos === 1 ? '' : 's'}</span>}
                             </div>
                           </div>
@@ -1401,7 +1401,7 @@ export default function VisitasPage() {
                   </div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#22C55E] transition-all"
+                      className="h-full bg-[var(--cor-primaria)] transition-all"
                       style={{ width: `${(paradasRota.filter(p => p.status === 'visitada').length / paradasRota.length) * 100}%` }}
                     />
                   </div>
@@ -1421,13 +1421,13 @@ export default function VisitasPage() {
                 <div className="space-y-2">
                   {paradasRota.map((c, i) => {
                     const statusCfg = c.status === 'visitada'
-                      ? { label: 'Visitada', color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10 border-[#22C55E]/30', icon: <CheckCircle2 size={9} /> }
+                      ? { label: 'Visitada', color: 'text-[var(--cor-primaria)]', bg: 'bg-[rgb(var(--cor-primaria-rgb)/10%)] border-[rgb(var(--cor-primaria-rgb)/30%)]', icon: <CheckCircle2 size={9} /> }
                       : c.status === 'pulada'
                       ? { label: 'Pulada', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', icon: <SkipForward size={9} /> }
                       : { label: 'Pendente', color: 'text-slate-400', bg: 'bg-white/5 border-white/10', icon: <Clock size={9} /> };
                     return (
                       <div key={c.id} className={`flex items-start gap-2 border rounded-xl p-3 ${
-                        c.status === 'visitada' ? 'bg-[#22C55E]/5 border-[#22C55E]/10' : c.status === 'pulada' ? 'bg-orange-500/5 border-orange-500/10 opacity-70' : 'bg-white/[0.02] border-white/5'
+                        c.status === 'visitada' ? 'bg-[rgb(var(--cor-primaria-rgb)/5%)] border-[rgb(var(--cor-primaria-rgb)/10%)]' : c.status === 'pulada' ? 'bg-orange-500/5 border-orange-500/10 opacity-70' : 'bg-white/[0.02] border-white/5'
                       }`}>
                         <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">{i + 1}</div>
                         <div className="flex-1 min-w-0">
@@ -1447,7 +1447,7 @@ export default function VisitasPage() {
                           </div>
                           <div className="flex gap-1">
                             {c.status !== 'visitada' && (
-                              <button onClick={() => marcarStatusParada(c.id, 'visitada')} title="Marcar como visitada" className="w-6 h-6 flex items-center justify-center bg-[#22C55E]/10 hover:bg-[#22C55E]/20 rounded text-[#22C55E]"><CheckCircle2 size={12}/></button>
+                              <button onClick={() => marcarStatusParada(c.id, 'visitada')} title="Marcar como visitada" className="w-6 h-6 flex items-center justify-center bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] rounded text-[var(--cor-primaria)]"><CheckCircle2 size={12}/></button>
                             )}
                             {c.status === 'pendente' && (
                               <button onClick={() => marcarStatusParada(c.id, 'pulada')} title="Pular por hoje" className="w-6 h-6 flex items-center justify-center bg-orange-500/10 hover:bg-orange-500/20 rounded text-orange-400"><SkipForward size={12}/></button>

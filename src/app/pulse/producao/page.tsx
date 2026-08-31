@@ -127,7 +127,7 @@ export default function PulseProducaoPage() {
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6">
-        <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
+        <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
           <Factory size={32} /> Produção
         </h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Consome matéria-prima e gera o produto final, com custo calculado</p>
@@ -140,7 +140,7 @@ export default function PulseProducaoPage() {
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Produto final</label>
             <select value={produtoFinalId} onChange={e => setProdutoFinalId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E]">
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
               <option value="">Selecione...</option>
               {produtosComEstoque.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
@@ -148,7 +148,7 @@ export default function PulseProducaoPage() {
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Quantidade produzida</label>
             <input type="number" value={quantidadeProduzida} onChange={e => setQuantidadeProduzida(e.target.value)}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E]" placeholder="1" />
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" placeholder="1" />
           </div>
         </div>
 
@@ -159,31 +159,31 @@ export default function PulseProducaoPage() {
             return (
               <div key={idx} className="flex flex-wrap items-center gap-2">
                 <select value={item.servicoId} onChange={e => atualizarLinha(idx, 'servicoId', e.target.value ? Number(e.target.value) : '')}
-                  className="flex-1 min-w-[160px] bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[#22C55E]">
+                  className="flex-1 min-w-[160px] bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
                   <option value="">Matéria-prima...</option>
                   {produtosComEstoque.map(s => <option key={s.id} value={s.id}>{s.nome} ({s.estoque} em estoque)</option>)}
                 </select>
                 <input type="number" value={item.quantidade} onChange={e => atualizarLinha(idx, 'quantidade', e.target.value)}
-                  className="w-24 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[#22C55E]" placeholder="Qtd" />
+                  className="w-24 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" placeholder="Qtd" />
                 {servico && <span className="text-[11px] text-slate-500 w-24 flex-shrink-0">R$ {((servico.preco_custo || 0) * (Number(item.quantidade) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                 <button onClick={() => removerLinha(idx)} className="text-slate-500 hover:text-red-400 flex-shrink-0"><Trash2 size={15} /></button>
               </div>
             );
           })}
         </div>
-        <button onClick={adicionarLinha} className="flex items-center gap-1.5 text-[12px] font-bold text-[#22C55E] mb-4">
+        <button onClick={adicionarLinha} className="flex items-center gap-1.5 text-[12px] font-bold text-[var(--cor-primaria)] mb-4">
           <Plus size={13} /> Adicionar matéria-prima
         </button>
 
         <div className="flex items-center justify-between bg-black/30 border border-white/10 rounded-xl px-4 py-3 mb-4">
           <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Custo total estimado</span>
-          <span className="text-lg font-black text-[#22C55E]">R$ {custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          <span className="text-lg font-black text-[var(--cor-primaria)]">R$ {custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
         </div>
 
         {erro && <p className="text-[12px] text-red-400 font-bold mb-3">{erro}</p>}
 
         <button onClick={registrarProducao} disabled={salvando}
-          className="w-full bg-[#22C55E] hover:bg-[#1ea34d] disabled:opacity-50 text-[#0B1120] py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2">
+          className="w-full bg-[var(--cor-primaria)] hover:bg-[#1ea34d] disabled:opacity-50 text-[#0B1120] py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2">
           {salvando ? <Loader2 size={16} className="animate-spin" /> : <Factory size={16} />} Registrar produção
         </button>
       </div>
@@ -208,7 +208,7 @@ export default function PulseProducaoPage() {
                   <p className="text-slate-500 text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[#22C55E] font-black text-sm">R$ {p.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[var(--cor-primaria)] font-black text-sm">R$ {p.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   <p className="text-slate-500 text-[10px]">R$ {(p.custo_total / p.quantidade_produzida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</p>
                 </div>
               </div>

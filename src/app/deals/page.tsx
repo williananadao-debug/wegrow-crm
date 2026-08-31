@@ -107,7 +107,7 @@ const STAGES = {
   1: { title: 'Contato Feito', color: 'border-blue-500' },
   2: { title: 'Proposta', color: 'border-purple-500' },
   3: { title: 'Negociação', color: 'border-yellow-500' },
-  4: { title: 'Ganhos', color: 'border-[#22C55E]' },
+  4: { title: 'Ganhos', color: 'border-[var(--cor-primaria)]' },
   5: { title: 'Perdidos', color: 'border-red-500' },
 };
 
@@ -116,7 +116,7 @@ const CDL_STAGES = {
   1: { title: 'Contato Feito', color: 'border-blue-500' },
   2: { title: 'Proposta de Filiação', color: 'border-purple-500' },
   3: { title: 'Em Negociação', color: 'border-yellow-500' },
-  4: { title: 'Filiados!', color: 'border-[#22C55E]' },
+  4: { title: 'Filiados!', color: 'border-[var(--cor-primaria)]' },
   5: { title: 'Desistiram', color: 'border-red-500' },
 };
 
@@ -935,7 +935,7 @@ export default function DealsPage() {
                     th { text-align: left; border-bottom: 1px solid #ccc; padding: 10px; font-size: 12px; text-transform: uppercase; }
                     td { padding: 10px; border-bottom: 1px solid #eee; }
                     .total-box { text-align: right; font-size: 16px; margin-top: 5px; }
-                    .total-final { text-align: right; font-size: 20px; font-weight: bold; margin-top: 10px; color: #22C55E; }
+                    .total-final { text-align: right; font-size: 20px; font-weight: bold; margin-top: 10px; color: var(--cor-primaria); }
                 </style>
             </head>
             <body>
@@ -1918,16 +1918,16 @@ export default function DealsPage() {
           {/* Barra de meta — ocupa o espaço central */}
           <div className="hidden md:flex flex-1 items-center gap-3 min-w-0">
             <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-600 to-[#22C55E] transition-all duration-1000" style={{ width: `${Math.min(percentMeta, 100)}%` }}/>
+              <div className="h-full bg-gradient-to-r from-blue-600 to-[var(--cor-primaria)] transition-all duration-1000" style={{ width: `${Math.min(percentMeta, 100)}%` }}/>
             </div>
-            <span className="text-[10px] font-black text-[#22C55E] shrink-0">{Math.round(percentMeta)}%</span>
+            <span className="text-[10px] font-black text-[var(--cor-primaria)] shrink-0">{Math.round(percentMeta)}%</span>
             <span className="text-[9px] text-slate-500 shrink-0 hidden lg:block">{labelMeta}</span>
           </div>
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
             <button onClick={() => setShowAgenda(true)} className="bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-600/20 hover:border-blue-500/30 hover:text-blue-400 p-2 rounded-xl transition-all" title="Agenda"><CalendarDays size={16} strokeWidth={2.5}/></button>
             <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5"><MapPin size={14} strokeWidth={3}/> Visitas</button>
-            <button onClick={() => abrirModal()} className="bg-[#22C55E] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgba(34,197,94,0.2)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
+            <button onClick={() => abrirModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgb(var(--cor-primaria-rgb)/20%)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
           </div>
       </div>
 
@@ -2000,7 +2000,7 @@ export default function DealsPage() {
               <div className="flex justify-between items-center p-6 border-b border-white/10 flex-shrink-0">
                   <h2 className="text-xl font-black uppercase italic tracking-tighter text-white flex items-center gap-2">
                       {editingLeadId ? (isCDL ? 'Editar Prospecto' : 'Editar Oportunidade') : (isCDL ? 'Novo Prospecto' : 'Novo Negócio')}
-                      {editingLeadId && editingLeadId < 1000000 && <span className="text-[#22C55E] bg-[#22C55E]/10 px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
+                      {editingLeadId && editingLeadId < 1000000 && <span className="text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)] px-2 py-1 rounded text-lg">#LD-{String(editingLeadId).padStart(4, '0')}</span>}
                   </h2>
                   <div className="flex items-center gap-2">
                       {editingLeadId && (
@@ -2190,12 +2190,12 @@ export default function DealsPage() {
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Cliente / Empresa *</label>
                         <div className="relative">
                             <input 
-                                className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[#22C55E] text-[#22C55E]' : (novaEmpresa.length > 2 ? 'border-blue-500' : 'border-white/10')} rounded-xl pl-4 pr-28 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
+                                className={`w-full bg-white/[0.03] border ${selectedClientId ? 'border-[var(--cor-primaria)] text-[var(--cor-primaria)]' : (novaEmpresa.length > 2 ? 'border-blue-500' : 'border-white/10')} rounded-xl pl-4 pr-28 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-colors uppercase`}
                                 placeholder="Buscar ou Cadastrar novo..." value={novaEmpresa} onChange={(e) => { setNovaEmpresa(e.target.value); setSelectedClientId(null); setShowClientDropdown(true); buscarClientes(e.target.value); }} onFocus={() => { setShowClientDropdown(true); if (novaEmpresa.length >= 2) buscarClientes(novaEmpresa); }} onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)} required
                             />
                             
                             {selectedClientId ? (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">
                                     <CheckCircle2 size={12}/> Vinculado
                                 </div>
                             ) : novaEmpresa.length > 2 ? (
@@ -2219,7 +2219,7 @@ export default function DealsPage() {
                                         >
                                             <div className="flex items-center gap-2">
                                               <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>
-                                              <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[#22C55E] shadow-[0_0_5px_rgba(34,197,94,0.8)]'}`} />
+                                              <div title={`Risco: ${c.risco?.toUpperCase() || 'VERDE'}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${c.risco === 'vermelho' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]' : c.risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]' : 'bg-[var(--cor-primaria)] shadow-[0_0_5px_rgb(var(--cor-primaria-rgb)/80%)]'}`} />
                                             </div>
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
@@ -2238,7 +2238,7 @@ export default function DealsPage() {
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Veículo de interesse</label>
                             <input
-                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
                                 placeholder="Ex: Honda Civic 2022 prata, ou link do anúncio..."
                                 value={veiculoReferencia}
                                 onChange={e => setVeiculoReferencia(e.target.value)}
@@ -2248,7 +2248,7 @@ export default function DealsPage() {
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2"><Building2 size={10} className="inline"/> Unidade / Filial *</label>
-                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer appearance-none" value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }} required>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] cursor-pointer appearance-none" value={novaUnidade} onChange={e => { setNovaUnidade(e.target.value); setCategoriaSelecionada(null); }} required>
                             <option value="" className="bg-[#0B1120]">SELECIONE UMA UNIDADE</option>
                             {unidades.map(u => (
                               <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>
@@ -2280,7 +2280,7 @@ export default function DealsPage() {
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
                                     <input
-                                        className={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-white text-sm font-bold outline-none ${cnpjError ? 'border-red-500 focus:border-red-400' : 'border-white/10 focus:border-[#22C55E]'}`}
+                                        className={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-white text-sm font-bold outline-none ${cnpjError ? 'border-red-500 focus:border-red-400' : 'border-white/10 focus:border-[var(--cor-primaria)]'}`}
                                         value={novoCnpj}
                                         onChange={e => {
                                             const masked = maskCnpj(e.target.value);
@@ -2294,36 +2294,36 @@ export default function DealsPage() {
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Inscrição Estadual</label>
-                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
+                                    <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={novoIE} onChange={e => setNovoIE(e.target.value)} placeholder="Ex: ISENTO ou Número" />
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Endereço</label>
-                                <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={novoEndereco} onChange={e => setNovoEndereco(e.target.value)} placeholder="Rua, número - Bairro" />
+                                <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={novoEndereco} onChange={e => setNovoEndereco(e.target.value)} placeholder="Rua, número - Bairro" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Calendar size={10}/> Início do Contrato</label>
-                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoInicio} onChange={e => handleContratoInicio(e.target.value)} />
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={contratoInicio} onChange={e => handleContratoInicio(e.target.value)} />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> Fim do Contrato</label>
-                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={contratoFim} onChange={e => setContratoFim(e.target.value)} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Hash size={10}/> Qtd. Parcelas</label>
-                                    <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={parcelas} onChange={e => handleParcelasChange(e.target.value)} placeholder="Ex: 3" />
+                                    <input type="text" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={parcelas} onChange={e => handleParcelasChange(e.target.value)} placeholder="Ex: 3" />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><CalendarDays size={10}/> 1º Vencimento</label>
-                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={vencimento} onChange={e => handleVencimentoChange(e.target.value)} />
+                                    <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={vencimento} onChange={e => handleVencimentoChange(e.target.value)} />
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Forma de Pagamento</label>
-                                <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] cursor-pointer" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
+                                <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] cursor-pointer" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
                                     <option value="" className="bg-[#0B1120]">Selecione</option>
                                     {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => (
                                         <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>
@@ -2337,7 +2337,7 @@ export default function DealsPage() {
                                         {vencimentosDatas.map((data, i) => (
                                             <div key={i} className="flex items-center gap-2">
                                                 <span className="text-[9px] text-slate-500 font-bold w-16 shrink-0">Parc. {i + 1}</span>
-                                                <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold outline-none focus:border-[#22C55E]" value={data} onChange={e => handleVencimentoParcela(i, e.target.value)} />
+                                                <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold outline-none focus:border-[var(--cor-primaria)]" value={data} onChange={e => handleVencimentoParcela(i, e.target.value)} />
                                             </div>
                                         ))}
                                     </div>
@@ -2355,7 +2355,7 @@ export default function DealsPage() {
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">
                             <div>
-                                <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest mt-1">Montar Proposta</p>
+                                <p className="text-[10px] font-black text-[var(--cor-primaria)] uppercase tracking-widest mt-1">Montar Proposta</p>
                                 {novaUnidade && <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Tabela: {novaUnidade}</p>}
                             </div>
                             <div className="text-right">
@@ -2364,8 +2364,8 @@ export default function DealsPage() {
                                     <span className="text-[10px] text-slate-500 font-bold uppercase">Desconto R$</span>
                                     <input type="number" className="w-20 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-2 py-1 text-xs font-bold outline-none text-right" placeholder="0" value={desconto || ''} onChange={e => setDesconto(Number(e.target.value))} />
                                 </div>
-                                <p className="text-sm font-black text-white bg-[#22C55E]/20 px-3 py-1 rounded-lg border border-[#22C55E]/30 inline-block">Final: R$ {totalModalFinal.toLocaleString()}</p>
-                                {percModal > 0 && ( <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${percModal > LIMITE_DESCONTO_MAXIMO ? 'text-red-400' : 'text-[#22C55E]'}`}>({percModal.toFixed(1)}% OFF)</p> )}
+                                <p className="text-sm font-black text-white bg-[rgb(var(--cor-primaria-rgb)/20%)] px-3 py-1 rounded-lg border border-[rgb(var(--cor-primaria-rgb)/30%)] inline-block">Final: R$ {totalModalFinal.toLocaleString()}</p>
+                                {percModal > 0 && ( <p className={`text-[8px] font-black uppercase tracking-widest mt-1 ${percModal > LIMITE_DESCONTO_MAXIMO ? 'text-red-400' : 'text-[var(--cor-primaria)]'}`}>({percModal.toFixed(1)}% OFF)</p> )}
                             </div>
                         </div>
                         
@@ -2386,7 +2386,7 @@ export default function DealsPage() {
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                                     {produtosDaCategoria.map((s) => (
                                         <button key={s.id} type="button" onClick={() => setItensTemporarios([...itensTemporarios, { servico: s.nome, quantidade: 1, precoUnitario: s.preco, tempo: '30"', programa: 'ROTATIVO' }])} className="flex flex-col items-start bg-white/5 hover:bg-blue-600/20 hover:border-blue-500/50 border border-white/10 p-3 rounded-xl transition-colors text-left group">
-                                            <span className="text-[10px] text-slate-300 font-bold uppercase mb-1 line-clamp-2 leading-tight group-hover:text-blue-200">{s.nome}</span><span className="text-xs font-black text-[#22C55E]">R$ {s.preco.toLocaleString('pt-BR')}</span>
+                                            <span className="text-[10px] text-slate-300 font-bold uppercase mb-1 line-clamp-2 leading-tight group-hover:text-blue-200">{s.nome}</span><span className="text-xs font-black text-[var(--cor-primaria)]">R$ {s.preco.toLocaleString('pt-BR')}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -2405,7 +2405,7 @@ export default function DealsPage() {
                                             <div className="flex items-center gap-3">
                                                 {tipoEspecialDoItem(item)
                                                   ? <span className="font-black text-amber-400 text-[9px] uppercase tracking-wider">{TIPOS_ESPECIAIS_ITEM[tipoEspecialDoItem(item)!]}</span>
-                                                  : <span className="font-black text-[#22C55E]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
+                                                  : <span className="font-black text-[var(--cor-primaria)]">R$ {(item.quantidade * item.precoUnitario).toLocaleString()}</span>
                                                 }
                                                 <button type="button" onClick={() => setItensTemporarios(itensTemporarios.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1 bg-red-500/10 hover:bg-red-500 hover:text-white rounded transition-colors"><Trash2 size={12}/></button>
                                             </div>
@@ -2507,7 +2507,7 @@ export default function DealsPage() {
                                 <p className="text-[10px] font-black text-slate-500 uppercase mb-2 flex items-center gap-1"><CalendarDays size={10}/> Follow-up</p>
                                 <input
                                     type="date"
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
                                     value={followupEm}
                                     onChange={e => setFollowupEm(e.target.value)}
                                 />
@@ -2536,7 +2536,7 @@ export default function DealsPage() {
                             <p className="text-orange-200/70 text-[10px] mb-4 mt-1">Este negócio solicita <strong>{percModal.toFixed(1)}% de desconto</strong>. O limite do vendedor é {LIMITE_DESCONTO_MAXIMO}%.</p>
                             {isLideranca ? (
                                 <div className="flex gap-2">
-                                    <button type="button" onClick={() => handleAprovacao(editingLeadId, 'aprovado')} className="flex-1 bg-[#22C55E] text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:scale-105 transition-all">Aprovar Desconto</button>
+                                    <button type="button" onClick={() => handleAprovacao(editingLeadId, 'aprovado')} className="flex-1 bg-[var(--cor-primaria)] text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:scale-105 transition-all">Aprovar Desconto</button>
                                     <button type="button" onClick={() => handleAprovacao(editingLeadId, 'recusado')} className="flex-1 bg-red-500 text-white font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:scale-105 transition-all">Recusar</button>
                                 </div>
                             ) : ( <p className="text-orange-400 font-black text-xs uppercase animate-pulse border border-orange-500/20 py-2 rounded-xl bg-orange-500/10">Aguardando Diretor/Gerente</p> )}
@@ -2547,7 +2547,7 @@ export default function DealsPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#0B1120] flex-shrink-0 rounded-b-[40px]">
-                  <button type="submit" form="leadForm" disabled={leadTravado} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] ${leadTravado ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[#22C55E] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                  <button type="submit" form="leadForm" disabled={leadTravado} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_20px_rgb(var(--cor-primaria-rgb)/30%)] ${leadTravado ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : novaEmpresa && novaUnidade ? (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'bg-orange-500 text-white' : 'bg-[var(--cor-primaria)] text-[#0F172A] hover:scale-[1.02]') : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
                       {leadTravado ? '🔒 Contrato assinado — bloqueado' : !editingLeadId ? (isCDL ? 'Cadastrar Prospecto' : 'Criar Oportunidade') : (percModal > LIMITE_DESCONTO_MAXIMO && !isLideranca ? 'Solicitar Aprovação' : 'Salvar Alterações')}
                   </button>
               </div>
@@ -2676,12 +2676,12 @@ export default function DealsPage() {
                 ))}
                 <div className="border-t border-white/5 pt-2 mt-2 flex justify-between">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
-                  <span className="text-sm font-black text-[#22C55E]">R$ {emailLead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-black text-[var(--cor-primaria)]">R$ {emailLead.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
               {emailResult === 'ok' && (
-                <div className="flex items-center gap-2 text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/20 rounded-xl p-3">
+                <div className="flex items-center gap-2 text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] rounded-xl p-3">
                   <CheckCircle2 size={14}/><span className="text-xs font-black uppercase tracking-widest">E-mail enviado com sucesso!</span>
                 </div>
               )}
@@ -2710,10 +2710,10 @@ export default function DealsPage() {
       {/* MODAL CONFIRMAR FILIAÇÃO CDL */}
       {cdlFiliacaoModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-[#22C55E]/30 w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0F172A] border border-[rgb(var(--cor-primaria-rgb)/30%)] w-full max-w-md rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-white/10">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
+                <div className="w-10 h-10 bg-[var(--cor-primaria)] rounded-xl flex items-center justify-center font-black text-[#0B1120] text-sm">CDL</div>
                 <div>
                   <h2 className="text-lg font-black text-white uppercase italic tracking-tight">Confirmar Filiação</h2>
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{CDL.nome}</p>
@@ -2729,7 +2729,7 @@ export default function DealsPage() {
                     key={val}
                     type="button"
                     onClick={() => setCdlModoFechamento(val)}
-                    className={`py-2.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all border ${cdlModoFechamento === val ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 text-slate-500 hover:border-white/20'}`}
+                    className={`py-2.5 rounded-xl font-black uppercase text-xs tracking-widest transition-all border ${cdlModoFechamento === val ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] border-[rgb(var(--cor-primaria-rgb)/50%)] text-[var(--cor-primaria)]' : 'bg-white/[0.02] border-white/10 text-slate-500 hover:border-white/20'}`}
                   >
                     {label}
                   </button>
@@ -2742,9 +2742,9 @@ export default function DealsPage() {
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Tipo de Associação *</label>
                     <div className="grid grid-cols-1 gap-2">
                       {['Associado Simples', 'Associado Plus', 'Associado Premium'].map(tipo => (
-                        <label key={tipo} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cdlTipoAssociacao === tipo ? 'bg-[#22C55E]/10 border-[#22C55E]/50 text-[#22C55E]' : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-slate-300'}`}>
+                        <label key={tipo} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cdlTipoAssociacao === tipo ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] border-[rgb(var(--cor-primaria-rgb)/50%)] text-[var(--cor-primaria)]' : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-slate-300'}`}>
                           <input type="radio" name="cdlTipo" value={tipo} className="sr-only" onChange={() => setCdlTipoAssociacao(tipo)} />
-                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${cdlTipoAssociacao === tipo ? 'border-[#22C55E] bg-[#22C55E]' : 'border-slate-600'}`}>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${cdlTipoAssociacao === tipo ? 'border-[var(--cor-primaria)] bg-[var(--cor-primaria)]' : 'border-slate-600'}`}>
                             {cdlTipoAssociacao === tipo && <div className="w-1.5 h-1.5 bg-[#0B1120] rounded-full" />}
                           </div>
                           <span className="text-xs font-black uppercase tracking-wide">{tipo}</span>
@@ -2762,18 +2762,18 @@ export default function DealsPage() {
                       placeholder="Ex: 497,00"
                       value={cdlValorAnuidade}
                       onChange={e => setCdlValorAnuidade(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] transition-colors"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Início</label>
-                      <input type="date" value={cdlDataInicio} onChange={e => setCdlDataInicio(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                      <input type="date" value={cdlDataInicio} onChange={e => setCdlDataInicio(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Vencimento</label>
-                      <input type="date" value={cdlDataFim} onChange={e => setCdlDataFim(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                      <input type="date" value={cdlDataFim} onChange={e => setCdlDataFim(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" />
                     </div>
                   </div>
                 </>
@@ -2794,14 +2794,14 @@ export default function DealsPage() {
               <button
                 onClick={confirmarFiliacaoCDL}
                 disabled={!cdlDataInicio || !cdlDataFim}
-                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[var(--cor-primaria)] text-[#0B1120] hover:bg-[#16A34A] disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={14}/> Confirmar Filiação
               </button>
               ) : (
               <button
                 onClick={confirmarVendaSimplesCDL}
-                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[#22C55E] text-[#0B1120] hover:bg-[#16A34A] transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[var(--cor-primaria)] text-[#0B1120] hover:bg-[#16A34A] transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={14}/> Fechar Venda
               </button>
@@ -2814,11 +2814,11 @@ export default function DealsPage() {
       {/* MODAL BOAS-VINDAS CDL — aparece após confirmar filiação */}
       {cdlBemVindoData && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-[#22C55E]/40 w-full max-w-sm rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="bg-[#22C55E]/10 p-6 text-center border-b border-[#22C55E]/20">
-              <div className="w-14 h-14 bg-[#22C55E] rounded-2xl flex items-center justify-center font-black text-[#0B1120] text-xl mx-auto mb-3 shadow-[0_0_30px_rgba(34,197,94,0.4)]">✓</div>
+          <div className="bg-[#0F172A] border border-[rgb(var(--cor-primaria-rgb)/40%)] w-full max-w-sm rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="bg-[rgb(var(--cor-primaria-rgb)/10%)] p-6 text-center border-b border-[rgb(var(--cor-primaria-rgb)/20%)]">
+              <div className="w-14 h-14 bg-[var(--cor-primaria)] rounded-2xl flex items-center justify-center font-black text-[#0B1120] text-xl mx-auto mb-3 shadow-[0_0_30px_rgb(var(--cor-primaria-rgb)/40%)]">✓</div>
               <h2 className="text-lg font-black text-white uppercase italic tracking-tight">Filiação Confirmada!</h2>
-              <p className="text-[#22C55E] font-bold text-sm mt-1">{cdlBemVindoData.empresa}</p>
+              <p className="text-[var(--cor-primaria)] font-bold text-sm mt-1">{cdlBemVindoData.empresa}</p>
               <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">
                 Protocolo #{String(cdlBemVindoData.id).padStart(6, '0')}
               </p>
@@ -2835,7 +2835,7 @@ export default function DealsPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setCdlBemVindoData(null)}
-                  className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] py-3.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(34,197,94,0.25)]"
+                  className="w-full bg-[var(--cor-primaria)] hover:bg-[#16A34A] text-[#0B1120] py-3.5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(var(--cor-primaria-rgb)/25%)]"
                 >
                   <MessageCircle size={16}/> Enviar Boas-Vindas pelo WhatsApp
                 </a>

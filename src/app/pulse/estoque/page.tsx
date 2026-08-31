@@ -15,7 +15,7 @@ type Movimentacao = {
 const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
   entrada_nf: { label: 'Nota Fiscal', cor: 'text-purple-400 bg-purple-500/10' },
   ajuste: { label: 'Ajuste manual', cor: 'text-blue-400 bg-blue-500/10' },
-  venda: { label: 'Venda', cor: 'text-[#22C55E] bg-[#22C55E]/10' },
+  venda: { label: 'Venda', cor: 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' },
   estorno: { label: 'Estorno', cor: 'text-red-400 bg-red-500/10' },
 };
 
@@ -83,7 +83,7 @@ export default function PulseEstoquePage() {
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
             <Boxes size={32} /> Estoque
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
@@ -100,7 +100,7 @@ export default function PulseEstoquePage() {
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Wallet size={10} /> Valor em estoque</p>
-          <p className="text-2xl font-black text-[#22C55E] mt-1">R$ {valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+          <p className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Estoque baixo</p>
@@ -172,7 +172,7 @@ export default function PulseEstoquePage() {
                   return (
                     <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
                       <div className="flex items-center justify-between">
-                        <span className={`font-black text-sm ${positivo ? 'text-[#22C55E]' : 'text-red-400'}`}>{positivo ? '+' : ''}{m.quantidade}</span>
+                        <span className={`font-black text-sm ${positivo ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{positivo ? '+' : ''}{m.quantidade}</span>
                         <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap mt-1">

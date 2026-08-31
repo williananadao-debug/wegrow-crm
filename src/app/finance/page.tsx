@@ -446,7 +446,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
             <DollarSign size={32}/> Financeiro
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
@@ -467,7 +467,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           <button
             key={key}
             onClick={() => setAba(key)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${aba === key ? 'bg-[#22C55E] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${aba === key ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
           >
             <Icon size={14}/> {label}
           </button>
@@ -523,7 +523,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
             {vencendoBreve.length === 0 ? (
               <div className="p-10 text-center">
-                <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                <CheckCircle2 size={32} className="text-[var(--cor-primaria)] mx-auto mb-2"/>
                 <p className="text-slate-500 text-sm font-bold">Nenhum contrato vencendo nos próximos 30 dias.</p>
               </div>
             ) : (
@@ -576,7 +576,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
             <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{isCDL ? 'Associados Adimplentes' : 'Contratos Ativos'}</p>
-              <h2 className="text-2xl font-black text-[#22C55E] mt-1">{totalContratos}</h2>
+              <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">{totalContratos}</h2>
               <p className="text-[10px] text-slate-500 mt-0.5">{isCDL ? 'anuidade em dia' : 'vencimento futuro'}</p>
             </div>
           </div>
@@ -587,7 +587,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
             {inadimplentes.length === 0 ? (
               <div className="p-10 text-center">
-                <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                <CheckCircle2 size={32} className="text-[var(--cor-primaria)] mx-auto mb-2"/>
                 <p className="text-slate-500 text-sm font-bold">Nenhum contrato vencido com os filtros atuais.</p>
               </div>
             ) : (
@@ -623,7 +623,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         <button
                           onClick={() => renovarContrato(l.id, l.contrato_fim as string)}
                           disabled={salvando === l.id}
-                          className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
+                          className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
                         >
                           {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <RefreshCw size={10}/>}
                           {isCDL ? 'Renovar Anuidade' : 'Renovar +1 ano'}
@@ -661,7 +661,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
               { label: 'Esperado', value: totalEsperado, color: 'text-white', bg: 'bg-[#0F172A]' },
-              { label: 'Recebido', value: totalRecebido, color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/5 border-[#22C55E]/20' },
+              { label: 'Recebido', value: totalRecebido, color: 'text-[var(--cor-primaria)]', bg: 'bg-[rgb(var(--cor-primaria-rgb)/5%)] border-[rgb(var(--cor-primaria-rgb)/20%)]' },
               { label: 'Pendente', value: totalPendente, color: 'text-orange-400', bg: 'bg-orange-500/5 border-orange-500/20' },
             ].map(({ label, value, color, bg }) => (
               <div key={label} className={`${bg} border border-white/10 p-5 rounded-2xl`}>
@@ -691,7 +691,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                           <span className="text-[9px] text-slate-500">{l.unidade}</span>
                           {l.contrato_fim && <span className="text-[9px] text-slate-600">Vence: {new Date(l.contrato_fim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
                           {l.data_pagamento && (
-                            <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
+                            <span className="text-[9px] font-black bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] border border-[rgb(var(--cor-primaria-rgb)/30%)] px-2 py-0.5 rounded">
                               Pago em {new Date(l.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
                             </span>
                           )}
@@ -709,7 +709,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                             {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
                           </button>
                         ) : (
-                          <button onClick={() => darBaixa(l.id)} disabled={salvando === l.id} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          <button onClick={() => darBaixa(l.id)} disabled={salvando === l.id} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                             {salvando === l.id ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Dar Baixa
                           </button>
                         )}
@@ -743,7 +743,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none"
               />
             </div>
-            <button onClick={() => setFormDespesaAberto(true)} className="bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+            <button onClick={() => setFormDespesaAberto(true)} className="bg-[var(--cor-primaria)] hover:bg-[#16A34A] text-[#0B1120] px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
               <Plus size={14}/> Nova Despesa
             </button>
           </div>
@@ -757,9 +757,9 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pendente</p>
               <h2 className="text-2xl font-black text-red-400 mt-1">R$ {totalDespesasPendentes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
             </div>
-            <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 p-5 rounded-2xl">
+            <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pago</p>
-              <h2 className="text-2xl font-black text-[#22C55E] mt-1">R$ {totalDespesasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {totalDespesasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
             </div>
           </div>
 
@@ -787,7 +787,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         {d.recorrente && <span className="text-[9px] font-black text-blue-400 flex items-center gap-0.5"><Repeat size={9}/> Recorrente</span>}
                         {d.nf_numero && <span title={d.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {d.nf_numero}</span>}
                         {d.data_pagamento && (
-                          <span className="text-[9px] font-black bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30 px-2 py-0.5 rounded">
+                          <span className="text-[9px] font-black bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] border border-[rgb(var(--cor-primaria-rgb)/30%)] px-2 py-0.5 rounded">
                             Pago em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
@@ -800,7 +800,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                           {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
                         </button>
                       ) : (
-                        <button onClick={() => marcarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <button onClick={() => marcarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                           {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Paga
                         </button>
                       )}
@@ -822,38 +822,38 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 <div className="space-y-3">
                   <div>
                     <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Título / Fornecedor</label>
-                    <input value={novaDespesa.titulo} onChange={e => setNovaDespesa(p => ({ ...p, titulo: e.target.value }))} placeholder="Ex: Aluguel sede" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                    <input value={novaDespesa.titulo} onChange={e => setNovaDespesa(p => ({ ...p, titulo: e.target.value }))} placeholder="Ex: Aluguel sede" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] mt-1" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Valor</label>
-                      <input type="number" value={novaDespesa.valor} onChange={e => setNovaDespesa(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                      <input type="number" value={novaDespesa.valor} onChange={e => setNovaDespesa(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] mt-1" />
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Vencimento</label>
-                      <input type="date" value={novaDespesa.data_vencimento} onChange={e => setNovaDespesa(p => ({ ...p, data_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1" />
+                      <input type="date" value={novaDespesa.data_vencimento} onChange={e => setNovaDespesa(p => ({ ...p, data_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] mt-1" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Categoria</label>
-                      <select value={novaDespesa.categoria} onChange={e => setNovaDespesa(p => ({ ...p, categoria: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1">
+                      <select value={novaDespesa.categoria} onChange={e => setNovaDespesa(p => ({ ...p, categoria: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] mt-1">
                         {CATEGORIAS_DESPESA.map(c => <option key={c} value={c} className="bg-[#0B1120]">{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Unidade</label>
-                      <select value={novaDespesa.unidade} onChange={e => setNovaDespesa(p => ({ ...p, unidade: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E] mt-1">
+                      <select value={novaDespesa.unidade} onChange={e => setNovaDespesa(p => ({ ...p, unidade: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] mt-1">
                         <option value="">Geral</option>
                         {unidades.map(u => <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>)}
                       </select>
                     </div>
                   </div>
                   <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mt-1">
-                    <input type="checkbox" checked={novaDespesa.recorrente} onChange={e => setNovaDespesa(p => ({ ...p, recorrente: e.target.checked }))} className="accent-[#22C55E]" />
+                    <input type="checkbox" checked={novaDespesa.recorrente} onChange={e => setNovaDespesa(p => ({ ...p, recorrente: e.target.checked }))} className="accent-[var(--cor-primaria)]" />
                     Despesa recorrente (todo mês)
                   </label>
-                  <button onClick={criarDespesa} disabled={salvandoDespesa} className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-2 disabled:opacity-60">
+                  <button onClick={criarDespesa} disabled={salvandoDespesa} className="w-full bg-[var(--cor-primaria)] hover:bg-[#16A34A] text-[#0B1120] py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-2 disabled:opacity-60">
                     {salvandoDespesa ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Salvar Despesa
                   </button>
                 </div>
@@ -873,17 +873,17 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 p-5 rounded-2xl">
+            <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita</p>
-              <h2 className="text-2xl font-black text-[#22C55E] mt-1">R$ {dreAno.receita.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {dreAno.receita.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
             </div>
             <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Despesa</p>
               <h2 className="text-2xl font-black text-red-400 mt-1">R$ {dreAno.despesa.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
             </div>
-            <div className={`${dreAno.resultado >= 0 ? 'bg-[#22C55E]/5 border-[#22C55E]/20' : 'bg-red-500/5 border-red-500/20'} border p-5 rounded-2xl`}>
+            <div className={`${dreAno.resultado >= 0 ? 'bg-[rgb(var(--cor-primaria-rgb)/5%)] border-[rgb(var(--cor-primaria-rgb)/20%)]' : 'bg-red-500/5 border-red-500/20'} border p-5 rounded-2xl`}>
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Resultado</p>
-              <h2 className={`text-2xl font-black mt-1 ${dreAno.resultado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {dreAno.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className={`text-2xl font-black mt-1 ${dreAno.resultado >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>R$ {dreAno.resultado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
             </div>
             <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Margem</p>
@@ -899,7 +899,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 return (
                   <div key={m.label} className="flex-1 flex flex-col items-center justify-end h-full gap-0.5">
                     <div className="w-full flex items-end justify-center gap-0.5 h-full">
-                      <div className="flex-1 bg-[#22C55E] rounded-t-sm" style={{ height: `${Math.max((m.receita / maxVal) * 100, m.receita > 0 ? 3 : 0)}%` }} title={`Receita: R$ ${m.receita.toLocaleString('pt-BR')}`} />
+                      <div className="flex-1 bg-[var(--cor-primaria)] rounded-t-sm" style={{ height: `${Math.max((m.receita / maxVal) * 100, m.receita > 0 ? 3 : 0)}%` }} title={`Receita: R$ ${m.receita.toLocaleString('pt-BR')}`} />
                       <div className="flex-1 bg-red-500/70 rounded-t-sm" style={{ height: `${Math.max((m.despesa / maxVal) * 100, m.despesa > 0 ? 3 : 0)}%` }} title={`Despesa: R$ ${m.despesa.toLocaleString('pt-BR')}`} />
                     </div>
                   </div>
@@ -912,7 +912,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               ))}
             </div>
             <div className="flex items-center gap-4 mt-4">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-[#22C55E] inline-block"/> Receita</span>
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--cor-primaria)] inline-block"/> Receita</span>
               <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/70 inline-block"/> Despesa</span>
             </div>
           </div>
@@ -937,10 +937,10 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                   {fluxoProjetado.map(m => (
                     <tr key={m.chave}>
                       <td className="p-3 font-black text-white uppercase">{m.label}</td>
-                      <td className="p-3 text-right text-[#22C55E] font-bold">R$ {m.entradas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                      <td className="p-3 text-right text-[var(--cor-primaria)] font-bold">R$ {m.entradas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
                       <td className="p-3 text-right text-red-400 font-bold">R$ {m.saidas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
                       <td className={`p-3 text-right font-black ${m.saldo >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {m.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
-                      <td className={`p-3 text-right font-black ${m.acumulado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {m.acumulado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+                      <td className={`p-3 text-right font-black ${m.acumulado >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>R$ {m.acumulado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -972,7 +972,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Tipo de cobrança</label>
                   <div className="grid grid-cols-2 gap-2">
                     {(['PIX', 'BOLETO'] as const).map(t => (
-                      <button key={t} onClick={() => setCobrancaTipo(t)} className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${cobrancaTipo === t ? 'bg-[#22C55E] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+                      <button key={t} onClick={() => setCobrancaTipo(t)} className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${cobrancaTipo === t ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
                         {t === 'PIX' ? <QrCode size={14}/> : <Barcode size={14}/>} {t}
                       </button>
                     ))}
@@ -986,7 +986,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                     value={cobrancaCpfCnpj}
                     onChange={e => setCobrancaCpfCnpj(e.target.value)}
                     placeholder="00.000.000/0001-00"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all"
                   />
                 </div>
 
@@ -996,7 +996,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                     type="date"
                     value={cobrancaVencimento}
                     onChange={e => setCobrancaVencimento(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all"
                   />
                 </div>
 
@@ -1007,7 +1007,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                     value={cobrancaEmail}
                     onChange={e => setCobrancaEmail(e.target.value)}
                     placeholder="cliente@email.com"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all"
                   />
                 </div>
 
@@ -1018,7 +1018,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 <button
                   onClick={gerarCobranca}
                   disabled={cobrancaLoading || !cobrancaCpfCnpj || !cobrancaVencimento}
-                  className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-[var(--cor-primaria)] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {cobrancaLoading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
                   {cobrancaLoading ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
@@ -1026,8 +1026,8 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-2xl p-4 text-center">
-                  <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                <div className="bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] rounded-2xl p-4 text-center">
+                  <CheckCircle2 size={32} className="text-[var(--cor-primaria)] mx-auto mb-2"/>
                   <p className="text-white font-black text-sm uppercase">Cobrança gerada com sucesso!</p>
                   <p className="text-slate-400 text-xs mt-1">R$ {Number(cobrancaResultado.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · Vence {new Date(cobrancaResultado.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                 </div>
@@ -1121,7 +1121,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                     value={nfseCpfCnpj}
                     onChange={e => setNfseCpfCnpj(e.target.value)}
                     placeholder="00.000.000/0001-00"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all"
                   />
                 </div>
 
@@ -1142,8 +1142,8 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-2xl p-4 text-center">
-                  <CheckCircle2 size={32} className="text-[#22C55E] mx-auto mb-2"/>
+                <div className="bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] rounded-2xl p-4 text-center">
+                  <CheckCircle2 size={32} className="text-[var(--cor-primaria)] mx-auto mb-2"/>
                   <p className="text-white font-black text-sm uppercase">Nota fiscal emitida!</p>
                   <p className="text-slate-400 text-xs mt-1">{nfseResultado.statusDescription || nfseResultado.status}</p>
                 </div>

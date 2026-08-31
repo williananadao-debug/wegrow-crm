@@ -86,7 +86,7 @@ const formatId = (id: number, prefix: string) => `${prefix}-${String(id).padStar
 
 // SEMÁFORO DE RISCO
 function SemaforoRisco({ status }: { status?: string }) {
-    if (status === 'aprovado') return <span className="bg-green-500/20 text-green-400 border border-green-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-[0_0_15px_rgba(34,197,94,0.2)]">🟢 Crédito Aprovado</span>;
+    if (status === 'aprovado') return <span className="bg-green-500/20 text-green-400 border border-green-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-[0_0_15px_rgb(var(--cor-primaria-rgb)/20%)]">🟢 Crédito Aprovado</span>;
     if (status === 'risco_moderado') return <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">🟡 Risco Moderado</span>;
     if (status === 'reprovado') return <span className="bg-red-500/20 text-red-400 border border-red-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">🔴 Risco Alto (Apenas à vista)</span>;
     return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">⚪ Em Análise</span>;
@@ -719,7 +719,7 @@ export default function CustomersPage() {
                   <Hash size={16} /> Duplicados
               </button>
             )}
-            <button onClick={() => handleOpenModal()} className="bg-[#22C55E] text-[#0F172A] px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgba(34,197,94,0.2)]">
+            <button onClick={() => handleOpenModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgb(var(--cor-primaria-rgb)/20%)]">
                 <Plus size={18} strokeWidth={3} /> {isCDL ? 'Novo Associado' : 'Novo Cliente'}
             </button>
         </div>
@@ -775,13 +775,13 @@ export default function CustomersPage() {
         <div className="flex-1 relative w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
           <input 
-            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:border-[#22C55E] outline-none placeholder:text-slate-600 transition-all"
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:border-[var(--cor-primaria)] outline-none placeholder:text-slate-600 transition-all"
             placeholder="Buscar por nome, CNPJ, Cidade..."
             value={busca} onChange={e => setBusca(e.target.value)}
           />
         </div>
         <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
-            <button onClick={() => setStatusFilter('ativo')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'ativo' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>Ativos</button>
+            <button onClick={() => setStatusFilter('ativo')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'ativo' ? 'bg-[var(--cor-primaria)] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>Ativos</button>
             <button onClick={() => setStatusFilter('inativo')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'inativo' ? 'bg-red-500 text-white' : 'text-slate-500 hover:text-white'}`}>Inativos</button>
             <button onClick={() => setStatusFilter('todos')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${statusFilter === 'todos' ? 'bg-white text-black' : 'text-slate-500 hover:text-white'}`}>Todos</button>
         </div>
@@ -803,7 +803,7 @@ export default function CustomersPage() {
             <>
                 {clientes.map(cliente => (
                 <div key={cliente.id} onClick={() => handleOpenModal(cliente)} className="cursor-pointer bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between hover:border-white/10 hover:bg-white/[0.04] transition-all group relative overflow-hidden">
-                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${cliente.status === 'ativo' ? 'bg-[#22C55E]' : 'bg-red-500'}`}></div>
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${cliente.status === 'ativo' ? 'bg-[var(--cor-primaria)]' : 'bg-red-500'}`}></div>
                     <div className="flex items-center gap-5 pl-3">
                         <div className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-2xl flex items-center justify-center font-black text-xl uppercase shadow-inner flex-shrink-0">
                             {cliente.nome_empresa.charAt(0)}
@@ -896,7 +896,7 @@ export default function CustomersPage() {
             </div>
 
             <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto flex-shrink-0">
-               <button onClick={() => setActiveTab('dados')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'dados' ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>Dados Cadastrais</button>
+               <button onClick={() => setActiveTab('dados')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'dados' ? 'border-[var(--cor-primaria)] text-[var(--cor-primaria)]' : 'border-transparent text-slate-500 hover:text-white'}`}>Dados Cadastrais</button>
                {editingId && (
                    <>
                    <button onClick={() => setActiveTab('unidades')} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'unidades' ? 'border-purple-500 text-purple-500' : 'border-transparent text-slate-500 hover:text-white'}`}><Building2 size={14}/> Filiais ({unidades.length})</button>
@@ -919,10 +919,10 @@ export default function CustomersPage() {
                         <div className="flex items-center justify-between flex-wrap gap-3">
                             <h3 className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-2"><Zap size={14} /> Busca Inteligente</h3>
                             <div className="flex bg-[#0B1120] border border-white/10 rounded-xl p-1 gap-1">
-                                <button type="button" onClick={() => trocarTipoPessoa('juridica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'juridica' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
+                                <button type="button" onClick={() => trocarTipoPessoa('juridica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'juridica' ? 'bg-[var(--cor-primaria)] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
                                     Pessoa Jurídica
                                 </button>
-                                <button type="button" onClick={() => trocarTipoPessoa('fisica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'fisica' ? 'bg-[#22C55E] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
+                                <button type="button" onClick={() => trocarTipoPessoa('fisica')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${tipoPessoa === 'fisica' ? 'bg-[var(--cor-primaria)] text-[#0F172A]' : 'text-slate-500 hover:text-white'}`}>
                                     Pessoa Física
                                 </button>
                             </div>
@@ -966,7 +966,7 @@ export default function CustomersPage() {
                             ) : (
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Inscrição Estadual</label>
-                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
+                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
                                 </div>
                             )}
                         </div>
@@ -994,7 +994,7 @@ export default function CustomersPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Inscrição Estadual</label>
-                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
+                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} placeholder="ISENTO ou número" />
                                 </div>
                                 {formData.observacao_risco && (
                                     <p className="text-[10px] text-slate-500 font-mono mt-4">🔍 {formData.observacao_risco}</p>
@@ -1007,23 +1007,23 @@ export default function CustomersPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Nome do cliente *</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required />
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.nome_empresa} onChange={e => setFormData({...formData, nome_empresa: e.target.value})} required />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Nome Fantasia</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.nome_fantasia} onChange={e => setFormData({...formData, nome_fantasia: e.target.value})} />
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.nome_fantasia} onChange={e => setFormData({...formData, nome_fantasia: e.target.value})} />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Razão Social</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} placeholder="Preenchido automático pelo CNPJ, se disponível" />
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} placeholder="Preenchido automático pelo CNPJ, se disponível" />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Telefone</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} />
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">E-mail</label>
-                            <input type="email" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                            <input type="email" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                         </div>
                     </div>
 
@@ -1033,25 +1033,25 @@ export default function CustomersPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">CEP</label>
-                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.cep} onChange={e => setFormData({...formData, cep: e.target.value})} />
+                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.cep} onChange={e => setFormData({...formData, cep: e.target.value})} />
                             </div>
                             <div className="md:col-span-2">
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Rua/Av</label>
-                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.endereco} onChange={e => setFormData({...formData, endereco: e.target.value})} />
+                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.endereco} onChange={e => setFormData({...formData, endereco: e.target.value})} />
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Número</label>
-                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.numero} onChange={e => setFormData({...formData, numero: e.target.value})} />
+                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.numero} onChange={e => setFormData({...formData, numero: e.target.value})} />
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Bairro</label>
-                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.bairro} onChange={e => setFormData({...formData, bairro: e.target.value})} />
+                                <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.bairro} onChange={e => setFormData({...formData, bairro: e.target.value})} />
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Cidade / UF</label>
                                 <div className="flex gap-2">
-                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] uppercase" value={formData.cidade} onChange={e => setFormData({...formData, cidade: e.target.value})} />
-                                    <input className="w-16 bg-[#0B1120] border border-white/10 rounded-xl px-2 py-3 text-white text-sm font-bold outline-none text-center focus:border-[#22C55E] uppercase" value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value})} maxLength={2} />
+                                    <input className="w-full bg-[#0B1120] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.cidade} onChange={e => setFormData({...formData, cidade: e.target.value})} />
+                                    <input className="w-16 bg-[#0B1120] border border-white/10 rounded-xl px-2 py-3 text-white text-sm font-bold outline-none text-center focus:border-[var(--cor-primaria)] uppercase" value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value})} maxLength={2} />
                                 </div>
                             </div>
                         </div>
@@ -1059,7 +1059,7 @@ export default function CustomersPage() {
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Status</label>
-                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
                             <option value="ativo" className="bg-[#0B1120]">Ativo</option>
                             <option value="inativo" className="bg-[#0B1120]">Inativo</option>
                         </select>
@@ -1067,7 +1067,7 @@ export default function CustomersPage() {
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Segmento</label>
-                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" value={formData.segmento} onChange={e => setFormData({...formData, segmento: e.target.value})}>
+                        <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.segmento} onChange={e => setFormData({...formData, segmento: e.target.value})}>
                             <option value="" className="bg-[#0B1120]">Selecione o segmento</option>
                             {SEGMENTOS_GRUPOS.map(g => (
                                 <optgroup key={g.grupo} label={g.grupo} className="bg-[#0B1120]">
@@ -1078,7 +1078,7 @@ export default function CustomersPage() {
                         </select>
                         {formData.segmento === 'Outro' && (
                             <input
-                                className="w-full mt-2 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"
+                                className="w-full mt-2 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]"
                                 placeholder="Qual segmento?"
                                 value={segmentoCustom}
                                 onChange={e => setSegmentoCustom(e.target.value)}
@@ -1116,7 +1116,7 @@ export default function CustomersPage() {
                         </div>
                     </div>
 
-                    <button type="submit" disabled={!editingId && !!cnpjDuplicado} className="w-full bg-[#22C55E] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 transition-all shadow-lg mt-4">
+                    <button type="submit" disabled={!editingId && !!cnpjDuplicado} className="w-full bg-[var(--cor-primaria)] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 transition-all shadow-lg mt-4">
                         {!editingId && cnpjDuplicado ? 'Resolva o CNPJ duplicado acima' : (editingId ? 'Salvar Alterações' : (isCDL ? 'Cadastrar Associado' : 'Criar Cliente'))}
                     </button>
                 </form>
@@ -1153,8 +1153,8 @@ export default function CustomersPage() {
                 <div className="space-y-3 pb-2">
                     {historicoVendas.length > 0 && (
                         <div className="grid grid-cols-3 gap-3 mb-4">
-                            <div className="bg-[#22C55E]/10 border border-[#22C55E]/20 p-3 rounded-xl text-center">
-                                <p className="text-[10px] font-black text-[#22C55E] uppercase">Ganhos</p>
+                            <div className="bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-3 rounded-xl text-center">
+                                <p className="text-[10px] font-black text-[var(--cor-primaria)] uppercase">Ganhos</p>
                                 <p className="text-lg font-black text-white">{historicoVendas.filter(v => v.status === 'ganho').length}</p>
                             </div>
                             <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-center">
@@ -1170,8 +1170,8 @@ export default function CustomersPage() {
                     {historicoVendas.map(venda => {
                         const isGanho = venda.status === 'ganho';
                         const isPerdido = venda.status === 'perdido';
-                        const borderColor = isGanho ? 'border-l-[#22C55E]' : isPerdido ? 'border-l-red-500' : 'border-l-blue-500';
-                        const statusBg = isGanho ? 'bg-[#22C55E]/20 text-[#22C55E]' : isPerdido ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400';
+                        const borderColor = isGanho ? 'border-l-[var(--cor-primaria)]' : isPerdido ? 'border-l-red-500' : 'border-l-blue-500';
+                        const statusBg = isGanho ? 'bg-[rgb(var(--cor-primaria-rgb)/20%)] text-[var(--cor-primaria)]' : isPerdido ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400';
                         const notas = Array.isArray(venda.notas) ? venda.notas : [];
                         return (
                         <div key={venda.id} className={`bg-white/[0.02] p-4 rounded-xl border border-white/5 border-l-2 ${borderColor}`}>
@@ -1381,7 +1381,7 @@ export default function CustomersPage() {
             </div>
             <div className="flex gap-3 p-6 border-t border-white/10 flex-shrink-0">
               <button onClick={() => setCsvModalOpen(false)} className="flex-1 bg-white/5 text-slate-400 hover:text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">Cancelar</button>
-              <button onClick={handleCsvImport} disabled={csvImporting} className="flex-1 bg-[#22C55E] text-[#0F172A] py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleCsvImport} disabled={csvImporting} className="flex-1 bg-[var(--cor-primaria)] text-[#0F172A] py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                 {csvImporting ? <><Loader2 size={14} className="animate-spin"/> Importando...</> : `Confirmar — ${csvPreview.length} clientes`}
               </button>
             </div>

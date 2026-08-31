@@ -334,7 +334,7 @@ export default function DashboardPage() {
   }, [contratosVencendo, user?.id]);
 
   const handleSellerClick = (id: string) => setVendedorSelecionado(prev => prev === id ? null : id);
-  const getDonutGradient = (visitados: number, pendentes: number) => { const total = visitados + pendentes; if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`; const pct = (visitados / total) * 100; return `conic-gradient(#22C55E ${pct}%, #EF4444 0)`; };
+  const getDonutGradient = (visitados: number, pendentes: number) => { const total = visitados + pendentes; if (total === 0) return `conic-gradient(#334155 100%, #334155 100%)`; const pct = (visitados / total) * 100; return `conic-gradient(var(--cor-primaria) ${pct}%, #EF4444 0)`; };
   const formatCompact = (num: number) => { if(num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k'; return num % 1 === 0 ? num.toString() : num.toFixed(2); };
 
   // Drill-down: leva os filtros atuais do dashboard (vendedor/unidade/período) pra tela de
@@ -403,7 +403,7 @@ export default function DashboardPage() {
             <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg items-center">
                 {/* 👇 INDICADOR DE ATUALIZAÇÃO MODO TV 👇 */}
                 <div className={`px-2 transition-all ${refreshing ? 'opacity-100 scale-110' : 'opacity-30 scale-100'}`}>
-                    <RefreshCw size={12} className={`text-[#22C55E] ${refreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw size={12} className={`text-[var(--cor-primaria)] ${refreshing ? 'animate-spin' : ''}`} />
                 </div>
                 <button onClick={() => setVisao('comercial')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all h-full ${visao === 'comercial' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
                     <TrendingUp size={12}/> {isCDL ? 'Captação' : 'Comercial'}
@@ -538,16 +538,16 @@ export default function DashboardPage() {
                                     className={`flex-1 min-w-[32px] group flex flex-col justify-end h-full relative rounded-lg transition-colors p-0.5 cursor-pointer ${isSelecionado ? 'bg-white/10' : 'hover:bg-white/5'}`}
                                 >
                                     <div
-                                        className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'} ${isSelecionado ? 'ring-2 ring-white' : ''}`}
+                                        className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[var(--cor-primaria)] shadow-[0_0_15px_rgb(var(--cor-primaria-rgb)/40%)]' : d.valor > 0 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5'} ${isSelecionado ? 'ring-2 ring-white' : ''}`}
                                         style={{ height: d.valor > 0 ? `${height}%` : '4px' }}
                                     >
                                         {d.valor > 0 && (
-                                            <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-orange-500'}`}>
+                                            <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[var(--cor-primaria)]' : 'text-orange-500'}`}>
                                                 {formatCompact(d.valor)}
                                             </span>
                                         )}
                                     </div>
-                                    <span className={`text-[9px] text-center font-bold mt-1 ${isHoje ? 'text-[#22C55E]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                                    <span className={`text-[9px] text-center font-bold mt-1 ${isHoje ? 'text-[var(--cor-primaria)]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                                 </div>
                             );
                         });
@@ -587,7 +587,7 @@ export default function DashboardPage() {
                                         <div className="absolute flex flex-col items-center gap-0.5" style={{ bottom: `calc(${altura}% + 6px)` }}>
                                             <span className="text-[9px] font-black text-white whitespace-nowrap">{formatCompact(m.valor)}</span>
                                             {variacao !== null && (
-                                                <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[#22C55E]' : 'text-red-500'}`}>
+                                                <span className={`text-[8px] font-black whitespace-nowrap ${variacao >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-500'}`}>
                                                     {variacao >= 0 ? '+' : ''}{Math.round(variacao)}%
                                                 </span>
                                             )}

@@ -89,7 +89,7 @@ export default function MarketingPage() {
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
-      <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3 mb-6">
+      <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3 mb-6">
         <TrendingUp size={32} /> Redes Sociais
       </h1>
 
@@ -127,13 +127,13 @@ export default function MarketingPage() {
           </p>
           <div>
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Instagram Business Account ID</label>
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[#22C55E]" value={config.ig_business_account_id} onChange={e => setConfig({ ...config, ig_business_account_id: e.target.value })} placeholder="17841400000000000" />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[var(--cor-primaria)]" value={config.ig_business_account_id} onChange={e => setConfig({ ...config, ig_business_account_id: e.target.value })} placeholder="17841400000000000" />
           </div>
           <div>
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Access Token</label>
-            <input type="password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[#22C55E]" value={config.access_token} onChange={e => setConfig({ ...config, access_token: e.target.value })} placeholder="EAAG..." />
+            <input type="password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-[var(--cor-primaria)]" value={config.access_token} onChange={e => setConfig({ ...config, access_token: e.target.value })} placeholder="EAAG..." />
           </div>
-          <button onClick={salvarConfig} disabled={salvando} className="bg-[#22C55E] hover:bg-[#1ea34d] disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
+          <button onClick={salvarConfig} disabled={salvando} className="bg-[var(--cor-primaria)] hover:bg-[#1ea34d] disabled:opacity-50 text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
             {salvando ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar credenciais
           </button>
           {toast && <p className="text-xs font-bold text-slate-400">{toast}</p>}

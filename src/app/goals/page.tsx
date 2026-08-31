@@ -497,7 +497,7 @@ export default function GoalsPage() {
 
       {/* HEADER DINÂMICO */}
       <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#22C55E]/10 rounded-full blur-3xl -mr-20 -mt-20" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[rgb(var(--cor-primaria-rgb)/10%)] rounded-full blur-3xl -mr-20 -mt-20" />
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
           <div>
@@ -513,7 +513,7 @@ export default function GoalsPage() {
               {isDirector && (
                 <button onClick={distribuirMetaAno} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all"><RefreshCcw size={16}/></button>
               )}
-              <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-[#22C55E]">
+              <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-[var(--cor-primaria)]">
                 <span className="text-slate-500 font-bold mr-2 text-sm">R$</span>
                 <input
                   type="text"
@@ -534,10 +534,10 @@ export default function GoalsPage() {
         <div className="mt-10">
           <div className="flex justify-between items-end mb-2">
             <span className="text-xs font-black text-white uppercase italic">Atingimento Acumulado</span>
-            <span className={`text-2xl font-black ${percentAno >= 100 ? 'text-[#22C55E]' : 'text-blue-500'}`}>{Math.round(percentAno)}%</span>
+            <span className={`text-2xl font-black ${percentAno >= 100 ? 'text-[var(--cor-primaria)]' : 'text-blue-500'}`}>{Math.round(percentAno)}%</span>
           </div>
           <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
-            <div className={`h-full transition-all duration-1000 rounded-full ${percentAno >= 100 ? 'bg-[#22C55E]' : 'bg-blue-600'}`} style={{ width: `${Math.min(percentAno, 100)}%` }} />
+            <div className={`h-full transition-all duration-1000 rounded-full ${percentAno >= 100 ? 'bg-[var(--cor-primaria)]' : 'bg-blue-600'}`} style={{ width: `${Math.min(percentAno, 100)}%` }} />
           </div>
           <div className="flex justify-between mt-3 text-[10px] font-bold uppercase">
              <div><span className="text-slate-500">Realizado:</span> <span className="text-white ml-1">R$ {realizadoAno.toLocaleString('pt-BR')}</span></div>
@@ -547,21 +547,21 @@ export default function GoalsPage() {
 
         {/* ALERTA DE RITMO */}
         {metaMesAtual > 0 && anoFiltro === anoAtual && (
-          <div className={`mt-6 flex items-center gap-4 p-4 rounded-2xl border ${ritmoOk ? 'bg-[#22C55E]/10 border-[#22C55E]/30' : 'bg-orange-500/10 border-orange-500/30 animate-pulse'}`}>
+          <div className={`mt-6 flex items-center gap-4 p-4 rounded-2xl border ${ritmoOk ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] border-[rgb(var(--cor-primaria-rgb)/30%)]' : 'bg-orange-500/10 border-orange-500/30 animate-pulse'}`}>
             {ritmoOk
-              ? <CheckCircle2 size={24} className="text-[#22C55E] flex-shrink-0" />
+              ? <CheckCircle2 size={24} className="text-[var(--cor-primaria)] flex-shrink-0" />
               : <AlertTriangle size={24} className="text-orange-400 flex-shrink-0" />}
             <div>
-              <p className={`text-xs font-black uppercase tracking-widest ${ritmoOk ? 'text-[#22C55E]' : 'text-orange-400'}`}>
+              <p className={`text-xs font-black uppercase tracking-widest ${ritmoOk ? 'text-[var(--cor-primaria)]' : 'text-orange-400'}`}>
                 {ritmoOk ? 'Ritmo no Verde' : 'Abaixo do Ritmo Esperado'}
               </p>
               <p className="text-[10px] text-slate-400 font-bold mt-0.5">
                 Dia {diaAtual}/{diasNoMes} — Esperado: <span className="text-white">R$ {Math.round(esperadoAteHoje).toLocaleString('pt-BR')}</span>
-                {' · '}{ritmoOk ? 'Adiantado' : 'Faltam'} <span className={ritmoOk ? 'text-[#22C55E]' : 'text-orange-400'}>R$ {Math.round(deltaRitmo).toLocaleString('pt-BR')}</span> {ritmoOk ? 'acima do ritmo' : 'para atingir o ritmo'}
+                {' · '}{ritmoOk ? 'Adiantado' : 'Faltam'} <span className={ritmoOk ? 'text-[var(--cor-primaria)]' : 'text-orange-400'}>R$ {Math.round(deltaRitmo).toLocaleString('pt-BR')}</span> {ritmoOk ? 'acima do ritmo' : 'para atingir o ritmo'}
               </p>
               {projecaoFechamento > 0 && (
                 <p className="text-[10px] text-slate-500 font-bold mt-1">
-                  Projeção de fechamento: <span className={projecaoFechamento >= metaMesAtual ? 'text-[#22C55E]' : 'text-orange-400'}>R$ {projecaoFechamento.toLocaleString('pt-BR')}</span>
+                  Projeção de fechamento: <span className={projecaoFechamento >= metaMesAtual ? 'text-[var(--cor-primaria)]' : 'text-orange-400'}>R$ {projecaoFechamento.toLocaleString('pt-BR')}</span>
                   {metaMesAtual > 0 && <span className="ml-1 text-slate-600">({Math.round((projecaoFechamento / metaMesAtual) * 100)}% da meta)</span>}
                 </p>
               )}
@@ -587,7 +587,7 @@ export default function GoalsPage() {
                     <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black uppercase ${active ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-400'}`}>
                       {new Date(0, mes - 1).toLocaleString('pt-BR', { month: 'short' })}
                     </span>
-                    {mPerc >= 100 && <div className="bg-[#22C55E]/20 text-[#22C55E] text-[8px] font-black px-2 py-1 rounded-full uppercase">Meta Batida 🏆</div>}
+                    {mPerc >= 100 && <div className="bg-[rgb(var(--cor-primaria-rgb)/20%)] text-[var(--cor-primaria)] text-[8px] font-black px-2 py-1 rounded-full uppercase">Meta Batida 🏆</div>}
                   </div>
 
                   <div className="space-y-4">
@@ -609,12 +609,12 @@ export default function GoalsPage() {
                     </div>
                     <div>
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Realizado</p>
-                      <p className="text-sm font-black text-[#22C55E]">R$ {mReal.toLocaleString('pt-BR')}</p>
+                      <p className="text-sm font-black text-[var(--cor-primaria)]">R$ {mReal.toLocaleString('pt-BR')}</p>
                     </div>
                     
                     {/* Progress bar mensal */}
                     <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
-                      <div className={`h-full transition-all duration-700 ${mPerc >= 100 ? 'bg-[#22C55E]' : 'bg-blue-500'}`} style={{ width: `${Math.min(mPerc, 100)}%` }} />
+                      <div className={`h-full transition-all duration-700 ${mPerc >= 100 ? 'bg-[var(--cor-primaria)]' : 'bg-blue-500'}`} style={{ width: `${Math.min(mPerc, 100)}%` }} />
                     </div>
                   </div>
                 </div>
@@ -670,10 +670,10 @@ export default function GoalsPage() {
           <div className="mb-8">
             <div className="flex justify-between items-end mb-2">
               <span className="text-xs font-black text-white uppercase italic">Atingimento Acumulado</span>
-              <span className={`text-xl font-black ${percentAnoUnidade >= 100 ? 'text-[#22C55E]' : 'text-orange-400'}`}>{Math.round(percentAnoUnidade)}%</span>
+              <span className={`text-xl font-black ${percentAnoUnidade >= 100 ? 'text-[var(--cor-primaria)]' : 'text-orange-400'}`}>{Math.round(percentAnoUnidade)}%</span>
             </div>
             <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
-              <div className={`h-full transition-all duration-1000 rounded-full ${percentAnoUnidade >= 100 ? 'bg-[#22C55E]' : 'bg-orange-500'}`} style={{ width: `${Math.min(percentAnoUnidade, 100)}%` }} />
+              <div className={`h-full transition-all duration-1000 rounded-full ${percentAnoUnidade >= 100 ? 'bg-[var(--cor-primaria)]' : 'bg-orange-500'}`} style={{ width: `${Math.min(percentAnoUnidade, 100)}%` }} />
             </div>
             <div className="flex justify-between mt-2 text-[10px] font-bold uppercase">
               <div><span className="text-slate-500">Realizado:</span> <span className="text-white ml-1">R$ {realizadoAnoUnidade.toLocaleString('pt-BR')}</span></div>
@@ -700,7 +700,7 @@ export default function GoalsPage() {
                     <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black uppercase ${active ? 'bg-orange-600 text-white' : 'bg-white/5 text-slate-400'}`}>
                       {new Date(0, mes - 1).toLocaleString('pt-BR', { month: 'short' })}
                     </span>
-                    {mPerc >= 100 && <div className="bg-[#22C55E]/20 text-[#22C55E] text-[8px] font-black px-2 py-1 rounded-full uppercase">Meta Batida 🏆</div>}
+                    {mPerc >= 100 && <div className="bg-[rgb(var(--cor-primaria-rgb)/20%)] text-[var(--cor-primaria)] text-[8px] font-black px-2 py-1 rounded-full uppercase">Meta Batida 🏆</div>}
                   </div>
 
                   <div className="space-y-4">
@@ -722,11 +722,11 @@ export default function GoalsPage() {
                     </div>
                     <div>
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Realizado</p>
-                      <p className="text-sm font-black text-[#22C55E]">R$ {mReal.toLocaleString('pt-BR')}</p>
+                      <p className="text-sm font-black text-[var(--cor-primaria)]">R$ {mReal.toLocaleString('pt-BR')}</p>
                     </div>
 
                     <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
-                      <div className={`h-full transition-all duration-700 ${mPerc >= 100 ? 'bg-[#22C55E]' : 'bg-orange-500'}`} style={{ width: `${Math.min(mPerc, 100)}%` }} />
+                      <div className={`h-full transition-all duration-700 ${mPerc >= 100 ? 'bg-[var(--cor-primaria)]' : 'bg-orange-500'}`} style={{ width: `${Math.min(mPerc, 100)}%` }} />
                     </div>
                   </div>
                 </div>
@@ -757,11 +757,11 @@ export default function GoalsPage() {
                 </div>
                 <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-700 ${v.perc >= 100 ? 'bg-[#22C55E]' : v.perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`}
+                    className={`h-full rounded-full transition-all duration-700 ${v.perc >= 100 ? 'bg-[var(--cor-primaria)]' : v.perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`}
                     style={{ width: `${Math.min(v.perc, 100)}%` }}
                   />
                 </div>
-                <span className={`w-14 text-right text-xs font-black ${v.perc >= 100 ? 'text-[#22C55E]' : v.perc >= 60 ? 'text-blue-400' : 'text-orange-400'}`}>{Math.round(v.perc)}%</span>
+                <span className={`w-14 text-right text-xs font-black ${v.perc >= 100 ? 'text-[var(--cor-primaria)]' : v.perc >= 60 ? 'text-blue-400' : 'text-orange-400'}`}>{Math.round(v.perc)}%</span>
                 {!v.meta && <span className="text-[8px] text-slate-600 font-bold uppercase">Sem meta</span>}
               </div>
             ))}
@@ -799,7 +799,7 @@ export default function GoalsPage() {
                       <p className="text-white font-black text-xs uppercase truncate">{prod.nome}</p>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         <span className="text-[9px] text-slate-500 font-bold">{prod.qtd}x vendido</span>
-                        <span className="text-[9px] text-[#22C55E] font-black">R$ {prod.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                        <span className="text-[9px] text-[var(--cor-primaria)] font-black">R$ {prod.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
                         {tendencia !== null && (
                           <span className={`text-[9px] font-black ${tendencia >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {tendencia >= 0 ? '▲' : '▼'} {Math.abs(tendencia).toFixed(0)}% vs mês ant.
@@ -831,7 +831,7 @@ export default function GoalsPage() {
                   {meta > 0 && (
                     <div>
                       <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-700 ${perc >= 100 ? 'bg-[#22C55E]' : perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${perc}%` }} />
+                        <div className={`h-full rounded-full transition-all duration-700 ${perc >= 100 ? 'bg-[var(--cor-primaria)]' : perc >= 60 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${perc}%` }} />
                       </div>
                       <p className="text-[9px] text-slate-600 mt-0.5 font-bold">{Math.round(perc)}% da meta mensal</p>
                     </div>

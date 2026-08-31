@@ -207,13 +207,13 @@ export default function PulsePainelPage() {
     <div className="p-4 md:p-8 pb-20 text-white">
       <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
             <LayoutGrid size={32} /> Painel Pulse
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Vendas sem funil — feche na hora, acompanhe aqui</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/pulse/nova-venda" className="inline-flex items-center gap-2 bg-[#22C55E] text-[#0B1120] hover:scale-105 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+          <Link href="/pulse/nova-venda" className="inline-flex items-center gap-2 bg-[var(--cor-primaria)] text-[#0B1120] hover:scale-105 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Plus size={14} /> Nova Venda
           </Link>
           <Link href="/visitas" className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
@@ -229,7 +229,7 @@ export default function PulsePainelPage() {
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Faturamento hoje</p>
-          <p className="text-2xl font-black text-[#22C55E] mt-1">R$ {faturamentoHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+          <p className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {faturamentoHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Faturamento do mês</p>
@@ -256,16 +256,16 @@ export default function PulsePainelPage() {
                 return (
                   <div key={i} className="flex-1 min-w-[24px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
                     <div
-                      className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[#22C55E] shadow-[0_0_15px_rgba(34,197,94,0.4)]' : d.valor > 0 ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white/5'}`}
+                      className={`w-full rounded-t-sm relative ${isHoje ? 'bg-[var(--cor-primaria)] shadow-[0_0_15px_rgb(var(--cor-primaria-rgb)/40%)]' : d.valor > 0 ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white/5'}`}
                       style={{ height: d.valor > 0 ? `${height}%` : '4px' }}
                     >
                       {d.valor > 0 && (
-                        <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[#22C55E]' : 'text-amber-500'}`}>
+                        <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-black tracking-tighter whitespace-nowrap z-10 ${isHoje ? 'text-[var(--cor-primaria)]' : 'text-amber-500'}`}>
                           {formatCompact(d.valor)}
                         </span>
                       )}
                     </div>
-                    <span className={`text-[8px] text-center font-bold mt-1 ${isHoje ? 'text-[#22C55E]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                    <span className={`text-[8px] text-center font-bold mt-1 ${isHoje ? 'text-[var(--cor-primaria)]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
                   </div>
                 );
               });
@@ -313,7 +313,7 @@ export default function PulsePainelPage() {
                   <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade))} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Orçamento
                   </button>
-                  <button onClick={() => converterEmPedido(v)} className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                  <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <CheckCircle2 size={10} /> Converter em Pedido
                   </button>
                 </div>
@@ -344,7 +344,7 @@ export default function PulsePainelPage() {
                     <span className="text-[9px] text-slate-600 font-mono">{formatId(v.id)}</span>
                     <span className="text-[9px] text-slate-500">{new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                     {v.forma_pagamento && <span className="text-[9px] bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{FORMAS_PAGAMENTO[v.forma_pagamento] || v.forma_pagamento}</span>}
-                    {v.nfse_invoice_id && <span className="text-[9px] bg-[#22C55E]/10 text-[#22C55E] px-2 py-0.5 rounded uppercase font-black">NF emitida</span>}
+                    {v.nfse_invoice_id && <span className="text-[9px] bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] px-2 py-0.5 rounded uppercase font-black">NF emitida</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -353,7 +353,7 @@ export default function PulsePainelPage() {
                     <Printer size={10} /> Recibo
                   </button>
                   {v.nfse_pdf_url ? (
-                    <a href={v.nfse_pdf_url} target="_blank" rel="noopener noreferrer" className="bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                    <a href={v.nfse_pdf_url} target="_blank" rel="noopener noreferrer" className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                       <ExternalLink size={10} /> Ver NF
                     </a>
                   ) : (
@@ -411,7 +411,7 @@ export default function PulsePainelPage() {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>
-                <input value={nfseCpfCnpj} onChange={e => setNfseCpfCnpj(e.target.value)} placeholder="00.000.000/0001-00" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[#22C55E] transition-all" />
+                <input value={nfseCpfCnpj} onChange={e => setNfseCpfCnpj(e.target.value)} placeholder="00.000.000/0001-00" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all" />
               </div>
               {nfseErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{nfseErro}</div>}
               <button onClick={emitirNfse} disabled={nfseLoading || !nfseCpfCnpj} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">

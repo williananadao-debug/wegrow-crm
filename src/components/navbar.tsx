@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +63,7 @@ export default function Navbar() {
   const mostrarObras = Boolean(modulos.obras);
   const mostrarArgus = Boolean(modulos.argus);
   const mostrarRedesSociais = Boolean(modulos.redes_sociais);
+  const mostrarFinanceiro = Boolean(modulos.financeiro);
   // Temporário — restrito a diretor enquanto o módulo está em teste (18/08).
   const mostrarMidia = Boolean(modulos.midia) && isDirector;
   const mostrarAdvocacia = Boolean(modulos.advocacia);
@@ -122,6 +123,7 @@ export default function Navbar() {
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
   const midiaItem = { name: 'Demais FM Comercial', icon: <Megaphone size={20} />, href: '/midia' };
   const redesSociaisItem = { name: 'Redes Sociais', icon: <TrendingUp size={20} />, href: '/marketing' };
+  const financeiroItem = { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' };
   const advocaciaItem = { name: 'Advocacia', icon: <Scale size={20} />, href: '/advocacia' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
@@ -140,6 +142,7 @@ export default function Navbar() {
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
       ...(mostrarArgus ? [argusItem] : []),
+      ...(mostrarFinanceiro ? [financeiroItem] : []),
       ...(mostrarRedesSociais ? [redesSociaisItem] : []),
       ...(mostrarMidia ? [midiaItem] : []),
       ...(mostrarAdvocacia ? [advocaciaItem] : []),
@@ -270,6 +273,12 @@ export default function Navbar() {
           {mostrarArgus && (
             <Link href={argusItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {argusItem.icon} {argusItem.name}
+            </Link>
+          )}
+
+          {mostrarFinanceiro && (
+            <Link href={financeiroItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(financeiroItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {financeiroItem.icon} {financeiroItem.name}
             </Link>
           )}
 
@@ -428,6 +437,13 @@ export default function Navbar() {
                     <Link href={argusItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(argusItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{argusItem.icon}</div>
                       <span className="text-sm font-semibold">{argusItem.name}</span>
+                    </Link>
+                  )}
+
+                  {mostrarFinanceiro && (
+                    <Link href={financeiroItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(financeiroItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{financeiroItem.icon}</div>
+                      <span className="text-sm font-semibold">{financeiroItem.name}</span>
                     </Link>
                   )}
 

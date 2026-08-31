@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import AdvocaciaTopNav from '../AdvocaciaTopNav';
 import DocumentosPanel from '../DocumentosPanel';
 import AndamentosProcessuais from '../AndamentosProcessuais';
+import PrazosProcessuais from '../PrazosProcessuais';
 import {
   ADVOCACIA_STAGES, ADVOCACIA_STAGE_GANHO, ADVOCACIA_STAGE_PERDIDO,
   AREAS_JURIDICAS, TIPO_HONORARIO_LABELS, fmtMoeda, fmtData, diasDesde, DIAS_LEAD_ESFRIANDO,
@@ -294,6 +295,11 @@ export default function AdvocaciaProcessosPage() {
                 <input value={form.origem} onChange={e => setForm(f => ({ ...f, origem: e.target.value }))}
                   className="w-full mt-1 border border-[#e5e0d5] rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#d9861c]" placeholder="Instagram, Google, Indicação..." />
               </div>
+              {editando && (
+                <div className="pt-3 border-t border-[#e5e0d5]">
+                  <PrazosProcessuais leadId={editando.id} />
+                </div>
+              )}
               {editando && (
                 <div className="pt-3 border-t border-[#e5e0d5]">
                   <AndamentosProcessuais leadId={editando.id} />

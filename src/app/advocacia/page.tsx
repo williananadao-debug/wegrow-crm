@@ -1,14 +1,15 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Sparkles, RefreshCw, Briefcase, DollarSign, Clock, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+import { Loader2, Sparkles, RefreshCw, Briefcase, DollarSign, Clock, AlertTriangle, Users, TrendingUp, Gavel, Scale } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import AdvocaciaTopNav from './AdvocaciaTopNav';
-import { ADVOCACIA_STAGES, ADVOCACIA_STAGE_GANHO, ADVOCACIA_STAGE_PERDIDO, fmtMoeda, fmtMoedaCompacta, fmtPct } from './shared';
+import { ADVOCACIA_STAGES, ADVOCACIA_STAGE_GANHO, ADVOCACIA_STAGE_PERDIDO, fmtMoeda, fmtMoedaCompacta, fmtPct, fmtData } from './shared';
 
-type LeadResumo = { id: number; etapa: number; created_at: string };
-type ProcessoResumo = { id: number; status: string };
+type LeadResumo = { id: number; etapa: number; created_at: string; advocacia_area_juridica: string | null };
+type ProcessoResumo = { id: number; status: string; area_juridica: string; data_inicio: string | null; data_encerramento: string | null };
 type LancamentoResumo = { valor: number; status: 'pendente' | 'pago'; data_vencimento: string; data_pagamento: string | null };
+type PrazoResumo = { id: number; titulo: string; data_prazo: string; advocacia_processos: { cliente_nome: string } | null };
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const STAGE_ORDEM = Object.keys(ADVOCACIA_STAGES).map(Number).filter(k => k !== ADVOCACIA_STAGE_PERDIDO);
@@ -22,6 +23,7 @@ export default function AdvocaciaPainelPage() {
   const [leads, setLeads] = useState<LeadResumo[]>([]);
   const [processos, setProcessos] = useState<ProcessoResumo[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
+  const [prazos, setPrazos] = useState<PrazoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [narrativa, setNarrativa] = useState<string | null>(null);
   const [carregandoNarrativa, setCarregandoNarrativa] = useState(false);
@@ -29,14 +31,18 @@ export default function AdvocaciaPainelPage() {
   const carregar = useCallback(async () => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
-    const [{ data: leadsData }, { data: procData }, { data: lancData }] = await Promise.all([
-      supabase.from('leads').select('id, etapa, created_at').eq('empresa_id', perfil.empresa_id),
-      supabase.from('advocacia_processos').select('id, status').eq('empresa_id', perfil.empresa_id),
+    const em15Dias = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+    const [{ data: leadsData }, { data: procData }, { data: lancData }, { data: prazosData }] = await Promise.all([
+      supabase.from('leads').select('id, etapa, created_at, advocacia_area_juridica').eq('empresa_id', perfil.empresa_id),
+      supabase.from('advocacia_processos').select('id, status, area_juridica, data_inicio, data_encerramento').eq('empresa_id', perfil.empresa_id),
       supabase.from('lancamentos').select('valor, status, data_vencimento, data_pagamento').eq('empresa_id', perfil.empresa_id).not('processo_id', 'is', null),
+      supabase.from('advocacia_prazos').select('id, titulo, data_prazo, advocacia_processos(cliente_nome)')
+        .eq('empresa_id', perfil.empresa_id).eq('concluido', false).lte('data_prazo', em15Dias).order('data_prazo', { ascending: true }),
     ]);
     setLeads((leadsData as LeadResumo[]) || []);
     setProcessos((procData as ProcessoResumo[]) || []);
     setLancamentos((lancData as LancamentoResumo[]) || []);
+    setPrazos((prazosData as any) || []);
     setLoading(false);
   }, [perfil?.empresa_id]);
 
@@ -70,6 +76,36 @@ export default function AdvocaciaPainelPage() {
 
   const funil = useMemo(() => STAGE_ORDEM.map(stage => ({ stage, label: ADVOCACIA_STAGES[stage], total: leads.filter(l => l.etapa === stage).length })), [leads]);
   const maxFunil = Math.max(1, ...funil.map(f => f.total));
+
+  // Taxa de êxito por área jurídica — só considera processos que já saíram de "ativo"
+  // (concluído ou encerrado conta como êxito; arquivado conta como perda), senão a taxa
+  // fica artificialmente baixa por causa dos processos ainda em andamento.
+  const exitoPorArea = useMemo(() => {
+    const mapa: Record<string, { ganhos: number; total: number }> = {};
+    processos.filter(p => p.status !== 'ativo').forEach(p => {
+      const area = p.area_juridica || 'Outro';
+      if (!mapa[area]) mapa[area] = { ganhos: 0, total: 0 };
+      mapa[area].total++;
+      if (p.status === 'concluido' || p.status === 'encerrado') mapa[area].ganhos++;
+    });
+    return Object.entries(mapa)
+      .map(([area, v]) => ({ area, pct: v.total > 0 ? (v.ganhos / v.total) * 100 : 0, total: v.total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+  }, [processos]);
+
+  // Tempo médio de processo (dias) — usa data_encerramento quando existe, senão hoje
+  // (processo ainda ativo conta o tempo corrido até agora).
+  const tempoMedioProcesso = useMemo(() => {
+    const comInicio = processos.filter(p => p.data_inicio);
+    if (comInicio.length === 0) return 0;
+    const totalDias = comInicio.reduce((s, p) => {
+      const inicio = new Date(p.data_inicio as string).getTime();
+      const fim = p.data_encerramento ? new Date(p.data_encerramento).getTime() : Date.now();
+      return s + Math.max(0, (fim - inicio) / 86400000);
+    }, 0);
+    return Math.round(totalDias / comInicio.length);
+  }, [processos]);
 
   const buscarNarrativa = async () => {
     setCarregandoNarrativa(true);
@@ -108,6 +144,22 @@ export default function AdvocaciaPainelPage() {
           </p>
         </div>
 
+        {!loading && prazos.length > 0 && (
+          <div className="bg-[#fdf3e7] border border-[#d9861c]/30 rounded-2xl p-5 mb-6">
+            <p className="flex items-center gap-2 text-[13px] font-bold text-[#a8630f] uppercase tracking-wide mb-3">
+              <AlertTriangle size={15} /> {prazos.length} prazo(s) vencendo nos próximos 15 dias
+            </p>
+            <div className="space-y-1.5">
+              {prazos.map(p => (
+                <div key={p.id} className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2 text-[12.5px]">
+                  <span className="font-semibold text-[#241c14]">{p.titulo}{p.advocacia_processos?.cliente_nome ? ` · ${p.advocacia_processos.cliente_nome}` : ''}</span>
+                  <span className="text-[#8a7355]">{fmtData(p.data_prazo)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-[#d9861c]" /></div>
         ) : (
@@ -136,6 +188,10 @@ export default function AdvocaciaPainelPage() {
               <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
                 <p className="text-[10px] font-bold uppercase text-[#9a958a] flex items-center gap-1"><TrendingUp size={11} /> Conversão do mês</p>
                 <p className="text-[19px] font-bold text-[#241c14] mt-1 font-mono">{fmtPct(taxaConversao)}</p>
+              </div>
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-4">
+                <p className="text-[10px] font-bold uppercase text-[#9a958a] flex items-center gap-1"><Gavel size={11} /> Tempo médio de processo</p>
+                <p className="text-[19px] font-bold text-[#241c14] mt-1 font-mono">{tempoMedioProcesso}d</p>
               </div>
             </div>
 
@@ -168,6 +224,24 @@ export default function AdvocaciaPainelPage() {
                 </div>
               </div>
             </div>
+
+            {exitoPorArea.length > 0 && (
+              <div className="bg-white border border-[#e5e0d5] rounded-2xl p-5 mt-4">
+                <p className="text-[13px] font-bold text-[#241c14] mb-1 flex items-center gap-2"><Scale size={14} /> Taxa de êxito por área jurídica</p>
+                <p className="text-[11px] text-[#9a958a] mb-4">Só processos já concluídos, encerrados ou arquivados — os ainda ativos não contam.</p>
+                <div className="space-y-2.5">
+                  {exitoPorArea.map(a => (
+                    <div key={a.area} className="flex items-center gap-3">
+                      <span className="text-[12px] text-[#6b6862] w-40 flex-shrink-0 truncate">{a.area}</span>
+                      <div className="flex-1 h-2.5 bg-[#f0ede6] rounded-full overflow-hidden">
+                        <div className="h-full bg-[#1fa85a] rounded-full" style={{ width: `${a.pct}%` }} />
+                      </div>
+                      <span className="text-[12px] font-mono font-semibold text-[#241c14] w-16 text-right">{fmtPct(a.pct)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

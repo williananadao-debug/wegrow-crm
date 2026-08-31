@@ -4,7 +4,10 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Clock, Loader2, AlertCircle, ArrowLeft, Search, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
-type Lead = { id: number; empresa: string; status: string; etapa: number; etapaDescricao: string; criadoEm: string };
+type Lead = {
+  id: number; empresa: string; status: string; etapa: number; etapaDescricao: string; criadoEm: string;
+  numeroProcesso?: string | null; andamentos?: { nome: string; dataHora: string }[];
+};
 type PortalConfig = { nome_portal: string; cor_primaria: string; logo_texto: string; etapas: string[] };
 
 function StatusContent() {
@@ -130,6 +133,22 @@ function StatusContent() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {(lead.andamentos?.length ?? 0) > 0 && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                    Andamentos do processo{lead.numeroProcesso ? ` · ${lead.numeroProcesso}` : ''}
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {lead.andamentos!.map((a, i) => (
+                      <div key={i} className="bg-[#0B1120] border border-white/5 rounded-xl p-3">
+                        <p className="text-[11.5px] font-bold text-slate-200">{a.nome}</p>
+                        <p className="text-[10px] text-slate-600">{new Date(a.dataHora).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

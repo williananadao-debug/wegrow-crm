@@ -26,9 +26,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
     const etapas = (portal.etapas as string[]) ?? ['Recebido', 'Em análise', 'Proposta enviada', 'Em negociação', 'Concluído'];
 
-    const fmt = (d: any) => ({
+    // Se o lead já virou processo de advocacia com andamentos sincronizados (DataJud),
+    // manda os últimos junto — cliente acompanha a movimentação real do processo, não só
+    // a etapa comercial genérica. Vem vazio pra qualquer lead que não seja de advocacia.
+    const buscarAndamentos = async (leadId: number) => {
+        const { data: processo } = await db.from('advocacia_processos').select('id, numero_processo').eq('lead_id', leadId).maybeSingle();
+        if (!processo) return { numeroProcesso: null, andamentos: [] as { nome: string; dataHora: string }[] };
+        const { data: itens } = await db.from('advocacia_andamentos').select('nome, data_hora')
+            .eq('processo_id', processo.id).order('data_hora', { ascending: false }).limit(10);
+        return { numeroProcesso: processo.numero_processo, andamentos: (itens || []).map(a => ({ nome: a.nome, dataHora: a.data_hora })) };
+    };
+
+    const fmt = async (d: any) => ({
         id: d.id, empresa: d.empresa, status: d.status, etapa: d.etapa,
         etapaDescricao: etapas[d.etapa] ?? 'Em andamento', criadoEm: d.created_at,
+        ...(await buscarAndamentos(d.id)),
     });
 
     if (id) {
@@ -37,7 +49,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
             .select('id, empresa, status, etapa, created_at')
             .eq('id', Number(id)).eq('empresa_id', portal.empresa_id).single();
         if (error || !data) return NextResponse.json({ erro: 'Protocolo não encontrado.' }, { status: 404 });
-        return NextResponse.json(fmt(data));
+        return NextResponse.json(await fmt(data));
     }
 
     if (busca) {
@@ -48,7 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
             .or(`cnpj.ilike.%${digits}%,telefone.ilike.%${busca}%`)
             .order('created_at', { ascending: false }).limit(5);
         if (error || !data?.length) return NextResponse.json({ erro: 'Nenhum cadastro encontrado.' }, { status: 404 });
-        return NextResponse.json(data.map(fmt));
+        return NextResponse.json(await Promise.all(data.map(fmt)));
     }
 
     return NextResponse.json({ erro: 'Informe id ou busca.' }, { status: 400 });

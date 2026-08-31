@@ -101,14 +101,21 @@ function PulseProducaoContent() {
       }
 
       if (produtoFinal) {
-        const novoEstoqueFinal = (produtoFinal.estoque || 0) + qtdProduzida;
         const novoCustoUnitario = custo / qtdProduzida;
-        await supabase.from('servicos').update({ estoque: novoEstoqueFinal, preco_custo: novoCustoUnitario }).eq('id', produtoFinal.id);
-        await supabase.from('estoque_movimentacoes').insert([{
-          empresa_id: perfil?.empresa_id, servico_id: produtoFinal.id, quantidade: qtdProduzida,
-          tipo: 'producao', producao_id: producao.id, user_id: user?.id,
-          observacao: `Produzido a partir de ${itensValidos.length} matéria(s)-prima(s)`,
-        }]);
+        // Só credita estoque se o produto final tiver controle de estoque ligado — fábrica
+        // que produz sob encomenda (ex: trailer) não guarda produto pronto parado, então
+        // fica sem estoque (null) de propósito e só o custo/histórico é atualizado.
+        const controlaEstoque = produtoFinal.estoque !== null && produtoFinal.estoque !== undefined;
+        const patch: any = { preco_custo: novoCustoUnitario };
+        if (controlaEstoque) patch.estoque = (produtoFinal.estoque || 0) + qtdProduzida;
+        await supabase.from('servicos').update(patch).eq('id', produtoFinal.id);
+        if (controlaEstoque) {
+          await supabase.from('estoque_movimentacoes').insert([{
+            empresa_id: perfil?.empresa_id, servico_id: produtoFinal.id, quantidade: qtdProduzida,
+            tipo: 'producao', producao_id: producao.id, user_id: user?.id,
+            observacao: `Produzido a partir de ${itensValidos.length} matéria(s)-prima(s)`,
+          }]);
+        }
       }
 
       setProdutoFinalId(''); setQuantidadeProduzida(''); setItens([{ servicoId: '', quantidade: '' }]);
@@ -133,7 +140,11 @@ function PulseProducaoContent() {
     );
   }
 
-  const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
+  // Produto final não precisa ter estoque controlado — fábrica que produz sob encomenda
+  // (ex: trailer) não guarda produto pronto parado, só registra o histórico/custo da
+  // produção. Matéria-prima continua exigindo estoque de verdade, porque é o que baixa.
+  const produtosFinaisDisponiveis = servicos.filter(s => s.tipo !== 'Matéria-prima');
+  const materiaPrimaDisponivel = servicos.filter(s => s.tipo === 'Matéria-prima' && s.estoque !== null && s.estoque !== undefined);
 
   return (
     <div className="p-4 md:p-8 pb-20 text-white">
@@ -153,7 +164,7 @@ function PulseProducaoContent() {
             <select value={produtoFinalId} onChange={e => setProdutoFinalId(e.target.value ? Number(e.target.value) : '')}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
               <option value="">Selecione...</option>
-              {produtosComEstoque.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+              {produtosFinaisDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
           </div>
           <div>
@@ -172,7 +183,7 @@ function PulseProducaoContent() {
                 <select value={item.servicoId} onChange={e => atualizarLinha(idx, 'servicoId', e.target.value ? Number(e.target.value) : '')}
                   className="flex-1 min-w-[160px] bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
                   <option value="">Matéria-prima...</option>
-                  {produtosComEstoque.map(s => <option key={s.id} value={s.id}>{s.nome} ({s.estoque} em estoque)</option>)}
+                  {materiaPrimaDisponivel.map(s => <option key={s.id} value={s.id}>{s.nome} ({s.estoque} em estoque)</option>)}
                 </select>
                 <input type="number" value={item.quantidade} onChange={e => atualizarLinha(idx, 'quantidade', e.target.value)}
                   className="w-24 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" placeholder="Qtd" />

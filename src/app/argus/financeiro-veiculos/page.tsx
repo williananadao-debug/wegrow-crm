@@ -15,6 +15,7 @@ type LeadVeiculo = {
   etapa: number;
   veiculo_referencia: string | null;
   veiculo_placa: string | null;
+  veiculo_renavam: string | null;
   veiculo_fipe_valor: number | null;
   veiculo_valor_compra: number | null;
   veiculo_data_compra: string | null;
@@ -50,6 +51,8 @@ export default function ArgusFinanceiroVeiculosPage() {
   const [novoCusto, setNovoCusto] = useState<Record<number, { descricao: string; valor: string; data: string }>>({});
   const [consultandoPlaca, setConsultandoPlaca] = useState<number | null>(null);
   const [resultadoPlaca, setResultadoPlaca] = useState<Record<number, { erro?: string; naoConfigurado?: boolean; dados?: any }>>({});
+  const [emitindoGuia, setEmitindoGuia] = useState<number | null>(null);
+  const [resultadoGuia, setResultadoGuia] = useState<Record<number, { erro?: string; naoConfigurado?: boolean; dados?: any }>>({});
   const [emitindoContrato, setEmitindoContrato] = useState<number | null>(null);
   const [resultadoContrato, setResultadoContrato] = useState<Record<number, { erro?: string; loja_sign_url?: string; comprador_sign_url?: string }>>({});
 
@@ -58,7 +61,7 @@ export default function ArgusFinanceiroVeiculosPage() {
     setLoading(true);
     const [{ data: leadsData }, { data: custosData }] = await Promise.all([
       supabase.from('leads')
-        .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, email, created_at')
+        .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_renavam, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, email, created_at')
         .eq('empresa_id', perfil.empresa_id)
         .not('veiculo_placa', 'is', null)
         .order('created_at', { ascending: false }),
@@ -179,7 +182,7 @@ export default function ArgusFinanceiroVeiculosPage() {
       const res = await fetch('/api/argus/consulta-placa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ empresa_id: perfil.empresa_id, placa: l.veiculo_placa }),
+        body: JSON.stringify({ empresa_id: perfil.empresa_id, placa: l.veiculo_placa, renavam: l.veiculo_renavam }),
       });
       const json = await res.json();
       setResultadoPlaca(prev => ({ ...prev, [l.id]: res.ok ? { dados: json.dados } : { erro: json.erro, naoConfigurado: json.naoConfigurado } }));
@@ -187,6 +190,23 @@ export default function ArgusFinanceiroVeiculosPage() {
       setResultadoPlaca(prev => ({ ...prev, [l.id]: { erro: err?.message || 'Erro ao consultar.' } }));
     }
     setConsultandoPlaca(null);
+  };
+
+  const emitirGuiaDebito = async (l: LeadVeiculo) => {
+    if (!l.veiculo_placa || !perfil?.empresa_id) return;
+    setEmitindoGuia(l.id);
+    try {
+      const res = await fetch('/api/argus/emitir-guia-debito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: perfil.empresa_id, placa: l.veiculo_placa, renavam: l.veiculo_renavam }),
+      });
+      const json = await res.json();
+      setResultadoGuia(prev => ({ ...prev, [l.id]: res.ok ? { dados: json.dados } : { erro: json.erro, naoConfigurado: json.naoConfigurado } }));
+    } catch (err: any) {
+      setResultadoGuia(prev => ({ ...prev, [l.id]: { erro: err?.message || 'Erro ao emitir guia.' } }));
+    }
+    setEmitindoGuia(null);
   };
 
   const emitirContrato = async (l: LeadVeiculo) => {
@@ -397,6 +417,11 @@ export default function ArgusFinanceiroVeiculosPage() {
                                   {consultandoPlaca === l.id ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />} Multas/débitos
                                 </button>
                               )}
+                              {l.veiculo_placa && (
+                                <button onClick={() => emitirGuiaDebito(l)} disabled={emitindoGuia === l.id} className="flex items-center gap-1.5 text-xs font-bold text-[#5c5c5c] uppercase tracking-wide disabled:opacity-50">
+                                  {emitindoGuia === l.id ? <Loader2 size={12} className="animate-spin" /> : <Receipt size={12} />} Guia de débito
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -407,6 +432,16 @@ export default function ArgusFinanceiroVeiculosPage() {
                               <p className="text-[11px] font-semibold text-red-600">{resultadoPlaca[l.id].erro}</p>
                             ) : (
                               <pre className="bg-[#f5f5f5] border border-[#e0e0e0] rounded-lg p-3 overflow-x-auto text-[11px] text-[#171717]">{JSON.stringify(resultadoPlaca[l.id].dados, null, 2)}</pre>
+                            )
+                          )}
+
+                          {resultadoGuia[l.id] && (
+                            resultadoGuia[l.id].naoConfigurado ? (
+                              <p className="text-[11px] font-semibold text-[#a8630f] bg-[#fdf3e7] border border-[#d9861c]/30 rounded-lg px-3 py-2">{resultadoGuia[l.id].erro}</p>
+                            ) : resultadoGuia[l.id].erro ? (
+                              <p className="text-[11px] font-semibold text-red-600">{resultadoGuia[l.id].erro}</p>
+                            ) : (
+                              <pre className="bg-[#f5f5f5] border border-[#e0e0e0] rounded-lg p-3 overflow-x-auto text-[11px] text-[#171717]">{JSON.stringify(resultadoGuia[l.id].dados, null, 2)}</pre>
                             )
                           )}
 

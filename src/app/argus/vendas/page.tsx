@@ -15,6 +15,7 @@ type LeadVeiculo = {
   etapa: number;
   veiculo_referencia: string | null;
   veiculo_placa: string | null;
+  veiculo_renavam: string | null;
   veiculo_fipe_valor: number | null;
   veiculo_valor_compra: number | null;
   veiculo_data_compra: string | null;
@@ -40,7 +41,7 @@ const COLUNAS: { id: string; label: string }[] = [
 
 const FORM_VAZIO = {
   empresa: '', telefone: '', email: '', cidade: '', vendedor_nome: '',
-  veiculo_referencia: '', veiculo_placa: '', valor_total: '',
+  veiculo_referencia: '', veiculo_placa: '', veiculo_renavam: '', valor_total: '',
   veiculo_fipe_valor: '', veiculo_valor_compra: '', veiculo_data_compra: '',
 };
 
@@ -124,7 +125,7 @@ export default function ArgusVendasVeiculosPage() {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     supabase.from('leads')
-      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, cidade, telefone, email, created_at')
+      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_renavam, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, cidade, telefone, email, created_at')
       .eq('empresa_id', perfil.empresa_id)
       .not('veiculo_placa', 'is', null)
       .order('created_at', { ascending: false })
@@ -175,7 +176,7 @@ export default function ArgusVendasVeiculosPage() {
     setForm({
       empresa: lead.empresa, telefone: lead.telefone || '', email: lead.email || '', cidade: lead.cidade || '',
       vendedor_nome: lead.vendedor_nome || '', veiculo_referencia: lead.veiculo_referencia || '',
-      veiculo_placa: lead.veiculo_placa || '', valor_total: String(lead.valor_total || ''),
+      veiculo_placa: lead.veiculo_placa || '', veiculo_renavam: lead.veiculo_renavam || '', valor_total: String(lead.valor_total || ''),
       veiculo_fipe_valor: lead.veiculo_fipe_valor != null ? String(lead.veiculo_fipe_valor) : '',
       veiculo_valor_compra: lead.veiculo_valor_compra != null ? String(lead.veiculo_valor_compra) : '',
       veiculo_data_compra: lead.veiculo_data_compra || '',
@@ -197,6 +198,7 @@ export default function ArgusVendasVeiculosPage() {
       vendedor_nome: form.vendedor_nome.trim() || null,
       veiculo_referencia: form.veiculo_referencia.trim() || null,
       veiculo_placa: form.veiculo_placa.trim().toUpperCase(),
+      veiculo_renavam: form.veiculo_renavam.trim() || null,
       valor_total: Number(form.valor_total),
       veiculo_fipe_valor: form.veiculo_fipe_valor ? Number(form.veiculo_fipe_valor) : null,
       veiculo_valor_compra: form.veiculo_valor_compra ? Number(form.veiculo_valor_compra) : null,
@@ -372,6 +374,10 @@ export default function ArgusVendasVeiculosPage() {
                   <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Placa *</label>
                   <input value={form.veiculo_placa} onChange={e => setForm({ ...form, veiculo_placa: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717] uppercase" />
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Renavam (pra consulta de multas/débitos)</label>
+                <input value={form.veiculo_renavam} onChange={e => setForm({ ...form, veiculo_renavam: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Valor da proposta *</label>

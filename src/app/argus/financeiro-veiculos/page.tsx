@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, DollarSign, Search, ChevronDown, ChevronUp, Plus, Trash2, Printer, Save, Receipt } from 'lucide-react';
+import { Loader2, DollarSign, Search, ChevronDown, ChevronUp, Plus, Trash2, Printer, Save, Receipt, FileSignature } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
 import DocumentosVeiculoPanel from '../DocumentosVeiculoPanel';
 import { fmtMoeda, fmtMoedaCompacta, fmtData } from '../shared';
@@ -20,6 +20,7 @@ type LeadVeiculo = {
   veiculo_data_compra: string | null;
   veiculo_data_venda: string | null;
   vendedor_nome: string | null;
+  email: string | null;
   created_at: string;
 };
 
@@ -37,6 +38,7 @@ export default function ArgusFinanceiroVeiculosPage() {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
   const empresa = auth.empresa;
+  const user = auth.user;
 
   const [leads, setLeads] = useState<LeadVeiculo[]>([]);
   const [custos, setCustos] = useState<CustoItem[]>([]);
@@ -46,13 +48,17 @@ export default function ArgusFinanceiroVeiculosPage() {
   const [editando, setEditando] = useState<Record<number, Partial<LeadVeiculo>>>({});
   const [salvandoId, setSalvandoId] = useState<number | null>(null);
   const [novoCusto, setNovoCusto] = useState<Record<number, { descricao: string; valor: string; data: string }>>({});
+  const [consultandoPlaca, setConsultandoPlaca] = useState<number | null>(null);
+  const [resultadoPlaca, setResultadoPlaca] = useState<Record<number, { erro?: string; naoConfigurado?: boolean; dados?: any }>>({});
+  const [emitindoContrato, setEmitindoContrato] = useState<number | null>(null);
+  const [resultadoContrato, setResultadoContrato] = useState<Record<number, { erro?: string; loja_sign_url?: string; comprador_sign_url?: string }>>({});
 
   const carregar = useCallback(async () => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     const [{ data: leadsData }, { data: custosData }] = await Promise.all([
       supabase.from('leads')
-        .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, created_at')
+        .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, email, created_at')
         .eq('empresa_id', perfil.empresa_id)
         .not('veiculo_placa', 'is', null)
         .order('created_at', { ascending: false }),
@@ -164,6 +170,49 @@ export default function ArgusFinanceiroVeiculosPage() {
   const excluirCusto = async (custoId: number) => {
     const { error } = await supabase.from('leads_veiculo_custos').delete().eq('id', custoId);
     if (!error) setCustos(prev => prev.filter(c => c.id !== custoId));
+  };
+
+  const consultarPlaca = async (l: LeadVeiculo) => {
+    if (!l.veiculo_placa || !perfil?.empresa_id) return;
+    setConsultandoPlaca(l.id);
+    try {
+      const res = await fetch('/api/argus/consulta-placa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa_id: perfil.empresa_id, placa: l.veiculo_placa }),
+      });
+      const json = await res.json();
+      setResultadoPlaca(prev => ({ ...prev, [l.id]: res.ok ? { dados: json.dados } : { erro: json.erro, naoConfigurado: json.naoConfigurado } }));
+    } catch (err: any) {
+      setResultadoPlaca(prev => ({ ...prev, [l.id]: { erro: err?.message || 'Erro ao consultar.' } }));
+    }
+    setConsultandoPlaca(null);
+  };
+
+  const emitirContrato = async (l: LeadVeiculo) => {
+    if (!perfil?.empresa_id) return;
+    if (!l.email) {
+      setResultadoContrato(prev => ({ ...prev, [l.id]: { erro: 'Esse cliente não tem e-mail cadastrado — edite a venda em Vendas e adicione o e-mail antes de emitir o contrato.' } }));
+      return;
+    }
+    setEmitindoContrato(l.id);
+    try {
+      const res = await fetch('/api/argus/contrato-veiculo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa_id: perfil.empresa_id,
+          lead_id: l.id,
+          comprador_email: l.email,
+          consultor: { nome: perfil?.nome || '', email: user?.email || '' },
+        }),
+      });
+      const json = await res.json();
+      setResultadoContrato(prev => ({ ...prev, [l.id]: res.ok ? { loja_sign_url: json.loja_sign_url, comprador_sign_url: json.comprador_sign_url } : { erro: json.erro } }));
+    } catch (err: any) {
+      setResultadoContrato(prev => ({ ...prev, [l.id]: { erro: err?.message || 'Erro ao emitir contrato.' } }));
+    }
+    setEmitindoContrato(null);
   };
 
   const imprimirHistorico = (l: LeadVeiculo) => {
@@ -338,8 +387,40 @@ export default function ArgusFinanceiroVeiculosPage() {
                                   <Receipt size={12} /> Recibo de venda
                                 </button>
                               )}
+                              {l.status === 'ganho' && (
+                                <button onClick={() => emitirContrato(l)} disabled={emitindoContrato === l.id} className="flex items-center gap-1.5 text-xs font-bold text-[#5c5c5c] uppercase tracking-wide disabled:opacity-50">
+                                  {emitindoContrato === l.id ? <Loader2 size={12} className="animate-spin" /> : <FileSignature size={12} />} Emitir contrato
+                                </button>
+                              )}
+                              {l.veiculo_placa && (
+                                <button onClick={() => consultarPlaca(l)} disabled={consultandoPlaca === l.id} className="flex items-center gap-1.5 text-xs font-bold text-[#5c5c5c] uppercase tracking-wide disabled:opacity-50">
+                                  {consultandoPlaca === l.id ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />} Multas/débitos
+                                </button>
+                              )}
                             </div>
                           </div>
+
+                          {resultadoPlaca[l.id] && (
+                            resultadoPlaca[l.id].naoConfigurado ? (
+                              <p className="text-[11px] font-semibold text-[#a8630f] bg-[#fdf3e7] border border-[#d9861c]/30 rounded-lg px-3 py-2">{resultadoPlaca[l.id].erro}</p>
+                            ) : resultadoPlaca[l.id].erro ? (
+                              <p className="text-[11px] font-semibold text-red-600">{resultadoPlaca[l.id].erro}</p>
+                            ) : (
+                              <pre className="bg-[#f5f5f5] border border-[#e0e0e0] rounded-lg p-3 overflow-x-auto text-[11px] text-[#171717]">{JSON.stringify(resultadoPlaca[l.id].dados, null, 2)}</pre>
+                            )
+                          )}
+
+                          {resultadoContrato[l.id] && (
+                            resultadoContrato[l.id].erro ? (
+                              <p className="text-[11px] font-semibold text-red-600">{resultadoContrato[l.id].erro}</p>
+                            ) : (
+                              <div className="bg-[#f5f5f5] border border-[#e0e0e0] rounded-lg p-3 text-[11px] space-y-1">
+                                <p className="font-bold text-[#171717]">Contrato enviado pra assinatura!</p>
+                                {resultadoContrato[l.id].loja_sign_url && <p><a href={resultadoContrato[l.id].loja_sign_url} target="_blank" rel="noreferrer" className="text-[#1d6fd9] underline">Link de assinatura da loja</a></p>}
+                                {resultadoContrato[l.id].comprador_sign_url && <p><a href={resultadoContrato[l.id].comprador_sign_url} target="_blank" rel="noreferrer" className="text-[#1d6fd9] underline">Link de assinatura do comprador</a></p>}
+                              </div>
+                            )
+                          )}
 
                           {emEdicao ? (
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

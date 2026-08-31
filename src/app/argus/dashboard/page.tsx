@@ -2,9 +2,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
-import { ArgusEdital, ArgusContrato, fmtMoeda, fmtMoedaCompacta } from '../shared';
+import { ArgusEdital, ArgusContrato, fmtMoeda, fmtMoedaCompacta, fmtData } from '../shared';
 import { Obra, Medicao } from '@/app/obras/shared';
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -38,6 +38,10 @@ type LeadVeiculo = {
 };
 
 type CustoItem = { id: number; lead_id: number; descricao: string; valor: number; data: string };
+type DocumentoVencendo = {
+  id: number; titulo: string; categoria: string; data_vencimento: string; lead_id: number;
+  leads: { veiculo_placa: string | null; veiculo_referencia: string | null } | null;
+};
 
 function ArgusDashboardVeiculos() {
   const auth = useAuth() || {};
@@ -47,12 +51,14 @@ function ArgusDashboardVeiculos() {
   const [leads, setLeads] = useState<LeadVeiculo[]>([]);
   const [custos, setCustos] = useState<CustoItem[]>([]);
   const [percentualComissao, setPercentualComissao] = useState(0);
+  const [documentosVencendo, setDocumentosVencendo] = useState<DocumentoVencendo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const carregar = useCallback(async () => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
-    const [{ data: leadsData }, { data: custosData }, { data: comissaoConfig }] = await Promise.all([
+    const em30Dias = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const [{ data: leadsData }, { data: custosData }, { data: comissaoConfig }, { data: documentosData }] = await Promise.all([
       supabase.from('leads')
         .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, created_at')
         .eq('empresa_id', perfil.empresa_id)
@@ -60,10 +66,17 @@ function ArgusDashboardVeiculos() {
         .order('created_at', { ascending: false }),
       supabase.from('leads_veiculo_custos').select('id, lead_id, descricao, valor, data').eq('empresa_id', perfil.empresa_id),
       supabase.from('argus_comissao_config').select('percentual').eq('empresa_id', perfil.empresa_id).maybeSingle(),
+      supabase.from('leads_veiculo_documentos')
+        .select('id, titulo, categoria, data_vencimento, lead_id, leads(veiculo_placa, veiculo_referencia)')
+        .eq('empresa_id', perfil.empresa_id)
+        .not('data_vencimento', 'is', null)
+        .lte('data_vencimento', em30Dias)
+        .order('data_vencimento', { ascending: true }),
     ]);
     setLeads((leadsData as LeadVeiculo[]) || []);
     setCustos((custosData as CustoItem[]) || []);
     setPercentualComissao(Number(comissaoConfig?.percentual || 0));
+    setDocumentosVencendo((documentosData as any) || []);
     setLoading(false);
   }, [perfil?.empresa_id]);
 
@@ -135,6 +148,22 @@ function ArgusDashboardVeiculos() {
       <ArgusTopNav nomeEmpresa={empresa?.nome} />
       <main className="max-w-[1400px] mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-[#171717] mb-6" style={{ fontFamily: 'var(--font-argus-serif)' }}>Dashboard</h1>
+
+        {!loading && documentosVencendo.length > 0 && (
+          <div className="bg-[#fdf3e7] border border-[#d9861c]/30 rounded-2xl p-5 mb-6">
+            <p className="flex items-center gap-2 text-[13px] font-bold text-[#a8630f] uppercase tracking-wide mb-3">
+              <AlertTriangle size={15} /> {documentosVencendo.length} documento(s) vencendo nos próximos 30 dias
+            </p>
+            <div className="space-y-1.5">
+              {documentosVencendo.map(d => (
+                <div key={d.id} className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2 text-[12.5px]">
+                  <span className="font-semibold text-[#171717]">{d.titulo}</span>
+                  <span className="text-[#8a8a8a]">{d.leads?.veiculo_placa || d.leads?.veiculo_referencia || '—'} · vence {fmtData(d.data_vencimento)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="p-8 flex justify-center"><Loader2 size={22} className="animate-spin text-[#171717]" /></div>

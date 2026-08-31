@@ -22,6 +22,7 @@ type LeadVeiculo = {
   vendedor_nome: string | null;
   cidade: string | null;
   telefone: string | null;
+  email: string | null;
   created_at: string;
 };
 
@@ -38,7 +39,7 @@ const COLUNAS: { id: string; label: string }[] = [
 ];
 
 const FORM_VAZIO = {
-  empresa: '', telefone: '', cidade: '', vendedor_nome: '',
+  empresa: '', telefone: '', email: '', cidade: '', vendedor_nome: '',
   veiculo_referencia: '', veiculo_placa: '', valor_total: '',
   veiculo_fipe_valor: '', veiculo_valor_compra: '', veiculo_data_compra: '',
 };
@@ -123,7 +124,7 @@ export default function ArgusVendasVeiculosPage() {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     supabase.from('leads')
-      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, cidade, telefone, created_at')
+      .select('id, empresa, valor_total, status, etapa, veiculo_referencia, veiculo_placa, veiculo_fipe_valor, veiculo_valor_compra, veiculo_data_compra, veiculo_data_venda, vendedor_nome, cidade, telefone, email, created_at')
       .eq('empresa_id', perfil.empresa_id)
       .not('veiculo_placa', 'is', null)
       .order('created_at', { ascending: false })
@@ -172,7 +173,7 @@ export default function ArgusVendasVeiculosPage() {
     resetarSelecaoFipe();
     carregarMarcasFipe();
     setForm({
-      empresa: lead.empresa, telefone: lead.telefone || '', cidade: lead.cidade || '',
+      empresa: lead.empresa, telefone: lead.telefone || '', email: lead.email || '', cidade: lead.cidade || '',
       vendedor_nome: lead.vendedor_nome || '', veiculo_referencia: lead.veiculo_referencia || '',
       veiculo_placa: lead.veiculo_placa || '', valor_total: String(lead.valor_total || ''),
       veiculo_fipe_valor: lead.veiculo_fipe_valor != null ? String(lead.veiculo_fipe_valor) : '',
@@ -191,6 +192,7 @@ export default function ArgusVendasVeiculosPage() {
     const payload = {
       empresa: form.empresa.trim(),
       telefone: form.telefone.trim() || null,
+      email: form.email.trim() || null,
       cidade: form.cidade.trim() || null,
       vendedor_nome: form.vendedor_nome.trim() || null,
       veiculo_referencia: form.veiculo_referencia.trim() || null,
@@ -347,13 +349,19 @@ export default function ArgusVendasVeiculosPage() {
                   <input value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
                 </div>
                 <div>
+                  <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">E-mail (pra assinatura de contrato)</label>
+                  <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Cidade</label>
                   <input value={form.cidade} onChange={e => setForm({ ...form, cidade: e.target.value })} className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Vendedor</label>
-                <input value={form.vendedor_nome} onChange={e => setForm({ ...form, vendedor_nome: e.target.value })} placeholder="Quem está atendendo" className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
+                <div>
+                  <label className="text-[10px] font-bold text-[#8a8a8a] uppercase block mb-1">Vendedor</label>
+                  <input value={form.vendedor_nome} onChange={e => setForm({ ...form, vendedor_nome: e.target.value })} placeholder="Quem está atendendo" className="w-full bg-[#f5f5f5] border border-[#e0e0e0] rounded-xl px-3 py-2.5 text-sm text-[#171717] outline-none focus:border-[#171717]" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

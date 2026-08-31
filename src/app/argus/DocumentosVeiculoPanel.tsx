@@ -13,8 +13,11 @@ type DocumentoVeiculo = {
   categoria: Categoria;
   titulo: string;
   arquivo_path: string;
+  data_vencimento: string | null;
   created_at: string;
 };
+
+const CATEGORIAS_COM_VENCIMENTO: Categoria[] = ['crlv', 'laudo_cautelar'];
 
 const CATEGORIA_LABELS: Record<Categoria, string> = {
   nota_fiscal_compra: 'Nota fiscal (compra)',
@@ -40,6 +43,7 @@ export default function DocumentosVeiculoPanel({ leadId }: { leadId: number }) {
   const [categoria, setCategoria] = useState<Categoria>('nota_fiscal_compra');
   const [titulo, setTitulo] = useState('');
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [vencimento, setVencimento] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
 
@@ -67,11 +71,12 @@ export default function DocumentosVeiculoPanel({ leadId }: { leadId: number }) {
       const payload = {
         empresa_id: perfil.empresa_id, lead_id: leadId, categoria, titulo: titulo.trim(),
         arquivo_path: path, tamanho_bytes: arquivo.size, responsavel_nome: perfil?.nome || null, user_id: user?.id,
+        data_vencimento: vencimento || null,
       };
       const { data, error } = await supabase.from('leads_veiculo_documentos').insert([payload]).select();
       if (error) throw error;
       if (data) setItens(prev => [data[0] as DocumentoVeiculo, ...prev]);
-      setTitulo(''); setArquivo(null); setFormAberto(false);
+      setTitulo(''); setArquivo(null); setVencimento(''); setFormAberto(false);
     } catch (err: any) {
       setErro(err?.message || 'Erro ao enviar arquivo.');
     } finally {
@@ -121,6 +126,13 @@ export default function DocumentosVeiculoPanel({ leadId }: { leadId: number }) {
             <input value={titulo} onChange={e => setTitulo(e.target.value)} required placeholder="Ex: CRLV atualizado"
               className="w-full mt-1 border border-[#e0e0e0] rounded-lg px-2.5 py-1.5 text-[13px] focus:outline-none focus:border-[#171717]" />
           </div>
+          {CATEGORIAS_COM_VENCIMENTO.includes(categoria) && (
+            <div>
+              <label className="text-[10px] font-bold uppercase text-[#8a8a8a]">Vencimento (opcional — ativa alerta no Dashboard)</label>
+              <input type="date" value={vencimento} onChange={e => setVencimento(e.target.value)}
+                className="w-full mt-1 border border-[#e0e0e0] rounded-lg px-2.5 py-1.5 text-[13px] focus:outline-none focus:border-[#171717]" />
+            </div>
+          )}
           {erro && <p className="text-[11px] text-red-600 font-semibold">{erro}</p>}
           <button type="submit" disabled={enviando || !arquivo || !titulo.trim()}
             className="w-full bg-[#171717] hover:bg-black disabled:opacity-50 text-white py-2 rounded-lg text-[12.5px] font-semibold transition-all flex items-center justify-center gap-2">
@@ -141,7 +153,14 @@ export default function DocumentosVeiculoPanel({ leadId }: { leadId: number }) {
                 <FileText size={14} className="text-[#171717] flex-shrink-0" />
                 <span className="min-w-0">
                   <span className="block text-[12.5px] font-semibold text-[#171717] truncate">{item.titulo}</span>
-                  <span className="block text-[10.5px] text-[#8a8a8a]">{CATEGORIA_LABELS[item.categoria]} · {fmtData(item.created_at)}</span>
+                  <span className="block text-[10.5px] text-[#8a8a8a]">
+                    {CATEGORIA_LABELS[item.categoria]} · {fmtData(item.created_at)}
+                    {item.data_vencimento && (
+                      <span className={new Date(item.data_vencimento) < new Date() ? 'text-red-600 font-bold' : (new Date(item.data_vencimento).getTime() - Date.now()) / 86400000 <= 30 ? 'text-[#d9861c] font-bold' : ''}>
+                        {' '}· vence {fmtData(item.data_vencimento)}
+                      </span>
+                    )}
+                  </span>
                 </span>
               </button>
               <div className="flex items-center gap-1 flex-shrink-0">

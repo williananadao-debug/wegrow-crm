@@ -10,7 +10,7 @@ type ItemProducao = { servicoId: number | ''; quantidade: string };
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
   id: number; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
-  status: StatusProducao;
+  status: StatusProducao; previsao_entrega: string | null; responsavel_id: string | null;
 };
 
 const ETAPAS: { status: StatusProducao; label: string; icon: any; cor: string }[] = [
@@ -24,7 +24,7 @@ const PROXIMA_ETAPA: Record<StatusProducao, StatusProducao | null> = { em_produc
 // MRP completo (sem múltiplos níveis de montagem, sem apontamento de mão de obra) — cobre
 // o caso real de fábrica que falta hoje no Pulse (que só modela revenda 1:1).
 function PulseProducaoContent() {
-  const { authLoading, temPulse, user, perfil } = usePulseAccess();
+  const { authLoading, temPulse, user, perfil, isLideranca, usersMap } = usePulseAccess();
   const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
@@ -33,14 +33,18 @@ function PulseProducaoContent() {
   const [produtoFinalId, setProdutoFinalId] = useState<number | ''>('');
   const [quantidadeProduzida, setQuantidadeProduzida] = useState('');
   const [itens, setItens] = useState<ItemProducao[]>([{ servicoId: '', quantidade: '' }]);
+  const [previsaoEntrega, setPrevisaoEntrega] = useState('');
+  const [responsavelId, setResponsavelId] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+
+  useEffect(() => { if (!responsavelId) setResponsavelId(user?.id || ''); }, [user?.id]);
 
   const carregar = async () => {
     setLoading(true);
     const [{ data: servicosData }, { data: producoesData }] = await Promise.all([
       supabase.from('servicos').select('*').order('nome', { ascending: true }),
-      supabase.from('pulse_producoes').select('id, produto_final_nome, quantidade_produzida, custo_total, created_at, status').order('created_at', { ascending: false }).limit(30),
+      supabase.from('pulse_producoes').select('id, produto_final_nome, quantidade_produzida, custo_total, created_at, status, previsao_entrega, responsavel_id').order('created_at', { ascending: false }).limit(30),
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
@@ -87,6 +91,7 @@ function PulseProducaoContent() {
       const { data: producao, error: errProd } = await supabase.from('pulse_producoes').insert([{
         empresa_id: perfil?.empresa_id, produto_final_id: produtoFinalId, produto_final_nome: produtoFinal?.nome || '',
         quantidade_produzida: qtdProduzida, custo_total: custo, user_id: user?.id,
+        previsao_entrega: previsaoEntrega || null, responsavel_id: responsavelId || user?.id || null,
       }]).select('id').single();
       if (errProd || !producao) throw new Error(errProd?.message || 'Erro ao registrar produção.');
 
@@ -127,7 +132,7 @@ function PulseProducaoContent() {
         }
       }
 
-      setProdutoFinalId(''); setQuantidadeProduzida(''); setItens([{ servicoId: '', quantidade: '' }]);
+      setProdutoFinalId(''); setQuantidadeProduzida(''); setItens([{ servicoId: '', quantidade: '' }]); setPrevisaoEntrega('');
       carregar();
     } catch (err: any) {
       setErro(err?.message || 'Erro ao registrar produção.');
@@ -188,6 +193,20 @@ function PulseProducaoContent() {
             <input type="number" value={quantidadeProduzida} onChange={e => setQuantidadeProduzida(e.target.value)}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" placeholder="1" />
           </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Previsão de entrega</label>
+            <input type="date" value={previsaoEntrega} onChange={e => setPrevisaoEntrega(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" />
+          </div>
+          {isLideranca && Object.keys(usersMap).length > 0 && (
+            <div>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Responsável</label>
+              <select value={responsavelId} onChange={e => setResponsavelId(e.target.value)}
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
+                {Object.entries(usersMap).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Matérias-primas consumidas</p>
@@ -248,7 +267,15 @@ function PulseProducaoContent() {
                 <div key={p.id} className="flex items-center justify-between gap-3 p-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-white font-bold text-sm truncate">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
-                    <p className="text-slate-500 text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                    <p className="text-slate-500 text-[10px]">
+                      {new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      {p.responsavel_id && usersMap[p.responsavel_id] && ` · ${usersMap[p.responsavel_id]}`}
+                      {p.previsao_entrega && (
+                        <span className={new Date(p.previsao_entrega) < new Date() && p.status !== 'entregue' ? 'text-red-400 font-bold' : ''}>
+                          {' '}· entrega {new Date(p.previsao_entrega + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 rounded-full flex-shrink-0 ${etapa.cor}`}>
                     <Icon size={11} /> {etapa.label}

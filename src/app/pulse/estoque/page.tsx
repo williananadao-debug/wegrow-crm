@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle, Pencil } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle, Pencil, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -36,6 +36,9 @@ export default function PulseEstoquePage() {
   const [ajusteMotivo, setAjusteMotivo] = useState('');
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
+  const [busca, setBusca] = useState('');
+  const [soBaixo, setSoBaixo] = useState(false);
+
   const fetchServicos = async () => {
     setLoadingServicos(true);
     const { data } = await supabase.from('servicos').select('*').order('nome', { ascending: true });
@@ -49,10 +52,16 @@ export default function PulseEstoquePage() {
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
 
+  const combina = (s: ServicoConfig) => {
+    if (soBaixo && (s.estoque as number) > (s.estoque_minimo ?? 5)) return false;
+    if (!busca.trim()) return true;
+    return s.nome.toLowerCase().includes(busca.trim().toLowerCase()) || (s.sku || '').toLowerCase().includes(busca.trim().toLowerCase());
+  };
+
   // Separado por tipo — matéria-prima e produto acabado misturados na mesma lista
   // confundia (ex: fábrica de trailer via chapa de aço junto com o trailer pronto).
-  const materiaPrima = produtosComEstoque.filter(s => s.tipo === 'Matéria-prima');
-  const produtosFinais = produtosComEstoque.filter(s => s.tipo !== 'Matéria-prima');
+  const materiaPrima = produtosComEstoque.filter(s => s.tipo === 'Matéria-prima' && combina(s));
+  const produtosFinais = produtosComEstoque.filter(s => s.tipo !== 'Matéria-prima' && combina(s));
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const atual = s.estoque || 0;
@@ -164,10 +173,16 @@ export default function PulseEstoquePage() {
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Wallet size={10} /> Valor em estoque</p>
           <p className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
         </div>
-        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Estoque baixo</p>
+        <button onClick={() => setSoBaixo(v => !v)} className={`text-left bg-[#0F172A] border rounded-2xl p-4 transition-all ${soBaixo ? 'border-red-500/50 bg-red-500/5' : 'border-white/10 hover:border-white/20'}`}>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Estoque baixo {soBaixo && '· filtrando'}</p>
           <p className={`text-2xl font-black mt-1 ${produtosBaixo.length > 0 ? 'text-red-400' : 'text-white'}`}>{produtosBaixo.length}</p>
-        </div>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
+        <Search size={14} className="text-slate-500 flex-shrink-0" />
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou SKU..." className="flex-1 bg-transparent outline-none text-white text-sm" />
+        {busca && <button onClick={() => setBusca('')} className="text-slate-500 hover:text-white"><X size={14} /></button>}
       </div>
 
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-4">

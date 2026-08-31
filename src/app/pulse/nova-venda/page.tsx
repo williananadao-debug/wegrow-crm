@@ -35,6 +35,8 @@ export default function PulseNovaVendaPage() {
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [buscaHistorico, setBuscaHistorico] = useState('');
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
 
   const carregarHistorico = async () => {
     if (!perfil?.empresa_id) return;
@@ -51,6 +53,19 @@ export default function PulseNovaVendaPage() {
     const abrindo = !mostrarHistorico;
     setMostrarHistorico(abrindo);
     if (abrindo && historico.length === 0) carregarHistorico();
+  };
+
+  const historicoFiltrado = historico.filter(h =>
+    !buscaHistorico.trim() || h.empresa?.toLowerCase().includes(buscaHistorico.trim().toLowerCase()) || String(h.id).includes(buscaHistorico.trim())
+  );
+  const totalHistoricoFiltrado = historicoFiltrado.filter(h => h.status !== 'orcamento').reduce((s, h) => s + Number(h.valor_total || 0), 0);
+
+  const cancelarOrcamento = async (id: number) => {
+    if (!confirm('Cancelar este orçamento? Essa ação não pode ser desfeita.')) return;
+    setCancelandoId(id);
+    const { error } = await supabase.from('leads').delete().eq('id', id);
+    setCancelandoId(null);
+    if (!error) setHistorico(prev => prev.filter(h => h.id !== id));
   };
 
   useEffect(() => {
@@ -281,16 +296,23 @@ export default function PulseNovaVendaPage() {
 
       {mostrarHistorico && (
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-5">
-          <div className="p-5 border-b border-white/5">
-            <h3 className="font-black uppercase text-sm text-slate-300">Vendas e orçamentos recentes</h3>
+          <div className="p-5 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-black uppercase text-sm text-slate-300">Vendas e orçamentos recentes</h3>
+              <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Faturado no período exibido: <span className="text-[var(--cor-primaria)]">R$ {totalHistoricoFiltrado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+            </div>
+            <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 focus-within:border-[var(--cor-primaria)]">
+              <Search size={13} className="text-slate-500 flex-shrink-0" />
+              <input value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} placeholder="Cliente ou protocolo..." className="flex-1 bg-transparent outline-none text-white text-xs w-40" />
+            </div>
           </div>
           {carregandoHistorico ? (
             <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-          ) : historico.length === 0 ? (
-            <div className="p-8 text-center"><p className="text-slate-500 text-sm font-bold">Nenhuma venda registrada ainda por aqui.</p></div>
+          ) : historicoFiltrado.length === 0 ? (
+            <div className="p-8 text-center"><p className="text-slate-500 text-sm font-bold">{historico.length === 0 ? 'Nenhuma venda registrada ainda por aqui.' : 'Nada encontrado pra essa busca.'}</p></div>
           ) : (
             <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
-              {historico.map(h => {
+              {historicoFiltrado.map(h => {
                 const ehOrc = h.status === 'orcamento';
                 const itens = Array.isArray(h.itens) ? h.itens : [];
                 return (
@@ -305,6 +327,11 @@ export default function PulseNovaVendaPage() {
                       {ehOrc ? 'Orçamento' : 'Venda'}
                     </span>
                     <span className="text-white font-black text-sm flex-shrink-0 w-24 text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    {ehOrc && (
+                      <button onClick={() => cancelarOrcamento(h.id)} disabled={cancelandoId === h.id} title="Cancelar orçamento" className="flex-shrink-0 text-slate-600 hover:text-red-400 disabled:opacity-50">
+                        {cancelandoId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
+                    )}
                   </div>
                 );
               })}

@@ -2,8 +2,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Loader2, DollarSign, Search, ChevronDown, ChevronUp, Plus, Trash2, Printer, Save } from 'lucide-react';
+import { Loader2, DollarSign, Search, ChevronDown, ChevronUp, Plus, Trash2, Printer, Save, Receipt } from 'lucide-react';
 import ArgusTopNav from '../ArgusTopNav';
+import DocumentosVeiculoPanel from '../DocumentosVeiculoPanel';
 import { fmtMoeda, fmtMoedaCompacta, fmtData } from '../shared';
 
 type LeadVeiculo = {
@@ -201,6 +202,38 @@ export default function ArgusFinanceiroVeiculosPage() {
     win.print();
   };
 
+  const emitirReciboVenda = (l: LeadVeiculo) => {
+    const win = window.open('', '_blank', 'width=800,height=900');
+    if (!win) return;
+    win.document.write(`
+      <html><head><title>Recibo de venda — ${l.veiculo_placa || l.veiculo_referencia || 'Veículo'}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; color: #171717; }
+        h1 { font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 30px; }
+        .linha { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
+        .linha span:first-child { color: #666; }
+        .linha span:last-child { font-weight: bold; }
+        .total { display: flex; justify-content: space-between; padding: 16px 0; margin-top: 10px; font-size: 18px; font-weight: bold; border-top: 2px solid #171717; }
+        .assinaturas { display: flex; justify-content: space-between; margin-top: 90px; }
+        .assinaturas div { width: 45%; border-top: 1px solid #171717; text-align: center; padding-top: 8px; font-size: 12px; color: #666; }
+      </style></head><body>
+        <h1>Recibo de venda de veículo</h1>
+        <div class="linha"><span>Comprador</span><span>${l.empresa}</span></div>
+        <div class="linha"><span>Veículo</span><span>${l.veiculo_referencia || '—'}</span></div>
+        <div class="linha"><span>Placa</span><span>${l.veiculo_placa || '—'}</span></div>
+        <div class="linha"><span>Vendedor</span><span>${l.vendedor_nome || '—'}</span></div>
+        <div class="linha"><span>Data da venda</span><span>${fmtData(l.veiculo_data_venda)}</span></div>
+        <div class="total"><span>Valor</span><span>${fmtMoeda(l.valor_total)}</span></div>
+        <div class="assinaturas">
+          <div>Vendedor</div>
+          <div>Comprador</div>
+        </div>
+      </body></html>
+    `);
+    win.document.close();
+    win.print();
+  };
+
   return (
     <div>
       <ArgusTopNav nomeEmpresa={empresa?.nome} />
@@ -298,8 +331,13 @@ export default function ArgusFinanceiroVeiculosPage() {
                                 <button onClick={() => iniciarEdicao(l)} className="text-xs font-bold text-[#171717] uppercase tracking-wide">Editar</button>
                               )}
                               <button onClick={() => imprimirHistorico(l)} className="flex items-center gap-1.5 text-xs font-bold text-[#5c5c5c] uppercase tracking-wide">
-                                <Printer size={12} /> Imprimir
+                                <Printer size={12} /> Imprimir histórico
                               </button>
+                              {l.status === 'ganho' && (
+                                <button onClick={() => emitirReciboVenda(l)} className="flex items-center gap-1.5 text-xs font-bold text-[#5c5c5c] uppercase tracking-wide">
+                                  <Receipt size={12} /> Recibo de venda
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -365,6 +403,10 @@ export default function ArgusFinanceiroVeiculosPage() {
                                 <Plus size={13} /> Adicionar
                               </button>
                             </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-[#f0f0f0]">
+                            <DocumentosVeiculoPanel leadId={l.id} />
                           </div>
                         </div>
                       )}

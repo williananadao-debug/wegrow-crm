@@ -1,17 +1,19 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ClienteOpcao, ServicoConfig, ItemCarrinho, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from '../shared';
+import { ClienteOpcao, ServicoConfig, ItemCarrinho, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica } from '../shared';
 
 export default function PulseNovaVendaPage() {
   const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
+  const [fichas, setFichas] = useState<{ produto_final_id: number; servico_id: number; quantidade_por_unidade: number }[]>([]);
   const [busca, setBusca] = useState('');
+  const [producoesIniciadas, setProducoesIniciadas] = useState<{ nome: string; ok: boolean }[]>([]);
 
   const [unidadeSel, setUnidadeSel] = useState('');
   const [vendedorId, setVendedorId] = useState('');
@@ -77,12 +79,32 @@ export default function PulseNovaVendaPage() {
   useEffect(() => {
     const carregar = async () => {
       setLoadingServicos(true);
-      const { data } = await supabase.from('servicos').select('*').order('nome', { ascending: true });
+      const [{ data }, { data: fichasData }] = await Promise.all([
+        supabase.from('servicos').select('*').order('nome', { ascending: true }),
+        supabase.from('pulse_fichas_tecnicas').select('produto_final_id, servico_id, quantidade_por_unidade'),
+      ]);
       if (data) setServicos(data as ServicoConfig[]);
+      if (fichasData) setFichas(fichasData);
       setLoadingServicos(false);
     };
     carregar();
   }, []);
+
+  const fichasPorProduto = useMemo(() => {
+    const m = new Map<number, FichaTecnicaItem[]>();
+    for (const f of fichas) {
+      const lista = m.get(f.produto_final_id) || [];
+      lista.push({ servicoId: f.servico_id, quantidadePorUnidade: Number(f.quantidade_por_unidade) });
+      m.set(f.produto_final_id, lista);
+    }
+    return m;
+  }, [fichas]);
+
+  // Sob encomenda = não guarda produto pronto parado (ex: trailer) — precisa de ficha
+  // técnica cadastrada em Produção antes de poder ser vendido, porque é ela que dispara a
+  // produção automaticamente ao fechar o pedido.
+  const ehSobEncomenda = (s: ServicoConfig) => s.tipo !== 'Matéria-prima' && (s.estoque === null || s.estoque === undefined);
+  const temFichaTecnica = (s: ServicoConfig) => (fichasPorProduto.get(s.id) || []).length > 0;
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -110,6 +132,7 @@ export default function PulseNovaVendaPage() {
   });
 
   const adicionarItem = (s: ServicoConfig) => {
+    if (ehSobEncomenda(s) && !temFichaTecnica(s)) return;
     setCarrinho(prev => {
       const existente = prev.find(i => i.servicoId === s.id);
       const maxima = s.estoque ?? null;
@@ -141,12 +164,27 @@ export default function PulseNovaVendaPage() {
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setClienteSelecionado(null); setClienteQuery('');
     setNovoTelefone(''); setNovoCnpj(''); setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
+    setProducoesIniciadas([]);
   };
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);
     if (!clienteSelecionado && clienteQuery.trim().length < 2) { setErro('Selecione ou digite o nome do cliente.'); return; }
     if (carrinho.length === 0) { setErro('Adicione pelo menos um item.'); return; }
+
+    // Sob encomenda sem ficha técnica não pode virar pedido — a produção nasceria sem
+    // saber o que consumir. Orçamento passa (ainda não mexe em estoque/produção).
+    if (modo === 'pedido') {
+      const servicoPorId = new Map(servicos.map(s => [s.id, s]));
+      const semFicha = carrinho.filter(i => {
+        const s = servicoPorId.get(i.servicoId);
+        return s && ehSobEncomenda(s) && !temFichaTecnica(s);
+      });
+      if (semFicha.length > 0) {
+        setErro(`Configure a ficha técnica de "${semFicha[0].nome}" em Produção antes de fechar essa venda.`);
+        return;
+      }
+    }
 
     setSalvando(true);
     try {
@@ -219,6 +257,39 @@ export default function PulseNovaVendaPage() {
           const item = carrinho.find(i => i.servicoId === s.id);
           return item && s.estoque !== null && s.estoque !== undefined ? { ...s, estoque: Math.max(0, s.estoque - item.quantidade) } : s;
         }));
+
+        // Produto sob encomenda com ficha técnica: produção nasce sozinha, direto em
+        // "Em produção" — ninguém passa pelo form manual de novo. Mapa com cópias (não as
+        // referências de `servicos`) porque duas produções desta MESMA venda podem
+        // compartilhar matéria-prima — sem atualizar o estoque local entre elas, a segunda
+        // chamada partiria do estoque de antes da primeira e sobrescreveria o desconto dela.
+        const servicoPorId = new Map(servicos.map(s => [s.id, { ...s }]));
+        const itensSobEncomenda = carrinho.filter(i => {
+          const s = servicoPorId.get(i.servicoId);
+          return s && ehSobEncomenda(s) && temFichaTecnica(s);
+        });
+        const resultados: { nome: string; ok: boolean }[] = [];
+        for (const item of itensSobEncomenda) {
+          const produtoFinal = servicoPorId.get(item.servicoId)!;
+          const fichaItens = fichasPorProduto.get(item.servicoId) || [];
+          try {
+            await registrarProducaoAutomatica({
+              empresaId: perfil?.empresa_id, produtoFinal, quantidadeProduzida: item.quantidade,
+              fichaItens, materiaPrimaPorId: servicoPorId,
+              userId: user?.id, responsavelId: vendedorId || user?.id, leadId: leadData.id, status: 'em_producao',
+            });
+            for (const fi of fichaItens) {
+              const mp = servicoPorId.get(fi.servicoId);
+              if (mp && mp.estoque !== null && mp.estoque !== undefined) {
+                mp.estoque = Math.max(0, mp.estoque - fi.quantidadePorUnidade * item.quantidade);
+              }
+            }
+            resultados.push({ nome: item.nome, ok: true });
+          } catch {
+            resultados.push({ nome: item.nome, ok: false });
+          }
+        }
+        setProducoesIniciadas(resultados);
       }
 
       setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload, status: modo === 'pedido' ? 'ganho' : 'orcamento' });
@@ -254,16 +325,20 @@ export default function PulseNovaVendaPage() {
           <p className={`text-3xl font-black mt-4 ${ehOrcamento ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`}>R$ {vendaConcluida.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           {ehOrcamento && <p className="text-slate-500 text-[10px] mt-2">Sem efeito no estoque/financeiro ainda — converte em pedido no Painel quando o cliente aprovar.</p>}
 
-          {!ehOrcamento && carrinho.length > 0 && (
+          {!ehOrcamento && producoesIniciadas.length > 0 && (
             <div className="mt-5 pt-5 border-t border-white/5 space-y-2">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left">Precisa fabricar algum item deste pedido?</p>
-              {carrinho.map(i => (
-                <Link key={i.servicoId} href={`/pulse/producao?produtoFinalId=${i.servicoId}&quantidade=${i.quantidade}`}
-                  className="w-full flex items-center justify-between gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2.5 text-left transition-all">
-                  <span className="text-white text-xs font-bold truncate">{i.nome} <span className="text-slate-500 font-semibold">× {i.quantidade}</span></span>
-                  <span className="flex items-center gap-1 text-[10px] font-black text-[var(--cor-primaria)] uppercase flex-shrink-0"><Factory size={12} /> Produção</span>
-                </Link>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left">Produção</p>
+              {producoesIniciadas.map((p, idx) => (
+                <div key={idx} className={`w-full flex items-center justify-between gap-2 border rounded-xl px-3 py-2.5 text-left ${p.ok ? 'bg-white/5 border-white/10' : 'bg-red-500/10 border-red-500/20'}`}>
+                  <span className="text-white text-xs font-bold truncate">{p.nome}</span>
+                  <span className={`flex items-center gap-1 text-[10px] font-black uppercase flex-shrink-0 ${p.ok ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>
+                    <Factory size={12} /> {p.ok ? 'Iniciada' : 'Falhou'}
+                  </span>
+                </div>
               ))}
+              <Link href="/pulse/producao" className="block text-center text-[10px] font-black text-[var(--cor-primaria)] uppercase tracking-widest pt-1">
+                Acompanhar no fluxo de produção →
+              </Link>
             </div>
           )}
 
@@ -385,23 +460,34 @@ export default function PulseNovaVendaPage() {
               <Search size={14} className="text-slate-500 flex-shrink-0" />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto no catálogo..." className="flex-1 bg-transparent outline-none text-white text-sm" />
             </div>
+            {!loadingServicos && servicosFiltrados.some(s => ehSobEncomenda(s) && !temFichaTecnica(s)) && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-bold px-3 py-2 rounded-xl mb-3">
+                <Settings2 size={13} className="flex-shrink-0" />
+                <span className="flex-1">Produto(s) sob encomenda sem ficha técnica não podem ser vendidos ainda.</span>
+                <Link href="/pulse/producao" className="underline flex-shrink-0">Configurar</Link>
+              </div>
+            )}
             {loadingServicos ? (
               <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
                 {servicosFiltrados.map(s => {
                   const semEstoque = s.estoque !== null && s.estoque !== undefined && s.estoque <= 0;
+                  const semFicha = ehSobEncomenda(s) && !temFichaTecnica(s);
+                  const bloqueado = semEstoque || semFicha;
                   return (
-                    <button key={s.id} disabled={semEstoque} onClick={() => adicionarItem(s)} className={`text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden transition-all disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <button key={s.id} disabled={bloqueado} onClick={() => adicionarItem(s)} className={`text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden transition-all disabled:opacity-40 disabled:cursor-not-allowed`}>
                       <div className="h-16 bg-white/5 flex items-center justify-center overflow-hidden">
                         {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={20} className="text-slate-600" />}
                       </div>
                       <div className="p-2.5">
                         <p className="text-white text-xs font-bold truncate">{s.nome}</p>
                         <p className="text-[var(--cor-primaria)] text-sm font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        {s.estoque !== null && s.estoque !== undefined && (
+                        {semFicha ? (
+                          <p className="text-[9px] font-bold mt-0.5 text-amber-400 flex items-center gap-1"><Settings2 size={9} /> Sem ficha técnica</p>
+                        ) : s.estoque !== null && s.estoque !== undefined ? (
                           <p className={`text-[9px] font-bold mt-0.5 ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</p>
-                        )}
+                        ) : null}
                       </div>
                     </button>
                   );

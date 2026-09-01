@@ -9,7 +9,13 @@ export type ServicoConfig = {
   id: number; nome: string; preco: number; tipo?: string; unidade?: string;
   estoque?: number | null; imagem_url?: string | null;
   sku?: string | null; preco_custo?: number | null; estoque_minimo?: number | null;
+  prazo_fabricacao_dias?: number | null;
 };
+
+// Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto
+// (ficaria MRP completo, fora do escopo do Pulse hoje). Cobre o caso real de fábrica
+// (corte → estrutura → pintura → acabamento) sem virar um quadro Kanban por si só.
+export const ETAPAS_FABRICACAO = ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'];
 
 export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; };
 
@@ -78,4 +84,91 @@ export async function alertarEstoqueBaixoSeCruzou(servicoId: number, antes: numb
       body: JSON.stringify({ servicoId }),
     }).catch(() => {});
   } catch {}
+}
+
+export type FichaTecnicaItem = { servicoId: number; quantidadePorUnidade: number };
+
+// Registra 1 produção consumindo a ficha técnica do produto (matéria-prima × quantidade
+// produzida) — usado tanto pelo botão manual "Registrar produção" quanto pelo gatilho
+// automático em Nova Venda, pra nunca duplicar a lógica de baixa de estoque/kardex entre
+// os dois lugares.
+export async function registrarProducaoAutomatica(params: {
+  empresaId: string;
+  produtoFinal: ServicoConfig;
+  quantidadeProduzida: number;
+  fichaItens: FichaTecnicaItem[];
+  materiaPrimaPorId: Map<number, ServicoConfig>;
+  userId?: string | null;
+  responsavelId?: string | null;
+  previsaoEntrega?: string | null;
+  leadId?: number | null;
+  status?: 'em_producao' | 'concluida' | 'entregue';
+}): Promise<{ producaoId: number; custoTotal: number }> {
+  const { empresaId, produtoFinal, quantidadeProduzida, fichaItens, materiaPrimaPorId, userId, responsavelId, previsaoEntrega, leadId, status } = params;
+
+  let custoTotal = 0;
+  const consumos = fichaItens.map(fi => {
+    const materiaPrima = materiaPrimaPorId.get(fi.servicoId);
+    const qtd = fi.quantidadePorUnidade * quantidadeProduzida;
+    const custoUnitario = materiaPrima?.preco_custo || 0;
+    custoTotal += qtd * custoUnitario;
+    return { materiaPrima, qtd, custoUnitario };
+  });
+
+  // Sem previsão informada, usa o prazo padrão de fabricação cadastrado na ficha técnica
+  // do produto — venda fechada já nasce com data estimada, sem precisar digitar na hora.
+  let previsaoFinal = previsaoEntrega || null;
+  if (!previsaoFinal && produtoFinal.prazo_fabricacao_dias) {
+    const data = new Date();
+    data.setDate(data.getDate() + produtoFinal.prazo_fabricacao_dias);
+    previsaoFinal = data.toISOString().split('T')[0];
+  }
+
+  const { data: producao, error: errProd } = await supabase.from('pulse_producoes').insert([{
+    empresa_id: empresaId, produto_final_id: produtoFinal.id, produto_final_nome: produtoFinal.nome,
+    quantidade_produzida: quantidadeProduzida, custo_total: custoTotal, user_id: userId || null,
+    previsao_entrega: previsaoFinal, responsavel_id: responsavelId || userId || null,
+    lead_id: leadId || null, status: status || 'em_producao',
+  }]).select('id').single();
+  if (errProd || !producao) throw new Error(errProd?.message || 'Erro ao registrar produção.');
+
+  await supabase.from('pulse_producao_eventos').insert([{
+    producao_id: producao.id, tipo: 'status',
+    texto: leadId ? 'Produção iniciada automaticamente pela venda.' : 'Produção registrada manualmente.',
+    user_id: userId || null,
+  }]);
+
+  for (const c of consumos) {
+    if (!c.materiaPrima) continue;
+    await supabase.from('pulse_producao_itens').insert([{
+      producao_id: producao.id, servico_id: c.materiaPrima.id, materia_prima_nome: c.materiaPrima.nome,
+      quantidade: c.qtd, custo_unitario: c.custoUnitario, subtotal: c.qtd * c.custoUnitario,
+    }]);
+    const estoqueAtual = c.materiaPrima.estoque || 0;
+    const novoEstoque = Math.max(0, estoqueAtual - c.qtd);
+    await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', c.materiaPrima.id);
+    await supabase.from('estoque_movimentacoes').insert([{
+      empresa_id: empresaId, servico_id: c.materiaPrima.id, quantidade: -(estoqueAtual - novoEstoque),
+      tipo: 'consumo_producao', producao_id: producao.id, user_id: userId || null,
+      observacao: `Consumido na produção de ${produtoFinal.nome}`,
+    }]);
+    alertarEstoqueBaixoSeCruzou(c.materiaPrima.id, estoqueAtual, novoEstoque, c.materiaPrima.estoque_minimo ?? 5);
+  }
+
+  // Produto final não precisa ter estoque controlado — fábrica que produz sob encomenda
+  // (ex: trailer) não guarda produto pronto parado, só registra o histórico/custo.
+  const controlaEstoque = produtoFinal.estoque !== null && produtoFinal.estoque !== undefined;
+  const novoCustoUnitario = quantidadeProduzida > 0 ? custoTotal / quantidadeProduzida : 0;
+  const patch: any = { preco_custo: novoCustoUnitario };
+  if (controlaEstoque) patch.estoque = (produtoFinal.estoque || 0) + quantidadeProduzida;
+  await supabase.from('servicos').update(patch).eq('id', produtoFinal.id);
+  if (controlaEstoque) {
+    await supabase.from('estoque_movimentacoes').insert([{
+      empresa_id: empresaId, servico_id: produtoFinal.id, quantidade: quantidadeProduzida,
+      tipo: 'producao', producao_id: producao.id, user_id: userId || null,
+      observacao: `Produzido a partir da ficha técnica`,
+    }]);
+  }
+
+  return { producaoId: producao.id, custoTotal };
 }

@@ -8,6 +8,7 @@ import AdvocaciaTopNav from '../AdvocaciaTopNav';
 import DocumentosPanel from '../DocumentosPanel';
 import AndamentosProcessuais from '../AndamentosProcessuais';
 import PrazosProcessuais from '../PrazosProcessuais';
+import TarefasProcesso from '../TarefasProcesso';
 import {
   ADVOCACIA_STAGES, ADVOCACIA_STAGE_GANHO, ADVOCACIA_STAGE_PERDIDO,
   AREAS_JURIDICAS, TIPO_HONORARIO_LABELS, fmtMoeda, fmtData, diasDesde, DIAS_LEAD_ESFRIANDO,
@@ -298,6 +299,11 @@ export default function AdvocaciaProcessosPage() {
               {editando && (
                 <div className="pt-3 border-t border-[#e5e0d5]">
                   <PrazosProcessuais leadId={editando.id} />
+                </div>
+              )}
+              {editando && (
+                <div className="pt-3 border-t border-[#e5e0d5]">
+                  <TarefasProcesso leadId={editando.id} advogados={advogados} />
                 </div>
               )}
               {editando && (

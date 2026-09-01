@@ -134,6 +134,38 @@ export const STATUS_PROCESSO_CORES: Record<AdvocaciaProcesso['status'], string> 
   arquivado: 'text-[#9a958a] bg-[#f0ede6] border-[#e5e0d5]',
 };
 
+export type AdvocaciaTarefa = {
+  id: number;
+  processo_id: number;
+  titulo: string;
+  descricao: string | null;
+  responsavel_id: string | null;
+  prioridade: 'baixa' | 'media' | 'alta' | 'urgente';
+  status: 'pendente' | 'em_andamento' | 'concluida';
+  data_prevista: string | null;
+  concluida_em: string | null;
+  created_at: string;
+};
+
+export const PRIORIDADE_TAREFA_LABELS: Record<AdvocaciaTarefa['prioridade'], string> = {
+  baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente',
+};
+export const PRIORIDADE_TAREFA_CORES: Record<AdvocaciaTarefa['prioridade'], string> = {
+  baixa: 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]',
+  media: 'text-[#1d6fd9] bg-[#e8f0fd] border-[#c9dcf7]',
+  alta: 'text-[#d9861c] bg-[#fdf0d4] border-[#f3ddab]',
+  urgente: 'text-[#d13b3b] bg-[#fbe4e4] border-[#f2c2c2]',
+};
+
+export const STATUS_TAREFA_LABELS: Record<AdvocaciaTarefa['status'], string> = {
+  pendente: 'Pendente', em_andamento: 'Em andamento', concluida: 'Concluída',
+};
+export const STATUS_TAREFA_CORES: Record<AdvocaciaTarefa['status'], string> = {
+  pendente: 'text-[#6b6862] bg-[#f0ede6] border-[#e5e0d5]',
+  em_andamento: 'text-[#1d6fd9] bg-[#e8f0fd] border-[#c9dcf7]',
+  concluida: 'text-[#1fa85a] bg-[#d9f2e3] border-[#b8e6cb]',
+};
+
 export const fmtMoeda = (v: number | null | undefined) =>
   'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 

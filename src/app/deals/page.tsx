@@ -2483,9 +2483,11 @@ export default function DealsPage() {
                                     <button type="button" onClick={adicionarNota} className="bg-blue-600 text-white px-3 rounded-lg text-[10px] font-bold">OK</button>
                                 </div>
                             </div>
-                            {atividades.length > 0 && (
-                                <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                            <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
                                     <p className="text-[10px] font-black text-slate-500 uppercase mb-3 flex items-center gap-1"><Clock size={10}/> Histórico de Atividades</p>
+                                    {atividades.length === 0 ? (
+                                        <p className="text-[10px] text-slate-600 font-medium">Nenhuma atividade registrada ainda — aparece aqui quando o lead mudar de etapa ou ganhar uma nota.</p>
+                                    ) : (
                                     <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
                                         {atividades.map((a, i) => {
                                             const d = new Date(a.created_at);
@@ -2501,8 +2503,8 @@ export default function DealsPage() {
                                             );
                                         })}
                                     </div>
-                                </div>
-                            )}
+                                    )}
+                            </div>
                             <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5">
                                 <p className="text-[10px] font-black text-slate-500 uppercase mb-2 flex items-center gap-1"><CalendarDays size={10}/> Follow-up</p>
                                 <input

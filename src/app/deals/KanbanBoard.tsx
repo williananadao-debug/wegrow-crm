@@ -76,11 +76,17 @@ const LeadCard = React.memo(({
     risco === 'amarelo' ? 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]' :
       'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.8)]';
 
+  // "Parado há X dias" precisa contar a partir da última vez que o lead se MEXEU (mudou de
+  // etapa), não desde que foi criado — senão um lead criado há semanas mas movido ontem
+  // aparece como "parado" há semanas, o que é falso e já confundiu gente da equipe.
   const diasParado = useMemo(() => {
     if (lead.status !== 'aberto') return null;
-    const criado = new Date(lead.created_at);
-    return Math.floor((Date.now() - criado.getTime()) / 86400000);
-  }, [lead.created_at, lead.status]);
+    const ultimaMudancaEtapa = Array.isArray(lead.atividades)
+      ? lead.atividades.find((a: Atividade) => a.tipo === 'etapa')?.created_at
+      : null;
+    const referencia = new Date(ultimaMudancaEtapa || lead.created_at);
+    return Math.floor((Date.now() - referencia.getTime()) / 86400000);
+  }, [lead.created_at, lead.status, lead.atividades]);
 
   return (
     <Draggable draggableId={lead.id.toString()} index={index}>

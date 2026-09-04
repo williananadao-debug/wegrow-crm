@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import * as Sentry from '@sentry/nextjs';
 import { buscarContratacoesPncp, filtrarPorPalavrasChave, formatarDataPncp, detalharContratacaoPncp } from '@/lib/pncp';
 
 export const dynamic = 'force-dynamic';
@@ -131,6 +132,7 @@ export async function GET(request: Request) {
         novosCandidatos += novos.length;
       } catch (err: any) {
         console.error(`[Argus Sync] Erro na descoberta (empresa ${empresaId}, filtro ${filtro.id}):`, err.message);
+        Sentry.captureException(err, { tags: { cron: 'argus-sync', fase: 'descoberta' }, extra: { empresaId, filtroId: filtro.id } });
       }
     }
 
@@ -166,6 +168,7 @@ export async function GET(request: Request) {
         statusAtualizados++;
       } catch (err: any) {
         console.error(`[Argus Sync] Erro no acompanhamento (edital ${edital.id}):`, err.message);
+        Sentry.captureException(err, { tags: { cron: 'argus-sync', fase: 'acompanhamento' }, extra: { empresaId, editalId: edital.id } });
       }
     }
 

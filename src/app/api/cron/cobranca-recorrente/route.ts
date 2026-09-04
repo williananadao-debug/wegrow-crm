@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/nextjs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -130,6 +131,7 @@ export async function GET(request: Request) {
             resultados.push({ lead: lead.id, empresa: lead.empresa, status: 'gerado', paymentId: payment.id, valor: valorParcela });
         } catch (err: any) {
             console.error('[cron/cobranca-recorrente]', lead.id, err.message);
+            Sentry.captureException(err, { tags: { cron: 'cobranca-recorrente' }, extra: { leadId: lead.id, empresa: lead.empresa } });
             resultados.push({ lead: lead.id, empresa: lead.empresa, status: 'erro', motivo: err.message });
         }
     }

@@ -1,4 +1,5 @@
 import withPWAInit from "@ducanh2912/next-pwa";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -30,4 +31,10 @@ const nextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+// Sem org/project/authToken de propósito — sem SENTRY_AUTH_TOKEN configurado, o upload
+// de source maps é pulado (só um aviso no build, não quebra), o SDK continua capturando
+// erro normalmente. Se um dia quiser stack trace com código-fonte real no Sentry em vez
+// de minificado, gera um auth token em sentry.io → Settings → Auth Tokens e adiciona aqui.
+export default withSentryConfig(withPWA(nextConfig), {
+  silent: true,
+});

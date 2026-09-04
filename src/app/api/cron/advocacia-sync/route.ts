@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import * as Sentry from '@sentry/nextjs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -136,6 +137,7 @@ export async function GET(request: Request) {
       } catch (err: any) {
         comErro++;
         console.error(`[Advocacia Sync] Erro no processo ${processo.id} (empresa ${empresaId}):`, err.message);
+        Sentry.captureException(err, { tags: { cron: 'advocacia-sync' }, extra: { empresaId, processoId: processo.id } });
       }
     }
 

@@ -6,6 +6,7 @@ export type ContratoWegrowData = {
   contratada_razao: string;
   contratada_cnpj: string;
   contratada_endereco: string;
+  contratada_banco: string;
   cliente_razao: string;
   cliente_cnpj: string;
   cliente_endereco: string;
@@ -144,6 +145,7 @@ export function gerarContratoWegrowBuffer(data: ContratoWegrowData): Promise<Con
         `2.1. Pela prestação dos serviços descritos na Cláusula 1ª, a CONTRATANTE pagará à WEGROW o valor mensal de ${fmt(data.valor_mensal)}.`,
         `2.2. O pagamento será realizado mensalmente, todo dia ${data.dia_vencimento} de cada mês, via cobrança recorrente emitida pela plataforma Asaas, com início em ${data.data_inicio}.`,
         '2.3. Reajuste anual. O valor mensal referido no item 2.1 será reajustado anualmente, na data de aniversário deste contrato, pela variação acumulada do IPCA (Índice Nacional de Preços ao Consumidor Amplo) no período, ou por outro índice que venha a substituí-lo.',
+        `2.4. Dados bancários da CONTRATADA para pagamento — Chave Pix (CNPJ): ${data.contratada_cnpj} · Favorecido: ${data.contratada_razao} · Instituição: ${data.contratada_banco}. A cobrança recorrente referida no item 2.2 prevalece como meio padrão de pagamento; estes dados servem para pagamentos avulsos ou de eventual falha na cobrança automática.`,
       ]);
 
       clausula(3, 'Do atraso no pagamento', [

@@ -18,7 +18,7 @@ import AbaUnidades from './abas/AbaUnidades';
 import AbaMetricas from './abas/AbaMetricas';
 import AbaFaturamento from './abas/AbaFaturamento';
 import AbaPortais from './abas/AbaPortais';
-import AbaContrato from './abas/AbaContrato';
+import AbaDocumentos from './abas/AbaDocumentos';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
@@ -46,14 +46,14 @@ function tempoRelativo(iso: string): string {
   return `há ${d}d`;
 }
 
-type Aba = 'geral' | 'modulos' | 'unidades' | 'faturamento' | 'portais' | 'contrato' | 'metricas';
+type Aba = 'geral' | 'modulos' | 'unidades' | 'faturamento' | 'portais' | 'documentos' | 'metricas';
 const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'geral', label: 'Geral', icon: <Edit2 size={13}/> },
   { id: 'modulos', label: 'Módulos', icon: <Package size={13}/> },
   { id: 'unidades', label: 'Unidades', icon: <Building2 size={13}/> },
   { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={13}/> },
   { id: 'portais', label: 'Portais', icon: <Globe size={13}/> },
-  { id: 'contrato', label: 'Contrato', icon: <PenLine size={13}/> },
+  { id: 'documentos', label: 'Documentos', icon: <PenLine size={13}/> },
   { id: 'metricas', label: 'Métricas', icon: <BarChart2 size={13}/> },
 ];
 
@@ -627,7 +627,7 @@ export default function AdminPage() {
                   {abaAtiva === 'unidades' && <AbaUnidades empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
                   {abaAtiva === 'faturamento' && <AbaFaturamento empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
                   {abaAtiva === 'portais' && <AbaPortais empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'contrato' && <AbaContrato empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+                  {abaAtiva === 'documentos' && <AbaDocumentos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
                   {abaAtiva === 'metricas' && <AbaMetricas empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
                 </div>
               </div>

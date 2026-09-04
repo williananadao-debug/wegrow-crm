@@ -5,9 +5,10 @@ import { gerarContratoWegrowBuffer } from '@/lib/contract-wegrow-pdf';
 export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+// Só usada aqui pra devolver o link de onde subir o PDF manualmente — a criação de
+// template via API é bloqueada no plano free do Docuseal self-hosted (ver comentário
+// mais abaixo, no upload pro storage).
 const DOCUSEAL_URL = (process.env.DOCUSEAL_URL || '').replace(/\/$/, '');
-const DOCUSEAL_TOKEN = process.env.DOCUSEAL_TOKEN || '';
-const DOCUSEAL_SIGN_BASE = (process.env.DOCUSEAL_SIGN_BASE_URL || DOCUSEAL_URL).replace(/\/$/, '');
 
 // Dados fixos da WeGrow como CONTRATADA — confirmados via consulta de CNPJ em 2026-08-17.
 // Mudam raramente (endereço, regime); se mudar, é só editar aqui, não tem UI pra isso.
@@ -15,6 +16,7 @@ const WEGROW = {
   razao: 'Willian da Silva Anadão Tecnologia da Informação LTDA',
   cnpj: '66.660.599/0001-06',
   endereco: 'Rua Visconde do Rio Branco, 1488, Conj. 909, Centro, Curitiba/PR — CEP 80420-210',
+  banco: 'Banco C6 S.A.',
 };
 const FORO_COMARCA = 'Curitiba/PR';
 const CANAL_SUPORTE = 'WhatsApp';
@@ -52,14 +54,12 @@ function nomesModulos(modulos: Record<string, any> | null | undefined) {
   return ativos.length > 0 ? ativos.join(', ') : 'a definir';
 }
 
-// POST — gera o PDF já com os dados do cliente preenchidos, cria o template no Docuseal
-// com os campos de assinatura já posicionados (sem precisar abrir editor manualmente) e
-// dispara o envio pra assinatura, tudo numa chamada só.
+// POST — gera o PDF já com os dados do cliente preenchidos e guarda num bucket privado.
+// Não envia pro Docuseal automaticamente (ver comentário no upload, mais abaixo) — o
+// admin baixa o PDF gerado e sobe manualmente no painel do Docuseal.
 export async function POST(request: Request) {
   const admin = await verificarAdmin(request);
   if (!admin) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
-  if (!DOCUSEAL_URL || !DOCUSEAL_TOKEN)
-    return NextResponse.json({ erro: 'Docuseal não configurado no servidor (DOCUSEAL_URL/DOCUSEAL_TOKEN).' }, { status: 500 });
 
   let body: any;
   try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
@@ -73,12 +73,12 @@ export async function POST(request: Request) {
   const { data: empresa } = await db.from('empresas').select('modulos').eq('id', empresa_id).single();
 
   let pdfBuffer: Buffer;
-  let sigYFracContratada: number, sigYFracContratante: number, sigPageContratada: number, sigPageContratante: number;
   try {
     const resultado = await gerarContratoWegrowBuffer({
       contratada_razao: WEGROW.razao,
       contratada_cnpj: WEGROW.cnpj,
       contratada_endereco: WEGROW.endereco,
+      contratada_banco: WEGROW.banco,
       cliente_razao,
       cliente_cnpj,
       cliente_endereco,
@@ -92,87 +92,36 @@ export async function POST(request: Request) {
       sla_resposta: SLA_RESPOSTA,
     });
     pdfBuffer = resultado.buffer;
-    sigPageContratada = resultado.sigPageContratada;
-    sigYFracContratada = resultado.sigYFracContratada;
-    sigPageContratante = resultado.sigPageContratante;
-    sigYFracContratante = resultado.sigYFracContratante;
   } catch (err: any) {
     console.error('[admin/contrato/pdf]', err);
     return NextResponse.json({ erro: 'Erro ao gerar PDF: ' + err.message }, { status: 500 });
   }
 
-  const templateRes = await fetch(`${DOCUSEAL_URL}/templates/pdf`, {
-    method: 'POST',
-    headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: `Contrato de serviço — ${cliente_razao}`,
-      documents: [{
-        name: 'contrato.pdf',
-        file: pdfBuffer.toString('base64'),
-        fields: [{
-          name: 'Assinatura WeGrow',
-          role: 'Contratada',
-          type: 'signature',
-          required: true,
-          areas: [{ x: 0.08, y: sigYFracContratada, w: 0.28, h: 0.06, page: sigPageContratada }],
-        }, {
-          name: 'Assinatura Cliente',
-          role: 'Contratante',
-          type: 'signature',
-          required: true,
-          areas: [{ x: 0.64, y: sigYFracContratante, w: 0.28, h: 0.06, page: sigPageContratante }],
-        }],
-      }],
-    }),
+  // O Docuseal self-hosted (plano free) bloqueia os endpoints de criar template via API
+  // (/templates/pdf e /templates/html retornam 404 "available in Pro Edition") — só a
+  // interface web permite criar template. Por isso o PDF é gerado aqui e guardado num
+  // bucket privado pro admin baixar e subir manualmente no painel do Docuseal, em vez de
+  // criar+enviar a submission automaticamente como o fluxo tentava antes.
+  const path = `${empresa_id}/contrato.pdf`;
+  const { error: uploadErr } = await db.storage.from('wegrow-documentos').upload(path, pdfBuffer, {
+    contentType: 'application/pdf',
+    upsert: true,
   });
+  if (uploadErr) return NextResponse.json({ erro: 'PDF gerado, mas falhou ao salvar no storage: ' + uploadErr.message }, { status: 500 });
 
-  if (!templateRes.ok) {
-    const txt = await templateRes.text();
-    console.error('[admin/contrato/template]', templateRes.status, txt.slice(0, 300));
-    return NextResponse.json({ erro: 'Erro ao criar template no Docuseal: ' + txt.slice(0, 200) }, { status: 502 });
-  }
-
-  const template = await templateRes.json();
-
-  const submissionRes = await fetch(`${DOCUSEAL_URL}/submissions`, {
-    method: 'POST',
-    headers: { 'X-Auth-Token': DOCUSEAL_TOKEN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      template_id: template.id,
-      send_email: true,
-      order: 'preserved', // WeGrow assina primeiro, cliente só recebe o e-mail depois
-      submitters: [
-        { name: admin.user_metadata?.nome || admin.email, email: admin.email, role: 'Contratada', order: 0 },
-        { name: signer_nome, email: signer_email, role: 'Contratante', order: 1 },
-      ],
-    }),
-  });
-
-  if (!submissionRes.ok) {
-    const txt = await submissionRes.text();
-    console.error('[admin/contrato/submission]', submissionRes.status, txt.slice(0, 300));
-    return NextResponse.json({ erro: 'Erro ao enviar pra assinatura: ' + txt.slice(0, 200) }, { status: 502 });
-  }
-
-  const submitters: any[] = await submissionRes.json();
-  const contratanteSubmitter = submitters.find((s: any) => s.role === 'Contratante') || submitters[1];
-  const signUrl = contratanteSubmitter ? `${DOCUSEAL_SIGN_BASE}/s/${contratanteSubmitter.slug}` : null;
-
-  const { error: updateErr } = await db.from('clientes_wegrow').update({
+  const { error: updateErr } = await db.from('clientes_wegrow').upsert({
+    empresa_id,
     razao_social: cliente_razao,
     cnpj: cliente_cnpj,
     endereco: cliente_endereco,
-    contrato_template_id: String(template.id),
-    contrato_submission_id: String(contratanteSubmitter?.submission_id ?? ''),
-    contrato_status: 'enviado',
+    contrato_arquivo_path: path,
+    contrato_status: 'gerado',
     contrato_signer_nome: signer_nome,
     contrato_signer_email: signer_email,
-    contrato_sign_url: signUrl,
-    contrato_enviado_em: new Date().toISOString(),
-    contrato_assinado_em: null,
-  }).eq('empresa_id', empresa_id);
+  }, { onConflict: 'empresa_id' });
 
-  if (updateErr) return NextResponse.json({ erro: 'Enviado no Docuseal, mas falhou ao salvar status: ' + updateErr.message }, { status: 500 });
+  if (updateErr) return NextResponse.json({ erro: 'PDF salvo, mas falhou ao atualizar status: ' + updateErr.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, sign_url: signUrl });
+  const { data: signed } = await db.storage.from('wegrow-documentos').createSignedUrl(path, 60 * 30);
+  return NextResponse.json({ ok: true, download_url: signed?.signedUrl ?? null, docuseal_url: DOCUSEAL_URL });
 }

@@ -11,12 +11,20 @@ export type Billing = {
   contrato_template_id?: string | null;
   contrato_edit_url?: string | null;
   contrato_submission_id?: string | null;
-  contrato_status?: string | null;
+  contrato_arquivo_path?: string | null;
+  contrato_status?: string | null; // rascunho | gerado | enviado | assinado
   contrato_signer_nome?: string | null;
   contrato_signer_email?: string | null;
   contrato_sign_url?: string | null;
   contrato_enviado_em?: string | null;
   contrato_assinado_em?: string | null;
+  cronograma_arquivo_path?: string | null;
+  cronograma_status?: string | null; // rascunho | gerado | enviado | assinado
+  cronograma_signer_nome?: string | null;
+  cronograma_signer_email?: string | null;
+  cronograma_sign_url?: string | null;
+  cronograma_enviado_em?: string | null;
+  cronograma_assinado_em?: string | null;
 };
 
 export type Empresa = {

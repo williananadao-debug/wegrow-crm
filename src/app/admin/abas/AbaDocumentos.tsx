@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 type Tipo = 'contrato' | 'cronograma';
 
 const STATUS_CFG: Record<string, { label: string; cor: string; icon: React.ReactNode }> = {
-  gerado:   { label: 'PDF pronto — falta subir no Docuseal', cor: 'text-blue-400 border-blue-500/20 bg-blue-500/10',       icon: <FileText size={13}/> },
+  gerado:   { label: 'No Docuseal — falta posicionar assinatura e enviar', cor: 'text-blue-400 border-blue-500/20 bg-blue-500/10', icon: <FileText size={13}/> },
   enviado:  { label: 'Aguardando assinatura',                cor: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10', icon: <Clock size={13}/> },
   assinado: { label: 'Assinado',                              cor: 'text-[#22C55E] border-[#22C55E]/20 bg-[#22C55E]/10',   icon: <CheckCircle2 size={13}/> },
 };
@@ -28,8 +28,8 @@ export default function AbaDocumentos({ empresa, token, onAtualizado }: AbaProps
   return (
     <div className="space-y-6">
       <p className="text-slate-400 text-xs">Documentos do cliente pra assinatura digital — não é o contrato de veiculação publicitária (esse já tem fluxo próprio no Kanban de Deals).</p>
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3">
-        <p className="text-amber-300 text-[11px]">O Docuseal self-hosted (plano free) não permite criar template via API — só pela interface web. Por isso o fluxo aqui é: <strong>gerar/subir o PDF</strong> → <strong>baixar</strong> → subir manualmente em <a href={process.env.NEXT_PUBLIC_DOCUSEAL_URL || '#'} target="_blank" rel="noopener noreferrer" className="underline">{process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'o painel do Docuseal'}</a> → colar o link de assinatura de volta aqui.</p>
+      <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3">
+        <p className="text-slate-400 text-[11px]"><strong className="text-slate-300">Contrato</strong> é gerado e enviado pra assinatura automaticamente. <strong className="text-slate-300">Cronograma</strong> (PDF avulso, sem coordenada conhecida de assinatura) sobe pro Docuseal e abre o editor pra você arrastar os campos e mandar direto por lá — depois cola o link de assinatura de volta aqui. Painel do Docuseal: <a href={process.env.NEXT_PUBLIC_DOCUSEAL_URL || '#'} target="_blank" rel="noopener noreferrer" className="text-[#22C55E] underline">{process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'console.docuseal.com'}</a>.</p>
       </div>
 
       <ContratoBloco empresa={empresa} token={token} onAtualizado={onAtualizado}/>
@@ -225,11 +225,15 @@ function CronogramaBloco({ empresa, token, onAtualizado }: AbaProps) {
       const res = await fetch('/api/admin/documentos', {
         method: 'POST',
         headers: headersAuth(token),
-        body: JSON.stringify({ empresa_id: empresa.id, tipo: 'cronograma', arquivo_base64: base64 }),
+        body: JSON.stringify({ empresa_id: empresa.id, tipo: 'cronograma', arquivo_base64: base64, nome_empresa: empresa.nome }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setErro(json.erro || 'Erro ao subir o PDF.'); return; }
       onAtualizado();
+      // template já existe no Docuseal, só falta posicionar os campos de assinatura
+      // visualmente (não dá pra saber a coordenada certa de um PDF que não foi gerado
+      // por aqui) — abre direto no editor pra não precisar caçar o link depois.
+      if (json.template_edit_url) window.open(json.template_edit_url, '_blank');
     } finally {
       setEnviando(false);
     }

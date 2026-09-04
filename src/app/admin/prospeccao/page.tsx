@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
   ArrowLeft, ShieldAlert, Loader2, RefreshCw, Target, X, Save,
-  Plus, Trash2, MapPin, Radio, Phone, Calendar, User,
+  Plus, Trash2, MapPin, Radio, Phone, Calendar, User, AlertTriangle, Clock,
 } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -26,18 +27,31 @@ type Prospect = {
   proxima_acao_em: string | null;
 };
 
-const STATUS_CFG: Record<string, { label: string; cor: string }> = {
-  avancado:     { label: 'Avançado',     cor: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  bom_fit:      { label: 'Bom fit',      cor: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
-  cliente:      { label: 'Cliente',      cor: 'bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/30' },
-  porte_grande: { label: 'Porte grande', cor: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
-  perdido:      { label: 'Perdido',      cor: 'bg-slate-500/15 text-slate-500 border-slate-500/30' },
+const STATUS_CFG: Record<string, { label: string; cor: string; dot: string }> = {
+  bom_fit:      { label: 'Bom fit',      cor: 'text-blue-400 border-blue-500/30 bg-blue-500/10',       dot: 'bg-blue-400' },
+  avancado:     { label: 'Avançado',     cor: 'text-amber-400 border-amber-500/30 bg-amber-500/10',    dot: 'bg-amber-400' },
+  cliente:      { label: 'Cliente',      cor: 'text-[#22C55E] border-[#22C55E]/30 bg-[#22C55E]/10',    dot: 'bg-[#22C55E]' },
+  porte_grande: { label: 'Porte grande', cor: 'text-rose-400 border-rose-500/30 bg-rose-500/10',       dot: 'bg-rose-400' },
+  perdido:      { label: 'Perdido',      cor: 'text-slate-500 border-slate-500/30 bg-slate-500/10',    dot: 'bg-slate-500' },
 };
-const ORDEM_STATUS = ['avancado', 'bom_fit', 'cliente', 'porte_grande', 'perdido'];
+// Ordem de funil — perdido fica sempre por último, é uma lateral e não uma etapa de avanço.
+const COLUNAS = ['bom_fit', 'avancado', 'cliente', 'porte_grande', 'perdido'];
 
 const CANAL_LABELS: Record<string, string> = { ialto: 'IAlto', nilton: 'Nilton', organico: 'Orgânico', indicacao: 'Indicação', direto: 'Direto' };
 
 const VAZIO: Partial<Prospect> = { nome: '', segmento: '', cidade: '', status: 'bom_fit', canal: '', faturamento_nota: '', fonte: '', estrategia: '', contato: '', whatsapp: '', notas: '', proxima_acao_em: '' };
+
+function diasAte(iso: string | null): number | null {
+  if (!iso) return null;
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const alvo = new Date(iso + 'T00:00:00');
+  return Math.round((alvo.getTime() - hoje.getTime()) / 86400000);
+}
+
+function fmtDataCurta(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
 
 export default function ProspeccaoPage() {
   const { user, loading: authLoading } = useAuth();
@@ -47,7 +61,7 @@ export default function ProspeccaoPage() {
   const [loading, setLoading] = useState(true);
   const [semTabela, setSemTabela] = useState(false);
   const [token, setToken] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState<string | null>(null);
+  const [movendoId, setMovendoId] = useState<string | null>(null);
 
   const [editando, setEditando] = useState<Prospect | Partial<Prospect> | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
@@ -75,7 +89,7 @@ export default function ProspeccaoPage() {
   };
 
   const abrirEdicao = (p: Prospect) => { setEditando(p); setCriandoNovo(false); setErro(null); };
-  const abrirNovo = () => { setEditando({ ...VAZIO }); setCriandoNovo(true); setErro(null); };
+  const abrirNovo = (statusInicial?: string) => { setEditando({ ...VAZIO, ...(statusInicial ? { status: statusInicial } : {}) }); setCriandoNovo(true); setErro(null); };
 
   const salvar = async () => {
     if (!editando) return;
@@ -100,6 +114,33 @@ export default function ProspeccaoPage() {
     setEditando(null); carregar();
   };
 
+  // Move o card otimisticamente na UI e só depois confirma no servidor — arrastar
+  // não pode esperar round-trip pra sentir responsivo, e se falhar reverte sozinho
+  // no próximo carregar().
+  const onDragEnd = async (result: DropResult) => {
+    const { source, destination, draggableId } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    const novoStatus = destination.droppableId;
+
+    setProspects(prev => prev.map(p => p.id === draggableId ? { ...p, status: novoStatus } : p));
+    setMovendoId(draggableId);
+    const res = await fetch('/api/admin/prospects', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: draggableId, status: novoStatus }),
+    });
+    setMovendoId(null);
+    if (!res.ok) carregar(); // reverte pro estado real do servidor
+  };
+
+  const proximasAcoes = useMemo(() => {
+    return prospects
+      .map(p => ({ p, dias: diasAte(p.proxima_acao_em) }))
+      .filter((x): x is { p: Prospect; dias: number } => x.dias !== null && x.dias <= 7 && x.p.status !== 'perdido' && x.p.status !== 'cliente')
+      .sort((a, b) => a.dias - b.dias);
+  }, [prospects]);
+
   if (authLoading) return null;
   if (!isAdmin) return (
     <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
@@ -107,17 +148,11 @@ export default function ProspeccaoPage() {
     </div>
   );
 
-  const contagens = ORDEM_STATUS.map(s => ({ status: s, total: prospects.filter(p => p.status === s).length }));
-  const visiveis = filtroStatus ? prospects.filter(p => p.status === filtroStatus) : prospects;
-  const agrupados = ORDEM_STATUS
-    .map(s => ({ status: s, itens: visiveis.filter(p => p.status === s) }))
-    .filter(g => g.itens.length > 0);
-
   return (
     <div className="min-h-screen bg-[#0B1120] text-white">
-      <div className="max-w-4xl mx-auto px-4 py-10">
+      <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-8">
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-4">
             <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
               <ArrowLeft size={16} className="text-slate-400"/>
@@ -130,7 +165,7 @@ export default function ProspeccaoPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">
+            <button onClick={() => abrirNovo()} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">
               <Plus size={13}/> Novo
             </button>
             <button onClick={carregar} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
@@ -139,19 +174,6 @@ export default function ProspeccaoPage() {
           </div>
         </div>
 
-        {!semTabela && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            <button onClick={() => setFiltroStatus(null)} className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${!filtroStatus ? 'bg-white text-[#0B1120] border-white' : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'}`}>
-              Todos <span className="opacity-60">{prospects.length}</span>
-            </button>
-            {contagens.filter(c => c.total > 0).map(c => (
-              <button key={c.status} onClick={() => setFiltroStatus(c.status)} className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${filtroStatus === c.status ? STATUS_CFG[c.status].cor : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'}`}>
-                {STATUS_CFG[c.status].label} <span className="opacity-60">{c.total}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
         {semTabela && (
           <div className="bg-[#0F172A] border border-yellow-500/20 rounded-3xl p-8 mb-6">
             <p className="text-yellow-400 font-black text-sm uppercase tracking-widest mb-4">Rode a migração no Supabase</p>
@@ -159,38 +181,85 @@ export default function ProspeccaoPage() {
           </div>
         )}
 
+        {/* Próximas ações — o que "controle de prospecção" mais precisa: o que fazer hoje/essa semana, sem caçar card por card */}
+        {!semTabela && !loading && proximasAcoes.length > 0 && (
+          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4 mb-6">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Clock size={12}/> Próximas ações (7 dias)</p>
+            <div className="flex flex-wrap gap-2">
+              {proximasAcoes.map(({ p, dias }) => (
+                <button key={p.id} onClick={() => abrirEdicao(p)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all hover:brightness-110 ${dias < 0 ? 'bg-red-500/10 border-red-500/30 text-red-400' : dias === 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+                  {dias < 0 && <AlertTriangle size={11}/>}
+                  {p.nome}
+                  <span className="opacity-70">{dias < 0 ? `${Math.abs(dias)}d atrasado` : dias === 0 ? 'hoje' : `em ${dias}d`}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-slate-600"/></div>
-        ) : (
-          <div className="space-y-6">
-            {agrupados.map(g => (
-              <div key={g.status}>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{STATUS_CFG[g.status].label} · {g.itens.length}</p>
-                <div className="space-y-2">
-                  {g.itens.map(p => (
-                    <button key={p.id} onClick={() => abrirEdicao(p)} className="w-full text-left bg-[#0F172A] border border-white/5 hover:border-white/20 rounded-2xl p-4 transition-all">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <h3 className="font-black text-white text-sm">{p.nome}</h3>
-                            {p.canal && <span className="text-[9px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-slate-400 px-2 py-0.5 rounded-full">{CANAL_LABELS[p.canal] || p.canal}</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                            {p.cidade && <span className="flex items-center gap-1"><MapPin size={10}/> {p.cidade}</span>}
-                            {p.segmento && <span className="flex items-center gap-1"><Radio size={10}/> {p.segmento}</span>}
-                          </div>
-                          {p.estrategia && <p className="text-slate-400 text-[11px] mt-2 line-clamp-2">{p.estrategia}</p>}
+        ) : semTabela ? null : (
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-3 overflow-x-auto pb-4">
+              {COLUNAS.map(status => {
+                const cfg = STATUS_CFG[status];
+                const itens = prospects.filter(p => p.status === status);
+                return (
+                  <div key={status} className="w-[280px] shrink-0 flex flex-col">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-slate-300">
+                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`}/> {cfg.label}
+                      </span>
+                      <span className="text-[10px] font-black text-slate-600">{itens.length}</span>
+                    </div>
+                    <Droppable droppableId={status}>
+                      {(provided, snapshot) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps}
+                          className={`flex-1 min-h-[120px] rounded-2xl p-2 space-y-2 border transition-colors ${snapshot.isDraggingOver ? 'bg-white/[0.04] border-white/20' : 'bg-[#0F172A]/50 border-white/5'}`}>
+                          {itens.map((p, index) => {
+                            const dias = diasAte(p.proxima_acao_em);
+                            const atrasado = dias !== null && dias < 0 && status !== 'perdido' && status !== 'cliente';
+                            return (
+                              <Draggable key={p.id} draggableId={p.id} index={index}>
+                                {(dragProvided, dragSnapshot) => (
+                                  <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps}
+                                    onClick={() => abrirEdicao(p)}
+                                    className={`bg-[#131C2E] border rounded-xl p-3 cursor-pointer transition-all hover:border-white/20 ${dragSnapshot.isDragging ? 'border-[#22C55E]/50 shadow-2xl rotate-1' : 'border-white/5'} ${movendoId === p.id ? 'opacity-60' : ''} ${atrasado ? 'ring-1 ring-red-500/40' : ''}`}>
+                                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                                      <h3 className="font-black text-white text-[13px] leading-tight">{p.nome}</h3>
+                                      {p.canal && <span className="text-[8px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-slate-500 px-1.5 py-0.5 rounded-full shrink-0">{CANAL_LABELS[p.canal] || p.canal}</span>}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-[10px] text-slate-500">
+                                      {p.cidade && <span className="flex items-center gap-1"><MapPin size={9}/> {p.cidade}</span>}
+                                      {p.segmento && <span className="flex items-center gap-1"><Radio size={9}/> {p.segmento}</span>}
+                                    </div>
+                                    {p.estrategia && <p className="text-slate-400 text-[10.5px] mt-2 line-clamp-2">{p.estrategia}</p>}
+                                    {p.proxima_acao_em && (
+                                      <div className={`flex items-center gap-1 mt-2 text-[10px] font-bold ${atrasado ? 'text-red-400' : 'text-slate-500'}`}>
+                                        {atrasado ? <AlertTriangle size={10}/> : <Calendar size={10}/>} {fmtDataCurta(p.proxima_acao_em)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            );
+                          })}
+                          {provided.placeholder}
+                          {itens.length === 0 && (
+                            <button onClick={() => abrirNovo(status)} className="w-full py-6 text-slate-700 hover:text-slate-500 text-[10px] font-black uppercase tracking-widest transition-colors">
+                              + adicionar
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!loading && !semTabela && prospects.length === 0 && (
-              <p className="text-slate-500 text-sm text-center py-12">Nenhum prospect cadastrado ainda.</p>
-            )}
-          </div>
+                      )}
+                    </Droppable>
+                  </div>
+                );
+              })}
+            </div>
+          </DragDropContext>
         )}
       </div>
 
@@ -217,7 +286,7 @@ export default function ProspeccaoPage() {
                 <div>
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Status</label>
                   <select value={editando.status || 'bom_fit'} onChange={e => setEditando(v => ({ ...v, status: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors">
-                    {ORDEM_STATUS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{STATUS_CFG[s].label}</option>)}
+                    {COLUNAS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{STATUS_CFG[s].label}</option>)}
                   </select>
                 </div>
                 <div>

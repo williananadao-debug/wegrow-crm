@@ -8,7 +8,7 @@ import {
   ShieldAlert, ChevronRight, Search,
   BarChart2, TrendingUp, Clock, Activity, Target, Printer, LogIn,
   DollarSign, Globe, PenLine, Edit2, AlertTriangle, XCircle, MessageCircle,
-  CheckCircle2, KeyRound, Trash2,
+  CheckCircle2, KeyRound, Trash2, Sparkles,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Empresa, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
@@ -330,6 +330,18 @@ export default function AdminPage() {
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
             >
               <Target size={14}/> Prospecção
+            </Link>
+            <Link
+              href="/admin/financeiro"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
+              <DollarSign size={14}/> Financeiro
+            </Link>
+            <Link
+              href="/admin/demos"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
+              <Sparkles size={14}/> Demos
             </Link>
             <Link
               href="/admin/indicadores"

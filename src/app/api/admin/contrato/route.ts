@@ -184,6 +184,7 @@ export async function POST(request: Request) {
     contrato_template_id: String(template.id),
     contrato_submission_id: String(contratanteSubmitter?.submission_id ?? ''),
     contrato_status: 'enviado',
+    contrato_fidelidade_meses: Number(fidelidade_meses) || 0,
     contrato_signer_nome: signer_nome,
     contrato_signer_email: signer_email,
     contrato_sign_url: signUrl,

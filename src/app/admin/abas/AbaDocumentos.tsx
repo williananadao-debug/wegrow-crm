@@ -138,14 +138,16 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
     endereco: empresa.billing?.endereco ?? '',
     dia_vencimento: empresa.billing?.proximo_vencimento ? String(new Date(empresa.billing.proximo_vencimento + 'T00:00:00').getDate()) : '10',
     data_inicio: new Date().toISOString().substring(0, 10),
-    fidelidade_meses: '12',
+    fidelidade_meses: String(empresa.billing?.contrato_fidelidade_meses ?? 12),
   });
   const [signerNome, setSignerNome] = useState(empresa.billing?.contrato_signer_nome ?? empresa.billing?.contato ?? '');
   const [signerEmail, setSignerEmail] = useState(empresa.billing?.contrato_signer_email ?? '');
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [editando, setEditando] = useState(false);
 
   const status = empresa.billing?.contrato_status;
+  const mostrarForm = !status || status === 'rascunho' || editando;
 
   const gerar = async () => {
     if (!signerNome.trim() || !signerEmail.trim() || !form.razao_social.trim() || !form.cnpj.trim() || !form.endereco.trim()) return;
@@ -169,6 +171,7 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
     const json = await res.json().catch(() => ({}));
     setGerando(false);
     if (!res.ok) { setErro(json.erro || 'Erro ao gerar contrato.'); return; }
+    setEditando(false);
     onAtualizado();
     // A ordem de assinatura no Docuseal é WeGrow primeiro, cliente depois — mas isso só
     // acontece de verdade se alguém assinar como Contratada. Abre o link da WeGrow na
@@ -183,8 +186,13 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
 
       {erro && <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 text-red-400 text-xs font-bold">{erro}</div>}
 
-      {(!status || status === 'rascunho') ? (
+      {mostrarForm ? (
         <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 space-y-3">
+          {editando && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+              <p className="text-amber-300 text-[11px]">Isso cria um contrato <strong>novo</strong> no Docuseal (não dá pra editar o que já foi enviado) — as assinaturas do link antigo deixam de valer. Se alguém já assinou pela versão anterior, ele vai precisar assinar de novo.</p>
+            </div>
+          )}
           <input value={form.razao_social} onChange={e => setForm({ ...form, razao_social: e.target.value })} placeholder="Razão social" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
           <div className="grid grid-cols-2 gap-2">
             <input value={form.cnpj} onChange={e => setForm({ ...form, cnpj: e.target.value })} placeholder="CNPJ" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
@@ -211,18 +219,30 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
             <input value={signerEmail} onChange={e => setSignerEmail(e.target.value)} placeholder="e-mail@cliente.com" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
           </div>
 
-          <button
-            onClick={gerar}
-            disabled={gerando || !signerNome.trim() || !signerEmail.trim() || !form.razao_social.trim() || !form.cnpj.trim() || !form.endereco.trim()}
-            className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {gerando ? <Loader2 size={13} className="animate-spin"/> : <PenLine size={13}/>}
-            Gerar contrato (PDF)
-          </button>
+          <div className="flex gap-2">
+            {editando && (
+              <button onClick={() => setEditando(false)} className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+                Cancelar
+              </button>
+            )}
+            <button
+              onClick={gerar}
+              disabled={gerando || !signerNome.trim() || !signerEmail.trim() || !form.razao_social.trim() || !form.cnpj.trim() || !form.endereco.trim()}
+              className="flex-1 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {gerando ? <Loader2 size={13} className="animate-spin"/> : <PenLine size={13}/>}
+              {editando ? 'Gerar contrato atualizado' : 'Gerar contrato (PDF)'}
+            </button>
+          </div>
           <p className="text-slate-600 text-[10px]">Já inclui a cláusula de pagamento (Pix/CNPJ/banco da WeGrow) e os módulos contratados dessa empresa.</p>
         </div>
       ) : (
-        <StatusEAssinatura empresa={empresa} token={token} tipo="contrato" onAtualizado={onAtualizado}/>
+        <div className="space-y-3">
+          <StatusEAssinatura empresa={empresa} token={token} tipo="contrato" onAtualizado={onAtualizado}/>
+          <button onClick={() => setEditando(true)} className="text-slate-500 hover:text-white text-[11px] font-bold underline transition-colors">
+            Editar dados e gerar contrato atualizado
+          </button>
+        </div>
       )}
     </div>
   );

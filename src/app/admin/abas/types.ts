@@ -13,6 +13,7 @@ export type Billing = {
   contrato_submission_id?: string | null;
   contrato_arquivo_path?: string | null;
   contrato_status?: string | null; // rascunho | gerado | enviado | assinado
+  contrato_fidelidade_meses?: number | null;
   contrato_signer_nome?: string | null;
   contrato_signer_email?: string | null;
   contrato_sign_url?: string | null;

@@ -15,6 +15,16 @@ function db() {
 }
 
 const MAX_PAGINAS_POR_FILTRO = 3; // conservador — PNCP não expõe rate-limit, então não arrisca
+const CONCORRENCIA_EMPRESAS = 3; // processa N empresas em paralelo — mantém o mesmo volume de chamadas ao PNCP, só sobrepõe a espera de rede em vez de somar tudo serialmente
+
+// Processa a lista em lotes de `tamanho`, aguardando cada lote terminar antes do
+// próximo — evita tanto o teto de 120s (que serial puro estoura com empresas
+// suficientes) quanto um burst descontrolado no PNCP (que paralelismo total causaria).
+async function emLotes<T>(itens: T[], tamanho: number, fn: (item: T) => Promise<void>) {
+  for (let i = 0; i < itens.length; i += tamanho) {
+    await Promise.allSettled(itens.slice(i, i + tamanho).map(fn));
+  }
+}
 
 async function notificarNovosCandidatos(supabase: ReturnType<typeof db>, empresaId: string, qtd: number) {
   if (!process.env.RESEND_API_KEY || qtd === 0) return;
@@ -60,7 +70,7 @@ export async function GET(request: Request) {
   const { data: empresas } = await supabase.from('empresas').select('id, modulos');
   const empresasArgus = (empresas || []).filter((e: any) => e.modulos?.argus === true);
 
-  for (const empresa of empresasArgus) {
+  const processarEmpresa = async (empresa: any) => {
     const empresaId = empresa.id;
     let novosCandidatos = 0;
 
@@ -87,33 +97,38 @@ export async function GET(request: Request) {
           pagina++;
         }
         const filtrados = filtrarPorPalavrasChave(encontrados, filtro.palavras_chave);
+        if (filtrados.length === 0) continue;
 
-        for (const item of filtrados) {
-          const { data: existente } = await supabase.from('argus_editais')
-            .select('id').eq('empresa_id', empresaId).eq('numero_controle_pncp', item.numeroControlePNCP).maybeSingle();
-          if (existente) continue;
+        // Checagem de duplicata em lote (1 query pro filtro inteiro) em vez de
+        // 1 select + 1 insert por item — o que antes escalava linear com o
+        // número de resultados do PNCP, agora é O(1) round-trip por filtro.
+        const numeros = filtrados.map(item => item.numeroControlePNCP);
+        const { data: existentes } = await supabase.from('argus_editais')
+          .select('numero_controle_pncp').eq('empresa_id', empresaId).in('numero_controle_pncp', numeros);
+        const jaExistem = new Set((existentes || []).map((e: any) => e.numero_controle_pncp));
+        const novos = filtrados.filter(item => !jaExistem.has(item.numeroControlePNCP));
+        if (novos.length === 0) continue;
 
-          await supabase.from('argus_editais').insert([{
-            empresa_id: empresaId,
-            origem: 'pncp',
-            numero_controle_pncp: item.numeroControlePNCP,
-            numero_processo: item.processo || null,
-            orgao: item.orgaoEntidade?.razaoSocial || null,
-            modalidade: item.modalidadeNome || null,
-            objeto: item.objetoCompra || null,
-            uf: item.unidadeOrgao?.ufSigla || null,
-            municipio: item.unidadeOrgao?.municipioNome || null,
-            status_interesse: 'candidato',
-            estagio_processo: item.situacaoCompraNome || null,
-            valor_estimado: item.valorTotalEstimado ?? null,
-            valor_homologado: item.valorTotalHomologado ?? null,
-            data_sessao: item.dataAberturaProposta || null,
-            data_encerramento_proposta: item.dataEncerramentoProposta || null,
-            link_pncp: item.linkProcessoEletronico || null,
-            raw_payload: item,
-          }]);
-          novosCandidatos++;
-        }
+        await supabase.from('argus_editais').insert(novos.map(item => ({
+          empresa_id: empresaId,
+          origem: 'pncp',
+          numero_controle_pncp: item.numeroControlePNCP,
+          numero_processo: item.processo || null,
+          orgao: item.orgaoEntidade?.razaoSocial || null,
+          modalidade: item.modalidadeNome || null,
+          objeto: item.objetoCompra || null,
+          uf: item.unidadeOrgao?.ufSigla || null,
+          municipio: item.unidadeOrgao?.municipioNome || null,
+          status_interesse: 'candidato',
+          estagio_processo: item.situacaoCompraNome || null,
+          valor_estimado: item.valorTotalEstimado ?? null,
+          valor_homologado: item.valorTotalHomologado ?? null,
+          data_sessao: item.dataAberturaProposta || null,
+          data_encerramento_proposta: item.dataEncerramentoProposta || null,
+          link_pncp: item.linkProcessoEletronico || null,
+          raw_payload: item,
+        })));
+        novosCandidatos += novos.length;
       } catch (err: any) {
         console.error(`[Argus Sync] Erro na descoberta (empresa ${empresaId}, filtro ${filtro.id}):`, err.message);
       }
@@ -155,7 +170,9 @@ export async function GET(request: Request) {
     }
 
     resultado.push({ empresa_id: empresaId, novos_candidatos: novosCandidatos, status_atualizados: statusAtualizados });
-  }
+  };
+
+  await emLotes(empresasArgus, CONCORRENCIA_EMPRESAS, processarEmpresa);
 
   return NextResponse.json({ ok: true, empresas_processadas: empresasArgus.length, resultado });
 }

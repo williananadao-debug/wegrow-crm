@@ -17,7 +17,18 @@ function db() {
 // gratuita, cobre todos os tribunais, sem conta própria da empresa.
 const DATAJUD_API_KEY = process.env.DATAJUD_API_KEY || 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
 const DATAJUD_BASE = 'https://api-publica.datajud.cnj.jus.br';
-const MAX_PROCESSOS_POR_EXECUCAO = 200; // conservador — DataJud não expõe rate-limit documentado
+// Antes era um teto único global (200) consumido na ordem em que `empresas` retornava —
+// um escritório com histórico grande sozinho esgotava o orçamento e nenhum outro
+// tenant sincronizava naquele dia. Agora é por empresa: cada tenant tem sua própria
+// cota, cliente novo não rouba orçamento de cliente antigo (nem o contrário).
+const MAX_PROCESSOS_POR_EMPRESA = 50; // conservador — DataJud não expõe rate-limit documentado
+const CONCORRENCIA_EMPRESAS = 3; // processa N empresas em paralelo — mesmo volume de chamadas ao DataJud, só sobrepõe a espera de rede
+
+async function emLotes<T>(itens: T[], tamanho: number, fn: (item: T) => Promise<void>) {
+  for (let i = 0; i < itens.length; i += tamanho) {
+    await Promise.allSettled(itens.slice(i, i + tamanho).map(fn));
+  }
+}
 
 type NovoAndamento = { processoId: number; clienteNome: string; numeroProcesso: string; nome: string; dataHora: string };
 
@@ -98,26 +109,23 @@ export async function GET(request: Request) {
 
   const supabase = db();
   const resultado: any[] = [];
-  let processosRestantes = MAX_PROCESSOS_POR_EXECUCAO;
 
   const { data: empresas } = await supabase.from('empresas').select('id, modulos');
   const empresasAdvocacia = (empresas || []).filter((e: any) => e.modulos?.advocacia === true);
 
-  for (const empresa of empresasAdvocacia) {
-    if (processosRestantes <= 0) break;
+  const processarEmpresa = async (empresa: any) => {
     const empresaId = empresa.id;
 
     const { data: processos } = await supabase.from('advocacia_processos')
       .select('id, numero_processo, tribunal, cliente_nome, advogado_responsavel_id')
       .eq('empresa_id', empresaId).eq('status', 'ativo')
       .not('numero_processo', 'is', null).not('tribunal', 'is', null)
-      .limit(processosRestantes);
+      .limit(MAX_PROCESSOS_POR_EMPRESA);
 
     const porAdvogado = new Map<string, NovoAndamento[]>();
     let sincronizados = 0, comErro = 0, novosAndamentos = 0;
 
     for (const processo of processos || []) {
-      processosRestantes--;
       sincronizados++;
       try {
         const novos = await sincronizarProcesso(supabase, empresaId, processo as any);
@@ -148,7 +156,9 @@ export async function GET(request: Request) {
     }
 
     resultado.push({ empresa_id: empresaId, processos_sincronizados: sincronizados, com_erro: comErro, novos_andamentos: novosAndamentos });
-  }
+  };
+
+  await emLotes(empresasAdvocacia, CONCORRENCIA_EMPRESAS, processarEmpresa);
 
   return NextResponse.json({ ok: true, empresas_processadas: empresasAdvocacia.length, resultado });
 }

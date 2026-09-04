@@ -48,3 +48,4 @@ enriquecer-ie-*
 next-env.d.ts
 
 .vercel
+.env*

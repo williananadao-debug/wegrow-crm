@@ -168,6 +168,11 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
     setGerando(false);
     if (!res.ok) { setErro(json.erro || 'Erro ao gerar contrato.'); return; }
     onAtualizado();
+    // A ordem de assinatura no Docuseal é WeGrow primeiro, cliente depois — mas isso só
+    // acontece de verdade se alguém assinar como Contratada. Abre o link da WeGrow na
+    // hora, senão ninguém clica nele e o contrato fica esperando a assinatura da WeGrow
+    // pra sempre enquanto o cliente já está com o link dele.
+    if (json.sign_url_contratada) window.open(json.sign_url_contratada, '_blank');
   };
 
   return (

@@ -166,8 +166,13 @@ export async function POST(request: Request) {
   }
 
   const submitters: any[] = await submissionRes.json();
+  const contratadaSubmitter = submitters.find((s: any) => s.role === 'Contratada') || submitters[0];
   const contratanteSubmitter = submitters.find((s: any) => s.role === 'Contratante') || submitters[1];
   const signUrl = contratanteSubmitter ? `${DOCUSEAL_SIGN_BASE}/s/${contratanteSubmitter.slug}` : null;
+  // Link do próprio Willian (Contratada, order:0) — precisa ser devolvido e usado
+  // explicitamente, senão ninguém nunca clica nele e o contrato fica esperando a
+  // assinatura da WeGrow pra sempre enquanto o cliente já recebeu o link dele.
+  const signUrlContratada = contratadaSubmitter ? `${DOCUSEAL_SIGN_BASE}/s/${contratadaSubmitter.slug}` : null;
 
   const { error: updateErr } = await db.from('clientes_wegrow').upsert({
     empresa_id,
@@ -187,5 +192,5 @@ export async function POST(request: Request) {
 
   if (updateErr) return NextResponse.json({ erro: 'Enviado no Docuseal, mas falhou ao salvar status: ' + updateErr.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, sign_url: signUrl });
+  return NextResponse.json({ ok: true, sign_url: signUrl, sign_url_contratada: signUrlContratada });
 }

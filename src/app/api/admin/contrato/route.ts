@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   let body: any;
   try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-  const { empresa_id, cliente_razao, cliente_cnpj, cliente_endereco, valor_mensal, dia_vencimento, data_inicio, signer_nome, signer_email } = body;
+  const { empresa_id, cliente_razao, cliente_cnpj, cliente_endereco, valor_mensal, fidelidade_meses, dia_vencimento, data_inicio, signer_nome, signer_email } = body;
   if (!empresa_id || !cliente_razao || !cliente_cnpj || !cliente_endereco || !valor_mensal || !signer_nome || !signer_email) {
     return NextResponse.json({ erro: 'empresa_id, cliente_razao, cliente_cnpj, cliente_endereco, valor_mensal, signer_nome e signer_email são obrigatórios.' }, { status: 422 });
   }
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
       cliente_endereco,
       modulos: nomesModulos(empresa?.modulos),
       valor_mensal: Number(valor_mensal),
+      fidelidade_meses: Number(fidelidade_meses) || 0,
       dia_vencimento: Number(dia_vencimento) || 10,
       data_inicio: fmtData(data_inicio) || fmtData(new Date().toISOString()),
       data_assinatura: `${FORO_COMARCA}, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`,

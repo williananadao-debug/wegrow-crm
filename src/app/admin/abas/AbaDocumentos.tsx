@@ -138,6 +138,7 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
     endereco: empresa.billing?.endereco ?? '',
     dia_vencimento: empresa.billing?.proximo_vencimento ? String(new Date(empresa.billing.proximo_vencimento + 'T00:00:00').getDate()) : '10',
     data_inicio: new Date().toISOString().substring(0, 10),
+    fidelidade_meses: '12',
   });
   const [signerNome, setSignerNome] = useState(empresa.billing?.contrato_signer_nome ?? empresa.billing?.contato ?? '');
   const [signerEmail, setSignerEmail] = useState(empresa.billing?.contrato_signer_email ?? '');
@@ -158,6 +159,7 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
         cliente_cnpj: form.cnpj.trim(),
         cliente_endereco: form.endereco.trim(),
         valor_mensal: empresa.billing?.valor_mensal || 0,
+        fidelidade_meses: form.fidelidade_meses,
         dia_vencimento: form.dia_vencimento,
         data_inicio: form.data_inicio,
         signer_nome: signerNome.trim(),
@@ -189,7 +191,19 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
             <input value={form.dia_vencimento} onChange={e => setForm({ ...form, dia_vencimento: e.target.value })} placeholder="Dia vencimento (ex: 10)" type="number" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
           </div>
           <input value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} placeholder="Endereço completo" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-          <input value={form.data_inicio} onChange={e => setForm({ ...form, data_inicio: e.target.value })} type="date" className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors"/>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={form.data_inicio} onChange={e => setForm({ ...form, data_inicio: e.target.value })} type="date" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors"/>
+            <select value={form.fidelidade_meses} onChange={e => setForm({ ...form, fidelidade_meses: e.target.value })} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors">
+              <option value="0" className="bg-[#0B1120]">Sem fidelidade</option>
+              <option value="6" className="bg-[#0B1120]">Fidelidade 6 meses</option>
+              <option value="12" className="bg-[#0B1120]">Fidelidade 12 meses</option>
+              <option value="18" className="bg-[#0B1120]">Fidelidade 18 meses</option>
+              <option value="24" className="bg-[#0B1120]">Fidelidade 24 meses</option>
+            </select>
+          </div>
+          {Number(form.fidelidade_meses) > 0 && (
+            <p className="text-slate-500 text-[10px]">Cancelamento antes do fim da fidelidade gera multa de 50% do saldo das mensalidades restantes.</p>
+          )}
 
           <p className="text-slate-300 text-xs font-bold pt-2 border-t border-white/5">Quem vai assinar pelo cliente</p>
           <div className="grid grid-cols-2 gap-2">

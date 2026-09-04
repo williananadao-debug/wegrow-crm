@@ -12,6 +12,7 @@ export type ContratoWegrowData = {
   cliente_endereco: string;
   modulos: string; // já formatado, ex: "Deals, Pulse, Relatórios"
   valor_mensal: number;
+  fidelidade_meses: number; // 0 = sem fidelidade, contrato por prazo indeterminado desde o início
   dia_vencimento: number;
   data_inicio: string; // dd/mm/aaaa já formatado
   data_assinatura: string; // ex: "Curitiba/PR, 17 de agosto de 2026"
@@ -27,6 +28,15 @@ const CINZA_LINHA = '#e2e4ea';
 
 function fmt(v: number) {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+}
+
+// Só cobre os prazos de fidelidade que realmente aparecem em contrato (não é conversor
+// numérico genérico) — convenção jurídica de escrever "12 (doze) meses" por extenso.
+const MESES_POR_EXTENSO: Record<number, string> = {
+  3: 'três', 6: 'seis', 9: 'nove', 12: 'doze', 18: 'dezoito', 24: 'vinte e quatro', 36: 'trinta e seis',
+};
+function porExtenso(meses: number): string {
+  return MESES_POR_EXTENSO[meses] || String(meses);
 }
 
 export type ContratoWegrowBufferResult = {
@@ -153,7 +163,13 @@ export function gerarContratoWegrowBuffer(data: ContratoWegrowData): Promise<Con
         '3.2. O atraso no pagamento não implica, por si só, suspensão do acesso da CONTRATANTE ao sistema, permanecendo este contrato regido pelas demais cláusulas independentemente da situação financeira entre as partes.',
       ]);
 
-      clausula(4, 'Do prazo e do cancelamento', [
+      clausula(4, 'Do prazo e do cancelamento', data.fidelidade_meses > 0 ? [
+        `4.1. Este contrato tem período de fidelidade de ${data.fidelidade_meses} (${porExtenso(data.fidelidade_meses)}) meses, contados a partir da data de assinatura. Encerrado esse período, o contrato passa a vigorar por prazo indeterminado, sem fidelidade adicional.`,
+        '4.2. Qualquer das partes poderá rescindir este contrato a qualquer tempo, mediante aviso prévio por escrito (e-mail ou WhatsApp) com antecedência mínima de 30 (trinta) dias.',
+        `4.3. Caso a CONTRATANTE solicite o cancelamento antes do término do período de fidelidade referido no item 4.1, incidirá multa rescisória equivalente a 50% (cinquenta por cento) do saldo remanescente das mensalidades até o fim da fidelidade, calculada pela fórmula: multa = 50% × (meses restantes × valor da mensalidade vigente). Exemplo ilustrativo, sem efeito vinculante sobre os valores reais deste contrato: mensalidade de R$ 665,00, fidelidade de 12 meses, cancelamento no 4º mês — restam 8 meses, saldo de R$ 5.320,00, multa de R$ 2.660,00.`,
+        '4.4. A multa referida no item 4.3 não se aplica caso a rescisão decorra de descumprimento contratual pela WEGROW, comprovado por escrito.',
+        '4.5. Encerrado o contrato, por qualquer motivo, a CONTRATANTE terá direito à exportação de todos os seus dados armazenados no sistema, conforme Cláusula 5ª, dentro do prazo de aviso prévio.',
+      ] : [
         '4.1. Este contrato vigora por prazo indeterminado, a partir da data de sua assinatura, não havendo fidelidade ou período mínimo de permanência.',
         '4.2. Qualquer das partes poderá rescindir este contrato a qualquer tempo, mediante aviso prévio por escrito (e-mail ou WhatsApp) com antecedência mínima de 30 (trinta) dias.',
         '4.3. Encerrado o contrato, a CONTRATANTE terá direito à exportação de todos os seus dados armazenados no sistema, conforme Cláusula 5ª, dentro do prazo de aviso prévio.',

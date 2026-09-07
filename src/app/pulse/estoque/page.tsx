@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, History, X, Wallet, AlertTriangle, Pencil, Search } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -9,15 +10,26 @@ import NotaFiscalModal from '@/components/NotaFiscalModal';
 type Movimentacao = {
   id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
   nf_numero: string | null; nf_chave_acesso: string | null; created_at: string;
-  tipo: string; observacao: string | null;
+  tipo: string; motivo: string | null; observacao: string | null;
 };
 
 const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
-  entrada_nf: { label: 'Nota Fiscal', cor: 'text-purple-400 bg-purple-500/10' },
+  entrada_nf: { label: 'Nota Fiscal (entrada)', cor: 'text-purple-400 bg-purple-500/10' },
+  saida_nf: { label: 'Nota Fiscal (saída)', cor: 'text-orange-400 bg-orange-500/10' },
   ajuste: { label: 'Ajuste manual', cor: 'text-blue-400 bg-blue-500/10' },
   venda: { label: 'Venda', cor: 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' },
+  consumo_producao: { label: 'Consumo de produção', cor: 'text-amber-400 bg-amber-500/10' },
   estorno: { label: 'Estorno', cor: 'text-red-400 bg-red-500/10' },
 };
+
+const MOTIVO_LABEL: Record<string, string> = {
+  compra: 'Compra', devolucao_cliente: 'Devolução de cliente', transferencia: 'Transferência',
+  contagem: 'Contagem física', outros: 'Outros', venda: 'Venda', perda: 'Perda/quebra',
+  devolucao_fornecedor: 'Devolução ao fornecedor', uso_interno: 'Uso interno',
+};
+
+const MOTIVOS_ENTRADA = ['compra', 'devolucao_cliente', 'transferencia', 'contagem', 'outros'] as const;
+const MOTIVOS_SAIDA = ['venda', 'perda', 'devolucao_fornecedor', 'transferencia', 'uso_interno', 'contagem'] as const;
 
 export default function PulseEstoquePage() {
   const { authLoading, temPulse, user, perfil } = usePulseAccess();
@@ -25,6 +37,7 @@ export default function PulseEstoquePage() {
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
   const [notaModalAberto, setNotaModalAberto] = useState(false);
+  const [notaTipo, setNotaTipo] = useState<'entrada' | 'saida'>('entrada');
 
   const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
@@ -33,6 +46,7 @@ export default function PulseEstoquePage() {
   const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
   const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
   const [ajusteQtd, setAjusteQtd] = useState('');
+  const [ajusteMotivoCat, setAjusteMotivoCat] = useState<string>('compra');
   const [ajusteMotivo, setAjusteMotivo] = useState('');
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
@@ -79,7 +93,7 @@ export default function PulseEstoquePage() {
   };
 
   const abrirAjuste = (s: ServicoConfig) => {
-    setAjusteServico(s); setAjusteTipo('entrada'); setAjusteQtd(''); setAjusteMotivo('');
+    setAjusteServico(s); setAjusteTipo('entrada'); setAjusteQtd(''); setAjusteMotivo(''); setAjusteMotivoCat('compra');
   };
 
   const confirmarAjuste = async () => {
@@ -95,7 +109,8 @@ export default function PulseEstoquePage() {
     if (deltaReal !== 0) {
       await supabase.from('estoque_movimentacoes').insert([{
         empresa_id: perfil?.empresa_id, servico_id: ajusteServico.id, quantidade: deltaReal,
-        tipo: 'ajuste', user_id: user?.id, observacao: ajusteMotivo.trim() || null,
+        tipo: 'ajuste', motivo: ajusteTipo === 'definir' ? 'contagem' : ajusteMotivoCat,
+        user_id: user?.id, observacao: ajusteMotivo.trim() || null,
       }]);
       alertarEstoqueBaixoSeCruzou(ajusteServico.id, atual, novo, ajusteServico.estoque_minimo ?? 5);
     }
@@ -159,9 +174,17 @@ export default function PulseEstoquePage() {
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
         </div>
-        <button onClick={() => setNotaModalAberto(true)} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
-          <ScanLine size={14} /> Dar entrada por Nota Fiscal
-        </button>
+        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ListTree size={14} /> Kardex
+          </Link>
+          <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <PackageMinus size={14} /> Dar saída por Nota Fiscal
+          </button>
+          <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ScanLine size={14} /> Dar entrada por Nota Fiscal
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -250,6 +273,7 @@ export default function PulseEstoquePage() {
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap mt-1">
                         <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${info.cor}`}>{info.label}</span>
+                        {m.motivo && <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{MOTIVO_LABEL[m.motivo] || m.motivo}</span>}
                         {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
                         {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
                         {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
@@ -275,7 +299,7 @@ export default function PulseEstoquePage() {
 
             <div className="grid grid-cols-3 gap-2 mb-3">
               {(['entrada', 'saida', 'definir'] as const).map(t => (
-                <button key={t} onClick={() => setAjusteTipo(t)} className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${ajusteTipo === t ? 'bg-amber-500 text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+                <button key={t} onClick={() => { setAjusteTipo(t); setAjusteMotivoCat(t === 'saida' ? 'perda' : 'compra'); }} className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${ajusteTipo === t ? 'bg-amber-500 text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
                   {t === 'entrada' ? 'Entrada (+)' : t === 'saida' ? 'Saída (−)' : 'Definir valor'}
                 </button>
               ))}
@@ -287,9 +311,21 @@ export default function PulseEstoquePage() {
             <input type="number" value={ajusteQtd} onChange={e => setAjusteQtd(e.target.value)}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-3" placeholder="0" autoFocus />
 
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo (opcional)</label>
+            {ajusteTipo !== 'definir' && (
+              <>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Motivo</label>
+                <select value={ajusteMotivoCat} onChange={e => setAjusteMotivoCat(e.target.value)}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-3">
+                  {(ajusteTipo === 'entrada' ? MOTIVOS_ENTRADA : MOTIVOS_SAIDA).map(m => (
+                    <option key={m} value={m} className="bg-[#0B1120]">{MOTIVO_LABEL[m]}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Observação (opcional)</label>
             <input value={ajusteMotivo} onChange={e => setAjusteMotivo(e.target.value)}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-5" placeholder="Ex: contagem física, perda, devolução..." />
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500 mb-5" placeholder="Detalhe livre, se quiser" />
 
             <button onClick={confirmarAjuste} disabled={salvandoAjuste || !ajusteQtd}
               className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
@@ -305,6 +341,7 @@ export default function PulseEstoquePage() {
         servicos={servicos}
         empresaId={perfil?.empresa_id}
         userId={user?.id}
+        tipo={notaTipo}
         onConcluido={() => fetchServicos()}
       />
     </div>

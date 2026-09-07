@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 
-const SYSTEM_PROMPT = `Você lê fotos de notas fiscais de fornecedores (compra de mercadoria) e extrai os dados em JSON.
+const SYSTEM_PROMPT_ENTRADA = `Você lê fotos de notas fiscais de fornecedores (compra de mercadoria) e extrai os dados em JSON.
 
 Responda SOMENTE com um objeto JSON válido, sem markdown, sem texto adicional, no formato:
 {
-  "fornecedor": "nome do fornecedor/emitente, ou null se não conseguir ler",
+  "fornecedor": "nome do EMITENTE da nota (fornecedor, quem vendeu), ou null se não conseguir ler",
   "cnpj_fornecedor": "CNPJ do emitente só com dígitos (14 números), ou null",
   "numero": "número da nota fiscal (campo 'Nº' ou 'Número'), ou null",
   "serie": "série da nota fiscal (campo 'Série'), ou null",
@@ -23,6 +23,17 @@ Regras:
 - Se não conseguir ler algum item claramente, não o inclua
 - itens pode ser um array vazio se não conseguir identificar nenhum item
 - chave_acesso: só preencha se conseguir ler os 44 dígitos com confiança. Se estiver borrado/cortado, retorne null — não invente dígitos`;
+
+// Saída: a nota foi emitida pela PRÓPRIA empresa pro cliente — o participante que
+// interessa pro estoque/financeiro é o DESTINATÁRIO (cliente), não o emitente (que é a
+// própria empresa). Mesma estrutura de resposta, só troca de quem os dados são extraídos.
+const SYSTEM_PROMPT_SAIDA = SYSTEM_PROMPT_ENTRADA
+  .replace('Você lê fotos de notas fiscais de fornecedores (compra de mercadoria) e extrai os dados em JSON.',
+    'Você lê fotos de notas fiscais de VENDA (saída de mercadoria, emitida pela própria empresa) e extrai os dados do DESTINATÁRIO (cliente) em JSON.')
+  .replace('"fornecedor": "nome do EMITENTE da nota (fornecedor, quem vendeu), ou null se não conseguir ler",',
+    '"fornecedor": "nome do DESTINATÁRIO da nota (cliente, quem comprou), ou null se não conseguir ler",')
+  .replace('"cnpj_fornecedor": "CNPJ do emitente só com dígitos (14 números), ou null",',
+    '"cnpj_fornecedor": "CNPJ/CPF do destinatário só com dígitos, ou null",');
 
 export async function POST(req: NextRequest) {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -50,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { imagemBase64 } = await req.json();
+    const { imagemBase64, tipo } = await req.json();
     if (!imagemBase64 || typeof imagemBase64 !== 'string' || !imagemBase64.startsWith('data:image/')) {
       return NextResponse.json({ error: 'Imagem inválida.' }, { status: 400 });
     }
@@ -60,7 +71,7 @@ export async function POST(req: NextRequest) {
       max_tokens: 3000,
       temperature: 0.1,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: tipo === 'saida' ? SYSTEM_PROMPT_SAIDA : SYSTEM_PROMPT_ENTRADA },
         {
           role: 'user',
           content: [

@@ -22,7 +22,7 @@ const acharServicoParecido = (descricao: string, servicos: ServicoConfig[]): num
 };
 
 export default function NotaFiscalModal({
-  aberto, onFechar, servicos, empresaId, userId, onConcluido,
+  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipo = 'entrada',
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -30,7 +30,9 @@ export default function NotaFiscalModal({
   empresaId?: string;
   userId?: string;
   onConcluido: (resumo: { fornecedor: string; valorTotal: number; itens: number }) => void;
+  tipo?: 'entrada' | 'saida';
 }) {
+  const isSaida = tipo === 'saida';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [etapa, setEtapa] = useState<'foto' | 'lendo' | 'revisao'>('foto');
   const [imagem, setImagem] = useState<string | null>(null);
@@ -73,14 +75,16 @@ export default function NotaFiscalModal({
       const res = await fetch('/api/pulse/ler-nota', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ imagemBase64: imagem }),
+        body: JSON.stringify({ imagemBase64: imagem, tipo }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao ler a nota.');
 
+      // Saída não pode "criar produto novo" — não dá pra dar saída de algo que não existe
+      // no catálogo. Sem casamento por nome, cai em 'ignorar' em vez de 'novo'.
       const itensLidos: ItemNota[] = (json.itens || []).map((i: any) => ({
         descricao: i.descricao, quantidade: i.quantidade, valor_unitario: i.valor_unitario,
-        servicoId: acharServicoParecido(i.descricao, servicos) ?? 'novo',
+        servicoId: acharServicoParecido(i.descricao, servicos) ?? (isSaida ? 'ignorar' : 'novo'),
       }));
       const totalCalculado = itensLidos.reduce((acc, i) => acc + i.quantidade * i.valor_unitario, 0);
 
@@ -106,12 +110,15 @@ export default function NotaFiscalModal({
   const removerItem = (index: number) => setItens(prev => prev.filter((_, i) => i !== index));
 
   const confirmar = async () => {
-    if (itens.length === 0) return setErro('Nenhum item pra dar entrada.');
+    if (itens.length === 0) return setErro(isSaida ? 'Nenhum item pra dar saída.' : 'Nenhum item pra dar entrada.');
     if (!valorTotal || Number(valorTotal) <= 0) return setErro('Informe o valor total da nota.');
     if (!dataVencimento) return setErro('Informe a data de vencimento.');
     setSalvando(true); setErro(null);
     try {
-      const itensValidos = itens.filter(i => i.servicoId !== 'ignorar');
+      // Saída nunca cria produto novo (não existe "vender algo que não está cadastrado") —
+      // filtrado aqui de novo por segurança, mesmo já sem a opção na UI.
+      const itensValidos = itens.filter(i => i.servicoId !== 'ignorar' && !(isSaida && i.servicoId === 'novo'));
+      let ultimoMovimentoId: number | null = null;
 
       for (const item of itensValidos) {
         let servicoId: number;
@@ -125,33 +132,52 @@ export default function NotaFiscalModal({
         } else if (typeof item.servicoId === 'number') {
           servicoId = item.servicoId;
           const atual = servicos.find(s => s.id === item.servicoId);
-          const novoEstoque = (atual?.estoque || 0) + item.quantidade;
+          const novoEstoque = isSaida
+            ? Math.max(0, (atual?.estoque || 0) - item.quantidade)
+            : (atual?.estoque || 0) + item.quantidade;
           await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', item.servicoId);
         } else {
           continue;
         }
 
-        await supabase.from('estoque_movimentacoes').insert([{
-          empresa_id: empresaId, servico_id: servicoId, quantidade: item.quantidade, valor_unitario: item.valor_unitario,
-          fornecedor: fornecedor || null, nf_numero: numero || null, nf_serie: serie || null,
-          nf_chave_acesso: chaveAcesso || null, user_id: userId, tipo: 'entrada_nf',
-        }]);
+        const { data: movimento } = await supabase.from('estoque_movimentacoes').insert([{
+          empresa_id: empresaId, servico_id: servicoId,
+          quantidade: isSaida ? -item.quantidade : item.quantidade,
+          valor_unitario: item.valor_unitario,
+          fornecedor: fornecedor || null, cnpj_participante: cnpjFornecedor || null,
+          nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
+          user_id: userId, tipo: isSaida ? 'saida_nf' : 'entrada_nf', motivo: isSaida ? 'venda' : 'compra',
+        }]).select('id').single();
+        if (movimento) ultimoMovimentoId = movimento.id;
       }
 
       const { error: erroLancamento } = await supabase.from('lancamentos').insert([{
-        titulo: fornecedor ? `Nota Fiscal - ${fornecedor}` : 'Nota Fiscal - Entrada de estoque',
-        valor: Number(valorTotal), tipo: 'saida', categoria: 'Fornecedor', status: 'pendente',
+        titulo: fornecedor
+          ? `Nota Fiscal - ${isSaida ? 'Venda para' : ''} ${fornecedor}`.trim()
+          : `Nota Fiscal - ${isSaida ? 'Saída de estoque' : 'Entrada de estoque'}`,
+        valor: Number(valorTotal), tipo: isSaida ? 'entrada' : 'saida', categoria: isSaida ? 'Vendas' : 'Fornecedor', status: 'pendente',
         data_vencimento: dataVencimento, user_id: userId, empresa_id: empresaId,
         nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
         nf_data_emissao: dataEmissao || null, nf_fornecedor_cnpj: cnpjFornecedor || null,
       }]);
       if (erroLancamento) throw new Error(erroLancamento.message);
 
+      // Registro fiscal da nota em si (número/série/chave) — hoje é só o que a pessoa
+      // digitou/leu por foto (origem 'manual'); quando entrar um provedor de verdade
+      // (Focus NFe), essas mesmas linhas passam a ter origem/status vindos da API.
+      await supabase.from('fiscal_notas').insert([{
+        empresa_id: empresaId, tipo, numero: numero || null, serie: serie || null,
+        chave_acesso: chaveAcesso || null, cnpj_participante: cnpjFornecedor || null,
+        nome_participante: fornecedor || null, valor_total: Number(valorTotal),
+        status: 'autorizada', origem: 'manual', data_emissao: dataEmissao || null,
+        estoque_movimentacao_id: ultimoMovimentoId,
+      }]);
+
       onConcluido({ fornecedor, valorTotal: Number(valorTotal), itens: itensValidos.length });
       reset();
       onFechar();
     } catch (err: any) {
-      setErro(err?.message || 'Erro ao confirmar entrada.');
+      setErro(err?.message || `Erro ao confirmar ${isSaida ? 'saída' : 'entrada'}.`);
     } finally {
       setSalvando(false);
     }
@@ -164,7 +190,7 @@ export default function NotaFiscalModal({
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="font-black text-white uppercase italic text-lg">Entrada por Nota Fiscal</h3>
+            <h3 className="font-black text-white uppercase italic text-lg">{isSaida ? 'Saída por Nota Fiscal' : 'Entrada por Nota Fiscal'}</h3>
             <p className="text-slate-500 text-xs font-bold">Foto da nota → IA lê os itens → você confirma</p>
           </div>
           <button onClick={fechar} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
@@ -204,11 +230,11 @@ export default function NotaFiscalModal({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Fornecedor</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{isSaida ? 'Cliente' : 'Fornecedor'}</label>
                 <input value={fornecedor} onChange={e => setFornecedor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CNPJ do fornecedor</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{isSaida ? 'CNPJ/CPF do cliente' : 'CNPJ do fornecedor'}</label>
                 <input value={cnpjFornecedor} onChange={e => setCnpjFornecedor(e.target.value)} placeholder="Só números" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
             </div>
@@ -233,7 +259,7 @@ export default function NotaFiscalModal({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento (Contas a Pagar)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{isSaida ? 'Vencimento (Contas a Receber)' : 'Vencimento (Contas a Pagar)'}</label>
                 <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
               <div>
@@ -260,12 +286,18 @@ export default function NotaFiscalModal({
                     onChange={e => atualizarItem(i, { servicoId: e.target.value === 'novo' || e.target.value === 'ignorar' ? e.target.value as any : Number(e.target.value) })}
                     className="w-full bg-black/40 border border-white/10 rounded-lg py-2 px-2.5 text-white text-xs outline-none focus:border-purple-500"
                   >
-                    <option value="novo" className="bg-[#0B1120]">+ Criar novo produto "{item.descricao}"</option>
+                    {!isSaida && <option value="novo" className="bg-[#0B1120]">+ Criar novo produto "{item.descricao}"</option>}
                     <option value="ignorar" className="bg-[#0B1120]">Ignorar este item (não mexe no estoque)</option>
                     {servicos.map(s => (
-                      <option key={s.id} value={s.id} className="bg-[#0B1120]">Somar no estoque de: {s.nome}</option>
+                      <option key={s.id} value={s.id} className="bg-[#0B1120]">{isSaida ? `Baixar do estoque de: ${s.nome} (${s.estoque ?? 0} disp.)` : `Somar no estoque de: ${s.nome}`}</option>
                     ))}
                   </select>
+                  {isSaida && typeof item.servicoId === 'number' && (() => {
+                    const s = servicos.find(sv => sv.id === item.servicoId);
+                    return s && item.quantidade > (s.estoque ?? 0)
+                      ? <p className="text-amber-400 text-[10px] font-bold">Quantidade maior que o disponível ({s.estoque ?? 0}) — estoque vai ficar zerado, não negativo.</p>
+                      : null;
+                  })()}
                 </div>
               ))}
             </div>
@@ -274,7 +306,7 @@ export default function NotaFiscalModal({
 
             <button onClick={confirmar} disabled={salvando} className="w-full bg-[#22C55E] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
               {salvando ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              {salvando ? 'Confirmando...' : 'Confirmar entrada e lançar despesa'}
+              {salvando ? 'Confirmando...' : isSaida ? 'Confirmar saída e lançar receita' : 'Confirmar entrada e lançar despesa'}
             </button>
           </div>
         )}

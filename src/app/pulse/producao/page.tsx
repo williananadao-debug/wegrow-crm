@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, registrarProducaoAutomatica, etapasFabricacaoDe } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, registrarProducaoAutomatica, aprovarAditivo, etapasFabricacaoDe } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -50,6 +50,14 @@ function PulseProducaoContent() {
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [eventos, setEventos] = useState<EventoProducao[]>([]);
   const [carregandoEventos, setCarregandoEventos] = useState(false);
+  const [aditivos, setAditivos] = useState<PulseAditivo[]>([]);
+  const [mostrarFormAditivo, setMostrarFormAditivo] = useState(false);
+  const [aditivoItens, setAditivoItens] = useState<AditivoItem[]>([]);
+  const [aditivoServicoId, setAditivoServicoId] = useState('');
+  const [aditivoQtd, setAditivoQtd] = useState('1');
+  const [aditivoMotivo, setAditivoMotivo] = useState('');
+  const [enviandoAditivo, setEnviandoAditivo] = useState(false);
+  const [processandoAditivoId, setProcessandoAditivoId] = useState<number | null>(null);
   const [novoComentario, setNovoComentario] = useState('');
   const [enviandoComentario, setEnviandoComentario] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
@@ -214,8 +222,65 @@ function PulseProducaoContent() {
     setCarregandoEventos(false);
   };
 
-  const abrirDetalhe = (p: Producao) => { setDetalheId(p.id); setNovoComentario(''); carregarEventos(p.id); };
-  const fecharDetalhe = () => { setDetalheId(null); setEventos([]); };
+  const carregarAditivos = async (producaoId: number) => {
+    const { data } = await supabase.from('pulse_aditivos').select('*').eq('producao_id', producaoId).order('created_at', { ascending: false });
+    setAditivos((data as PulseAditivo[]) || []);
+  };
+
+  const abrirDetalhe = (p: Producao) => {
+    setDetalheId(p.id); setNovoComentario(''); carregarEventos(p.id); carregarAditivos(p.id);
+    setMostrarFormAditivo(false); setAditivoItens([]); setAditivoMotivo('');
+  };
+  const fecharDetalhe = () => { setDetalheId(null); setEventos([]); setAditivos([]); };
+
+  const adicionarItemAditivo = () => {
+    const s = servicos.find(sv => sv.id === Number(aditivoServicoId));
+    const qtd = Number(aditivoQtd);
+    if (!s || !qtd || qtd <= 0) return;
+    setAditivoItens(prev => [...prev, { servicoId: s.id, nome: s.nome, quantidade: qtd, precoUnitario: s.preco }]);
+    setAditivoServicoId(''); setAditivoQtd('1');
+  };
+  const removerItemAditivo = (idx: number) => setAditivoItens(prev => prev.filter((_, i) => i !== idx));
+  const valorAditivo = aditivoItens.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
+
+  const enviarAditivo = async () => {
+    if (!detalheProducao || aditivoItens.length === 0) return;
+    setEnviandoAditivo(true);
+    try {
+      const { error } = await supabase.from('pulse_aditivos').insert([{
+        empresa_id: perfil?.empresa_id, producao_id: detalheProducao.id, lead_id: detalheProducao.lead_id,
+        itens: aditivoItens, valor_adicional: valorAditivo, motivo: aditivoMotivo.trim() || null,
+        solicitado_por: user?.id,
+      }]);
+      if (error) throw error;
+      await supabase.from('pulse_producao_eventos').insert([{
+        producao_id: detalheProducao.id, tipo: 'comentario', user_id: user?.id,
+        texto: `Aditivo solicitado (aguardando aprovação): ${aditivoItens.map(i => `${i.nome} ×${i.quantidade}`).join(', ')} — R$ ${valorAditivo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+      }]);
+      setMostrarFormAditivo(false); setAditivoItens([]); setAditivoMotivo('');
+      carregarAditivos(detalheProducao.id); carregarEventos(detalheProducao.id);
+    } catch (err: any) {
+      alert('Erro ao solicitar aditivo: ' + (err?.message || 'tente novamente'));
+    } finally {
+      setEnviandoAditivo(false);
+    }
+  };
+
+  const decidirAditivo = async (aditivo: PulseAditivo, aprovar: boolean) => {
+    setProcessandoAditivoId(aditivo.id);
+    try {
+      if (aprovar) {
+        await aprovarAditivo(aditivo, perfil?.empresa_id || '', user?.id);
+      } else {
+        await supabase.from('pulse_aditivos').update({ status: 'rejeitado', aprovado_por: user?.id, aprovado_em: new Date().toISOString() }).eq('id', aditivo.id);
+      }
+      if (detalheId) { carregarAditivos(detalheId); carregarEventos(detalheId); carregar(); }
+    } catch (err: any) {
+      alert('Erro ao processar aditivo: ' + (err?.message || 'tente novamente'));
+    } finally {
+      setProcessandoAditivoId(null);
+    }
+  };
 
   const adicionarComentario = async () => {
     if (!detalheId || !novoComentario.trim()) return;
@@ -502,6 +567,80 @@ function PulseProducaoContent() {
             )}
 
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {(aditivos.length > 0 || detalheProducao.status !== 'entregue') && (
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aditivos</p>
+                    {detalheProducao.status !== 'entregue' && !mostrarFormAditivo && (
+                      <button onClick={() => setMostrarFormAditivo(true)} className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest">+ Solicitar aditivo</button>
+                    )}
+                  </div>
+
+                  {aditivos.map(ad => (
+                    <div key={ad.id} className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${ad.status === 'aprovado' ? 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' : ad.status === 'rejeitado' ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10'}`}>{ad.status}</span>
+                        <span className="text-white font-black text-xs">+R$ {ad.valor_adicional.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <p className="text-slate-300 text-xs">{ad.itens.map(i => `${i.nome} ×${i.quantidade}`).join(', ')}</p>
+                      {ad.motivo && <p className="text-slate-500 text-[10px] italic">{ad.motivo}</p>}
+                      {ad.status === 'pendente' && isLideranca && (
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={() => decidirAditivo(ad, true)} disabled={processandoAditivoId === ad.id} className="flex-1 bg-[var(--cor-primaria)] text-[#0B1120] py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                            {processandoAditivoId === ad.id ? 'Processando...' : 'Aprovar'}
+                          </button>
+                          <button onClick={() => decidirAditivo(ad, false)} disabled={processandoAditivoId === ad.id} className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                            Rejeitar
+                          </button>
+                        </div>
+                      )}
+                      {ad.status === 'pendente' && !isLideranca && (
+                        <p className="text-slate-600 text-[10px]">Aguardando aprovação da diretoria.</p>
+                      )}
+                    </div>
+                  ))}
+
+                  {mostrarFormAditivo && (
+                    <div className="bg-black/30 border border-amber-500/20 rounded-xl p-3 space-y-2">
+                      <div className="flex gap-2">
+                        <select value={aditivoServicoId} onChange={e => setAditivoServicoId(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-white text-xs outline-none focus:border-amber-500">
+                          <option value="" className="bg-[#0B1120]">Selecione o item...</option>
+                          {servicos.map(s => <option key={s.id} value={s.id} className="bg-[#0B1120]">{s.nome} — R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>)}
+                        </select>
+                        <input type="number" min="1" value={aditivoQtd} onChange={e => setAditivoQtd(e.target.value)} className="w-16 bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-white text-xs text-center outline-none focus:border-amber-500" />
+                        <button onClick={adicionarItemAditivo} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 rounded-lg"><Plus size={14} /></button>
+                      </div>
+
+                      {aditivoItens.length > 0 && (
+                        <div className="space-y-1">
+                          {aditivoItens.map((it, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-xs bg-white/[0.03] rounded-lg px-2.5 py-1.5">
+                              <span className="text-slate-300">{it.nome} ×{it.quantidade}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-500 font-mono">R$ {(it.quantidade * it.precoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <button onClick={() => removerItemAditivo(idx)} className="text-slate-600 hover:text-red-400"><Trash2 size={12} /></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <input value={aditivoMotivo} onChange={e => setAditivoMotivo(e.target.value)} placeholder="Motivo (opcional) — ex: cliente pediu depois de fechar" className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs outline-none focus:border-amber-500" />
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-white font-black text-sm">Total: R$ {valorAditivo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setMostrarFormAditivo(false); setAditivoItens([]); }} className="text-slate-400 hover:text-white text-[10px] font-black uppercase px-3 py-2">Cancelar</button>
+                          <button onClick={enviarAditivo} disabled={enviandoAditivo || aditivoItens.length === 0} className="bg-amber-500 hover:bg-amber-400 text-[#0B1120] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-1.5">
+                            {enviandoAditivo ? <Loader2 size={12} className="animate-spin" /> : null} Enviar pra aprovação
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {carregandoEventos ? (
                 <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-slate-600" /></div>
               ) : eventos.length === 0 ? (

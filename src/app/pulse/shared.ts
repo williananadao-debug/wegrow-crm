@@ -182,3 +182,104 @@ export async function registrarProducaoAutomatica(params: {
 
   return { producaoId: producao.id, custoTotal };
 }
+
+export type AditivoItem = { servicoId: number; nome: string; quantidade: number; precoUnitario: number };
+export type PulseAditivo = {
+  id: number; empresa_id: string; producao_id: number | null; lead_id: number | null;
+  itens: AditivoItem[]; valor_adicional: number; motivo: string | null;
+  status: 'pendente' | 'aprovado' | 'rejeitado'; solicitado_por: string | null;
+  aprovado_por: string | null; aprovado_em: string | null; created_at: string;
+};
+
+// Aprova um aditivo (pedido de adicionar item a uma produção já em andamento — ex:
+// cliente pede um teto elétrico depois que o trailer já começou a ser fabricado):
+// consome a ficha técnica de cada item igual a uma venda normal faria, mas sem criar uma
+// produção nova — soma direto na que já existe — e atualiza o valor total da venda
+// original. Alçada de quem pode chamar isso é responsabilidade de quem chama (UI só
+// mostra o botão de aprovar pra diretor/gerente), não é reforçada aqui.
+export async function aprovarAditivo(aditivo: PulseAditivo, empresaId: string, userId?: string | null): Promise<void> {
+  if (!aditivo.producao_id) throw new Error('Aditivo sem produção associada.');
+
+  const servicoIds = aditivo.itens.map(i => i.servicoId);
+  const [{ data: fichas }, { data: servicosEnvolvidos }, { data: producaoAtual }] = await Promise.all([
+    supabase.from('pulse_fichas_tecnicas').select('produto_final_id, servico_id, quantidade_por_unidade').in('produto_final_id', servicoIds),
+    supabase.from('servicos').select('*'),
+    supabase.from('pulse_producoes').select('custo_total, produto_final_nome').eq('id', aditivo.producao_id).single(),
+  ]);
+
+  const servicoPorId = new Map((servicosEnvolvidos || []).map((s: any) => [s.id, s as ServicoConfig]));
+  const fichasPorProduto = new Map<number, FichaTecnicaItem[]>();
+  for (const f of fichas || []) {
+    const lista = fichasPorProduto.get(f.produto_final_id) || [];
+    lista.push({ servicoId: f.servico_id, quantidadePorUnidade: f.quantidade_por_unidade });
+    fichasPorProduto.set(f.produto_final_id, lista);
+  }
+
+  let custoAdicional = 0;
+
+  for (const item of aditivo.itens) {
+    const fichaItens = fichasPorProduto.get(item.servicoId) || [];
+    if (fichaItens.length > 0) {
+      // Item sob encomenda com ficha técnica — consome matéria-prima na produção já
+      // existente (não cria pulse_producoes nova, o trailer já está sendo fabricado).
+      for (const fi of fichaItens) {
+        const materiaPrima = servicoPorId.get(fi.servicoId);
+        if (!materiaPrima) continue;
+        const qtd = fi.quantidadePorUnidade * item.quantidade;
+        const custoUnitario = materiaPrima.preco_custo || 0;
+        custoAdicional += qtd * custoUnitario;
+        await supabase.from('pulse_producao_itens').insert([{
+          producao_id: aditivo.producao_id, servico_id: materiaPrima.id, materia_prima_nome: materiaPrima.nome,
+          quantidade: qtd, custo_unitario: custoUnitario, subtotal: qtd * custoUnitario,
+        }]);
+        const estoqueAtual = materiaPrima.estoque || 0;
+        const novoEstoque = Math.max(0, estoqueAtual - qtd);
+        await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', materiaPrima.id);
+        await supabase.from('estoque_movimentacoes').insert([{
+          empresa_id: empresaId, servico_id: materiaPrima.id, quantidade: -(estoqueAtual - novoEstoque),
+          tipo: 'consumo_producao', producao_id: aditivo.producao_id, user_id: userId || null,
+          observacao: `Aditivo aprovado — ${item.nome}`,
+        }]);
+        alertarEstoqueBaixoSeCruzou(materiaPrima.id, estoqueAtual, novoEstoque, materiaPrima.estoque_minimo ?? 5);
+      }
+    } else {
+      // Item de estoque pronto (sem ficha técnica) — baixa direto, igual a venda normal.
+      const produto = servicoPorId.get(item.servicoId);
+      if (produto && produto.estoque !== null && produto.estoque !== undefined) {
+        const estoqueAtual = produto.estoque;
+        const novoEstoque = Math.max(0, estoqueAtual - item.quantidade);
+        await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', produto.id);
+        await supabase.from('estoque_movimentacoes').insert([{
+          empresa_id: empresaId, servico_id: produto.id, quantidade: -(estoqueAtual - novoEstoque),
+          tipo: 'venda', motivo: 'venda', producao_id: aditivo.producao_id, user_id: userId || null,
+          observacao: `Aditivo aprovado — ${item.nome}`,
+        }]);
+        alertarEstoqueBaixoSeCruzou(produto.id, estoqueAtual, novoEstoque, produto.estoque_minimo ?? 5);
+      }
+    }
+  }
+
+  await supabase.from('pulse_producoes').update({
+    custo_total: (producaoAtual?.custo_total || 0) + custoAdicional,
+  }).eq('id', aditivo.producao_id);
+
+  await supabase.from('pulse_producao_eventos').insert([{
+    producao_id: aditivo.producao_id, tipo: 'status', user_id: userId || null,
+    texto: `Aditivo aprovado: ${aditivo.itens.map(i => `${i.nome} ×${i.quantidade}`).join(', ')} (+R$ ${aditivo.valor_adicional.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+  }]);
+
+  if (aditivo.lead_id) {
+    const { data: lead } = await supabase.from('leads').select('itens, valor_total').eq('id', aditivo.lead_id).single();
+    if (lead) {
+      const itensAtuais = Array.isArray(lead.itens) ? lead.itens : [];
+      const novosItens = [...itensAtuais, ...aditivo.itens.map(i => ({ servico: i.nome, quantidade: i.quantidade, precoUnitario: i.precoUnitario }))];
+      await supabase.from('leads').update({
+        itens: novosItens, valor_total: (lead.valor_total || 0) + aditivo.valor_adicional,
+      }).eq('id', aditivo.lead_id);
+    }
+  }
+
+  await supabase.from('pulse_aditivos').update({
+    status: 'aprovado', aprovado_por: userId || null, aprovado_em: new Date().toISOString(),
+  }).eq('id', aditivo.id);
+}

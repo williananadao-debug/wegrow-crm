@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes, Factory, ArrowUp, ArrowDown } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
+import { ETAPAS_FABRICACAO_PADRAO } from '../pulse/shared';
 
 type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
 
@@ -81,6 +82,10 @@ export default function SettingsPage() {
   const [nfseConfig, setNfseConfig] = useState<NfseConfig>(NFSE_CONFIG_VAZIA);
   const [savingNfse, setSavingNfse] = useState(false);
   const [feedbackNfse, setFeedbackNfse] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [modulosAtuais, setModulosAtuais] = useState<Record<string, any>>({});
+  const [etapasProducao, setEtapasProducao] = useState<string[]>(ETAPAS_FABRICACAO_PADRAO);
+  const [savingEtapas, setSavingEtapas] = useState(false);
+  const [feedbackEtapas, setFeedbackEtapas] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
   const categoriasDisponiveis = Array.from(new Set([...CATEGORIAS_PADRAO, ...servicos.map(s => s.tipo).filter(Boolean)]));
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +109,9 @@ export default function SettingsPage() {
     setLoading(true);
     const { data: emp } = await supabase.from('empresas').select('modulos, nfse_config').eq('id', perfil?.empresa_id).single();
     if (emp?.nfse_config) setNfseConfig({ ...NFSE_CONFIG_VAZIA, ...emp.nfse_config });
+    setModulosAtuais(emp?.modulos || {});
+    const etapasSalvas = emp?.modulos?.pulse_etapas_fabricacao;
+    setEtapasProducao(Array.isArray(etapasSalvas) && etapasSalvas.length > 0 ? etapasSalvas : ETAPAS_FABRICACAO_PADRAO);
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('ordem', { ascending: true, nullsFirst: false }).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
@@ -435,6 +443,37 @@ export default function SettingsPage() {
     } finally {
       setSavingNfse(false);
       setTimeout(() => setFeedbackNfse(null), 4000);
+    }
+  };
+
+  const atualizarEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? valor : e));
+  const removerEtapa = (idx: number) => setEtapasProducao(prev => prev.filter((_, i) => i !== idx));
+  const adicionarEtapa = () => setEtapasProducao(prev => [...prev, '']);
+  const moverEtapa = (idx: number, direcao: -1 | 1) => setEtapasProducao(prev => {
+    const alvo = idx + direcao;
+    if (alvo < 0 || alvo >= prev.length) return prev;
+    const copia = [...prev];
+    [copia[idx], copia[alvo]] = [copia[alvo], copia[idx]];
+    return copia;
+  });
+
+  const salvarEtapas = async () => {
+    const etapasValidas = etapasProducao.map(e => e.trim()).filter(Boolean);
+    if (etapasValidas.length === 0) return;
+    setSavingEtapas(true);
+    setFeedbackEtapas(null);
+    try {
+      const novosModulos = { ...modulosAtuais, pulse_etapas_fabricacao: etapasValidas };
+      const { error } = await supabase.from('empresas').update({ modulos: novosModulos }).eq('id', perfil?.empresa_id);
+      if (error) throw error;
+      setModulosAtuais(novosModulos);
+      setEtapasProducao(etapasValidas);
+      setFeedbackEtapas({ type: 'success', msg: 'Etapas de produção salvas com sucesso!' });
+    } catch (err: any) {
+      setFeedbackEtapas({ type: 'error', msg: 'Erro: ' + (err.message || 'Verifique o console') });
+    } finally {
+      setSavingEtapas(false);
+      setTimeout(() => setFeedbackEtapas(null), 4000);
     }
   };
 
@@ -803,6 +842,55 @@ export default function SettingsPage() {
             >
               {savingOpec ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
               {savingOpec ? 'Salvando...' : 'Salvar Config OPEC'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {temPulse && perfil?.cargo === 'diretor' && (
+        <div className="max-w-6xl bg-[#0B1120] border border-white/10 rounded-[40px] p-6 md:p-8 shadow-2xl relative mt-6">
+          <div className="flex items-center gap-3 text-slate-300 border-b border-white/5 pb-6 mb-6">
+            <Factory size={18} className="text-amber-400" />
+            <div>
+              <h2 className="font-bold text-sm uppercase tracking-wide">Etapas de Produção (Pulse)</h2>
+              <p className="text-slate-500 text-[10px] font-medium mt-0.5">O fluxo que aparece no Kanban de Produção — cada negócio tem o seu (ex: chassi → elétrica → acabamento). Mudar aqui não afeta produções já em andamento.</p>
+            </div>
+          </div>
+
+          <div className="space-y-2 mb-5">
+            {etapasProducao.map((etapa, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-6 text-center text-[10px] font-black text-slate-600">{idx + 1}</span>
+                <input
+                  value={etapa}
+                  onChange={e => atualizarEtapa(idx, e.target.value)}
+                  placeholder="Nome da etapa"
+                  className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-amber-400"
+                />
+                <button type="button" onClick={() => moverEtapa(idx, -1)} disabled={idx === 0} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowUp size={13} /></button>
+                <button type="button" onClick={() => moverEtapa(idx, 1)} disabled={idx === etapasProducao.length - 1} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowDown size={13} /></button>
+                <button type="button" onClick={() => removerEtapa(idx)} disabled={etapasProducao.length <= 1} className="w-8 h-8 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg text-red-400"><Trash2 size={13} /></button>
+              </div>
+            ))}
+            <button type="button" onClick={adicionarEtapa} className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 mt-2">
+              <Plus size={14} /> Adicionar etapa
+            </button>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            {feedbackEtapas && (
+              <div className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl ${feedbackEtapas.type === 'success' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'bg-red-500/10 text-red-400'}`}>
+                {feedbackEtapas.type === 'success' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+                {feedbackEtapas.msg}
+              </div>
+            )}
+            <button
+              onClick={salvarEtapas}
+              disabled={savingEtapas}
+              className="w-full md:w-auto md:ml-auto bg-amber-500 hover:bg-amber-400 text-[#0B1120] px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingEtapas ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>}
+              {savingEtapas ? 'Salvando...' : 'Salvar Etapas'}
             </button>
           </div>
         </div>

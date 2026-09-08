@@ -15,7 +15,17 @@ export type ServicoConfig = {
 // Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto
 // (ficaria MRP completo, fora do escopo do Pulse hoje). Cobre o caso real de fábrica
 // (corte → estrutura → pintura → acabamento) sem virar um quadro Kanban por si só.
-export const ETAPAS_FABRICACAO = ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'];
+// Padrão genérico — cada empresa pode ter seu próprio fluxo (ex: Trailer Travel usa
+// Chassi → ACM → Elétrica → Hidráulica → Suspensão → Marcenaria, bem diferente de uma
+// oficina). Configurável em Configurações → Etapas de Produção, salvo em
+// empresas.modulos.pulse_etapas_fabricacao; isso aqui é só o valor de partida quando a
+// empresa ainda não personalizou.
+export const ETAPAS_FABRICACAO_PADRAO = ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'];
+
+export function etapasFabricacaoDe(modulos: Record<string, any> | null | undefined): string[] {
+  const custom = modulos?.pulse_etapas_fabricacao;
+  return Array.isArray(custom) && custom.length > 0 ? custom : ETAPAS_FABRICACAO_PADRAO;
+}
 
 export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; };
 

@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, registrarProducaoAutomatica, ETAPAS_FABRICACAO } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, registrarProducaoAutomatica, etapasFabricacaoDe } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -29,7 +29,8 @@ const PROXIMA_ETAPA: Record<StatusProducao, StatusProducao | null> = { em_produc
 // estoque de um item que se vende pronto). As duas usam a MESMA ficha técnica — nunca mais
 // se re-seleciona matéria-prima na hora, isso é cadastrado uma vez por produto.
 function PulseProducaoContent() {
-  const { authLoading, temPulse, user, perfil, isLideranca, usersMap } = usePulseAccess();
+  const { authLoading, temPulse, user, perfil, empresa, isLideranca, usersMap } = usePulseAccess();
+  const ETAPAS_FABRICACAO = useMemo(() => etapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);

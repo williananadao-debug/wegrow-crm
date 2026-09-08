@@ -26,6 +26,12 @@ export type Billing = {
   cronograma_sign_url?: string | null;
   cronograma_enviado_em?: string | null;
   cronograma_assinado_em?: string | null;
+  asaas_customer_id?: string | null;
+  ultima_cobranca_id?: string | null;
+  ultima_cobranca_tipo?: string | null;
+  ultima_cobranca_url?: string | null;
+  ultima_cobranca_status?: string | null;
+  ultima_cobranca_em?: string | null;
 };
 
 export type Empresa = {

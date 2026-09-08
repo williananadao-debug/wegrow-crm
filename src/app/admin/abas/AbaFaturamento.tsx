@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Loader2, Save, MessageCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Loader2, Save, MessageCircle, CheckCircle2, RefreshCw, Receipt, QrCode, ExternalLink, Copy } from 'lucide-react';
 import { AbaProps, headersAuth, fmtData, proximoMes, BILLING_VAZIO } from './types';
 
 const CANAIS_ORIGEM = [
@@ -25,6 +25,9 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
   const [erro, setErro] = useState<string | null>(null);
   const [salvandoChurn, setSalvandoChurn] = useState(false);
   const [registrandoPgto, setRegistrandoPgto] = useState(false);
+  const [gerandoCobranca, setGerandoCobranca] = useState<'BOLETO' | 'PIX' | null>(null);
+  const [erroCobranca, setErroCobranca] = useState<string | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -76,6 +79,23 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
     onAtualizado();
   };
 
+  const gerarCobranca = async (tipo: 'BOLETO' | 'PIX') => {
+    setGerandoCobranca(tipo); setErroCobranca(null);
+    try {
+      const res = await fetch('/api/admin/cobranca', {
+        method: 'POST',
+        headers: headersAuth(token),
+        body: JSON.stringify({ empresa_id: empresa.id, tipo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroCobranca(json.erro || 'Erro ao gerar cobrança.'); return; }
+      onAtualizado();
+      if (json.url) window.open(json.url, '_blank');
+    } finally {
+      setGerandoCobranca(null);
+    }
+  };
+
   const registrarPagamento = async () => {
     setRegistrandoPgto(true);
     const atual = empresa.billing?.proximo_vencimento ?? new Date().toISOString().substring(0, 10);
@@ -97,18 +117,48 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button onClick={registrarPagamento} disabled={registrandoPgto} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
           {registrandoPgto ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>} Pgto recebido
         </button>
+        <button onClick={() => gerarCobranca('BOLETO')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
+          {gerandoCobranca === 'BOLETO' ? <Loader2 size={11} className="animate-spin"/> : <Receipt size={11}/>} Gerar boleto
+        </button>
+        <button onClick={() => gerarCobranca('PIX')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
+          {gerandoCobranca === 'PIX' ? <Loader2 size={11} className="animate-spin"/> : <QrCode size={11}/>} Gerar Pix
+        </button>
         {empresa.billing?.whatsapp && (
-          <a href={`https://wa.me/55${empresa.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${empresa.billing.contato ? ' ' + empresa.billing.contato : ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${(empresa.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(empresa.billing.proximo_vencimento)}.`)}`}
+          <a href={`https://wa.me/55${empresa.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${empresa.billing.contato ? ' ' + empresa.billing.contato : ''}!${empresa.billing?.ultima_cobranca_url ? ` Segue o link pra pagar a assinatura WeGrow: ${empresa.billing.ultima_cobranca_url}` : ` Segue o Pix para renovação da assinatura WeGrow — R$ ${(empresa.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês.`} Vencimento: ${fmtData(empresa.billing.proximo_vencimento)}.`)}`}
             target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">
             <MessageCircle size={11}/> Cobrar
           </a>
         )}
       </div>
+
+      {erroCobranca && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
+          <p className="text-red-400 text-xs font-bold">{erroCobranca}</p>
+        </div>
+      )}
+
+      {empresa.billing?.ultima_cobranca_url && (
+        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Última cobrança gerada ({empresa.billing.ultima_cobranca_tipo})</p>
+            <p className="text-slate-400 text-[10px] truncate">{empresa.billing.ultima_cobranca_em ? fmtData(empresa.billing.ultima_cobranca_em.substring(0, 10)) : ''} · status: {empresa.billing.ultima_cobranca_status || '—'}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => { navigator.clipboard.writeText(empresa.billing!.ultima_cobranca_url!); setLinkCopiado(true); setTimeout(() => setLinkCopiado(false), 2000); }} className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-colors" title="Copiar link">
+              <Copy size={13}/>
+            </button>
+            <a href={empresa.billing.ultima_cobranca_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-colors" title="Abrir">
+              <ExternalLink size={13}/>
+            </a>
+          </div>
+          {linkCopiado && <span className="text-[#22C55E] text-[10px] font-bold">Copiado!</span>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

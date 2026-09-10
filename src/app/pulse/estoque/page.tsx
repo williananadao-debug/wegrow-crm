@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, BarChart3, ClipboardCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -189,6 +189,12 @@ export default function PulseEstoquePage() {
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
           <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ListTree size={14} /> Kardex
+          </Link>
+          <Link href="/pulse/estoque/relatorio" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <BarChart3 size={14} /> Relatório
+          </Link>
+          <Link href="/pulse/estoque/contagem" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ClipboardCheck size={14} /> Contagem
           </Link>
           <Link href="/pulse/fiscal" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Receipt size={14} /> Notas Fiscais

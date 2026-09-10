@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { manifestarCiencia, capturarItensDaNota, FocusNfeAmbiente } from '@/lib/focusNfe';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     if (existente) return NextResponse.json({ ok: true, duplicado: true });
   }
 
-  await db.from('fiscal_notas').insert([{
+  const { data: notaCriada } = await db.from('fiscal_notas').insert([{
     empresa_id: integracao.empresa_id,
     tipo: 'entrada',
     chave_acesso: chaveAcesso,
@@ -62,26 +63,26 @@ export async function POST(request: Request) {
     origem: 'manifestacao_focus_nfe',
     data_emissao: dataEmissao,
     observacao: `Payload bruto do webhook (conferir mapeamento de campos na primeira nota real): ${JSON.stringify(payload).slice(0, 1800)}`,
-  }]);
+  }]).select('id').single();
 
   // "Ciência da operação" precisa acontecer logo (a SEFAZ cobra isso dentro de um prazo)
   // — as etapas seguintes (confirmação depois de conferir a mercadoria física, ou
   // desconhecimento se a nota não for da empresa) ficam pra ação manual do almoxarifado,
   // não dá pra confirmar recebimento de mercadoria que ainda não chegou.
-  if (chaveAcesso) {
+  if (chaveAcesso && notaCriada) {
     const { data: integracaoCompleta } = await db.from('fiscal_integracoes').select('token_producao, token_homologacao, ambiente_ativo').eq('empresa_id', integracao.empresa_id).single();
-    const emProducao = integracaoCompleta?.ambiente_ativo === 'producao';
-    const token = emProducao ? integracaoCompleta?.token_producao : integracaoCompleta?.token_homologacao;
-    const base = emProducao ? 'https://api.focusnfe.com.br' : 'https://homologacao.focusnfe.com.br';
+    const ambiente: FocusNfeAmbiente = integracaoCompleta?.ambiente_ativo === 'producao' ? 'producao' : 'homologacao';
+    const token = ambiente === 'producao' ? integracaoCompleta?.token_producao : integracaoCompleta?.token_homologacao;
     if (token) {
       try {
-        await fetch(`${base}/v2/nfes_recebidas/${chaveAcesso}/manifesto`, {
-          method: 'POST',
-          headers: { Authorization: `Basic ${Buffer.from(`${token}:`).toString('base64')}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tipo: 'ciencia' }),
-        });
+        await manifestarCiencia(token, ambiente, chaveAcesso);
+        // Buscar itens é best-effort logo em seguida: às vezes a SEFAZ ainda não liberou
+        // o XML completo no instante exato da manifestação. Se falhar aqui, a nota fica
+        // 'sem_itens' e o backfill (que roda por baixo dos panos de novo) pega ela depois
+        // junto com o resto do histórico — não trava o registro da nota por causa disso.
+        await capturarItensDaNota(db, notaCriada.id, integracao.empresa_id, token, ambiente, chaveAcesso);
       } catch (err) {
-        console.error('[webhook/focus-nfe/recebida] falha ao manifestar ciência:', err);
+        console.error('[webhook/focus-nfe/recebida] falha ao manifestar/buscar itens:', err);
       }
     }
   }

@@ -3,22 +3,13 @@ import { useState, useRef } from 'react';
 import { Loader2, Camera, ScanLine, X, CheckCircle2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ServicoConfig } from '@/app/pulse/shared';
+import { acharServicoParecido } from '@/lib/matchProduto';
 
 type ItemNota = {
   descricao: string;
   quantidade: number;
   valor_unitario: number;
   servicoId: number | 'novo' | 'ignorar';
-};
-
-const normalizar = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-
-const acharServicoParecido = (descricao: string, servicos: ServicoConfig[]): number | null => {
-  const alvo = normalizar(descricao);
-  const exato = servicos.find(s => normalizar(s.nome) === alvo);
-  if (exato) return exato.id;
-  const parcial = servicos.find(s => normalizar(s.nome).includes(alvo) || alvo.includes(normalizar(s.nome)));
-  return parcial ? parcial.id : null;
 };
 
 export default function NotaFiscalModal({

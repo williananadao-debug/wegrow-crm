@@ -1,9 +1,11 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Boxes } from 'lucide-react';
+import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Boxes, History, ListChecks } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
+import { ServicoConfig } from '../shared';
+import RevisarItensNotaModal from '@/components/RevisarItensNotaModal';
 
 type NotaFiscal = {
   id: number; tipo: 'entrada' | 'saida'; chave_acesso: string | null;
@@ -12,6 +14,7 @@ type NotaFiscal = {
   valor_total: number | null; status: string;
   xml_url: string | null; danfe_url: string | null;
   data_emissao: string | null; origem: string; observacao: string | null;
+  itens_status: 'sem_itens' | 'pendente_revisao' | 'processado';
   created_at: string;
 };
 
@@ -44,32 +47,65 @@ const formatCnpj = (v: string | null) => {
 };
 
 export default function FiscalPage() {
-  const { authLoading, temPulse, perfil } = usePulseAccess();
+  const { authLoading, temPulse, perfil, isLideranca, user } = usePulseAccess();
 
   const [notas, setNotas] = useState<NotaFiscal[]>([]);
+  const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'entrada' | 'saida'>('todos');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState<typeof PERIODOS[number]['id']>('90d');
   const [busca, setBusca] = useState('');
   const [chaveCopiada, setChaveCopiada] = useState<number | null>(null);
+  const [notaEmRevisao, setNotaEmRevisao] = useState<NotaFiscal | null>(null);
+  const [buscandoHistorico, setBuscandoHistorico] = useState(false);
+  const [resultadoHistorico, setResultadoHistorico] = useState<string | null>(null);
   // "Agora" travado num state em vez de Date.now() dentro do useMemo — chamar função
   // impura no render é proibido pela regra de pureza do React. A tela não fica aberta
   // por dias, então fixar na montagem é suficiente pro corte de período.
   const [agora] = useState(() => Date.now());
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
-    supabase.from('fiscal_notas').select('*').eq('empresa_id', perfil.empresa_id)
-      .order('data_emissao', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(1000)
-      .then(({ data }) => {
-        if (data) setNotas(data as NotaFiscal[]);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from('fiscal_notas').select('*').eq('empresa_id', perfil.empresa_id)
+        .order('data_emissao', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(1000),
+      supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).order('nome'),
+    ]).then(([resNotas, resServicos]) => {
+      if (resNotas.data) setNotas(resNotas.data as NotaFiscal[]);
+      if (resServicos.data) setServicos(resServicos.data as ServicoConfig[]);
+      setLoading(false);
+    });
   }, [perfil?.empresa_id]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const buscarHistoricoCompleto = async () => {
+    setBuscandoHistorico(true); setResultadoHistorico(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/backfill', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao buscar histórico.');
+      setResultadoHistorico(
+        `${json.notasNovas} nota(s) nova(s) encontrada(s) no histórico, ${json.notasComItens} com itens lidos do XML` +
+        (json.falhas ? `, ${json.falhas} falharam (confira os logs)` : '') + '.'
+      );
+      carregar();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'falha ao buscar histórico.';
+      setResultadoHistorico(`Erro: ${msg}`);
+    } finally {
+      setBuscandoHistorico(false);
+    }
+  };
 
   const filtradas = useMemo(() => {
     const limite = filtroPeriodo === 'tudo' || !agora ? null : agora - DIAS_PERIODO[filtroPeriodo] * 86400000;
@@ -130,10 +166,24 @@ export default function FiscalPage() {
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Entradas capturadas na SEFAZ e saídas emitidas</p>
         </div>
-        <Link href="/pulse/estoque" className="self-start md:self-auto inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-          <Boxes size={14} /> Lançar nota por foto
-        </Link>
+        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          {isLideranca && (
+            <button onClick={buscarHistoricoCompleto} disabled={buscandoHistorico} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              {buscandoHistorico ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
+              {buscandoHistorico ? 'Buscando...' : 'Buscar histórico completo'}
+            </button>
+          )}
+          <Link href="/pulse/estoque" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <Boxes size={14} /> Lançar nota por foto
+          </Link>
+        </div>
       </header>
+
+      {resultadoHistorico && (
+        <div className={`mb-4 rounded-xl p-3 text-xs font-bold ${resultadoHistorico.startsWith('Erro') ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+          {resultadoHistorico}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
@@ -210,6 +260,11 @@ export default function FiscalPage() {
                       <p className="text-white font-bold text-sm truncate">{n.nome_participante || (entrada ? 'Fornecedor não identificado' : 'Cliente não identificado')}</p>
                       <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${status.cor}`}>{status.label}</span>
                       <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{ORIGEM_LABEL[n.origem] || n.origem}</span>
+                      {n.itens_status === 'pendente_revisao' && (
+                        <button onClick={() => setNotaEmRevisao(n)} className="inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20 transition-colors">
+                          <ListChecks size={9} /> Revisar itens
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[10px] text-slate-500">
                       {n.numero && <span className="text-slate-400 font-bold">NF {n.numero}{n.serie ? `/${n.serie}` : ''}</span>}
@@ -253,6 +308,17 @@ export default function FiscalPage() {
       {!loading && notas.length >= 1000 && (
         <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 notas mais recentes — refine os filtros pra achar algo mais antigo.</p>
       )}
+
+      <RevisarItensNotaModal
+        aberto={!!notaEmRevisao}
+        onFechar={() => setNotaEmRevisao(null)}
+        notaId={notaEmRevisao?.id ?? null}
+        notaLabel={notaEmRevisao ? `${notaEmRevisao.nome_participante || 'Fornecedor'}${notaEmRevisao.numero ? ` — NF ${notaEmRevisao.numero}` : ''}` : ''}
+        servicos={servicos}
+        empresaId={perfil?.empresa_id}
+        userId={user?.id}
+        onConcluido={carregar}
+      />
     </div>
   );
 }

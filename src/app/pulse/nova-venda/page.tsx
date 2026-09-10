@@ -30,6 +30,15 @@ export default function PulseNovaVendaPage() {
   const [desconto, setDesconto] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState('pix');
 
+  // Item avulso = projeto personalizado / customização fora do catálogo (ex: trailer sob
+  // medida com item extra que não é um produto de prateleira). Chave local negativa,
+  // decrescente — nunca colide com id real de servico (sempre positivo).
+  const [mostrarItemAvulso, setMostrarItemAvulso] = useState(false);
+  const [avulsoDescricao, setAvulsoDescricao] = useState('');
+  const [avulsoValor, setAvulsoValor] = useState('');
+  const [avulsoQtd, setAvulsoQtd] = useState('1');
+  const proximoIdAvulsoRef = useRef(-1);
+
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [vendaConcluida, setVendaConcluida] = useState<any>(null);
@@ -155,6 +164,15 @@ export default function PulseNovaVendaPage() {
   };
 
   const removerItem = (servicoId: number) => setCarrinho(prev => prev.filter(i => i.servicoId !== servicoId));
+
+  const adicionarItemAvulso = () => {
+    const preco = Number(avulsoValor);
+    const qtd = Math.max(1, Number(avulsoQtd) || 1);
+    if (!avulsoDescricao.trim() || !(preco > 0)) return;
+    const id = proximoIdAvulsoRef.current--;
+    setCarrinho(prev => [...prev, { servicoId: id, nome: avulsoDescricao.trim(), quantidade: qtd, precoUnitario: preco, estoqueMax: null, avulso: true }]);
+    setAvulsoDescricao(''); setAvulsoValor(''); setAvulsoQtd('1'); setMostrarItemAvulso(false);
+  };
 
   const subtotal = carrinho.reduce((acc, i) => acc + i.precoUnitario * i.quantidade, 0);
   const total = Math.max(0, subtotal - desconto);
@@ -476,7 +494,27 @@ export default function PulseNovaVendaPage() {
 
         <div className="space-y-5">
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
-            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3 block">Pedido</label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block">Pedido</label>
+              <button onClick={() => setMostrarItemAvulso(v => !v)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
+                <Plus size={11} /> Item personalizado
+              </button>
+            </div>
+
+            {mostrarItemAvulso && (
+              <div className="bg-black/30 border border-dashed border-white/15 rounded-xl p-3 mb-3 space-y-2">
+                <p className="text-[10px] font-bold text-slate-500 leading-snug">Pra projeto sob medida — descreve a personalização e o valor, soma no total sem precisar cadastrar produto novo no catálogo.</p>
+                <input value={avulsoDescricao} onChange={e => setAvulsoDescricao(e.target.value)} placeholder="Ex: Teto elétrico personalizado" className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" min="0" step="0.01" value={avulsoValor} onChange={e => setAvulsoValor(e.target.value)} placeholder="Valor (R$)" className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                  <input type="number" min="1" value={avulsoQtd} onChange={e => setAvulsoQtd(e.target.value)} placeholder="Quantidade" className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                </div>
+                <button onClick={adicionarItemAvulso} disabled={!avulsoDescricao.trim() || !(Number(avulsoValor) > 0)} className="w-full bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                  Adicionar ao pedido
+                </button>
+              </div>
+            )}
+
             {carrinho.length === 0 ? (
               <p className="text-slate-500 text-xs font-bold text-center py-6">Nenhum item ainda.</p>
             ) : (
@@ -484,7 +522,10 @@ export default function PulseNovaVendaPage() {
                 {carrinho.map(i => (
                   <div key={i.servicoId} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-xs font-bold truncate">{i.nome}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-white text-xs font-bold truncate">{i.nome}</p>
+                        {i.avulso && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded bg-white/10 text-slate-400 uppercase">Personalizado</span>}
+                      </div>
                       <p className="text-slate-500 text-[10px]">R$ {i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
                     </div>
                     <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={12} /></button>

@@ -9,7 +9,7 @@ export type ServicoConfig = {
   id: number; nome: string; preco: number; tipo?: string; unidade?: string;
   estoque?: number | null; imagem_url?: string | null;
   sku?: string | null; preco_custo?: number | null; estoque_minimo?: number | null;
-  prazo_fabricacao_dias?: number | null;
+  prazo_fabricacao_dias?: number | null; descricao?: string | null;
 };
 
 // Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto
@@ -27,7 +27,11 @@ export function etapasFabricacaoDe(modulos: Record<string, any> | null | undefin
   return Array.isArray(custom) && custom.length > 0 ? custom : ETAPAS_FABRICACAO_PADRAO;
 }
 
-export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; };
+// avulso=true: item digitado na hora, fora do catálogo (ex: personalização de um projeto
+// sob medida — "teto elétrico extra", "revestimento premium"). servicoId nesse caso é só
+// uma chave local negativa pro React, nunca é gravado como FK em lugar nenhum — não
+// mexe em estoque/produção, só soma no valor da venda.
+export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; avulso?: boolean; };
 
 export type VendaPulse = {
   id: number; empresa: string; valor_total: number; created_at: string; forma_pagamento?: string | null;

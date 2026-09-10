@@ -35,6 +35,7 @@ type ServicoConfig = {
   produto_pai_id?: number | null;
   variante_nome?: string | null;
   ordem?: number | null;
+  descricao?: string | null;
 };
 
 type NfseConfig = {
@@ -133,6 +134,7 @@ export default function SettingsPage() {
         produto_pai_id: item.produto_pai_id ?? null,
         variante_nome: item.variante_nome ?? null,
         ordem: item.ordem ?? null,
+        descricao: item.descricao ?? null,
       }));
       setServicos(formatados);
     } else {
@@ -173,6 +175,7 @@ export default function SettingsPage() {
                 estoque_minimo: s.estoque_minimo ?? 5,
                 produto_pai_id: s.produto_pai_id ?? null,
                 variante_nome: s.variante_nome?.trim() || null,
+                descricao: s.descricao?.trim() || null,
                 empresa_id: perfil.empresa_id,
             }));
             tarefas.push({
@@ -203,6 +206,7 @@ export default function SettingsPage() {
                         preco_custo: s.preco_custo ?? null,
                         estoque_minimo: s.estoque_minimo ?? 5,
                         variante_nome: s.variante_nome?.trim() || null,
+                        descricao: s.descricao?.trim() || null,
                         historico_precos: historicoAtualizado,
                     }).eq('id', parseInt(s.id)).select('id');
                     return { error, data };
@@ -669,6 +673,22 @@ export default function SettingsPage() {
                                     <Boxes size={11} /> Ver estoque
                                 </Link>
                             )}
+                        </div>
+                    )}
+
+                    {temPulse && !servico.produto_pai_id && (
+                        <div className="col-span-12 pl-0 md:pl-11 -mt-1">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <FileText size={11} className="text-slate-500" />
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Descrição / especificações (aparece na venda e na proposta)</span>
+                            </div>
+                            <textarea
+                                value={servico.descricao ?? ''}
+                                onChange={(e) => atualizarServico(servico.id, 'descricao', e.target.value)}
+                                rows={3}
+                                className="w-full bg-[#0F172A] border border-white/5 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)] resize-y"
+                                placeholder="Ex: Dimensões, itens de série, diferenciais do modelo..."
+                            />
                         </div>
                     )}
                 </div>

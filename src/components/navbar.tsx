@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -115,6 +115,7 @@ export default function Navbar() {
       { name: 'Produtos', icon: <Package size={20} />, href: '/settings' },
       { name: 'Estoque', icon: <Boxes size={20} />, href: '/pulse/estoque' },
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
+      { name: 'Notas Fiscais', icon: <Receipt size={20} />, href: '/pulse/fiscal' },
   ];
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };

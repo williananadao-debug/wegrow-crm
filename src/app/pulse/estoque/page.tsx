@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -177,6 +177,9 @@ export default function PulseEstoquePage() {
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
           <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ListTree size={14} /> Kardex
+          </Link>
+          <Link href="/pulse/fiscal" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <Receipt size={14} /> Notas Fiscais
           </Link>
           <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <PackageMinus size={14} /> Dar saída por Nota Fiscal

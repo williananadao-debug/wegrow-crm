@@ -142,6 +142,16 @@ export default function FiscalPage() {
     };
   }, [filtradas]);
 
+  // Status do processamento de itens, sempre sobre TODAS as notas (não só o filtro de
+  // período ativo) — é um indicador de sistema, não uma métrica que devia sumir se
+  // alguém filtrar pra "30 dias". Explica de forma persistente por que tanta nota não
+  // tem o botão "Revisar itens": a SEFAZ libera o XML aos poucos, não na hora.
+  const statusItens = useMemo(() => {
+    const aguardandoXml = notas.filter(n => n.tipo === 'entrada' && n.origem === 'manifestacao_focus_nfe' && n.itens_status === 'sem_itens').length;
+    const pendentesRevisao = notas.filter(n => n.itens_status === 'pendente_revisao').length;
+    return { aguardandoXml, pendentesRevisao };
+  }, [notas]);
+
   const copiarChave = (nota: NotaFiscal) => {
     if (!nota.chave_acesso) return;
     navigator.clipboard.writeText(nota.chave_acesso);
@@ -183,6 +193,17 @@ export default function FiscalPage() {
           </Link>
         </div>
       </header>
+
+      {(statusItens.aguardandoXml > 0 || statusItens.pendentesRevisao > 0) && (
+        <div className="mb-4 rounded-xl p-3 bg-white/[0.03] border border-white/10 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold">
+          {statusItens.pendentesRevisao > 0 && (
+            <span className="text-purple-300">📋 {statusItens.pendentesRevisao} nota(s) prontas pra revisar (badge &quot;Revisar itens&quot; na lista abaixo)</span>
+          )}
+          {statusItens.aguardandoXml > 0 && (
+            <span className="text-slate-500">⏳ {statusItens.aguardandoXml} nota(s) ainda aguardando a SEFAZ liberar o XML completo — o sistema tenta de novo sozinho todo dia, não precisa fazer nada</span>
+          )}
+        </div>
+      )}
 
       {resultadoHistorico && (
         <div className={`mb-4 rounded-xl p-3 text-xs font-bold ${resultadoHistorico.startsWith('Erro') ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>

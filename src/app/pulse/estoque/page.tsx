@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
+import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
 type Movimentacao = {
   id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
@@ -53,6 +54,10 @@ export default function PulseEstoquePage() {
   const [busca, setBusca] = useState('');
   const [soBaixo, setSoBaixo] = useState(false);
 
+  // Consumo dos últimos 30 dias, só pra calcular o ritmo de reposição — não é o Kardex
+  // completo (esse já tem tela própria em /pulse/estoque/movimentacoes).
+  const [consumoRecente, setConsumoRecente] = useState<{ servico_id: number; quantidade: number; created_at: string }[]>([]);
+
   const fetchServicos = async () => {
     setLoadingServicos(true);
     const { data } = await supabase.from('servicos').select('*').order('nome', { ascending: true });
@@ -60,11 +65,18 @@ export default function PulseEstoquePage() {
     setLoadingServicos(false);
   };
 
-  useEffect(() => { fetchServicos(); }, []);
+  useEffect(() => {
+    fetchServicos();
+    const desde = new Date(Date.now() - 30 * 86400000).toISOString();
+    supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at').lt('quantidade', 0).gte('created_at', desde)
+      .then(({ data }) => { if (data) setConsumoRecente(data); });
+  }, []);
+
 
   const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
+  const alertasReposicao = calcularAlertasReposicao(servicos, consumoRecente);
 
   const combina = (s: ServicoConfig) => {
     if (soBaixo && (s.estoque as number) > (s.estoque_minimo ?? 5)) return false;
@@ -204,6 +216,28 @@ export default function PulseEstoquePage() {
           <p className={`text-2xl font-black mt-1 ${produtosBaixo.length > 0 ? 'text-red-400' : 'text-white'}`}>{produtosBaixo.length}</p>
         </button>
       </div>
+
+      {alertasReposicao.length > 0 && (
+        <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 mb-4">
+          <p className="text-[10px] font-black text-purple-300 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+            <TrendingDown size={12} /> Reposição inteligente — pelo ritmo de consumo, vão zerar antes do prazo de repor
+          </p>
+          <div className="space-y-1.5">
+            {alertasReposicao.slice(0, 8).map(a => (
+              <div key={a.servicoId} className="flex items-center justify-between gap-3 bg-black/20 rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-xs truncate">{a.nome}</p>
+                  <p className="text-slate-500 text-[10px]">{a.estoqueAtual} em estoque · consumindo ~{a.consumoDiario.toFixed(1)}/dia</p>
+                </div>
+                <span className={`shrink-0 text-xs font-black px-2 py-1 rounded ${a.diasRestantes <= a.limiarDias / 2 ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                  {Math.max(0, Math.floor(a.diasRestantes))}d restantes
+                </span>
+              </div>
+            ))}
+          </div>
+          {alertasReposicao.length > 8 && <p className="text-slate-600 text-[10px] mt-2">+ {alertasReposicao.length - 8} outro(s) produto(s) nessa situação.</p>}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
         <Search size={14} className="text-slate-500 flex-shrink-0" />

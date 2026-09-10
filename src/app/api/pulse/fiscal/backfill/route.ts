@@ -23,11 +23,8 @@ function supabaseAdmin() {
 // basta clicar de novo — continua de onde parou. Existe também um cron diário
 // (/api/cron/fiscal-backfill-itens) que faz esse retry sozinho, sem precisar clicar.
 //
-// Só cria fiscal_notas (+ itens pendentes de revisão) pro histórico — NÃO cria lançamento
-// financeiro (contas a pagar) pra nota antiga, diferente do webhook (que cria pra nota
-// nova, essa sim é conta a pagar real). Nota de 6 meses atrás quase certamente já foi
-// paga; criar "pendente" em massa pra 500+ notas históricas inflaria o financeiro com
-// dívida fictícia. Fica só como registro fiscal até alguém decidir reconciliar à mão.
+// Cria fiscal_notas + lançamento (conta a pagar 'pendente') pra toda nota nova, inclusive
+// histórico — quem cuida do financeiro marca como paga na mão as que já foram quitadas.
 export async function POST(req: NextRequest) {
   const inicio = Date.now();
   const db = supabaseAdmin();

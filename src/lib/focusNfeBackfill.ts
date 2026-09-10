@@ -1,6 +1,8 @@
 // Núcleo do backfill de NFe recebidas — puxa o histórico completo contra o CNPJ da
-// empresa, cria fiscal_notas pra nota nova, e tenta capturar os itens do XML de toda
-// nota que ainda está 'sem_itens' (nova ou de uma rodada anterior que não deu tempo).
+// empresa, cria fiscal_notas + lançamento (conta a pagar) pra nota nova, e tenta capturar
+// os itens do XML de toda nota que ainda está 'sem_itens' (nova ou de uma rodada anterior
+// que não deu tempo). Nota histórica também vira lançamento (decisão de 2026-09-10) —
+// quem cuida do financeiro marca como paga na mão as que já foram quitadas.
 //
 // Compartilhado entre duas portas de entrada:
 //   - /api/pulse/fiscal/backfill (POST, autenticado) — diretor/gerente aciona na hora
@@ -9,7 +11,7 @@
 //     assíncrona, às vezes só depois de dias, então uma rodada manual não é garantia de
 //     pegar tudo de primeira.
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { listarNfesRecebidas, manifestarCiencia, capturarItensDaNota, aguardar, FocusNfeAmbiente } from '@/lib/focusNfe';
+import { listarNfesRecebidas, manifestarCiencia, capturarItensDaNota, criarLancamentoNotaEntrada, aguardar, FocusNfeAmbiente } from '@/lib/focusNfe';
 
 // Focus NFe libera ~100 chamadas/min — cada nota pendente de item usa até 2 (manifestar
 // + baixar XML). Sem esperar entre chamadas, um histórico de centenas de notas estoura o
@@ -77,6 +79,19 @@ export async function processarBackfillEmpresa(params: {
         notaId = criada.id;
         porChave.set(chave, { id: notaId, chave_acesso: chave, itens_status: 'sem_itens' });
         notasNovas++;
+
+        // Toda nota de entrada vira conta a pagar em Financeiro, inclusive histórico —
+        // decisão de 2026-09-10 (quem cuida do financeiro marca como paga na mão as que
+        // já foram quitadas). Cancelada não gera conta nenhuma (situacao só vem
+        // 'cancelada' ou 'autorizada' nessa API — não existe 'rejeitada' aqui).
+        if (status !== 'cancelada' && notaHistorico.valor_total) {
+          await criarLancamentoNotaEntrada(db, {
+            empresaId, notaId, valorTotal: Number(notaHistorico.valor_total),
+            nomeParticipante: notaHistorico.nome_emitente, cnpjParticipante: notaHistorico.documento_emitente,
+            numero: null, serie: null, chaveAcesso: chave,
+            dataEmissao: notaHistorico.data_emissao ? notaHistorico.data_emissao.slice(0, 10) : null,
+          });
+        }
       }
 
       // nfe_completa=false: SEFAZ ainda não liberou o XML — nem tenta, só volta vazio.

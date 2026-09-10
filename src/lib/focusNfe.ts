@@ -116,6 +116,31 @@ export function extrairItensXmlNfe(xml: string): ItemXmlNfe[] {
   return itens;
 }
 
+// Cria o lançamento financeiro (conta a pagar) de uma nota de entrada e liga de volta em
+// fiscal_notas.lancamento_id. Compartilhado entre o webhook (nota nova, chegando na hora)
+// e o backfill (histórico) — decisão de 2026-09-10: TODA nota de entrada vira conta a
+// pagar 'pendente', inclusive histórico; quem cuida do financeiro marca como paga na mão
+// as que já foram quitadas. Vencimento não vem no payload/XML da NF-e (isso é duplicata,
+// não faz parte do evento em si) — D+30 da emissão é só uma estimativa, ajustável depois.
+export async function criarLancamentoNotaEntrada(db: SupabaseClient, params: {
+  empresaId: string; notaId: number; valorTotal: number;
+  nomeParticipante: string | null; cnpjParticipante: string | null;
+  numero: string | null; serie: string | null; chaveAcesso: string | null; dataEmissao: string | null;
+}): Promise<void> {
+  const dataBase = params.dataEmissao ? new Date(params.dataEmissao) : new Date();
+  const vencimento = new Date(dataBase);
+  vencimento.setDate(vencimento.getDate() + 30);
+  const { data: lancamento } = await db.from('lancamentos').insert([{
+    titulo: `Nota Fiscal - ${params.nomeParticipante || 'Fornecedor'}`,
+    valor: params.valorTotal, tipo: 'saida', categoria: 'Fornecedor', status: 'pendente',
+    data_vencimento: vencimento.toISOString().split('T')[0],
+    empresa_id: params.empresaId,
+    nf_numero: params.numero, nf_serie: params.serie, nf_chave_acesso: params.chaveAcesso,
+    nf_data_emissao: params.dataEmissao, nf_fornecedor_cnpj: params.cnpjParticipante,
+  }]).select('id').single();
+  if (lancamento) await db.from('fiscal_notas').update({ lancamento_id: lancamento.id }).eq('id', params.notaId);
+}
+
 export type ResultadoCapturaItens = { itensGravados: number; rateLimited: boolean };
 
 // Baixa o XML de uma nota já manifestada, extrai os itens e casa cada um com o catálogo

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Boxes, History, ListChecks } from 'lucide-react';
+import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Boxes, History, ListChecks, PenLine } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
@@ -289,6 +289,11 @@ export default function FiscalPage() {
                       {n.itens_status === 'pendente_revisao' && (
                         <button onClick={() => setNotaEmRevisao(n)} className="inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20 transition-colors">
                           <ListChecks size={9} /> Revisar itens
+                        </button>
+                      )}
+                      {entrada && n.itens_status === 'sem_itens' && n.status === 'autorizada' && (
+                        <button onClick={() => setNotaEmRevisao(n)} className="inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase bg-white/[0.03] border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors">
+                          <PenLine size={9} /> Digitar itens na mão
                         </button>
                       )}
                     </div>

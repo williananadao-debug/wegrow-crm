@@ -159,7 +159,7 @@ export async function registrarProducaoAutomatica(params: {
     await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', c.materiaPrima.id);
     await supabase.from('estoque_movimentacoes').insert([{
       empresa_id: empresaId, servico_id: c.materiaPrima.id, quantidade: -(estoqueAtual - novoEstoque),
-      tipo: 'consumo_producao', producao_id: producao.id, user_id: userId || null,
+      tipo: 'consumo_producao', producao_id: producao.id, lead_id: leadId || null, user_id: userId || null,
       observacao: `Consumido na produção de ${produtoFinal.nome}`,
     }]);
     alertarEstoqueBaixoSeCruzou(c.materiaPrima.id, estoqueAtual, novoEstoque, c.materiaPrima.estoque_minimo ?? 5);
@@ -175,7 +175,7 @@ export async function registrarProducaoAutomatica(params: {
   if (controlaEstoque) {
     await supabase.from('estoque_movimentacoes').insert([{
       empresa_id: empresaId, servico_id: produtoFinal.id, quantidade: quantidadeProduzida,
-      tipo: 'producao', producao_id: producao.id, user_id: userId || null,
+      tipo: 'producao', producao_id: producao.id, lead_id: leadId || null, user_id: userId || null,
       observacao: `Produzido a partir da ficha técnica`,
     }]);
   }
@@ -237,7 +237,7 @@ export async function aprovarAditivo(aditivo: PulseAditivo, empresaId: string, u
         await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', materiaPrima.id);
         await supabase.from('estoque_movimentacoes').insert([{
           empresa_id: empresaId, servico_id: materiaPrima.id, quantidade: -(estoqueAtual - novoEstoque),
-          tipo: 'consumo_producao', producao_id: aditivo.producao_id, user_id: userId || null,
+          tipo: 'consumo_producao', producao_id: aditivo.producao_id, lead_id: aditivo.lead_id, user_id: userId || null,
           observacao: `Aditivo aprovado — ${item.nome}`,
         }]);
         alertarEstoqueBaixoSeCruzou(materiaPrima.id, estoqueAtual, novoEstoque, materiaPrima.estoque_minimo ?? 5);
@@ -251,7 +251,7 @@ export async function aprovarAditivo(aditivo: PulseAditivo, empresaId: string, u
         await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', produto.id);
         await supabase.from('estoque_movimentacoes').insert([{
           empresa_id: empresaId, servico_id: produto.id, quantidade: -(estoqueAtual - novoEstoque),
-          tipo: 'venda', motivo: 'venda', producao_id: aditivo.producao_id, user_id: userId || null,
+          tipo: 'venda', motivo: 'venda', producao_id: aditivo.producao_id, lead_id: aditivo.lead_id, user_id: userId || null,
           observacao: `Aditivo aprovado — ${item.nome}`,
         }]);
         alertarEstoqueBaixoSeCruzou(produto.id, estoqueAtual, novoEstoque, produto.estoque_minimo ?? 5);

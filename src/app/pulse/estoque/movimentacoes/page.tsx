@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { Loader2, Activity, ListTree, ArrowLeft, Filter, X, Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../../usePulseAccess';
-import { ServicoConfig } from '../../shared';
+import { ServicoConfig, formatId } from '../../shared';
 
 type Movimentacao = {
   id: number; servico_id: number; quantidade: number; valor_unitario: number | null;
   fornecedor: string | null; cnpj_participante: string | null;
   nf_numero: string | null; nf_serie: string | null; nf_chave_acesso: string | null;
+  lead_id: number | null;
   created_at: string; tipo: string; motivo: string | null; observacao: string | null;
 };
 
@@ -68,7 +69,8 @@ export default function KardexPage() {
       if (busca.trim()) {
         const alvo = busca.trim().toLowerCase();
         const nomeServico = servicoPorId[m.servico_id]?.nome?.toLowerCase() || '';
-        const matchTexto = nomeServico.includes(alvo) || (m.fornecedor || '').toLowerCase().includes(alvo) || (m.nf_numero || '').includes(alvo) || (m.observacao || '').toLowerCase().includes(alvo);
+        const osTexto = m.lead_id ? formatId(m.lead_id).toLowerCase() : '';
+        const matchTexto = nomeServico.includes(alvo) || (m.fornecedor || '').toLowerCase().includes(alvo) || (m.nf_numero || '').includes(alvo) || (m.observacao || '').toLowerCase().includes(alvo) || osTexto.includes(alvo);
         if (!matchTexto) return false;
       }
       return true;
@@ -132,7 +134,7 @@ export default function KardexPage() {
       <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4 mb-4 space-y-3">
         <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5">
           <Search size={14} className="text-slate-500 flex-shrink-0" />
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por produto, fornecedor/cliente, NF ou observação..." className="flex-1 bg-transparent outline-none text-white text-sm" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por produto, fornecedor/cliente, NF, OS da venda ou observação..." className="flex-1 bg-transparent outline-none text-white text-sm" />
           {busca && <button onClick={() => setBusca('')} className="text-slate-500 hover:text-white"><X size={14} /></button>}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -181,6 +183,7 @@ export default function KardexPage() {
                     <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[10px] text-slate-500">
                       {m.fornecedor && <span className="text-slate-400 font-bold">{m.fornecedor}</span>}
                       {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-purple-400 font-bold">NF {m.nf_numero}{m.nf_serie ? `/${m.nf_serie}` : ''}</span>}
+                      {m.lead_id && <span className="text-[var(--cor-primaria)] font-bold">OS {formatId(m.lead_id)}</span>}
                       {m.valor_unitario != null && <span>R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
                       {m.observacao && <span className="italic">{m.observacao}</span>}
                     </div>

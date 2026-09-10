@@ -232,7 +232,7 @@ export default function PulseNovaVendaPage() {
               supabase.from('servicos').update({ estoque: novo }).eq('id', i.servicoId),
               supabase.from('estoque_movimentacoes').insert([{
                 empresa_id: perfil?.empresa_id, servico_id: i.servicoId, quantidade: deltaReal,
-                tipo: 'venda', observacao: `Venda Pulse — OS ${formatId(leadData.id)}`, user_id: user?.id,
+                tipo: 'venda', lead_id: leadData.id, observacao: `Venda Pulse — OS ${formatId(leadData.id)}`, user_id: user?.id,
               }]),
             ];
           }),

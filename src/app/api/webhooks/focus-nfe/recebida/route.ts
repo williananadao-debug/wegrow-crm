@@ -65,6 +65,26 @@ export async function POST(request: Request) {
     observacao: `Payload bruto do webhook (conferir mapeamento de campos na primeira nota real): ${JSON.stringify(payload).slice(0, 1800)}`,
   }]).select('id').single();
 
+  // Nota capturada automática também é conta a pagar de verdade — sem isso ela só
+  // aparecia em /pulse/fiscal, nunca em Financeiro (diferente da nota lançada na mão por
+  // foto, que sempre criou o lançamento junto). Prazo de vencimento não vem no payload do
+  // Focus NFe (isso é duplicata/boleto, não faz parte do evento da NF-e em si) — 30 dias
+  // da emissão é só uma estimativa padrão; quem cuida do financeiro ajusta a data real.
+  if (notaCriada && valorTotal) {
+    const dataBase = dataEmissao ? new Date(dataEmissao) : new Date();
+    const vencimentoEstimado = new Date(dataBase);
+    vencimentoEstimado.setDate(vencimentoEstimado.getDate() + 30);
+    const { data: lancamento } = await db.from('lancamentos').insert([{
+      titulo: `Nota Fiscal - ${nomeEmitente || 'Fornecedor'}`,
+      valor: valorTotal, tipo: 'saida', categoria: 'Fornecedor', status: 'pendente',
+      data_vencimento: vencimentoEstimado.toISOString().split('T')[0],
+      empresa_id: integracao.empresa_id,
+      nf_numero: numero, nf_serie: serie, nf_chave_acesso: chaveAcesso,
+      nf_data_emissao: dataEmissao, nf_fornecedor_cnpj: cnpjEmitente,
+    }]).select('id').single();
+    if (lancamento) await db.from('fiscal_notas').update({ lancamento_id: lancamento.id }).eq('id', notaCriada.id);
+  }
+
   // "Ciência da operação" precisa acontecer logo (a SEFAZ cobra isso dentro de um prazo)
   // — as etapas seguintes (confirmação depois de conferir a mercadoria física, ou
   // desconhecimento se a nota não for da empresa) ficam pra ação manual do almoxarifado,

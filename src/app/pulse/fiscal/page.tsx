@@ -94,10 +94,15 @@ export default function FiscalPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao buscar histórico.');
-      setResultadoHistorico(
-        `${json.notasNovas} nota(s) nova(s) encontrada(s) no histórico, ${json.notasComItens} com itens lidos do XML` +
-        (json.falhas ? `, ${json.falhas} falharam (confira os logs)` : '') + '.'
-      );
+      const partes = [
+        `${json.notasNovas} nota(s) nova(s) encontrada(s) no histórico`,
+        `${json.notasComItens} com itens lidos do XML`,
+      ];
+      if (json.falhas) partes.push(`${json.falhas} falharam`);
+      let msg = partes.join(', ') + '.';
+      if (json.rateLimitado) msg += ' Parou por excesso de chamada ao Focus NFe (rate limit) — clique em "Buscar histórico completo" de novo pra continuar de onde parou.';
+      else if (json.parcial) msg += ` Ainda restam ~${json.restantesEstimado} nota(s) pra processar — clique de novo pra continuar.`;
+      setResultadoHistorico(msg);
       carregar();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'falha ao buscar histórico.';

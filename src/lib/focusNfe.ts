@@ -23,20 +23,29 @@ export type NfeRecebidaResumo = {
   valor_total: string | number | null;
   data_emissao: string | null;
   situacao: string | null;
-  manifestacao_destinatario: string | null;
+  nfe_completa?: boolean; // true = XML completo já disponível pra download; false = ainda não, nem tenta baixar
   versao: number;
 };
+
+export function aguardar(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // GET /v2/nfes_recebidas — lista TODO o histórico contra o CNPJ, sem filtro de data.
 // Pagina por "versao": cada chamada devolve até 100 registros com versao > desde; o
 // header X-Max-Version da resposta diz o corte pra pedir a próxima página. Loop até a
 // resposta vir vazia (não tem mais nada depois desse ponto).
+//
+// A API devolve uma LINHA POR EVENTO, não uma linha por nota — a mesma chave aparece
+// várias vezes (ex: uma vez com nfe_completa=false, de novo quando o XML completo fica
+// pronto). Sem dedupe aqui, cada nota vira várias linhas de fiscal_notas duplicadas.
+// Dedupe mantém só a versão mais alta (mais recente) de cada chave.
 export async function listarNfesRecebidas(
   token: string, ambiente: FocusNfeAmbiente, cnpj: string
 ): Promise<NfeRecebidaResumo[]> {
   const todas: NfeRecebidaResumo[] = [];
   let desde = 0;
-  for (let pagina = 0; pagina < 200; pagina++) { // trava de segurança — 200*100 = 20 mil notas
+  for (let pagina = 0; pagina < 200; pagina++) { // trava de segurança — 200*100 = 20 mil eventos
     const url = new URL(`${baseUrl(ambiente)}/v2/nfes_recebidas`);
     url.searchParams.set('cnpj', cnpj.replace(/\D/g, ''));
     if (desde > 0) url.searchParams.set('versao', String(desde));
@@ -51,7 +60,13 @@ export async function listarNfesRecebidas(
     desde = proximo;
     if (pagina_dados.length < 100) break; // veio menos que o máximo, acabou o histórico
   }
-  return todas;
+
+  const maisRecentePorChave = new Map<string, NfeRecebidaResumo>();
+  for (const evento of todas) {
+    const atual = maisRecentePorChave.get(evento.chave_nfe);
+    if (!atual || evento.versao > atual.versao) maisRecentePorChave.set(evento.chave_nfe, evento);
+  }
+  return Array.from(maisRecentePorChave.values());
 }
 
 // POST /v2/nfes_recebidas/{chave}/manifesto — "ciência da operação". A SEFAZ cobra isso
@@ -65,11 +80,16 @@ export async function manifestarCiencia(token: string, ambiente: FocusNfeAmbient
   });
 }
 
-// GET /v2/nfes_recebidas/{chave}.xml — XML completo da nota, com os itens.
-export async function baixarXmlNfeRecebida(token: string, ambiente: FocusNfeAmbiente, chave: string): Promise<string | null> {
+// GET /v2/nfes_recebidas/{chave}.xml — XML completo da nota, com os itens. Devolve o
+// status HTTP junto — quem chama decide se vale tentar de novo depois (204/404 = XML
+// ainda não ficou pronto, tenta no próximo backfill; 429 = estourou rate limit, para de
+// insistir na hora e deixa pra próxima leva).
+export async function baixarXmlNfeRecebida(
+  token: string, ambiente: FocusNfeAmbiente, chave: string
+): Promise<{ xml: string | null; status: number }> {
   const res = await fetch(`${baseUrl(ambiente)}/v2/nfes_recebidas/${chave}.xml`, { headers: headerAuth(token) });
-  if (!res.ok) return null; // nota ainda não manifestada, ou XML não disponível — segue sem itens, só o cabeçalho
-  return res.text();
+  if (!res.ok) return { xml: null, status: res.status };
+  return { xml: await res.text(), status: res.status };
 }
 
 export type ItemXmlNfe = { descricao: string; ncm: string | null; quantidade: number; valor_unitario: number };
@@ -96,19 +116,22 @@ export function extrairItensXmlNfe(xml: string): ItemXmlNfe[] {
   return itens;
 }
 
+export type ResultadoCapturaItens = { itensGravados: number; rateLimited: boolean };
+
 // Baixa o XML de uma nota já manifestada, extrai os itens e casa cada um com o catálogo
 // de produtos da empresa por nome. Usado tanto pelo webhook (nota a nota, assim que
-// chega) quanto pelo backfill (uma chamada por nota do histórico inteiro). Devolve
-// quantos itens foram gravados (0 se a nota não tinha XML disponível ainda ou não tinha
-// item nenhum — nesses casos fiscal_notas.itens_status continua 'sem_itens').
+// chega) quanto pelo backfill (uma chamada por nota do histórico inteiro). itensGravados
+// fica 0 se a nota não tinha XML disponível ainda ou não tinha item nenhum (nesses casos
+// fiscal_notas.itens_status continua 'sem_itens' — o backfill tenta de novo depois).
 export async function capturarItensDaNota(
   db: SupabaseClient, notaId: number, empresaId: string,
   token: string, ambiente: FocusNfeAmbiente, chaveAcesso: string
-): Promise<number> {
-  const xml = await baixarXmlNfeRecebida(token, ambiente, chaveAcesso);
-  if (!xml) return 0;
+): Promise<ResultadoCapturaItens> {
+  const { xml, status } = await baixarXmlNfeRecebida(token, ambiente, chaveAcesso);
+  if (status === 429) return { itensGravados: 0, rateLimited: true };
+  if (!xml) return { itensGravados: 0, rateLimited: false };
   const itensXml = extrairItensXmlNfe(xml);
-  if (itensXml.length === 0) return 0;
+  if (itensXml.length === 0) return { itensGravados: 0, rateLimited: false };
 
   const { data: servicos } = await db.from('servicos').select('id, nome').eq('empresa_id', empresaId);
   const catalogo = servicos || [];
@@ -125,5 +148,5 @@ export async function capturarItensDaNota(
     }))
   );
   await db.from('fiscal_notas').update({ itens_status: 'pendente_revisao' }).eq('id', notaId);
-  return itensXml.length;
+  return { itensGravados: itensXml.length, rateLimited: false };
 }

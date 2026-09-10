@@ -108,7 +108,6 @@ function PulseProducaoContent() {
 
   const produtosFinaisDisponiveis = servicos.filter(s => s.tipo !== 'Matéria-prima');
   const materiaPrimaDisponivel = servicos.filter(s => s.tipo === 'Matéria-prima');
-  const produtosComFicha = produtosFinaisDisponiveis.filter(s => (fichasPorProduto.get(s.id) || []).length > 0);
 
   // --- Ficha técnica: carregar/editar/salvar ---
   useEffect(() => {
@@ -162,8 +161,11 @@ function PulseProducaoContent() {
     const qtd = Number(quantidadeProduzida);
     if (!produtoFinalId) { setErro('Selecione o produto final.'); return; }
     if (!qtd) { setErro('Informe a quantidade a produzir (maior que zero).'); return; }
+    // Ficha técnica é opcional — sem ela, a produção é registrada igual, só que sem
+    // consumir matéria-prima automaticamente (registrarProducaoAutomatica lida bem com
+    // lista vazia). Quem quer o consumo automático configura a ficha antes; quem não usa
+    // ficha técnica (ex: Trailer Travel) não fica travado por isso.
     const fichaItens = fichasPorProduto.get(produtoFinalId as number) || [];
-    if (fichaItens.length === 0) { setErro('Esse produto ainda não tem ficha técnica — cadastre em "Ficha técnica" antes de produzir.'); return; }
     const produtoFinal = servicoPorId.get(produtoFinalId as number);
     if (!produtoFinal) return;
     setSalvando(true);
@@ -405,10 +407,10 @@ function PulseProducaoContent() {
 
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 mb-6">
         <p className="text-sm font-black uppercase text-slate-300 mb-1">Registrar produção manual</p>
-        <p className="text-slate-500 text-[11px] font-bold mb-4">Pra repor sem uma venda associada — consome a ficha técnica automaticamente.</p>
+        <p className="text-slate-500 text-[11px] font-bold mb-4">Pra repor sem uma venda associada — se o produto tem ficha técnica, consome a matéria-prima automaticamente; senão só registra a produção.</p>
 
-        {produtosComFicha.length === 0 ? (
-          <p className="text-slate-500 text-xs font-bold py-4">Nenhum produto com ficha técnica cadastrada ainda — configure uma em &quot;Ficha técnica&quot; primeiro.</p>
+        {produtosFinaisDisponiveis.length === 0 ? (
+          <p className="text-slate-500 text-xs font-bold py-4">Nenhum produto cadastrado ainda.</p>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -417,7 +419,7 @@ function PulseProducaoContent() {
                 <select value={produtoFinalId} onChange={e => setProdutoFinalId(e.target.value ? Number(e.target.value) : '')}
                   className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
                   <option value="">Selecione...</option>
-                  {produtosComFicha.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                  {produtosFinaisDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}{(fichasPorProduto.get(s.id) || []).length === 0 ? ' (sem ficha técnica)' : ''}</option>)}
                 </select>
               </div>
               <div>

@@ -93,12 +93,13 @@ type Lead = {
 type ClienteOpcao = {
   id: number;
   nome_empresa: string;
-  telefone: string; 
+  telefone: string;
   cnpj?: string;
   inscricao_estadual?: string;
   email?: string;
   cidade?: string;
   endereco?: string;
+  razao_social?: string;
   risco?: string;
 };
 
@@ -377,7 +378,7 @@ export default function DealsPage() {
               ? `nome_empresa.ilike.%${q}%,cnpj.ilike.%${qCnpj}%`
               : `nome_empresa.ilike.%${q}%`;
           let query = supabase.from('clientes')
-              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, status_risco')
+              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, razao_social, status_risco')
               .eq('status', 'ativo')
               .or(orFilter)
               .order('nome_empresa', { ascending: true })
@@ -1561,6 +1562,26 @@ export default function DealsPage() {
       }
   };
 
+  // Preenche o formulário com o cadastro do cliente escolhido. Atribui SEMPRE (mesmo
+  // vazio) de propósito: com `if (c.cnpj)` — como era antes — trocar de cliente no meio
+  // do preenchimento deixava o CNPJ/endereço do cliente anterior no formulário, e esse
+  // dado do cliente errado ia parar no contrato. Campo vazio aqui significa "esse cliente
+  // não tem esse dado ainda", e é isso que tem que aparecer na tela.
+  const selecionarCliente = (c: ClienteOpcao) => {
+      setNovaEmpresa(c.nome_empresa);
+      setSelectedClientId(c.id);
+      setNovoTelefone(c.telefone || '');
+      setNovaCidade(c.cidade || '');
+      setNovoCnpj(c.cnpj || '');
+      setNovoIE(c.inscricao_estadual || '');
+      setNovoEndereco(c.endereco || '');
+      setNovaRazaoSocial(c.razao_social || '');
+      // Abre "Detalhes adicionais" quando o cliente já tem dado fiscal/endereço — senão
+      // fica preenchido escondido atrás de um acordeão fechado e parece que não puxou.
+      if (c.cnpj || c.endereco || c.inscricao_estadual) setMostrarDetalhes(true);
+      setShowClientDropdown(false);
+  };
+
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado para salvar um lead!");
@@ -1608,6 +1629,28 @@ export default function DealsPage() {
             console.error("Erro ao auto-cadastrar cliente", e);
             setLoading(false);
             return alert("Erro ao criar o cliente novo na base.");
+        }
+    } else if (finalClientId) {
+        // Cliente que JÁ existia: o CNPJ/IE/endereço digitados aqui iam só pro lead e
+        // nunca voltavam pro cadastro — então no negócio seguinte o cliente aparecia
+        // "pelado" de novo e alguém redigitava tudo, toda vez, pra sempre. Devolve pro
+        // cadastro o que foi preenchido, pra ficar disponível na próxima.
+        //
+        // Só manda campo com conteúdo: campo vazio no formulário significa "não sei",
+        // não "apague o que está salvo" — sem esse filtro, abrir um negócio antigo sem
+        // endereço e salvar limparia o endereço do cliente.
+        const patchCliente: Record<string, string> = {};
+        if (novoCnpj) patchCliente.cnpj = novoCnpj;
+        if (novoIE) patchCliente.inscricao_estadual = novoIE;
+        if (novoEndereco) patchCliente.endereco = novoEndereco;
+        if (novoTelefone) patchCliente.telefone = novoTelefone;
+        if (novaCidade) patchCliente.cidade = novaCidade;
+        if (novaRazaoSocial) patchCliente.razao_social = novaRazaoSocial;
+        if (Object.keys(patchCliente).length > 0) {
+            const { error: errUpd } = await supabase.from('clientes').update(patchCliente).eq('id', finalClientId);
+            // Falha aqui não derruba o salvamento do negócio — o dado do lead é o que
+            // importa pro contrato; o cadastro do cliente é conveniência pra próxima vez.
+            if (errUpd) console.error('[salvarLead] falha ao atualizar cadastro do cliente', errUpd);
         }
     }
 
@@ -2215,7 +2258,7 @@ export default function DealsPage() {
                                 {!clientesBuscando && clientesOpcoes.map(c => (
                                         <div 
                                             key={c.id} className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-blue-600/20 transition-colors flex flex-col"
-                                            onMouseDown={(e) => { e.preventDefault(); setNovaEmpresa(c.nome_empresa); setSelectedClientId(c.id); setNovoTelefone(c.telefone || ''); if (c.cidade) setNovaCidade(c.cidade as string); if (c.cnpj) setNovoCnpj(c.cnpj as string); if (c.inscricao_estadual) setNovoIE(c.inscricao_estadual as string); if (c.endereco) setNovoEndereco(c.endereco as string); setShowClientDropdown(false); }}
+                                            onMouseDown={(e) => { e.preventDefault(); selecionarCliente(c); }}
                                         >
                                             <div className="flex items-center gap-2">
                                               <span className="text-white font-bold text-xs uppercase">{c.nome_empresa}</span>

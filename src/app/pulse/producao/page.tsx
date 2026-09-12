@@ -332,7 +332,7 @@ function PulseProducaoContent() {
           <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
             <Factory size={32} /> Produção
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ficha técnica cadastrada uma vez, produção nasce sozinha na venda</p>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Produção nasce sozinha na venda — acompanhe etapas e prazos aqui</p>
         </div>
         <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
           <Settings2 size={14} /> Ficha técnica
@@ -342,7 +342,7 @@ function PulseProducaoContent() {
       {abaFicha && (
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 mb-6">
           <p className="text-sm font-black uppercase text-slate-300 mb-1">Ficha técnica por produto</p>
-          <p className="text-slate-500 text-[11px] font-bold mb-4">Cadastre quanto de cada matéria-prima 1 unidade do produto consome. Sem isso, o produto não pode ser vendido no Pulse.</p>
+          <p className="text-slate-500 text-[11px] font-bold mb-4">Cadastre quanto de cada matéria-prima 1 unidade do produto consome — opcional: sem ficha técnica, a produção acontece do mesmo jeito, só não baixa matéria-prima sozinha.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

@@ -9,6 +9,20 @@
 -- cada campo (cada campo é resolvido separadamente — se o negócio mais recente tem CNPJ
 -- mas não tem endereço, ainda pega o endereço de um negócio mais antigo que tinha). Só
 -- preenche o que já está NULL no cadastro — nunca sobrescreve dado que já existe lá.
+--
+-- ⚠️ STATUS (2026-09-11, fim do dia): RODADO, MAS COM BUG — NÃO CONFIAR NO RESULTADO.
+-- O BLOCO 2 rodou sem erro (sem_cnpj/sem_endereco/etc ficaram em 109/1886/1891/528/119,
+-- iguais ao BLOCO 1), mas confirmamos manualmente que existem clientes que DEVERIAM ter
+-- sido preenchidos e continuam NULL (ex: id 11318 "Comercio de motosserras presidente" —
+-- tem CNPJ 24.504.633/0001-03 no negócio, `clientes.cnpj` continua NULL). O UPDATE não
+-- está pegando todo mundo que a query de leitura (mesma lógica) encontra — bug real na
+-- junção/CTE, ainda não identificado. NÃO rodar de novo sem antes achar a causa — rodar
+-- de novo sem entender não vai piorar nada (é idempotente, só preenche NULL), mas também
+-- não vai resolver sozinho.
+-- Pausado a pedido do Will — o bug em si (dado não salvando pra negócio NOVO) já está
+-- corrigido e confirmado (commit 0047a3b); isso aqui é só limpeza de histórico, sem
+-- pressa. Retomar quando sobrar tempo: comparar client_id 11318 passo a passo contra o
+-- que a CTE `cnpj_recente` do BLOCO 2 realmente devolve pra ele.
 
 -- ============================================================================
 -- BLOCO 1 — inventário (só leitura, roda primeiro)

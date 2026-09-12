@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
-import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Boxes, History, ListChecks, PenLine } from 'lucide-react';
+import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
 import RevisarItensNotaModal from '@/components/RevisarItensNotaModal';
+import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
 
 type NotaFiscal = {
   id: number; tipo: 'entrada' | 'saida'; chave_acesso: string | null;
@@ -58,6 +58,7 @@ export default function FiscalPage() {
   const [busca, setBusca] = useState('');
   const [chaveCopiada, setChaveCopiada] = useState<number | null>(null);
   const [notaEmRevisao, setNotaEmRevisao] = useState<NotaFiscal | null>(null);
+  const [lancarNotaAberto, setLancarNotaAberto] = useState(false);
   const [buscandoHistorico, setBuscandoHistorico] = useState(false);
   const [resultadoHistorico, setResultadoHistorico] = useState<string | null>(null);
   // "Agora" travado num state em vez de Date.now() dentro do useMemo — chamar função
@@ -188,9 +189,9 @@ export default function FiscalPage() {
               {buscandoHistorico ? 'Buscando...' : 'Buscar histórico completo'}
             </button>
           )}
-          <Link href="/pulse/estoque" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <Boxes size={14} /> Lançar nota por foto
-          </Link>
+          <button onClick={() => setLancarNotaAberto(true)} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <Plus size={14} /> Lançar Nota Fiscal
+          </button>
         </div>
       </header>
 
@@ -345,6 +346,15 @@ export default function FiscalPage() {
         onFechar={() => setNotaEmRevisao(null)}
         notaId={notaEmRevisao?.id ?? null}
         notaLabel={notaEmRevisao ? `${notaEmRevisao.nome_participante || 'Fornecedor'}${notaEmRevisao.numero ? ` — NF ${notaEmRevisao.numero}` : ''}` : ''}
+        servicos={servicos}
+        empresaId={perfil?.empresa_id}
+        userId={user?.id}
+        onConcluido={carregar}
+      />
+
+      <LancarNotaFiscalModal
+        aberto={lancarNotaAberto}
+        onFechar={() => setLancarNotaAberto(false)}
         servicos={servicos}
         empresaId={perfil?.empresa_id}
         userId={user?.id}

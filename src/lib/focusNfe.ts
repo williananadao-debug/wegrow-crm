@@ -4,6 +4,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { acharServicoParecido } from '@/lib/matchProduto';
+import { extrairItensXmlNfe } from '@/lib/nfeXmlParser';
+export { extrairItensXmlNfe } from '@/lib/nfeXmlParser';
 
 export type FocusNfeAmbiente = 'producao' | 'homologacao';
 
@@ -90,30 +92,6 @@ export async function baixarXmlNfeRecebida(
   const res = await fetch(`${baseUrl(ambiente)}/v2/nfes_recebidas/${chave}.xml`, { headers: headerAuth(token) });
   if (!res.ok) return { xml: null, status: res.status };
   return { xml: await res.text(), status: res.status };
-}
-
-export type ItemXmlNfe = { descricao: string; ncm: string | null; quantidade: number; valor_unitario: number };
-
-// Extração dos itens (<det>...</det>) via regex — schema da NFe é fixo (padrão SEFAZ),
-// não justifica trazer uma lib de XML só pra isso. Cada <det> tem um <prod> com os
-// campos que interessam: xProd (descrição), NCM, qCom (quantidade), vUnCom (valor
-// unitário). Robusto o bastante pro XML real da SEFAZ (sempre bem formado).
-export function extrairItensXmlNfe(xml: string): ItemXmlNfe[] {
-  const itens: ItemXmlNfe[] = [];
-  const detsMatch = xml.match(/<det\b[^>]*>[\s\S]*?<\/det>/g) || [];
-  for (const det of detsMatch) {
-    const prodMatch = det.match(/<prod>([\s\S]*?)<\/prod>/);
-    if (!prodMatch) continue;
-    const prod = prodMatch[1];
-    const campo = (tag: string) => prod.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`))?.[1] ?? null;
-    const descricao = campo('xProd');
-    if (!descricao) continue;
-    const quantidade = Number(campo('qCom')) || 0;
-    const valorUnitario = Number(campo('vUnCom')) || 0;
-    if (quantidade <= 0) continue;
-    itens.push({ descricao, ncm: campo('NCM'), quantidade, valor_unitario: valorUnitario });
-  }
-  return itens;
 }
 
 // Cria o lançamento financeiro (conta a pagar) de uma nota de entrada e liga de volta em

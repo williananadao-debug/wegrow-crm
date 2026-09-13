@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -44,6 +44,9 @@ export default function PulseEstoquePage() {
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
   const [abaDetalhe, setAbaDetalhe] = useState<'movimentacoes' | 'precos'>('movimentacoes');
+  // Chave de acesso -> link do DANFE/XML da nota, pra abrir a NF direto da movimentação
+  // sem precisar ir procurar em /pulse/fiscal.
+  const [notasPorChave, setNotasPorChave] = useState<Record<string, { id: number; danfeUrl: string | null; xmlUrl: string | null }>>({});
 
   const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
   const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
@@ -144,9 +147,19 @@ export default function PulseEstoquePage() {
     setHistoricoServico(s);
     setAbaDetalhe('movimentacoes');
     setCarregandoHistorico(true);
+    setNotasPorChave({});
     const { data } = await supabase.from('estoque_movimentacoes').select('*').eq('servico_id', s.id).order('created_at', { ascending: false });
-    setMovimentacoes((data || []) as Movimentacao[]);
+    const movs = (data || []) as Movimentacao[];
+    setMovimentacoes(movs);
     setCarregandoHistorico(false);
+
+    const chaves = [...new Set(movs.map(m => m.nf_chave_acesso).filter((c): c is string => !!c))];
+    if (chaves.length > 0) {
+      const { data: notas } = await supabase.from('fiscal_notas').select('id, chave_acesso, danfe_url, xml_url').in('chave_acesso', chaves);
+      if (notas) {
+        setNotasPorChave(Object.fromEntries(notas.map(n => [n.chave_acesso as string, { id: n.id, danfeUrl: n.danfe_url, xmlUrl: n.xml_url }])));
+      }
+    }
   };
 
   const renderLinhaEstoque = (s: ServicoConfig) => {
@@ -315,7 +328,7 @@ export default function PulseEstoquePage() {
         const historicoPrecos = [...(historicoServico.historico_precos || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setHistoricoServico(null)}>
-            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-2xl shadow-2xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Package size={18} className="text-purple-400" /> Detalhe do produto</h3>
@@ -373,6 +386,15 @@ export default function PulseEstoquePage() {
                             {m.motivo && <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{MOTIVO_LABEL[m.motivo] || m.motivo}</span>}
                             {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
                             {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
+                            {(() => {
+                              const nota = m.nf_chave_acesso ? notasPorChave[m.nf_chave_acesso] : undefined;
+                              const link = nota?.danfeUrl || nota?.xmlUrl;
+                              return link ? (
+                                <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] font-black bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2 py-0.5 rounded uppercase transition-colors">
+                                  <FileText size={9} /> Abrir NF
+                                </a>
+                              ) : null;
+                            })()}
                             {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
                             {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
                           </div>

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes, Factory, ArrowUp, ArrowDown } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes, Factory, ArrowUp, ArrowDown, Wand2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -147,6 +147,18 @@ export default function SettingsPage() {
     setLoading(false);
   };
 
+  // Gera um código curto e único o bastante sem precisar consultar o banco antes (o save
+  // é em lote — checar "próximo número livre" um por um criaria corrida entre itens do
+  // mesmo lote). Prefixo pelas 3 primeiras letras do nome (ou "PRD" sem nome ainda) +
+  // sufixo aleatório en base36 — legível o bastante pra reconhecer de relance, único o
+  // bastante pra nunca colidir num catálogo de centenas de itens.
+  const gerarSkuAutomatico = (nome: string) => {
+    const prefixo = (nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'PRD';
+    const sufixo = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${prefixo}-${sufixo}`;
+  };
+
   const salvarConfiguracoes = async () => {
     // Sem empresa_id carregado, o insert cai fora da policy de RLS (empresa_id teria que
     // bater com meu_empresa_id()) e falha pra TODOS os itens novos de uma vez — melhor
@@ -157,22 +169,20 @@ export default function SettingsPage() {
       return;
     }
 
-    // SKU obrigatório pra todo item — não só ajuda a identificar cada produto de forma
-    // única, como no futuro dá pra casar item de nota fiscal pelo código em vez de
-    // adivinhar pelo nome (raiz de itens duplicados/mal classificados vindos de NF).
-    const semSku = servicos.filter(s => !s.sku?.trim());
-    if (semSku.length > 0) {
-      setFeedback({ type: 'error', msg: `SKU é obrigatório — preencha pra: ${semSku.map(s => s.nome || '(sem nome)').join(', ')}` });
-      setTimeout(() => setFeedback(null), 6000);
-      return;
-    }
+    // SKU nunca fica em branco (ajuda a identificar cada produto de forma única e, no
+    // futuro, casar item de nota fiscal pelo código em vez de adivinhar pelo nome) — mas
+    // em vez de travar o salvamento pedindo pra digitar um por um, gera sozinho pra quem
+    // deixou vazio. Quem quiser o próprio código (ex: já tem SKU/EAN do fornecedor) edita
+    // o campo normalmente antes de salvar.
+    const servicosComSku = servicos.map(s => s.sku?.trim() ? s : { ...s, sku: gerarSkuAutomatico(s.nome) });
+    if (servicosComSku.some((s, i) => s.sku !== servicos[i].sku)) setServicos(servicosComSku);
 
     setSaving(true);
     setFeedback(null);
 
     try {
-        const novos = servicos.filter(s => s.id.startsWith('temp-'));
-        const existentes = servicos.filter(s => !s.id.startsWith('temp-'));
+        const novos = servicosComSku.filter(s => s.id.startsWith('temp-'));
+        const existentes = servicosComSku.filter(s => !s.id.startsWith('temp-'));
         // Cada promise carrega uma etiqueta ("novo: Nome" / "Nome") pra mensagem de erro
         // conseguir apontar exatamente qual item falhou, em vez de "alguns itens".
         const tarefas: { label: string; run: () => Promise<{ error: any; data: any }> }[] = [];
@@ -625,13 +635,21 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="col-span-12 flex flex-wrap items-center gap-2 pl-0 md:pl-11 -mt-1">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU <span className="text-red-400">*</span></span>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</span>
                         <input
                             value={servico.sku ?? ''}
                             onChange={(e) => atualizarServico(servico.id, 'sku', e.target.value)}
-                            className={`w-28 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500 ${!servico.sku?.trim() ? 'border-red-500/50' : 'border-white/5'}`}
-                            placeholder="código/barras (obrigatório)"
+                            className="w-28 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500"
+                            placeholder="gerado automático se vazio"
                         />
+                        <button
+                            type="button"
+                            onClick={() => atualizarServico(servico.id, 'sku', gerarSkuAutomatico(servico.nome))}
+                            title="Gerar código automaticamente"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-slate-500 hover:text-blue-400 transition-all"
+                        >
+                            <Wand2 size={12} />
+                        </button>
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Custo</span>
                         <div className="flex items-center gap-1 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 focus-within:border-blue-500">
                             <span className="text-[9px] text-slate-500">R$</span>

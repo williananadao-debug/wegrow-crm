@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, registrarProducaoAutomatica, aprovarAditivo, etapasFabricacaoDe } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, registrarProducaoAutomatica, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -106,8 +106,8 @@ function PulseProducaoContent() {
     return m;
   }, [fichas]);
 
-  const produtosFinaisDisponiveis = servicos.filter(s => s.tipo !== 'Matéria-prima');
-  const materiaPrimaDisponivel = servicos.filter(s => s.tipo === 'Matéria-prima');
+  const produtosFinaisDisponiveis = servicos.filter(s => !ehMateriaPrima(s));
+  const materiaPrimaDisponivel = servicos.filter(s => ehMateriaPrima(s));
 
   // --- Ficha técnica: carregar/editar/salvar ---
   useEffect(() => {

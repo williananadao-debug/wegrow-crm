@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
+import { ServicoConfig, alertarEstoqueBaixoSeCruzou, ehMateriaPrima } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
@@ -90,8 +90,8 @@ export default function PulseEstoquePage() {
 
   // Separado por tipo — matéria-prima e produto acabado misturados na mesma lista
   // confundia (ex: fábrica de trailer via chapa de aço junto com o trailer pronto).
-  const materiaPrima = produtosComEstoque.filter(s => s.tipo === 'Matéria-prima' && combina(s));
-  const produtosFinais = produtosComEstoque.filter(s => s.tipo !== 'Matéria-prima' && combina(s));
+  const materiaPrima = produtosComEstoque.filter(s => ehMateriaPrima(s) && combina(s));
+  const produtosFinais = produtosComEstoque.filter(s => !ehMateriaPrima(s) && combina(s));
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const atual = s.estoque || 0;

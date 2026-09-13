@@ -18,6 +18,14 @@ export type ServicoConfig = {
   historico_precos?: HistoricoPreco[] | null;
 };
 
+// "Nota Fiscal" = item que o sistema criou sozinho ao ler uma NF e não reconheceu no
+// catálogo — na prática é sempre matéria-prima/insumo (ninguém revisou ainda o tipo
+// certo). Tratar como matéria-prima em qualquer tela que decide o que é vendável
+// (Nova Venda), o que entra em ficha técnica (Produção) ou como o Estoque separa as
+// duas listas — sem isso, insumo lido de nota (parafuso, produto de limpeza etc.)
+// aparecia misturado com produto acabado pronto pra vender.
+export const ehMateriaPrima = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Matéria-prima' || s.tipo === 'Nota Fiscal';
+
 // Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto
 // (ficaria MRP completo, fora do escopo do Pulse hoje). Cobre o caso real de fábrica
 // (corte → estrutura → pintura → acabamento) sem virar um quadro Kanban por si só.

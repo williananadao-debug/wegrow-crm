@@ -6,7 +6,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
-import { ETAPAS_FABRICACAO_PADRAO } from '../pulse/shared';
+import { ETAPAS_FABRICACAO_PADRAO, ehMateriaPrima } from '../pulse/shared';
 
 type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
 
@@ -77,11 +77,7 @@ export default function SettingsPage() {
   // Catálogo (o que o cliente compra) e matéria-prima/insumo (consumido na ficha
   // técnica, nunca vendido direto) viviam misturados na mesma lista — confuso pra
   // quem só quer configurar preço/foto do produto e esbarra em "Chapa de Aço 2mm".
-  // "Nota Fiscal" (item que o sistema criou sozinho ao ler uma nota e não reconheceu)
-  // cai junto com matéria-prima — é isso que costuma ser na prática, e tira do
-  // catálogo de vendas algo que ninguém revisou ainda.
   const [abaCategoria, setAbaCategoria] = useState<'venda' | 'materia_prima'>('venda');
-  const ehMateriaPrima = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Matéria-prima' || s.tipo === 'Nota Fiscal';
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [histModalId, setHistModalId] = useState<string | null>(null);

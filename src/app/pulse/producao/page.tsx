@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv } from 'lucide-react';
+import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
@@ -115,6 +115,12 @@ function PulseProducaoContent() {
 
   const produtosFinaisDisponiveis = servicos.filter(s => !ehMateriaPrima(s));
   const materiaPrimaDisponivel = servicos.filter(s => ehMateriaPrima(s));
+
+  // Contadores acima do quadro — só quantidade, sem nenhum valor (mesma regra do resto
+  // da tela). Dá pra ver de cara o tamanho da fila sem contar card por coluna.
+  const emProducaoCount = producoes.filter(p => p.status === 'em_producao').length;
+  const aguardandoEntregaCount = producoes.filter(p => p.status === 'concluida').length;
+  const atrasadasCount = producoes.filter(p => p.previsao_entrega && new Date(p.previsao_entrega) < new Date() && p.status !== 'entregue').length;
 
   // --- Ficha técnica: carregar/editar/salvar ---
   useEffect(() => {
@@ -404,6 +410,21 @@ function PulseProducaoContent() {
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Hammer size={10} /> Em produção</p>
+          <p className="text-2xl font-black text-white mt-1">{emProducaoCount}</p>
+        </div>
+        <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> Aguardando entrega</p>
+          <p className="text-2xl font-black text-white mt-1">{aguardandoEntregaCount}</p>
+        </div>
+        <div className={`bg-[#0F172A] border rounded-2xl p-4 ${atrasadasCount > 0 ? 'border-red-500/40' : 'border-white/10'}`}>
+          <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-slate-500'}`}><AlertTriangle size={10} /> Atrasadas</p>
+          <p className={`text-2xl font-black mt-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-white'}`}>{atrasadasCount}</p>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 mb-3">
         <ClipboardList size={15} className="text-slate-500" />

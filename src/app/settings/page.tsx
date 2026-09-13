@@ -157,6 +157,16 @@ export default function SettingsPage() {
       return;
     }
 
+    // SKU obrigatório pra todo item — não só ajuda a identificar cada produto de forma
+    // única, como no futuro dá pra casar item de nota fiscal pelo código em vez de
+    // adivinhar pelo nome (raiz de itens duplicados/mal classificados vindos de NF).
+    const semSku = servicos.filter(s => !s.sku?.trim());
+    if (semSku.length > 0) {
+      setFeedback({ type: 'error', msg: `SKU é obrigatório — preencha pra: ${semSku.map(s => s.nome || '(sem nome)').join(', ')}` });
+      setTimeout(() => setFeedback(null), 6000);
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 
@@ -615,12 +625,12 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="col-span-12 flex flex-wrap items-center gap-2 pl-0 md:pl-11 -mt-1">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</span>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU <span className="text-red-400">*</span></span>
                         <input
                             value={servico.sku ?? ''}
                             onChange={(e) => atualizarServico(servico.id, 'sku', e.target.value)}
-                            className="w-28 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500"
-                            placeholder="código/barras"
+                            className={`w-28 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500 ${!servico.sku?.trim() ? 'border-red-500/50' : 'border-white/5'}`}
+                            placeholder="código/barras (obrigatório)"
                         />
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Custo</span>
                         <div className="flex items-center gap-1 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 focus-within:border-blue-500">

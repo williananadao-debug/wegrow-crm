@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, alertarEstoqueBaixoSeCruzou, ehMateriaPrima } from '../shared';
+import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
@@ -90,8 +90,11 @@ export default function PulseEstoquePage() {
 
   // Separado por tipo — matéria-prima e produto acabado misturados na mesma lista
   // confundia (ex: fábrica de trailer via chapa de aço junto com o trailer pronto).
-  const materiaPrima = produtosComEstoque.filter(s => ehMateriaPrima(s) && combina(s));
-  const produtosFinais = produtosComEstoque.filter(s => !ehMateriaPrima(s) && combina(s));
+  // Sem divisão por tipo — Trailer Travel só vende sob encomenda (nunca guarda produto
+  // pronto no estoque), então a antiga seção "Produtos acabados" ficava sempre cheia de
+  // insumo mal classificado e nunca de produto de verdade. Uma lista só é mais honesta
+  // com o que o estoque controlado realmente é aqui: matéria-prima/insumo.
+  const itensFiltrados = produtosComEstoque.filter(combina);
 
   const ajustarEstoque = async (s: ServicoConfig, delta: number) => {
     const atual = s.estoque || 0;
@@ -283,40 +286,21 @@ export default function PulseEstoquePage() {
         {busca && <button onClick={() => setBusca('')} className="text-slate-500 hover:text-white"><X size={14} /></button>}
       </div>
 
-      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-4">
-        <div className="p-5 border-b border-white/5">
-          <h3 className="font-black uppercase text-sm text-slate-300">Produtos acabados ({produtosFinais.length})</h3>
-          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">O que é vendido/entregue ao cliente — sobe via Produção ou ajuste manual</p>
-        </div>
-        {loadingServicos ? (
-          <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-        ) : produtosFinais.length === 0 ? (
-          <div className="p-10 text-center">
-            <Boxes size={28} className="text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-500 text-sm font-bold">Nenhum produto acabado com estoque controlado ainda.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {[...produtosFinais].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
-          </div>
-        )}
-      </div>
-
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
         <div className="p-5 border-b border-white/5">
-          <h3 className="font-black uppercase text-sm text-slate-300">Matéria-prima ({materiaPrima.length})</h3>
-          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Insumos consumidos na Produção — pra cadastrar novo item, vai em Configurações → Catálogo</p>
+          <h3 className="font-black uppercase text-sm text-slate-300">Matéria-prima / insumos ({itensFiltrados.length})</h3>
+          <p className="text-slate-500 text-[10px] font-bold uppercase mt-1">Consumidos na Produção — pra cadastrar novo item, vai em Configurações → Catálogo</p>
         </div>
         {loadingServicos ? (
           <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-        ) : materiaPrima.length === 0 ? (
+        ) : itensFiltrados.length === 0 ? (
           <div className="p-10 text-center">
             <Boxes size={28} className="text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-500 text-sm font-bold">Nenhuma matéria-prima cadastrada ainda.</p>
+            <p className="text-slate-500 text-sm font-bold">Nenhum item com estoque controlado ainda.</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {[...materiaPrima].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
+            {[...itensFiltrados].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
           </div>
         )}
       </div>

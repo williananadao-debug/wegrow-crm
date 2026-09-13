@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -120,6 +120,22 @@ export default function PulseEstoquePage() {
   const atualizarMinimo = async (s: ServicoConfig, valor: number) => {
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque_minimo: valor } : x));
     await supabase.from('servicos').update({ estoque_minimo: valor }).eq('id', s.id);
+  };
+
+  // Mesma lógica de Configurações → Produtos (settings/page.tsx) — SKU editável e
+  // gerável direto por aqui também, porque é no Estoque que o time realmente mexe no
+  // catálogo no dia a dia, não em Configurações.
+  const gerarSkuAutomatico = (nome: string) => {
+    const prefixo = (nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'PRD';
+    const sufixo = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${prefixo}-${sufixo}`;
+  };
+
+  const atualizarSku = async (s: ServicoConfig, valor: string) => {
+    setServicos(prev => prev.map(x => x.id === s.id ? { ...x, sku: valor } : x));
+    setHistoricoServico(prev => prev && prev.id === s.id ? { ...prev, sku: valor } : prev);
+    await supabase.from('servicos').update({ sku: valor || null }).eq('id', s.id);
   };
 
   const abrirAjuste = (s: ServicoConfig) => {
@@ -376,6 +392,24 @@ export default function PulseEstoquePage() {
                     <p className={`font-black text-sm ${margemAtual >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{margemAtual.toFixed(0)}%</p>
                   </div>
                 )}
+              </div>
+
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</span>
+                <input
+                  value={historicoServico.sku ?? ''}
+                  onChange={e => atualizarSku(historicoServico, e.target.value)}
+                  placeholder="gerado automático se vazio"
+                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => atualizarSku(historicoServico, gerarSkuAutomatico(historicoServico.nome))}
+                  title="Gerar código automaticamente"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-slate-500 hover:text-purple-400 transition-all flex-shrink-0"
+                >
+                  <Wand2 size={13} />
+                </button>
               </div>
 
               <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-4">

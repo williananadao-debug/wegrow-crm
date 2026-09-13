@@ -10,7 +10,7 @@ SELECT
   'DIAMOND HOUSE 7.5',
   195900.00,
   'Trailer',
-  'un',
+  '', -- unidade = filial/unidade de negócio, não unidade de medida — '' = "Geral", visível pra empresa inteira
   'Dimensões: 7,50 x 2,20 m — valor a partir de R$ 195.900,00 (varia por personalização)
 
 CONFIGURAÇÃO
@@ -60,7 +60,7 @@ WITH pai AS (
     'TRAVEL SILVER HOUSE 565',
     169900.00,
     'Trailer',
-    'un',
+    '',
     'Dimensões: 5,65 x 2,20 x 2,00 m — valor R$ 169.900,00 (com freio elétrico: R$ 189.900,00, ver variante)
 
 MONTAGEM INTERNA
@@ -104,7 +104,7 @@ Prazo de entrega aproximado: 250 a 280 dias após fechamento do contrato e pagam
   RETURNING id, empresa_id
 )
 INSERT INTO public.servicos (empresa_id, nome, preco, tipo, unidade, produto_pai_id, variante_nome, prazo_fabricacao_dias)
-SELECT empresa_id, 'TRAVEL SILVER HOUSE 565', 189900.00, 'Trailer', 'un', id, 'Com Freio Elétrico', 270
+SELECT empresa_id, 'TRAVEL SILVER HOUSE 565', 189900.00, 'Trailer', '', id, 'Com Freio Elétrico', 270
 FROM pai;
 
 -- Confere:

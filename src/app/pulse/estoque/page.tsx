@@ -219,36 +219,47 @@ export default function PulseEstoquePage() {
     setNotasPorMovimentacao(mapa);
   };
 
+  // Grid fixo (não flex) — colunas sempre alinhadas de linha em linha (Produto/SKU/Preço/
+  // Estoque/Mín. sempre na mesma posição horizontal), em vez do bloco de texto corrido +
+  // botões soltos de antes. Cabeçalho abaixo usa o MESMO template de colunas.
+  const COLUNAS_ESTOQUE = 'grid-cols-[40px_minmax(0,1fr)_100px_90px_128px_64px_64px]';
+
   const renderLinhaEstoque = (s: ServicoConfig) => {
     const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
-    const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
     return (
-      <div key={s.id} onClick={() => abrirHistorico(s)} className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] transition-colors">
-        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
-          {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} className="text-slate-600" />}
+      <div key={s.id} onClick={() => abrirHistorico(s)} className={`grid ${COLUNAS_ESTOQUE} items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition-colors`}>
+        <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={15} className="text-slate-600" />}
         </div>
-        <div className="flex-1 min-w-0">
+
+        <div className="min-w-0">
           <p className="text-white font-bold text-sm truncate">{s.nome}</p>
-          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            <p className="text-slate-500 text-[10px]">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{s.unidade ? ` /${s.unidade}` : ''}</p>
-            {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{s.tipo}</span>}
-            <span className="text-[9px] text-slate-600">· R$ {valorEmEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em estoque</span>
-          </div>
+          {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase inline-block mt-0.5">{s.tipo}</span>}
         </div>
-        <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={13} /></button>
-        <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
-        <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
-        <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, 1); }} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
-        <div onClick={e => e.stopPropagation()} className="flex items-center gap-1 shrink-0" title="Estoque mínimo — dispara o alerta de estoque baixo">
-          <span className="text-[9px] font-black text-slate-600 uppercase">mín.</span>
+
+        <p className="text-slate-400 text-[11px] font-mono font-bold truncate" title={s.sku || ''}>{s.sku || '—'}</p>
+
+        <p className="text-slate-300 text-xs font-bold truncate">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+
+        <div className="flex items-center justify-center gap-1.5">
+          <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Minus size={12} /></button>
+          <span className={`text-sm font-black w-7 text-center flex-shrink-0 ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
+          <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, 1); }} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Plus size={12} /></button>
+        </div>
+
+        <div onClick={e => e.stopPropagation()} title="Estoque mínimo — dispara o alerta de estoque baixo">
           <input
             type="number" min="0" value={s.estoque_minimo ?? 5}
             onChange={e => atualizarMinimo(s, e.target.value === '' ? 0 : Number(e.target.value))}
-            className="w-10 bg-black/30 border border-white/10 rounded-lg px-1 py-1 text-slate-300 text-xs text-center outline-none focus:border-amber-500"
+            className="w-full bg-black/30 border border-white/10 rounded-lg px-1 py-1 text-slate-300 text-xs text-center outline-none focus:border-amber-500"
           />
         </div>
-        {baixo && <span className="text-[9px] font-black text-red-400 uppercase ml-1">baixo</span>}
-        <ChevronRight size={15} className="text-slate-700 flex-shrink-0" />
+
+        <div className="flex items-center justify-end gap-1.5">
+          {baixo && <AlertTriangle size={12} className="text-red-400 flex-shrink-0" />}
+          <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={12} /></button>
+          <ChevronRight size={14} className="text-slate-700 flex-shrink-0" />
+        </div>
       </div>
     );
   };
@@ -353,8 +364,21 @@ export default function PulseEstoquePage() {
             <p className="text-slate-500 text-sm font-bold">Nenhum item com estoque controlado ainda.</p>
           </div>
         ) : (
-          <div className="divide-y divide-white/5">
-            {[...itensFiltrados].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px]">
+              <div className={`grid ${COLUNAS_ESTOQUE} items-center gap-3 px-4 py-2 border-b border-white/5 text-[9px] font-black text-slate-600 uppercase tracking-widest`}>
+                <span />
+                <span>Produto</span>
+                <span>SKU</span>
+                <span>Preço</span>
+                <span className="text-center">Estoque</span>
+                <span className="text-center">Mín.</span>
+                <span />
+              </div>
+              <div className="divide-y divide-white/5">
+                {[...itensFiltrados].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
+              </div>
+            </div>
           </div>
         )}
       </div>

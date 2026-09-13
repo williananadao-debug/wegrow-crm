@@ -114,13 +114,26 @@ export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any, empresaIn
   const janela = window.open('', '', 'width=860,height=1000');
   if (!janela) return;
   const nomeEmpresa = unidadeInfo?.razao_social || unidadeInfo?.nome || empresaInfo?.nome || '';
-  const linhas = itens.map((i: any, idx: number) => `
-    <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafafa'}">
-      <td style="padding:12px 16px;border-bottom:1px solid #eee">${i.servico}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:center;color:#666">${i.quantidade}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:right;color:#666">R$ ${i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:right;font-weight:700">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-    </tr>`
+  // Cartão por item em vez de tabela simples — orçamento de trailer (produto caro, sob
+  // encomenda) precisa mostrar a descrição completa (specs), não só nome/qtd/preço. A
+  // foto do produto vira marca d'água atrás do texto: reforça identidade visual sem
+  // brigar com a legibilidade da descrição.
+  const linhas = itens.map((i: any) => `
+    <div style="position:relative;border:1px solid #eee;border-radius:14px;overflow:hidden;margin-bottom:10px;">
+      ${i.imagemUrl ? `<div style="position:absolute;inset:0;background-image:url('${i.imagemUrl}');background-size:cover;background-position:center;opacity:0.07;"></div>` : ''}
+      <div style="position:relative;padding:16px 20px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+          <div style="flex:1;min-width:0;">
+            <p style="margin:0;font-size:14px;font-weight:800">${i.servico}</p>
+            ${i.descricao ? `<p style="margin:8px 0 0;font-size:11px;color:#555;white-space:pre-line;line-height:1.6">${i.descricao}</p>` : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <p style="margin:0;font-size:11px;color:#888;white-space:nowrap">${i.quantidade}x R$ ${i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p style="margin:4px 0 0;font-size:16px;font-weight:900;color:${cor};white-space:nowrap">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+      </div>
+    </div>`
   ).join('');
   janela.document.write(`
     <html><head><title>Orçamento ${formatId(alvo.id)}</title></head>
@@ -154,17 +167,7 @@ export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any, empresaIn
             <p style="margin:4px 0 0;font-size:16px;font-weight:700">${alvo.empresa}</p>
           </div>
 
-          <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
-            <thead>
-              <tr style="background:${cor}">
-                <th style="padding:10px 16px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Item</th>
-                <th style="padding:10px 16px;text-align:center;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Qtd</th>
-                <th style="padding:10px 16px;text-align:right;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Unitário</th>
-                <th style="padding:10px 16px;text-align:right;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>${linhas}</tbody>
-          </table>
+          <div>${linhas}</div>
 
           <div style="display:flex;justify-content:flex-end;margin-top:16px">
             <div style="min-width:240px">

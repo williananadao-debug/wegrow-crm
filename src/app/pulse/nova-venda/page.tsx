@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2 } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica } from '../shared';
@@ -24,9 +24,15 @@ export default function PulseNovaVendaPage() {
   const [clienteResultados, setClienteResultados] = useState<ClienteOpcao[]>([]);
   const [clienteSelecionado, setClienteSelecionado] = useState<ClienteOpcao | null>(null);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
-  const [novoTelefone, setNovoTelefone] = useState('');
-  const [novoCnpj, setNovoCnpj] = useState('');
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Atalho pra cadastrar cliente sem sair da tela de venda — some com o antigo fluxo de
+  // "cliente novo é criado automaticamente ao finalizar", porque agora nenhum item entra
+  // no carrinho sem cliente selecionado (ver clienteDefinido abaixo).
+  const [modalClienteAberto, setModalClienteAberto] = useState(false);
+  const [formCliente, setFormCliente] = useState({ nome_empresa: '', telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
+  const [erroCliente, setErroCliente] = useState<string | null>(null);
 
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [desconto, setDesconto] = useState(0);
@@ -127,6 +133,40 @@ export default function PulseNovaVendaPage() {
   // técnica cadastrada em Produção antes de poder ser vendido, porque é ela que dispara a
   // produção automaticamente ao fechar o pedido.
   const ehSobEncomenda = (s: ServicoConfig) => s.tipo !== 'Matéria-prima' && (s.estoque === null || s.estoque === undefined);
+
+  // Trava o catálogo até ter cliente selecionado — evita montar pedido inteiro e só
+  // descobrir na hora de fechar que esqueceu de vincular o cliente.
+  const clienteDefinido = !!clienteSelecionado;
+
+  const abrirCadastroCliente = (nomeInicial = '') => {
+    setFormCliente({ nome_empresa: nomeInicial, telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
+    setErroCliente(null);
+    setModalClienteAberto(true);
+  };
+
+  const salvarClienteRapido = async () => {
+    if (!formCliente.nome_empresa.trim()) { setErroCliente('Nome é obrigatório.'); return; }
+    setSalvandoCliente(true); setErroCliente(null);
+    try {
+      const { data, error } = await supabase.from('clientes').insert([{
+        nome_empresa: formCliente.nome_empresa.trim(),
+        telefone: formCliente.telefone.trim() || null,
+        cnpj: formCliente.cnpj.trim() || null,
+        email: formCliente.email.trim() || null,
+        cidade: formCliente.cidade.trim() || null,
+        endereco: formCliente.endereco.trim() || null,
+        status: 'ativo', status_risco: 'em_analise', empresa_id: perfil?.empresa_id,
+      }]).select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco').single();
+      if (error) throw error;
+      setClienteSelecionado(data as ClienteOpcao);
+      setClienteQuery(''); setClienteResultados([]);
+      setModalClienteAberto(false);
+    } catch (err: any) {
+      setErroCliente(err?.message || 'Erro ao cadastrar cliente.');
+    } finally {
+      setSalvandoCliente(false);
+    }
+  };
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -260,42 +300,41 @@ export default function PulseNovaVendaPage() {
 
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
-    setNovoTelefone(''); setNovoCnpj(''); setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
+    setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
     setProducoesIniciadas([]);
   };
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);
-    if (!clienteSelecionado && clienteQuery.trim().length < 2) { setErro('Selecione ou digite o nome do cliente.'); return; }
+    if (!clienteSelecionado) { setErro('Selecione ou cadastre o cliente.'); return; }
     if (carrinho.length === 0) { setErro('Adicione pelo menos um item.'); return; }
 
     setSalvando(true);
     try {
-      let clientId = clienteSelecionado?.id ?? null;
-      const nomeCliente = clienteSelecionado?.nome_empresa || clienteQuery.trim();
-
-      if (!clientId) {
-        const { data: novoCliente, error: erroCliente } = await supabase.from('clientes').insert([{
-          nome_empresa: nomeCliente, telefone: novoTelefone || null, cnpj: novoCnpj || null,
-          status: 'ativo', status_risco: 'em_analise', empresa_id: perfil?.empresa_id,
-        }]).select('id').single();
-        if (erroCliente) throw erroCliente;
-        clientId = novoCliente.id;
-      }
+      const clientId = clienteSelecionado.id;
+      const nomeCliente = clienteSelecionado.nome_empresa;
 
       // Extras de configuração viram parte do preço unitário e ficam listados no nome do
       // item — assim aparecem automaticamente no recibo/orçamento e no histórico sem
       // precisar mudar imprimirReciboOuOrcamento ou o formato salvo em leads.itens.
-      const itensPayload = carrinho.map(i => ({
-        servico: i.configuracoes?.length ? `${i.nome} (${i.configuracoes.map(c => c.descricao).join(', ')})` : i.nome,
-        quantidade: i.quantidade,
-        precoUnitario: i.precoUnitario + valorExtras(i),
-      }));
+      // descricao/imagemUrl gravados junto (não só o id) porque o orçamento impresso
+      // precisa mostrar as specs completas mesmo se o produto for editado/removido do
+      // catálogo depois — leads.itens é o snapshot da venda no momento em que foi feita.
+      const itensPayload = carrinho.map(i => {
+        const servicoOriginal = servicos.find(s => s.id === i.servicoId);
+        return {
+          servico: i.configuracoes?.length ? `${i.nome} (${i.configuracoes.map(c => c.descricao).join(', ')})` : i.nome,
+          quantidade: i.quantidade,
+          precoUnitario: i.precoUnitario + valorExtras(i),
+          descricao: servicoOriginal?.descricao || null,
+          imagemUrl: servicoOriginal?.imagem_url || null,
+        };
+      });
 
       const { data: leadData, error: erroLead } = await supabase.from('leads').insert([{
         empresa: nomeCliente,
-        telefone: clienteSelecionado?.telefone || novoTelefone || null,
-        cnpj: clienteSelecionado?.cnpj || novoCnpj || null,
+        telefone: clienteSelecionado.telefone || null,
+        cnpj: clienteSelecionado.cnpj || null,
         valor_total: total,
         desconto,
         itens: itensPayload,
@@ -324,7 +363,7 @@ export default function PulseNovaVendaPage() {
           // Venda fechada direto no Pulse não passa pelo check-in manual de /visitas — sem isso,
           // ranking e relatórios de visita zeravam pra quem vende só por aqui.
           supabase.from('visitas').insert([{
-            empresa: nomeCliente, telefone: clienteSelecionado?.telefone || novoTelefone || null,
+            empresa: nomeCliente, telefone: clienteSelecionado.telefone || null,
             observacao: `Venda Pulse — OS ${formatId(leadData.id)}`,
             user_id: vendedorId || user?.id, empresa_id: perfil?.empresa_id, unidade: unidadeSel || null,
             lead_id: leadData.id,
@@ -511,7 +550,14 @@ export default function PulseNovaVendaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
-            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2 block">Cliente</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block">Cliente</label>
+              {!clienteSelecionado && (
+                <button onClick={() => abrirCadastroCliente()} className="text-[10px] font-black uppercase text-[var(--cor-primaria)] hover:brightness-110 flex items-center gap-1">
+                  <UserPlus size={11} /> Cadastrar cliente
+                </button>
+              )}
+            </div>
             {clienteSelecionado ? (
               <div className="flex items-center justify-between bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] rounded-xl px-4 py-3">
                 <div>
@@ -536,10 +582,10 @@ export default function PulseNovaVendaPage() {
                       </button>
                     ))}
                     {!buscandoCliente && clienteResultados.length === 0 && (
-                      <div className="px-4 py-3 space-y-2">
-                        <p className="text-slate-400 text-xs font-bold">Cliente novo — "{clienteQuery.trim()}" será cadastrado.</p>
-                        <input value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} placeholder="Telefone (opcional)" className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
-                        <input value={novoCnpj} onChange={e => setNovoCnpj(e.target.value)} placeholder="CNPJ/CPF (opcional, precisa pra emitir NF)" className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
+                      <div className="px-4 py-3">
+                        <button onClick={() => abrirCadastroCliente(clienteQuery.trim())} className="w-full flex items-center justify-center gap-1.5 bg-white/5 hover:bg-white/10 text-[var(--cor-primaria)] font-black text-xs uppercase py-2.5 rounded-lg transition-colors">
+                          <UserPlus size={13} /> Cadastrar &quot;{clienteQuery.trim()}&quot;
+                        </button>
                       </div>
                     )}
                   </div>
@@ -548,7 +594,14 @@ export default function PulseNovaVendaPage() {
             )}
           </div>
 
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 relative">
+            {!clienteDefinido && (
+              <div className="absolute inset-0 z-10 bg-[#0F172A]/95 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center gap-2 text-center p-6">
+                <Lock size={26} className="text-slate-600" />
+                <p className="text-slate-300 font-black text-sm uppercase">Selecione um cliente para começar</p>
+                <p className="text-slate-500 text-xs">Escolha um cliente existente ou cadastre um novo acima antes de montar o pedido.</p>
+              </div>
+            )}
             {catalogoGrande && (
               <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
                 <Search size={14} className="text-slate-500 flex-shrink-0" />
@@ -617,7 +670,7 @@ export default function PulseNovaVendaPage() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
             <div className="flex items-center justify-between mb-3">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block">Pedido</label>
-              <button onClick={abrirCriarPersonalizado} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
+              <button onClick={abrirCriarPersonalizado} disabled={!clienteDefinido} className="text-[10px] font-black uppercase text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors">
                 <Plus size={11} /> Produto personalizado
               </button>
             </div>
@@ -841,6 +894,35 @@ export default function PulseNovaVendaPage() {
           </div>
         );
       })()}
+
+      {modalClienteAberto && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalClienteAberto(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-sm p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white font-black text-sm uppercase flex items-center gap-1.5"><UserPlus size={14} /> Cadastrar cliente</p>
+              <button onClick={() => setModalClienteAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={16} /></button>
+            </div>
+            <div className="space-y-2">
+              <input value={formCliente.nome_empresa} onChange={e => setFormCliente(p => ({ ...p, nome_empresa: e.target.value }))} placeholder="Nome / Razão social *" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <input value={formCliente.telefone} onChange={e => setFormCliente(p => ({ ...p, telefone: e.target.value }))} placeholder="Telefone" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <input value={formCliente.cnpj} onChange={e => setFormCliente(p => ({ ...p, cnpj: e.target.value }))} placeholder="CNPJ/CPF (precisa pra emitir NF)" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <input value={formCliente.email} onChange={e => setFormCliente(p => ({ ...p, email: e.target.value }))} placeholder="E-mail" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={formCliente.cidade} onChange={e => setFormCliente(p => ({ ...p, cidade: e.target.value }))} placeholder="Cidade" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                <input value={formCliente.endereco} onChange={e => setFormCliente(p => ({ ...p, endereco: e.target.value }))} placeholder="Endereço" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              </div>
+            </div>
+            {erroCliente && <p className="text-red-400 text-xs font-bold mt-2">{erroCliente}</p>}
+            <button
+              onClick={salvarClienteRapido}
+              disabled={salvandoCliente || !formCliente.nome_empresa.trim()}
+              className="w-full mt-4 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2"
+            >
+              {salvandoCliente ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={14} />} {salvandoCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

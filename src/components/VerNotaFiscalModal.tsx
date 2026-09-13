@@ -50,7 +50,7 @@ export default function VerNotaFiscalModal({ aberto, onFechar, notaId }: { abert
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onFechar}>
-      <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Receipt size={20} className="text-purple-400" /> Nota Fiscal</h3>
           <button onClick={onFechar} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
@@ -63,9 +63,9 @@ export default function VerNotaFiscalModal({ aberto, onFechar, notaId }: { abert
         ) : (
           <div className="space-y-4">
             <div className="bg-black/30 border border-white/5 rounded-2xl p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-white font-black text-base">{nota.nome_participante || 'Sem fornecedor/cliente informado'}</p>
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-full bg-white/5 text-slate-400">{nota.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-white font-black text-base truncate min-w-0">{nota.nome_participante || 'Sem fornecedor/cliente informado'}</p>
+                <span className="shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full bg-white/5 text-slate-400">{nota.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
               </div>
               {nota.cnpj_participante && <p className="text-slate-500 text-xs">CNPJ {nota.cnpj_participante}</p>}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 pt-1">
@@ -74,7 +74,11 @@ export default function VerNotaFiscalModal({ aberto, onFechar, notaId }: { abert
                 <span><b className="text-slate-300">Lançada em</b> {new Date(nota.created_at).toLocaleDateString('pt-BR')}</span>
               </div>
               {nota.chave_acesso && <p className="text-slate-600 text-[10px] font-mono break-all">{nota.chave_acesso}</p>}
-              {nota.observacao && <p className="text-slate-500 text-xs italic pt-1">{nota.observacao}</p>}
+              {nota.observacao && (
+                <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 mt-1 max-h-28 overflow-y-auto">
+                  <p className="text-slate-500 text-[10px] italic break-all whitespace-pre-wrap leading-relaxed">{nota.observacao}</p>
+                </div>
+              )}
             </div>
 
             <div>

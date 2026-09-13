@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica } from '../shared';
@@ -38,6 +38,13 @@ export default function PulseNovaVendaPage() {
   const [avulsoValor, setAvulsoValor] = useState('');
   const [avulsoQtd, setAvulsoQtd] = useState('1');
   const proximoIdAvulsoRef = useRef(-1);
+
+  // Detalhe expandido do produto (imagem grande + descrição completa) — abre por um
+  // botão próprio no card, separado do clique que adiciona ao pedido.
+  const [produtoDetalhe, setProdutoDetalhe] = useState<ServicoConfig | null>(null);
+  // "Agora" travado num state em vez de Date.now() direto no cálculo — chamar função
+  // impura no render quebra a regra de pureza do React.
+  const [agora] = useState(() => Date.now());
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -176,6 +183,22 @@ export default function PulseNovaVendaPage() {
 
   const subtotal = carrinho.reduce((acc, i) => acc + i.precoUnitario * i.quantidade, 0);
   const total = Math.max(0, subtotal - desconto);
+
+  // Prazo de entrega estimado — pega o MAIOR prazo de fabricação entre os itens sob
+  // encomenda do carrinho (o pedido só sai quando todo item estiver pronto, não faz
+  // sentido prometer a data do mais rápido). Item avulso/personalizado e produto com
+  // estoque pronto não têm prazo de fabricação, ficam de fora da conta.
+  const prazoEstimado = useMemo(() => {
+    const servicoPorId = new Map(servicos.map(s => [s.id, s]));
+    const prazos = carrinho
+      .map(i => servicoPorId.get(i.servicoId)?.prazo_fabricacao_dias)
+      .filter((d): d is number => typeof d === 'number' && d > 0);
+    if (prazos.length === 0) return null;
+    const maiorPrazo = Math.max(...prazos);
+    const data = new Date(agora);
+    data.setDate(data.getDate() + maiorPrazo);
+    return { dias: maiorPrazo, data };
+  }, [carrinho, servicos, agora]);
 
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setClienteSelecionado(null); setClienteQuery('');
@@ -468,22 +491,40 @@ export default function PulseNovaVendaPage() {
             {loadingServicos ? (
               <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
                 {servicosFiltrados.map(s => {
                   const semEstoque = s.estoque !== null && s.estoque !== undefined && s.estoque <= 0;
                   return (
-                    <button key={s.id} disabled={semEstoque} onClick={() => adicionarItem(s)} className={`text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-xl overflow-hidden transition-all disabled:opacity-40 disabled:cursor-not-allowed`}>
-                      <div className="h-16 bg-white/5 flex items-center justify-center overflow-hidden">
-                        {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={20} className="text-slate-600" />}
+                    <div
+                      key={s.id} role="button" tabIndex={semEstoque ? -1 : 0}
+                      onClick={() => !semEstoque && adicionarItem(s)}
+                      onKeyDown={e => { if (!semEstoque && (e.key === 'Enter' || e.key === ' ')) adicionarItem(s); }}
+                      className={`relative text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-2xl overflow-hidden transition-all ${semEstoque ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <div className="h-36 bg-white/5 flex items-center justify-center overflow-hidden">
+                        {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={32} className="text-slate-600" />}
                       </div>
-                      <div className="p-2.5">
-                        <p className="text-white text-xs font-bold truncate">{s.nome}</p>
-                        <p className="text-[var(--cor-primaria)] text-sm font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        {s.estoque !== null && s.estoque !== undefined ? (
-                          <p className={`text-[9px] font-bold mt-0.5 ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</p>
-                        ) : null}
+                      {s.descricao && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setProdutoDetalhe(s); }}
+                          title="Ver descrição completa"
+                          className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full text-white transition-colors"
+                        >
+                          <Info size={14} />
+                        </button>
+                      )}
+                      <div className="p-3">
+                        <p className="text-white text-sm font-bold leading-snug">{s.nome}</p>
+                        <p className="text-[var(--cor-primaria)] text-base font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {s.estoque !== null && s.estoque !== undefined ? (
+                            <span className={`text-[9px] font-bold ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</span>
+                          ) : s.prazo_fabricacao_dias ? (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase"><Factory size={9} /> ~{s.prazo_fabricacao_dias}d</span>
+                          ) : null}
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
                 {servicosFiltrados.length === 0 && <p className="col-span-full text-center text-slate-500 text-xs font-bold py-6">Nenhum produto encontrado.</p>}
@@ -550,6 +591,12 @@ export default function PulseNovaVendaPage() {
                 <span className="text-white font-black uppercase text-sm">Total</span>
                 <span className="text-[var(--cor-primaria)] font-black text-xl">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
+              {prazoEstimado && (
+                <div className="flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 mt-1">
+                  <span className="text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Factory size={11} /> Previsão de entrega</span>
+                  <span className="text-white text-xs font-black">{prazoEstimado.data.toLocaleDateString('pt-BR')} <span className="text-amber-400 font-bold">(~{prazoEstimado.dias}d)</span></span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -597,6 +644,36 @@ export default function PulseNovaVendaPage() {
           </div>
         </div>
       </div>
+
+      {produtoDetalhe && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setProdutoDetalhe(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="h-56 bg-white/5 flex items-center justify-center overflow-hidden relative">
+              {produtoDetalhe.imagem_url ? <img src={produtoDetalhe.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={48} className="text-slate-600" />}
+              <button onClick={() => setProdutoDetalhe(null)} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white"><X size={16} /></button>
+            </div>
+            <div className="p-5">
+              <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
+              <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              {produtoDetalhe.prazo_fabricacao_dias && (
+                <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
+                  <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
+                </p>
+              )}
+              {produtoDetalhe.descricao && (
+                <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
+              )}
+              <button
+                onClick={() => { adicionarItem(produtoDetalhe); setProdutoDetalhe(null); }}
+                disabled={produtoDetalhe.estoque !== null && produtoDetalhe.estoque !== undefined && produtoDetalhe.estoque <= 0}
+                className="w-full mt-5 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-40 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+              >
+                <Plus size={14} /> Adicionar ao pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

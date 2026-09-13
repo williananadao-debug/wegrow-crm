@@ -635,42 +635,24 @@ export default function SettingsPage() {
 
                     {temPulse && (
                         <div className="col-span-12 flex flex-wrap items-center gap-2 pl-0 md:pl-11 -mt-1">
-                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Estoque</span>
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Controla estoque</span>
                             <button
                                 type="button"
-                                onClick={() => atualizarServico(servico.id, 'estoque', Math.max(0, (servico.estoque ?? 0) - 1))}
-                                className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-300 text-xs font-black"
-                            >−</button>
-                            <input
-                                type="number"
-                                value={servico.estoque ?? ''}
-                                onChange={(e) => atualizarServico(servico.id, 'estoque', e.target.value === '' ? null : Number(e.target.value))}
-                                className={`w-20 bg-[#0F172A] border rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-[var(--cor-primaria)] text-center ${servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) ? 'border-red-500/40' : 'border-white/5'}`}
-                                placeholder="não controla"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => atualizarServico(servico.id, 'estoque', (servico.estoque ?? 0) + 1)}
-                                className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded text-slate-300 text-xs font-black"
-                            >+</button>
+                                onClick={() => atualizarServico(servico.id, 'estoque', servico.estoque !== null && servico.estoque !== undefined ? null : 0)}
+                                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${servico.estoque !== null && servico.estoque !== undefined ? 'bg-[var(--cor-primaria)]' : 'bg-white/10'}`}
+                            >
+                                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${servico.estoque !== null && servico.estoque !== undefined ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                            </button>
+                            {/* Quantidade e mínimo NÃO se editam aqui de propósito — mexer direto nesse número
+                                pula o Kardex (histórico de entrada/saída) que o Pulse mantém. Isso é só o
+                                interruptor "esse produto tem controle de estoque?"; ajuste de quantidade e
+                                limiar de alerta ficam só em /pulse/estoque. */}
                             {servico.estoque !== null && servico.estoque !== undefined && (
-                                <>
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Mín.</span>
-                                    <input
-                                        type="number"
-                                        value={servico.estoque_minimo ?? 5}
-                                        onChange={(e) => atualizarServico(servico.id, 'estoque_minimo', e.target.value === '' ? 5 : Number(e.target.value))}
-                                        className="w-14 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-amber-500 text-center"
-                                    />
-                                </>
+                                <span className="text-slate-400 text-xs font-bold">{servico.estoque} em estoque{(servico.estoque as number) <= (servico.estoque_minimo ?? 5) ? <span className="text-red-400 font-black uppercase ml-1.5">· baixo</span> : null}</span>
                             )}
-                            {servico.estoque !== null && servico.estoque !== undefined && servico.estoque <= (servico.estoque_minimo ?? 5) && (
-                                <span className="text-[9px] font-black text-red-400 uppercase">estoque baixo</span>
-                            )}
-                            <span className="text-[9px] text-slate-600">deixe em branco pra não controlar estoque desse item</span>
                             {!servico.id.startsWith('temp-') && servico.estoque !== null && servico.estoque !== undefined && (
                                 <Link href="/pulse/estoque" className="ml-auto flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1 text-[9px] font-black text-slate-300 hover:text-white uppercase tracking-widest transition-all">
-                                    <Boxes size={11} /> Ver estoque
+                                    <Boxes size={11} /> Ajustar no Estoque
                                 </Link>
                             )}
                         </div>

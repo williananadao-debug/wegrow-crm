@@ -104,6 +104,15 @@ export default function PulseEstoquePage() {
     }
   };
 
+  // Estoque mínimo é o limiar que dispara o alerta de "estoque baixo" — mora aqui (não
+  // mais em Configurações → Produtos) porque é dado operacional de estoque, não
+  // identidade do produto. Movido de lá pra cá pra não ficar controle de quantidade
+  // espalhado em duas telas diferentes.
+  const atualizarMinimo = async (s: ServicoConfig, valor: number) => {
+    setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque_minimo: valor } : x));
+    await supabase.from('servicos').update({ estoque_minimo: valor }).eq('id', s.id);
+  };
+
   const abrirAjuste = (s: ServicoConfig) => {
     setAjusteServico(s); setAjusteTipo('entrada'); setAjusteQtd(''); setAjusteMotivo(''); setAjusteMotivoCat('compra');
   };
@@ -159,6 +168,14 @@ export default function PulseEstoquePage() {
         <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
         <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
         <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
+        <div className="flex items-center gap-1 shrink-0" title="Estoque mínimo — dispara o alerta de estoque baixo">
+          <span className="text-[9px] font-black text-slate-600 uppercase">mín.</span>
+          <input
+            type="number" min="0" value={s.estoque_minimo ?? 5}
+            onChange={e => atualizarMinimo(s, e.target.value === '' ? 0 : Number(e.target.value))}
+            className="w-10 bg-black/30 border border-white/10 rounded-lg px-1 py-1 text-slate-300 text-xs text-center outline-none focus:border-amber-500"
+          />
+        </div>
         {baixo && <span className="text-[9px] font-black text-red-400 uppercase ml-1">baixo</span>}
       </div>
     );

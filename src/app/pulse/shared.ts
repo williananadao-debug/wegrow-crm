@@ -31,7 +31,17 @@ export function etapasFabricacaoDe(modulos: Record<string, any> | null | undefin
 // sob medida — "teto elétrico extra", "revestimento premium"). servicoId nesse caso é só
 // uma chave local negativa pro React, nunca é gravado como FK em lugar nenhum — não
 // mexe em estoque/produção, só soma no valor da venda.
-export type ItemCarrinho = { servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null; avulso?: boolean; };
+//
+// configuracoes: extras anexados a ESSE item específico do pedido (ex: trailer sob
+// encomenda + "teto elétrico" + "revestimento premium") — cada um soma (ou desconta, se
+// valor negativo) uma vez na linha, não multiplica pela quantidade (faz sentido pra
+// trailer, sempre vendido em unidade). Diferente do item avulso (que é uma linha própria
+// no pedido) — configuração vive DENTRO da linha do produto principal.
+export type ConfiguracaoItem = { chave: string; descricao: string; valor: number };
+export type ItemCarrinho = {
+  servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null;
+  avulso?: boolean; configuracoes?: ConfiguracaoItem[];
+};
 
 export type VendaPulse = {
   id: number; empresa: string; valor_total: number; created_at: string; forma_pagamento?: string | null;

@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ClienteOpcao, ServicoConfig, ItemCarrinho, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica } from '../shared';
+import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica } from '../shared';
+
+const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
 export default function PulseNovaVendaPage() {
   const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
@@ -28,6 +30,7 @@ export default function PulseNovaVendaPage() {
 
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [desconto, setDesconto] = useState(0);
+  const [acrescimo, setAcrescimo] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState('pix');
 
   // Item avulso = projeto personalizado / customização fora do catálogo (ex: trailer sob
@@ -39,9 +42,16 @@ export default function PulseNovaVendaPage() {
   const [avulsoQtd, setAvulsoQtd] = useState('1');
   const proximoIdAvulsoRef = useRef(-1);
 
-  // Detalhe expandido do produto (imagem grande + descrição completa) — abre por um
-  // botão próprio no card, separado do clique que adiciona ao pedido.
+  // Detalhe expandido do produto (imagem grande + descrição completa). Pra item sob
+  // encomenda (trailer), dobra de função como CONFIGURADOR: some com o botão "Adicionar
+  // ao pedido" simples e some com uma seção de extras (configuração/personalização, cada
+  // um com seu valor — soma ou desconta do preço base). editandoServicoId != null =
+  // reabriu pra editar um item que já está no carrinho (substitui em vez de duplicar).
   const [produtoDetalhe, setProdutoDetalhe] = useState<ServicoConfig | null>(null);
+  const [extrasConfigurando, setExtrasConfigurando] = useState<ConfiguracaoItem[]>([]);
+  const [novoExtraDescricao, setNovoExtraDescricao] = useState('');
+  const [novoExtraValor, setNovoExtraValor] = useState('');
+  const [editandoServicoId, setEditandoServicoId] = useState<number | null>(null);
   // "Agora" travado num state em vez de Date.now() direto no cálculo — chamar função
   // impura no render quebra a regra de pureza do React.
   const [agora] = useState(() => Date.now());
@@ -139,10 +149,13 @@ export default function PulseNovaVendaPage() {
     }, 350);
   }, [clienteQuery, perfil?.empresa_id]);
 
-  const servicosFiltrados = servicos.filter(s => {
-    if (s.tipo === 'Matéria-prima') return false; // não vende matéria-prima direto pro cliente
-    if (s.unidade && s.unidade !== unidadeSel) return false;
-    if (!busca.trim()) return true;
+  // Catálogo pequeno (poucos produtos) não precisa de busca — todo mundo já cabe na
+  // tela, o campo só ocupava espaço. Com catálogo grande (ex: pacotes de mídia da rádio),
+  // a busca volta sozinha.
+  const servicosVenda = servicos.filter(s => s.tipo !== 'Matéria-prima' && (!s.unidade || s.unidade === unidadeSel));
+  const catalogoGrande = servicosVenda.length > 6;
+  const servicosFiltrados = servicosVenda.filter(s => {
+    if (!catalogoGrande || !busca.trim()) return true;
     return s.nome.toLowerCase().includes(busca.trim().toLowerCase());
   });
 
@@ -159,6 +172,42 @@ export default function PulseNovaVendaPage() {
       return [...prev, { servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: maxima }];
     });
   };
+
+  const abrirConfigurador = (s: ServicoConfig, extrasIniciais: ConfiguracaoItem[] = [], editando = false) => {
+    setProdutoDetalhe(s);
+    setExtrasConfigurando(extrasIniciais);
+    setNovoExtraDescricao(''); setNovoExtraValor('');
+    setEditandoServicoId(editando ? s.id : null);
+  };
+
+  const adicionarExtraConfiguracao = () => {
+    const valor = Number(novoExtraValor);
+    if (!novoExtraDescricao.trim() || !valor) return;
+    setExtrasConfigurando(prev => [...prev, { chave: novaChaveExtra(), descricao: novoExtraDescricao.trim(), valor }]);
+    setNovoExtraDescricao(''); setNovoExtraValor('');
+  };
+  const removerExtraConfiguracao = (chave: string) => setExtrasConfigurando(prev => prev.filter(e => e.chave !== chave));
+
+  // Confirma o item sob configuração — soma quantidade se já existia igual no carrinho
+  // (sem editar), ou substitui a linha inteira se veio de "editar" um item já existente.
+  const confirmarConfiguracao = () => {
+    if (!produtoDetalhe) return;
+    const s = produtoDetalhe;
+    const extras = extrasConfigurando.length > 0 ? extrasConfigurando : undefined;
+    setCarrinho(prev => {
+      if (editandoServicoId != null) {
+        return prev.map(i => i.servicoId === editandoServicoId ? { ...i, configuracoes: extras } : i);
+      }
+      const existente = prev.find(i => i.servicoId === s.id);
+      if (existente) {
+        return prev.map(i => i.servicoId === s.id ? { ...i, quantidade: i.quantidade + 1, configuracoes: extras ?? i.configuracoes } : i);
+      }
+      return [...prev, { servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: s.estoque ?? null, configuracoes: extras }];
+    });
+    setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]);
+  };
+
+  const valorExtras = (i: ItemCarrinho) => (i.configuracoes || []).reduce((s, c) => s + c.valor, 0);
 
   const alterarQuantidade = (servicoId: number, delta: number) => {
     setCarrinho(prev => prev.map(i => {
@@ -181,8 +230,8 @@ export default function PulseNovaVendaPage() {
     setAvulsoDescricao(''); setAvulsoValor(''); setAvulsoQtd('1'); setMostrarItemAvulso(false);
   };
 
-  const subtotal = carrinho.reduce((acc, i) => acc + i.precoUnitario * i.quantidade, 0);
-  const total = Math.max(0, subtotal - desconto);
+  const subtotal = carrinho.reduce((acc, i) => acc + (i.precoUnitario + valorExtras(i)) * i.quantidade, 0);
+  const total = Math.max(0, subtotal - desconto + acrescimo);
 
   // Prazo de entrega estimado — pega o MAIOR prazo de fabricação entre os itens sob
   // encomenda do carrinho (o pedido só sai quando todo item estiver pronto, não faz
@@ -201,7 +250,7 @@ export default function PulseNovaVendaPage() {
   }, [carrinho, servicos, agora]);
 
   const resetar = () => {
-    setCarrinho([]); setDesconto(0); setClienteSelecionado(null); setClienteQuery('');
+    setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
     setNovoTelefone(''); setNovoCnpj(''); setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
     setProducoesIniciadas([]);
   };
@@ -225,7 +274,14 @@ export default function PulseNovaVendaPage() {
         clientId = novoCliente.id;
       }
 
-      const itensPayload = carrinho.map(i => ({ servico: i.nome, quantidade: i.quantidade, precoUnitario: i.precoUnitario }));
+      // Extras de configuração viram parte do preço unitário e ficam listados no nome do
+      // item — assim aparecem automaticamente no recibo/orçamento e no histórico sem
+      // precisar mudar imprimirReciboOuOrcamento ou o formato salvo em leads.itens.
+      const itensPayload = carrinho.map(i => ({
+        servico: i.configuracoes?.length ? `${i.nome} (${i.configuracoes.map(c => c.descricao).join(', ')})` : i.nome,
+        quantidade: i.quantidade,
+        precoUnitario: i.precoUnitario + valorExtras(i),
+      }));
 
       const { data: leadData, error: erroLead } = await supabase.from('leads').insert([{
         empresa: nomeCliente,
@@ -484,29 +540,37 @@ export default function PulseNovaVendaPage() {
           </div>
 
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
-            <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
-              <Search size={14} className="text-slate-500 flex-shrink-0" />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto no catálogo..." className="flex-1 bg-transparent outline-none text-white text-sm" />
-            </div>
+            {catalogoGrande && (
+              <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
+                <Search size={14} className="text-slate-500 flex-shrink-0" />
+                <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto no catálogo..." className="flex-1 bg-transparent outline-none text-white text-sm" />
+              </div>
+            )}
             {loadingServicos ? (
               <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
             ) : (
               <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
                 {servicosFiltrados.map(s => {
                   const semEstoque = s.estoque !== null && s.estoque !== undefined && s.estoque <= 0;
+                  // Sob encomenda (trailer) abre o configurador — o clique rápido só faz
+                  // sentido pra item de prateleira, onde não tem nada a personalizar.
+                  const aoClicar = () => {
+                    if (semEstoque) return;
+                    if (ehSobEncomenda(s)) abrirConfigurador(s); else adicionarItem(s);
+                  };
                   return (
                     <div
                       key={s.id} role="button" tabIndex={semEstoque ? -1 : 0}
-                      onClick={() => !semEstoque && adicionarItem(s)}
-                      onKeyDown={e => { if (!semEstoque && (e.key === 'Enter' || e.key === ' ')) adicionarItem(s); }}
+                      onClick={aoClicar}
+                      onKeyDown={e => { if (!semEstoque && (e.key === 'Enter' || e.key === ' ')) aoClicar(); }}
                       className={`relative text-left bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 hover:border-white/20 rounded-2xl overflow-hidden transition-all ${semEstoque ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       <div className="h-36 bg-white/5 flex items-center justify-center overflow-hidden">
                         {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={32} className="text-slate-600" />}
                       </div>
-                      {s.descricao && (
+                      {s.descricao && !ehSobEncomenda(s) && (
                         <button
-                          onClick={e => { e.stopPropagation(); setProdutoDetalhe(s); }}
+                          onClick={e => { e.stopPropagation(); abrirConfigurador(s); }}
                           title="Ver descrição completa"
                           className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full text-white transition-colors"
                         >
@@ -560,21 +624,39 @@ export default function PulseNovaVendaPage() {
               <p className="text-slate-500 text-xs font-bold text-center py-6">Nenhum item ainda.</p>
             ) : (
               <div className="space-y-2 mb-4">
-                {carrinho.map(i => (
-                  <div key={i.servicoId} className="flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-white text-xs font-bold truncate">{i.nome}</p>
-                        {i.avulso && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded bg-white/10 text-slate-400 uppercase">Personalizado</span>}
+                {carrinho.map(i => {
+                  const servicoOriginal = servicos.find(s => s.id === i.servicoId);
+                  const podeConfigurar = !i.avulso && servicoOriginal && ehSobEncomenda(servicoOriginal);
+                  return (
+                    <div key={i.servicoId} className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-white text-xs font-bold truncate">{i.nome}</p>
+                            {i.avulso && <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded bg-white/10 text-slate-400 uppercase">Personalizado</span>}
+                          </div>
+                          <p className="text-slate-500 text-[10px]">R$ {(i.precoUnitario + valorExtras(i)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
+                        </div>
+                        {podeConfigurar && (
+                          <button onClick={() => abrirConfigurador(servicoOriginal, i.configuracoes || [], true)} title="Editar configuração" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white shrink-0"><Pencil size={11} /></button>
+                        )}
+                        <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 shrink-0"><Minus size={12} /></button>
+                        <span className="text-white text-xs font-black w-5 text-center shrink-0">{i.quantidade}</span>
+                        <button onClick={() => alterarQuantidade(i.servicoId, 1)} disabled={i.estoqueMax !== null && i.quantidade >= i.estoqueMax} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 disabled:opacity-30 shrink-0"><Plus size={12} /></button>
+                        <button onClick={() => removerItem(i.servicoId)} className="text-slate-600 hover:text-red-400 p-1 shrink-0"><Trash2 size={13} /></button>
                       </div>
-                      <p className="text-slate-500 text-[10px]">R$ {i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
+                      {i.configuracoes && i.configuracoes.length > 0 && (
+                        <div className="mt-1.5 pl-2 border-l-2 border-white/10 space-y-0.5">
+                          {i.configuracoes.map(ex => (
+                            <p key={ex.chave} className="text-[10px] text-slate-500">
+                              {ex.descricao} <span className={ex.valor >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}>({ex.valor >= 0 ? '+' : ''}R$ {ex.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={12} /></button>
-                    <span className="text-white text-xs font-black w-5 text-center">{i.quantidade}</span>
-                    <button onClick={() => alterarQuantidade(i.servicoId, 1)} disabled={i.estoqueMax !== null && i.quantidade >= i.estoqueMax} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 disabled:opacity-30"><Plus size={12} /></button>
-                    <button onClick={() => removerItem(i.servicoId)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={13} /></button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -586,6 +668,10 @@ export default function PulseNovaVendaPage() {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400 font-bold text-xs">Desconto R$</span>
                 <input type="number" value={desconto || ''} onChange={e => setDesconto(Math.max(0, Number(e.target.value) || 0))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400 font-bold text-xs">Acréscimo R$</span>
+                <input type="number" value={acrescimo || ''} onChange={e => setAcrescimo(Math.max(0, Number(e.target.value) || 0))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-white/5">
                 <span className="text-white font-black uppercase text-sm">Total</span>
@@ -645,35 +731,72 @@ export default function PulseNovaVendaPage() {
         </div>
       </div>
 
-      {produtoDetalhe && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setProdutoDetalhe(null)}>
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="h-56 bg-white/5 flex items-center justify-center overflow-hidden relative">
-              {produtoDetalhe.imagem_url ? <img src={produtoDetalhe.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={48} className="text-slate-600" />}
-              <button onClick={() => setProdutoDetalhe(null)} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white"><X size={16} /></button>
-            </div>
-            <div className="p-5">
-              <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
-              <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-              {produtoDetalhe.prazo_fabricacao_dias && (
-                <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
-                  <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
-                </p>
-              )}
-              {produtoDetalhe.descricao && (
-                <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
-              )}
-              <button
-                onClick={() => { adicionarItem(produtoDetalhe); setProdutoDetalhe(null); }}
-                disabled={produtoDetalhe.estoque !== null && produtoDetalhe.estoque !== undefined && produtoDetalhe.estoque <= 0}
-                className="w-full mt-5 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-40 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <Plus size={14} /> Adicionar ao pedido
-              </button>
+      {produtoDetalhe && (() => {
+        const configuravel = ehSobEncomenda(produtoDetalhe);
+        const totalExtras = extrasConfigurando.reduce((s, e) => s + e.valor, 0);
+        const fecharModal = () => { setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); };
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={fecharModal}>
+            <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="h-48 bg-white/5 flex items-center justify-center overflow-hidden relative shrink-0">
+                {produtoDetalhe.imagem_url ? <img src={produtoDetalhe.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={48} className="text-slate-600" />}
+                <button onClick={fecharModal} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white"><X size={16} /></button>
+              </div>
+              <div className="p-5">
+                <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
+                <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                {produtoDetalhe.prazo_fabricacao_dias && (
+                  <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
+                    <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
+                  </p>
+                )}
+                {produtoDetalhe.descricao && (
+                  <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
+                )}
+
+                {configuravel && (
+                  <div className="border-t border-white/5 mt-4 pt-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><Settings2 size={12} /> Configuração / itens adicionais</p>
+                    {extrasConfigurando.length > 0 && (
+                      <div className="space-y-1.5 mb-2">
+                        {extrasConfigurando.map(ex => (
+                          <div key={ex.chave} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5">
+                            <span className="text-slate-300 text-xs">{ex.descricao}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs font-bold ${ex.valor >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{ex.valor >= 0 ? '+' : ''}R$ {ex.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              <button onClick={() => removerExtraConfiguracao(ex.chave)} className="text-slate-600 hover:text-red-400"><Trash2 size={12} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <input value={novoExtraDescricao} onChange={e => setNovoExtraDescricao(e.target.value)} placeholder="Ex: Teto elétrico, cor personalizada..." className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                      <input type="number" step="0.01" value={novoExtraValor} onChange={e => setNovoExtraValor(e.target.value)} placeholder="R$ (+/-)" className="w-24 shrink-0 bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                      <button onClick={adicionarExtraConfiguracao} disabled={!novoExtraDescricao.trim() || !Number(novoExtraValor)} className="shrink-0 bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white p-2 rounded-lg"><Plus size={14} /></button>
+                    </div>
+                    <p className="text-slate-600 text-[9px] font-bold mt-1.5">Valor negativo desconta do projeto (ex: -500 pra tirar um item de série); positivo acrescenta.</p>
+                    {totalExtras !== 0 && (
+                      <div className="flex items-center justify-between pt-2 mt-2 border-t border-white/5 text-xs">
+                        <span className="text-slate-400 font-bold">Total do item (com configuração)</span>
+                        <span className="text-white font-black">R$ {(produtoDetalhe.preco + totalExtras).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={confirmarConfiguracao}
+                  disabled={produtoDetalhe.estoque !== null && produtoDetalhe.estoque !== undefined && produtoDetalhe.estoque <= 0}
+                  className="w-full mt-5 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-40 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+                >
+                  <Plus size={14} /> {editandoServicoId != null ? 'Salvar alterações' : 'Adicionar ao pedido'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

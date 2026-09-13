@@ -7,7 +7,7 @@ import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou } from './shared';
 
 export default function PulsePainelPage() {
-  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
+  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa } = usePulseAccess();
 
   const [vendas, setVendas] = useState<VendaPulse[]>([]);
   const [loadingVendas, setLoadingVendas] = useState(true);
@@ -310,7 +310,7 @@ export default function PulsePainelPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className="font-black text-white">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade))} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                  <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade), empresa)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Orçamento
                   </button>
                   <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
@@ -349,7 +349,7 @@ export default function PulsePainelPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className="font-black text-white">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade))} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                  <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade), empresa)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Recibo
                   </button>
                   {v.nfse_pdf_url ? (

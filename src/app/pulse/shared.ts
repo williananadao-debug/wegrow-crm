@@ -41,6 +41,10 @@ export type ConfiguracaoItem = { chave: string; descricao: string; valor: number
 export type ItemCarrinho = {
   servicoId: number; nome: string; quantidade: number; precoUnitario: number; estoqueMax: number | null;
   avulso?: boolean; configuracoes?: ConfiguracaoItem[];
+  // Só usado por produto 100% personalizado (avulso, fora do catálogo) — produto de
+  // catálogo tem esse prazo no próprio cadastro (servicos.prazo_fabricacao_dias),
+  // personalizado não tem de onde puxar, por isso carrega o valor direto na linha.
+  prazoFabricacaoDias?: number | null;
 };
 
 export type VendaPulse = {
@@ -67,28 +71,117 @@ export const getLocalYYYYMMDD = (date: Date) => {
 
 export const formatCompact = (num: number) => num >= 1000 ? (num / 1000).toFixed(1).replace('.0', '') + 'k' : (num % 1 === 0 ? num.toString() : num.toFixed(2));
 
-export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any) {
+export type EmpresaImpressao = { nome?: string | null; logo_url?: string | null; cor_primaria?: string | null };
+
+// Cor da marca sempre precisa de fallback: nem toda empresa configurou cor_primaria
+// ainda (campo relativamente novo), e o documento não pode ficar sem nenhuma cor.
+const corMarca = (empresaInfo?: EmpresaImpressao) => empresaInfo?.cor_primaria || '#22C55E';
+
+export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any, empresaInfo?: EmpresaImpressao) {
   const ehOrcamento = alvo.status === 'orcamento';
   const rotulo = ehOrcamento ? 'Orçamento' : 'Recibo';
   const itens = alvo.itens || [];
-  const janela = window.open('', '', 'width=420,height=600');
+  const cor = corMarca(empresaInfo);
+
+  // Orçamento é documento que o cliente recebe e olha antes de decidir — merece
+  // identidade visual de verdade (logo, cor da marca, layout de proposta). Recibo é só
+  // comprovante de pagamento interno, formato compacto de cupom continua servindo bem.
+  if (!ehOrcamento) {
+    const janela = window.open('', '', 'width=420,height=600');
+    if (!janela) return;
+    const linhas = itens.map((i: any) =>
+      `<tr><td style="padding:4px 0">${i.quantidade}x ${i.servico}</td><td style="text-align:right;padding:4px 0">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>`
+    ).join('');
+    janela.document.write(`
+      <html><head><title>${rotulo} ${formatId(alvo.id)}</title></head>
+      <body style="font-family:monospace;font-size:12px;padding:16px;max-width:360px;margin:0 auto;">
+        <h2 style="text-align:center;margin:0 0 4px;">${unidadeInfo?.razao_social || unidadeInfo?.nome || ''}</h2>
+        ${unidadeInfo?.cnpj ? `<p style="text-align:center;margin:0 0 12px;">CNPJ ${unidadeInfo.cnpj}</p>` : ''}
+        <hr/>
+        <p><b>${rotulo}:</b> ${formatId(alvo.id)}<br/><b>Cliente:</b> ${alvo.empresa}<br/><b>Data:</b> ${new Date(alvo.created_at || Date.now()).toLocaleString('pt-BR')}</p>
+        <hr/>
+        <table style="width:100%;border-collapse:collapse;">${linhas}</table>
+        <hr/>
+        <h3 style="color:${cor}">TOTAL: R$ ${alvo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+        <p>Pagamento: ${FORMAS_PAGAMENTO[alvo.forma_pagamento] || alvo.forma_pagamento || ''}</p>
+        <script>window.onload = function(){ window.print(); }</script>
+      </body></html>
+    `);
+    janela.document.close();
+    return;
+  }
+
+  const janela = window.open('', '', 'width=860,height=1000');
   if (!janela) return;
-  const linhas = itens.map((i: any) =>
-    `<tr><td style="padding:4px 0">${i.quantidade}x ${i.servico}</td><td style="text-align:right;padding:4px 0">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>`
+  const nomeEmpresa = unidadeInfo?.razao_social || unidadeInfo?.nome || empresaInfo?.nome || '';
+  const linhas = itens.map((i: any, idx: number) => `
+    <tr style="background:${idx % 2 === 0 ? '#fff' : '#fafafa'}">
+      <td style="padding:12px 16px;border-bottom:1px solid #eee">${i.servico}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:center;color:#666">${i.quantidade}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:right;color:#666">R$ ${i.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:right;font-weight:700">R$ ${(i.precoUnitario * i.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+    </tr>`
   ).join('');
   janela.document.write(`
-    <html><head><title>${rotulo} ${formatId(alvo.id)}</title></head>
-    <body style="font-family:monospace;font-size:12px;padding:16px;max-width:360px;margin:0 auto;">
-      <h2 style="text-align:center;margin:0 0 4px;">${unidadeInfo?.razao_social || unidadeInfo?.nome || ''}</h2>
-      ${unidadeInfo?.cnpj ? `<p style="text-align:center;margin:0 0 12px;">CNPJ ${unidadeInfo.cnpj}</p>` : ''}
-      <hr/>
-      <p><b>${rotulo}:</b> ${formatId(alvo.id)}<br/><b>Cliente:</b> ${alvo.empresa}<br/><b>Data:</b> ${new Date(alvo.created_at || Date.now()).toLocaleString('pt-BR')}</p>
-      <hr/>
-      <table style="width:100%;border-collapse:collapse;">${linhas}</table>
-      <hr/>
-      <h3>TOTAL: R$ ${alvo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-      <p>Pagamento: ${FORMAS_PAGAMENTO[alvo.forma_pagamento] || alvo.forma_pagamento || ''}</p>
-      ${ehOrcamento ? '<p style="text-align:center;margin-top:12px;font-style:italic;">Orçamento sem validade fiscal — sujeito a confirmação.</p>' : ''}
+    <html><head><title>Orçamento ${formatId(alvo.id)}</title></head>
+    <body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#f5f5f5;color:#1a1a1a;">
+      <div style="max-width:760px;margin:0 auto;background:#fff;">
+        <div style="background:${cor};padding:32px 40px;display:flex;align-items:center;gap:16px;">
+          ${empresaInfo?.logo_url
+            ? `<img src="${empresaInfo.logo_url}" alt="" style="height:56px;max-width:160px;object-fit:contain;background:#fff;border-radius:8px;padding:6px" />`
+            : `<div style="width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#fff;flex-shrink:0">${(nomeEmpresa || 'W')[0].toUpperCase()}</div>`
+          }
+          <div>
+            <p style="margin:0;color:#fff;font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">${nomeEmpresa}</p>
+            ${unidadeInfo?.cnpj ? `<p style="margin:2px 0 0;color:rgba(255,255,255,0.85);font-size:12px">CNPJ ${unidadeInfo.cnpj}</p>` : ''}
+          </div>
+        </div>
+
+        <div style="padding:32px 40px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;flex-wrap:wrap;gap:16px">
+            <div>
+              <p style="margin:0;font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1px">Orçamento</p>
+              <p style="margin:2px 0 0;font-size:24px;font-weight:900;color:${cor}">${formatId(alvo.id)}</p>
+            </div>
+            <div style="text-align:right">
+              <p style="margin:0;font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1px">Data</p>
+              <p style="margin:2px 0 0;font-size:14px;font-weight:700">${new Date(alvo.created_at || Date.now()).toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          <div style="background:#fafafa;border-radius:12px;padding:16px 20px;margin-bottom:24px">
+            <p style="margin:0;font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1px">Cliente</p>
+            <p style="margin:4px 0 0;font-size:16px;font-weight:700">${alvo.empresa}</p>
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+            <thead>
+              <tr style="background:${cor}">
+                <th style="padding:10px 16px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Item</th>
+                <th style="padding:10px 16px;text-align:center;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Qtd</th>
+                <th style="padding:10px 16px;text-align:right;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Unitário</th>
+                <th style="padding:10px 16px;text-align:right;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+          </table>
+
+          <div style="display:flex;justify-content:flex-end;margin-top:16px">
+            <div style="min-width:240px">
+              <div style="display:flex;justify-content:space-between;padding:12px 20px;background:${cor};border-radius:10px">
+                <span style="color:#fff;font-weight:900;text-transform:uppercase;font-size:13px;letter-spacing:0.5px">Total</span>
+                <span style="color:#fff;font-weight:900;font-size:18px">R$ ${alvo.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+
+          ${alvo.forma_pagamento ? `<p style="margin:20px 0 0;font-size:13px;color:#666"><b>Forma de pagamento:</b> ${FORMAS_PAGAMENTO[alvo.forma_pagamento] || alvo.forma_pagamento}</p>` : ''}
+
+          <p style="margin:28px 0 0;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center;font-style:italic">
+            Orçamento sem validade fiscal — sujeito a confirmação e disponibilidade no momento do fechamento.
+          </p>
+        </div>
+      </div>
       <script>window.onload = function(){ window.print(); }</script>
     </body></html>
   `);

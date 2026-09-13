@@ -9,7 +9,7 @@ import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecni
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
 export default function PulseNovaVendaPage() {
-  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse } = usePulseAccess();
+  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa } = usePulseAccess();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
@@ -33,13 +33,9 @@ export default function PulseNovaVendaPage() {
   const [acrescimo, setAcrescimo] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState('pix');
 
-  // Item avulso = projeto personalizado / customização fora do catálogo (ex: trailer sob
-  // medida com item extra que não é um produto de prateleira). Chave local negativa,
-  // decrescente — nunca colide com id real de servico (sempre positivo).
-  const [mostrarItemAvulso, setMostrarItemAvulso] = useState(false);
-  const [avulsoDescricao, setAvulsoDescricao] = useState('');
-  const [avulsoValor, setAvulsoValor] = useState('');
-  const [avulsoQtd, setAvulsoQtd] = useState('1');
+  // Produto 100% personalizado (fora do catálogo, ex: trailer sob medida que não é
+  // nenhum dos modelos prontos) usa o mesmo configurador dos produtos de catálogo — id
+  // local negativo, decrescente, nunca colide com id real de servico (sempre positivo).
   const proximoIdAvulsoRef = useRef(-1);
 
   // Detalhe expandido do produto (imagem grande + descrição completa). Pra item sob
@@ -52,6 +48,7 @@ export default function PulseNovaVendaPage() {
   const [novoExtraDescricao, setNovoExtraDescricao] = useState('');
   const [novoExtraValor, setNovoExtraValor] = useState('');
   const [editandoServicoId, setEditandoServicoId] = useState<number | null>(null);
+  const [criandoPersonalizado, setCriandoPersonalizado] = useState(false);
   // "Agora" travado num state em vez de Date.now() direto no cálculo — chamar função
   // impura no render quebra a regra de pureza do React.
   const [agora] = useState(() => Date.now());
@@ -174,10 +171,23 @@ export default function PulseNovaVendaPage() {
   };
 
   const abrirConfigurador = (s: ServicoConfig, extrasIniciais: ConfiguracaoItem[] = [], editando = false) => {
-    setProdutoDetalhe(s);
+    setProdutoDetalhe(s); setCriandoPersonalizado(false);
     setExtrasConfigurando(extrasIniciais);
     setNovoExtraDescricao(''); setNovoExtraValor('');
     setEditandoServicoId(editando ? s.id : null);
+  };
+
+  // Trailer 100% sob medida — não é nenhum dos modelos do catálogo, é um projeto novo do
+  // zero. Mesmo configurador de sempre, só que nome/preço/prazo nascem em branco e ficam
+  // editáveis (pra um produto de catálogo isso é fixo, vem do cadastro). Reaproveita o id
+  // negativo do item avulso — nunca colide com servico real, nunca vira FK.
+  const abrirCriarPersonalizado = () => {
+    const id = proximoIdAvulsoRef.current--;
+    setProdutoDetalhe({ id, nome: '', preco: 0, estoque: null, prazo_fabricacao_dias: null });
+    setCriandoPersonalizado(true);
+    setExtrasConfigurando([]);
+    setNovoExtraDescricao(''); setNovoExtraValor('');
+    setEditandoServicoId(null);
   };
 
   const adicionarExtraConfiguracao = () => {
@@ -192,19 +202,26 @@ export default function PulseNovaVendaPage() {
   // (sem editar), ou substitui a linha inteira se veio de "editar" um item já existente.
   const confirmarConfiguracao = () => {
     if (!produtoDetalhe) return;
+    if (criandoPersonalizado && (!produtoDetalhe.nome.trim() || !(produtoDetalhe.preco > 0))) return;
     const s = produtoDetalhe;
     const extras = extrasConfigurando.length > 0 ? extrasConfigurando : undefined;
     setCarrinho(prev => {
       if (editandoServicoId != null) {
-        return prev.map(i => i.servicoId === editandoServicoId ? { ...i, configuracoes: extras } : i);
+        return prev.map(i => i.servicoId === editandoServicoId
+          ? { ...i, nome: s.nome, precoUnitario: s.preco, configuracoes: extras, prazoFabricacaoDias: s.prazo_fabricacao_dias ?? null }
+          : i);
       }
-      const existente = prev.find(i => i.servicoId === s.id);
+      const existente = !criandoPersonalizado ? prev.find(i => i.servicoId === s.id) : undefined;
       if (existente) {
         return prev.map(i => i.servicoId === s.id ? { ...i, quantidade: i.quantidade + 1, configuracoes: extras ?? i.configuracoes } : i);
       }
-      return [...prev, { servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: s.estoque ?? null, configuracoes: extras }];
+      return [...prev, {
+        servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: s.estoque ?? null,
+        configuracoes: extras, avulso: criandoPersonalizado || undefined,
+        prazoFabricacaoDias: criandoPersonalizado ? (s.prazo_fabricacao_dias ?? null) : undefined,
+      }];
     });
-    setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]);
+    setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); setCriandoPersonalizado(false);
   };
 
   const valorExtras = (i: ItemCarrinho) => (i.configuracoes || []).reduce((s, c) => s + c.valor, 0);
@@ -221,14 +238,6 @@ export default function PulseNovaVendaPage() {
 
   const removerItem = (servicoId: number) => setCarrinho(prev => prev.filter(i => i.servicoId !== servicoId));
 
-  const adicionarItemAvulso = () => {
-    const preco = Number(avulsoValor);
-    const qtd = Math.max(1, Number(avulsoQtd) || 1);
-    if (!avulsoDescricao.trim() || !(preco > 0)) return;
-    const id = proximoIdAvulsoRef.current--;
-    setCarrinho(prev => [...prev, { servicoId: id, nome: avulsoDescricao.trim(), quantidade: qtd, precoUnitario: preco, estoqueMax: null, avulso: true }]);
-    setAvulsoDescricao(''); setAvulsoValor(''); setAvulsoQtd('1'); setMostrarItemAvulso(false);
-  };
 
   const subtotal = carrinho.reduce((acc, i) => acc + (i.precoUnitario + valorExtras(i)) * i.quantidade, 0);
   const total = Math.max(0, subtotal - desconto + acrescimo);
@@ -240,7 +249,7 @@ export default function PulseNovaVendaPage() {
   const prazoEstimado = useMemo(() => {
     const servicoPorId = new Map(servicos.map(s => [s.id, s]));
     const prazos = carrinho
-      .map(i => servicoPorId.get(i.servicoId)?.prazo_fabricacao_dias)
+      .map(i => i.avulso ? i.prazoFabricacaoDias : servicoPorId.get(i.servicoId)?.prazo_fabricacao_dias)
       .filter((d): d is number => typeof d === 'number' && d > 0);
     if (prazos.length === 0) return null;
     const maiorPrazo = Math.max(...prazos);
@@ -427,7 +436,7 @@ export default function PulseNovaVendaPage() {
           )}
 
           <div className="flex gap-2 mt-6">
-            <button onClick={() => imprimirReciboOuOrcamento(vendaConcluida, unidades.find(u => u.nome === unidadeSel))} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+            <button onClick={() => imprimirReciboOuOrcamento(vendaConcluida, unidades.find(u => u.nome === unidadeSel), empresa)} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Printer size={14} /> {ehOrcamento ? 'Orçamento' : 'Recibo'}
             </button>
             <button onClick={resetar} className="flex-1 bg-[var(--cor-primaria)] hover:bg-[#16A34A] text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
@@ -591,6 +600,13 @@ export default function PulseNovaVendaPage() {
                     </div>
                   );
                 })}
+                <button
+                  onClick={abrirCriarPersonalizado}
+                  className="flex flex-col items-center justify-center gap-2 h-full min-h-[13rem] border-2 border-dashed border-white/10 hover:border-[var(--cor-primaria)]/50 rounded-2xl text-slate-500 hover:text-[var(--cor-primaria)] transition-all"
+                >
+                  <Plus size={28} />
+                  <span className="text-xs font-black uppercase tracking-widest text-center px-2">Produto<br />Personalizado</span>
+                </button>
                 {servicosFiltrados.length === 0 && <p className="col-span-full text-center text-slate-500 text-xs font-bold py-6">Nenhum produto encontrado.</p>}
               </div>
             )}
@@ -601,24 +617,10 @@ export default function PulseNovaVendaPage() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
             <div className="flex items-center justify-between mb-3">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block">Pedido</label>
-              <button onClick={() => setMostrarItemAvulso(v => !v)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
-                <Plus size={11} /> Item personalizado
+              <button onClick={abrirCriarPersonalizado} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
+                <Plus size={11} /> Produto personalizado
               </button>
             </div>
-
-            {mostrarItemAvulso && (
-              <div className="bg-black/30 border border-dashed border-white/15 rounded-xl p-3 mb-3 space-y-2">
-                <p className="text-[10px] font-bold text-slate-500 leading-snug">Pra projeto sob medida — descreve a personalização e o valor, soma no total sem precisar cadastrar produto novo no catálogo.</p>
-                <input value={avulsoDescricao} onChange={e => setAvulsoDescricao(e.target.value)} placeholder="Ex: Teto elétrico personalizado" className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="number" min="0" step="0.01" value={avulsoValor} onChange={e => setAvulsoValor(e.target.value)} placeholder="Valor (R$)" className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
-                  <input type="number" min="1" value={avulsoQtd} onChange={e => setAvulsoQtd(e.target.value)} placeholder="Quantidade" className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
-                </div>
-                <button onClick={adicionarItemAvulso} disabled={!avulsoDescricao.trim() || !(Number(avulsoValor) > 0)} className="w-full bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-                  Adicionar ao pedido
-                </button>
-              </div>
-            )}
 
             {carrinho.length === 0 ? (
               <p className="text-slate-500 text-xs font-bold text-center py-6">Nenhum item ainda.</p>
@@ -626,7 +628,20 @@ export default function PulseNovaVendaPage() {
               <div className="space-y-2 mb-4">
                 {carrinho.map(i => {
                   const servicoOriginal = servicos.find(s => s.id === i.servicoId);
-                  const podeConfigurar = !i.avulso && servicoOriginal && ehSobEncomenda(servicoOriginal);
+                  const podeConfigurar = i.avulso || (servicoOriginal && ehSobEncomenda(servicoOriginal));
+                  const editarLinha = () => {
+                    if (i.avulso) {
+                      // Produto personalizado não tem cadastro no catálogo — reconstrói um
+                      // objeto temporário com os dados já salvos na linha pra reabrir editável.
+                      setProdutoDetalhe({ id: i.servicoId, nome: i.nome, preco: i.precoUnitario, estoque: null, prazo_fabricacao_dias: i.prazoFabricacaoDias ?? null });
+                      setCriandoPersonalizado(true);
+                      setExtrasConfigurando(i.configuracoes || []);
+                      setNovoExtraDescricao(''); setNovoExtraValor('');
+                      setEditandoServicoId(i.servicoId);
+                    } else if (servicoOriginal) {
+                      abrirConfigurador(servicoOriginal, i.configuracoes || [], true);
+                    }
+                  };
                   return (
                     <div key={i.servicoId} className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5">
                       <div className="flex items-center gap-2">
@@ -638,7 +653,7 @@ export default function PulseNovaVendaPage() {
                           <p className="text-slate-500 text-[10px]">R$ {(i.precoUnitario + valorExtras(i)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
                         </div>
                         {podeConfigurar && (
-                          <button onClick={() => abrirConfigurador(servicoOriginal, i.configuracoes || [], true)} title="Editar configuração" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white shrink-0"><Pencil size={11} /></button>
+                          <button onClick={editarLinha} title="Editar" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white shrink-0"><Pencil size={11} /></button>
                         )}
                         <button onClick={() => alterarQuantidade(i.servicoId, -1)} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 shrink-0"><Minus size={12} /></button>
                         <span className="text-white text-xs font-black w-5 text-center shrink-0">{i.quantidade}</span>
@@ -732,26 +747,55 @@ export default function PulseNovaVendaPage() {
       </div>
 
       {produtoDetalhe && (() => {
-        const configuravel = ehSobEncomenda(produtoDetalhe);
+        const configuravel = criandoPersonalizado || ehSobEncomenda(produtoDetalhe);
         const totalExtras = extrasConfigurando.reduce((s, e) => s + e.valor, 0);
-        const fecharModal = () => { setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); };
+        const fecharModal = () => { setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); setCriandoPersonalizado(false); };
+        const invalido = criandoPersonalizado && (!produtoDetalhe.nome.trim() || !(produtoDetalhe.preco > 0));
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={fecharModal}>
             <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="h-48 bg-white/5 flex items-center justify-center overflow-hidden relative shrink-0">
-                {produtoDetalhe.imagem_url ? <img src={produtoDetalhe.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={48} className="text-slate-600" />}
-                <button onClick={fecharModal} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white"><X size={16} /></button>
-              </div>
+              {!criandoPersonalizado && (
+                <div className="h-48 bg-white/5 flex items-center justify-center overflow-hidden relative shrink-0">
+                  {produtoDetalhe.imagem_url ? <img src={produtoDetalhe.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={48} className="text-slate-600" />}
+                  <button onClick={fecharModal} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-full text-white"><X size={16} /></button>
+                </div>
+              )}
               <div className="p-5">
-                <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
-                <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                {produtoDetalhe.prazo_fabricacao_dias && (
-                  <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
-                    <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
-                  </p>
-                )}
-                {produtoDetalhe.descricao && (
-                  <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
+                {criandoPersonalizado ? (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Settings2 size={12} /> Produto personalizado</p>
+                      <button onClick={fecharModal} className="text-slate-500 hover:text-white p-1"><X size={16} /></button>
+                    </div>
+                    <input
+                      value={produtoDetalhe.nome} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, nome: e.target.value })}
+                      placeholder="Nome do projeto (ex: Trailer sob medida - Família Silva)"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white font-bold text-sm outline-none focus:border-[var(--cor-primaria)]"
+                    />
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Valor base (R$)</label>
+                        <input type="number" step="0.01" value={produtoDetalhe.preco || ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, preco: Number(e.target.value) || 0 })} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Prazo (dias, opcional)</label>
+                        <input type="number" min="0" value={produtoDetalhe.prazo_fabricacao_dias ?? ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, prazo_fabricacao_dias: e.target.value ? Number(e.target.value) : null })} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
+                    <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    {produtoDetalhe.prazo_fabricacao_dias && (
+                      <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
+                        <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
+                      </p>
+                    )}
+                    {produtoDetalhe.descricao && (
+                      <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
+                    )}
+                  </>
                 )}
 
                 {configuravel && (
@@ -787,7 +831,7 @@ export default function PulseNovaVendaPage() {
 
                 <button
                   onClick={confirmarConfiguracao}
-                  disabled={produtoDetalhe.estoque !== null && produtoDetalhe.estoque !== undefined && produtoDetalhe.estoque <= 0}
+                  disabled={invalido || (produtoDetalhe.estoque !== null && produtoDetalhe.estoque !== undefined && produtoDetalhe.estoque <= 0)}
                   className="w-full mt-5 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-40 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
                 >
                   <Plus size={14} /> {editandoServicoId != null ? 'Salvar alterações' : 'Adicionar ao pedido'}

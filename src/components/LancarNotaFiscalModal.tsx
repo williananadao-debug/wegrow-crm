@@ -1,8 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Camera, FileUp, FileCode2, PenLine, X, CheckCircle2, Trash2, ArrowLeft, Plus } from 'lucide-react';
+import { Loader2, Camera, FileUp, FileCode2, PenLine, X, CheckCircle2, Trash2, ArrowLeft, Plus, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { ServicoConfig } from '@/app/pulse/shared';
+import { ServicoConfig, formatId } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
 import { extrairCabecalhoXmlNfe, extrairItensXmlNfe } from '@/lib/nfeXmlParser';
 import { uploadArquivoNotaFiscal } from '@/lib/notaFiscalArquivo';
@@ -14,6 +14,8 @@ type ItemNota = {
   valorUnitario: number;
   servicoId: number | 'novo' | 'ignorar';
 };
+
+type PedidoOpcao = { id: number; empresa: string; valor_total: number };
 
 const novaChave = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
@@ -63,6 +65,31 @@ export default function LancarNotaFiscalModal({
   // (no Kardex do Estoque) algo de verdade pra abrir. Método 'manual' nunca tem arquivo.
   const [arquivoOriginal, setArquivoOriginal] = useState<File | null>(null);
 
+  // Saída aqui é sempre "venda" (não tem outro motivo nesse modal) — precisa estar
+  // amarrada a um pedido de verdade (mesmo lead_id que a baixa automática de Nova Venda
+  // usa), senão dava pra baixar estoque como "venda" sem nenhuma venda registrada atrás.
+  const [pedidoQuery, setPedidoQuery] = useState('');
+  const [pedidoResultados, setPedidoResultados] = useState<PedidoOpcao[]>([]);
+  const [pedidoSelecionado, setPedidoSelecionado] = useState<PedidoOpcao | null>(null);
+  const [buscandoPedido, setBuscandoPedido] = useState(false);
+  const debouncePedidoRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (tipo !== 'saida' || pedidoSelecionado) { setPedidoResultados([]); return; }
+    if (debouncePedidoRef.current) clearTimeout(debouncePedidoRef.current);
+    if (pedidoQuery.trim().length < 2) { setPedidoResultados([]); return; }
+    setBuscandoPedido(true);
+    debouncePedidoRef.current = setTimeout(async () => {
+      const q = pedidoQuery.trim();
+      let query = supabase.from('leads').select('id, empresa, valor_total')
+        .eq('empresa_id', empresaId).eq('tipo', 'Pulse').order('created_at', { ascending: false }).limit(10);
+      query = /^\d+$/.test(q) ? query.eq('id', Number(q)) : query.ilike('empresa', `%${q}%`);
+      const { data } = await query;
+      setPedidoResultados((data as PedidoOpcao[]) || []);
+      setBuscandoPedido(false);
+    }, 350);
+  }, [pedidoQuery, tipo, pedidoSelecionado, empresaId]);
+
   // Histórico de descrições já digitadas — sugestão via <datalist> nativo enquanto
   // digita, pra não reinventar "Chapa de Aço 2mm" de um jeito diferente toda hora.
   const [historicoDescricoes, setHistoricoDescricoes] = useState<string[]>([]);
@@ -89,6 +116,7 @@ export default function LancarNotaFiscalModal({
     setChaveAcesso(''); setDataEmissao(''); setValorTotal('');
     setDataVencimento(new Date().toISOString().substring(0, 10));
     setItens([]); setErro(null); setArquivoOriginal(null);
+    setPedidoQuery(''); setPedidoResultados([]); setPedidoSelecionado(null);
   };
 
   const fechar = () => { if (!salvando) { reset(); onFechar(); } };
@@ -200,6 +228,7 @@ export default function LancarNotaFiscalModal({
     if (!valorTotal || Number(valorTotal) <= 0) return setErro('Informe o valor total da nota.');
     if (!dataVencimento) return setErro('Informe a data de vencimento.');
     if (!empresaId) return setErro('Empresa não identificada.');
+    if (tipo === 'saida' && !pedidoSelecionado) return setErro('Saída precisa estar vinculada a um pedido — busque e selecione um.');
     setSalvando(true); setErro(null);
     try {
       // Sobe o arquivo original (foto/PDF vira danfe_url, XML vira xml_url) — sem isso o
@@ -252,6 +281,7 @@ export default function LancarNotaFiscalModal({
           tipo: tipo === 'saida' ? 'saida_nf' : 'entrada_nf', motivo: tipo === 'saida' ? 'venda' : 'compra',
           nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
           fornecedor: fornecedor || null, cnpj_participante: cnpjFornecedor || null,
+          lead_id: tipo === 'saida' ? pedidoSelecionado?.id ?? null : null,
         }]).select('id').single();
 
         await supabase.from('fiscal_notas_itens').insert([{
@@ -354,6 +384,41 @@ export default function LancarNotaFiscalModal({
                 <input value={cnpjFornecedor} onChange={e => setCnpjFornecedor(e.target.value)} placeholder="Só números" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
             </div>
+
+            {tipo === 'saida' && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pedido (Nova Venda)</label>
+                {pedidoSelecionado ? (
+                  <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2.5">
+                    <p className="text-white text-xs font-bold truncate">{formatId(pedidoSelecionado.id)} · {pedidoSelecionado.empresa}</p>
+                    <button onClick={() => setPedidoSelecionado(null)} className="text-slate-400 hover:text-white p-1 shrink-0"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-purple-500">
+                      <Search size={13} className="text-slate-500 flex-shrink-0" />
+                      <input value={pedidoQuery} onChange={e => setPedidoQuery(e.target.value)} placeholder="Busque o pedido por cliente ou nº da OS..." className="flex-1 bg-transparent outline-none text-white text-xs" />
+                      {buscandoPedido && <Loader2 size={13} className="animate-spin text-slate-500" />}
+                    </div>
+                    {pedidoQuery.trim().length >= 2 && (
+                      <div className="absolute z-20 mt-1 w-full bg-[#0B1120] border border-white/10 rounded-xl overflow-hidden max-h-48 overflow-y-auto shadow-2xl">
+                        {pedidoResultados.map(p => (
+                          <button key={p.id} onClick={() => { setPedidoSelecionado(p); setPedidoQuery(''); }} className="w-full text-left px-4 py-2.5 hover:bg-white/5 border-b border-white/5 last:border-0">
+                            <p className="text-white text-sm font-bold">{formatId(p.id)} · {p.empresa}</p>
+                            <p className="text-slate-500 text-xs">R$ {p.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          </button>
+                        ))}
+                        {!buscandoPedido && pedidoResultados.length === 0 && (
+                          <p className="text-slate-500 text-xs font-bold p-3">Nenhum pedido encontrado com esse termo.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="text-slate-600 text-[9px] font-bold mt-1">Saída aqui é sempre venda — precisa vir de um pedido já existente (feito em Nova Venda), senão o estoque baixa sem venda registrada por trás.</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Número</label>

@@ -1,8 +1,8 @@
 "use client";
-import { useState, useRef } from 'react';
-import { Loader2, Camera, ScanLine, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Loader2, Camera, ScanLine, X, CheckCircle2, Trash2, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { ServicoConfig } from '@/app/pulse/shared';
+import { ServicoConfig, formatId } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
 import { uploadArquivoNotaFiscal, base64ParaBlob } from '@/lib/notaFiscalArquivo';
 
@@ -12,6 +12,20 @@ type ItemNota = {
   valor_unitario: number;
   servicoId: number | 'novo' | 'ignorar';
 };
+
+type PedidoOpcao = { id: number; empresa: string; valor_total: number };
+
+// Saída por motivo "venda" precisa estar amarrada a um pedido de verdade (mesmo lead_id
+// que a baixa automática de Nova Venda usa) — sem isso, dava pra "vender" estoque por
+// aqui sem nenhum registro de venda por trás. Os outros motivos não têm venda associada,
+// então continuam livres.
+const MOTIVOS_SAIDA: { value: string; label: string }[] = [
+  { value: 'venda', label: 'Venda' },
+  { value: 'perda', label: 'Perda/quebra' },
+  { value: 'devolucao_fornecedor', label: 'Devolução ao fornecedor' },
+  { value: 'transferencia', label: 'Transferência' },
+  { value: 'uso_interno', label: 'Uso interno' },
+];
 
 export default function NotaFiscalModal({
   aberto, onFechar, servicos, empresaId, userId, onConcluido, tipo = 'entrada',
@@ -40,12 +54,36 @@ export default function NotaFiscalModal({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  const [motivoSaida, setMotivoSaida] = useState('venda');
+  const [pedidoQuery, setPedidoQuery] = useState('');
+  const [pedidoResultados, setPedidoResultados] = useState<PedidoOpcao[]>([]);
+  const [pedidoSelecionado, setPedidoSelecionado] = useState<PedidoOpcao | null>(null);
+  const [buscandoPedido, setBuscandoPedido] = useState(false);
+  const debouncePedidoRef = useRef<NodeJS.Timeout | null>(null);
+
   const reset = () => {
     setEtapa('foto'); setImagem(null); setFornecedor(''); setCnpjFornecedor('');
     setNumero(''); setSerie(''); setChaveAcesso(''); setDataEmissao(''); setValorTotal('');
     setDataVencimento(new Date().toISOString().substring(0, 10));
     setItens([]); setErro(null);
+    setMotivoSaida('venda'); setPedidoQuery(''); setPedidoResultados([]); setPedidoSelecionado(null);
   };
+
+  useEffect(() => {
+    if (!isSaida || motivoSaida !== 'venda' || pedidoSelecionado) { setPedidoResultados([]); return; }
+    if (debouncePedidoRef.current) clearTimeout(debouncePedidoRef.current);
+    if (pedidoQuery.trim().length < 2) { setPedidoResultados([]); return; }
+    setBuscandoPedido(true);
+    debouncePedidoRef.current = setTimeout(async () => {
+      const q = pedidoQuery.trim();
+      let query = supabase.from('leads').select('id, empresa, valor_total')
+        .eq('empresa_id', empresaId).eq('tipo', 'Pulse').order('created_at', { ascending: false }).limit(10);
+      query = /^\d+$/.test(q) ? query.eq('id', Number(q)) : query.ilike('empresa', `%${q}%`);
+      const { data } = await query;
+      setPedidoResultados((data as PedidoOpcao[]) || []);
+      setBuscandoPedido(false);
+    }, 350);
+  }, [pedidoQuery, motivoSaida, isSaida, pedidoSelecionado, empresaId]);
 
   const fechar = () => { if (!salvando) { reset(); onFechar(); } };
 
@@ -105,6 +143,7 @@ export default function NotaFiscalModal({
     if (itens.length === 0) return setErro(isSaida ? 'Nenhum item pra dar saída.' : 'Nenhum item pra dar entrada.');
     if (!valorTotal || Number(valorTotal) <= 0) return setErro('Informe o valor total da nota.');
     if (!dataVencimento) return setErro('Informe a data de vencimento.');
+    if (isSaida && motivoSaida === 'venda' && !pedidoSelecionado) return setErro('Saída por venda precisa estar vinculada a um pedido — busque e selecione um.');
     setSalvando(true); setErro(null);
     try {
       // Saída nunca cria produto novo (não existe "vender algo que não está cadastrado") —
@@ -141,7 +180,8 @@ export default function NotaFiscalModal({
           valor_unitario: item.valor_unitario,
           fornecedor: fornecedor || null, cnpj_participante: cnpjFornecedor || null,
           nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
-          user_id: userId, tipo: isSaida ? 'saida_nf' : 'entrada_nf', motivo: isSaida ? 'venda' : 'compra',
+          user_id: userId, tipo: isSaida ? 'saida_nf' : 'entrada_nf', motivo: isSaida ? motivoSaida : 'compra',
+          lead_id: isSaida && motivoSaida === 'venda' ? pedidoSelecionado?.id ?? null : null,
         }]).select('id').single();
         if (movimento) ultimoMovimentoId = movimento.id;
       }
@@ -237,6 +277,52 @@ export default function NotaFiscalModal({
                 <input value={cnpjFornecedor} onChange={e => setCnpjFornecedor(e.target.value)} placeholder="Só números" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
             </div>
+
+            {isSaida && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Motivo da saída</label>
+                <select
+                  value={motivoSaida}
+                  onChange={e => { setMotivoSaida(e.target.value); setPedidoSelecionado(null); setPedidoQuery(''); }}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500"
+                >
+                  {MOTIVOS_SAIDA.map(m => <option key={m.value} value={m.value} className="bg-[#0B1120]">{m.label}</option>)}
+                </select>
+                {motivoSaida === 'venda' && (
+                  <div className="mt-2">
+                    {pedidoSelecionado ? (
+                      <div className="flex items-center justify-between bg-purple-500/10 border border-purple-500/30 rounded-xl px-3 py-2.5">
+                        <p className="text-white text-xs font-bold truncate">{formatId(pedidoSelecionado.id)} · {pedidoSelecionado.empresa}</p>
+                        <button onClick={() => setPedidoSelecionado(null)} className="text-slate-400 hover:text-white p-1 shrink-0"><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-purple-500">
+                          <Search size={13} className="text-slate-500 flex-shrink-0" />
+                          <input value={pedidoQuery} onChange={e => setPedidoQuery(e.target.value)} placeholder="Busque o pedido por cliente ou nº da OS..." className="flex-1 bg-transparent outline-none text-white text-xs" />
+                          {buscandoPedido && <Loader2 size={13} className="animate-spin text-slate-500" />}
+                        </div>
+                        {pedidoQuery.trim().length >= 2 && (
+                          <div className="absolute z-20 mt-1 w-full bg-[#0B1120] border border-white/10 rounded-xl overflow-hidden max-h-48 overflow-y-auto shadow-2xl">
+                            {pedidoResultados.map(p => (
+                              <button key={p.id} onClick={() => { setPedidoSelecionado(p); setPedidoQuery(''); }} className="w-full text-left px-4 py-2.5 hover:bg-white/5 border-b border-white/5 last:border-0">
+                                <p className="text-white text-sm font-bold">{formatId(p.id)} · {p.empresa}</p>
+                                <p className="text-slate-500 text-xs">R$ {p.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                              </button>
+                            ))}
+                            {!buscandoPedido && pedidoResultados.length === 0 && (
+                              <p className="text-slate-500 text-xs font-bold p-3">Nenhum pedido encontrado com esse termo.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-slate-600 text-[9px] font-bold mt-1">Saída por venda precisa vir de um pedido já existente (feito em Nova Venda) — sem isso o estoque baixa sem nenhuma venda registrada por trás.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Número</label>

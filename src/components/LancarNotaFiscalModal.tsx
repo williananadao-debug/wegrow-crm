@@ -210,7 +210,11 @@ export default function LancarNotaFiscalModal({
         let servicoId: number;
         if (item.servicoId === 'novo') {
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
-            nome: item.descricao, preco: item.valorUnitario, tipo: 'Nota Fiscal', unidade: 'un',
+            // unidade aqui é FILIAL/unidade de negócio (ver Configurações → Produtos), não
+            // unidade de medida — '' = "Geral", visível pra empresa inteira. 'un' quebrava
+            // o produto: ficava invisível em Nova Venda pra quem não tivesse uma filial
+            // chamada literalmente "un".
+            nome: item.descricao, preco: item.valorUnitario, tipo: 'Nota Fiscal', unidade: '',
             estoque: item.quantidade, empresa_id: empresaId,
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);

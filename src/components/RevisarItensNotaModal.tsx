@@ -100,8 +100,10 @@ export default function RevisarItensNotaModal({
 
         let servicoId: number;
         if (item.escolha === 'novo') {
+          // unidade aqui é FILIAL/unidade de negócio, não unidade de medida — '' =
+          // "Geral", visível pra empresa inteira.
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
-            nome: item.descricao, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: 'un',
+            nome: item.descricao, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: '',
             estoque: item.quantidade, empresa_id: empresaId,
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
@@ -139,7 +141,7 @@ export default function RevisarItensNotaModal({
         let servicoId: number;
         if (item.escolha === 'novo') {
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
-            nome: item.descricao.trim(), preco: valorUnitario, tipo: 'Nota Fiscal', unidade: 'un',
+            nome: item.descricao.trim(), preco: valorUnitario, tipo: 'Nota Fiscal', unidade: '',
             estoque: quantidade, empresa_id: empresaId,
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);

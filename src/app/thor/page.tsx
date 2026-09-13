@@ -12,7 +12,9 @@ type Mensagem = { role: 'user' | 'assistant'; content: string; leadsGerados?: nu
 const SUGESTOES = [
   'Tem cliente parado que eu deveria resgatar?',
   'Algum contrato vencendo que eu preciso renovar?',
-  'Me dá uma lista de clientes novos pra abordar',
+  'Como está o estoque hoje?',
+  'Como está a produção — tem gargalo?',
+  'Como foi o faturamento esse mês?',
   'Monta o catálogo de vendas pra eu imprimir',
 ];
 
@@ -92,7 +94,7 @@ export default function ThorPage() {
         {mensagens.length === 0 && (
           <div className="space-y-3">
             <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4 text-slate-300 text-sm">
-              Oi! Eu sou a THOR. Consigo gerar lista de clientes pra retomar contato (resgate, contratos vencendo, primeira compra) e ler nota fiscal de fornecedor por foto pra já dar entrada no estoque e lançar a despesa.
+              Oi! Eu sou a THOR. Consigo gerar lista de clientes pra retomar contato (resgate, contratos vencendo, primeira compra), ler nota fiscal de fornecedor por foto pra já dar entrada no estoque, e analisar estoque, produção e vendas pra você acompanhar o negócio sem precisar entrar em cada tela.
             </div>
             <div className="flex flex-wrap gap-2">
               {SUGESTOES.map(s => (

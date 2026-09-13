@@ -116,6 +116,7 @@ export default function Navbar() {
       { name: 'Estoque', icon: <Boxes size={20} />, href: '/pulse/estoque' },
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
       { name: 'Notas Fiscais', icon: <Receipt size={20} />, href: '/pulse/fiscal' },
+      { name: 'Painel Gerencial', icon: <BarChart3 size={20} />, href: '/pulse/gerencial' },
   ];
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };

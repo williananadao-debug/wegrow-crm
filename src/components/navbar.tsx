@@ -116,7 +116,13 @@ export default function Navbar() {
       { name: 'Estoque', icon: <Boxes size={20} />, href: '/pulse/estoque' },
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
       { name: 'Notas Fiscais', icon: <Receipt size={20} />, href: '/pulse/fiscal' },
-  ];
+      // "Minha Equipe" também mora no grupo CRM — empresa só-Pulse (modulos.crm === false,
+      // caso da Trailer Travel) nunca via esse grupo, então o cadastro de usuário ficava
+      // inacessível pra quem não usa CRM. Duplicado aqui de propósito (empresa com os dois
+      // módulos ativos vê em ambos os grupos — redundância aceitável, mais simples que criar
+      // uma seção nova só pra isso).
+      (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
+  ].filter(Boolean) as any[];
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
   const thorItem = { name: 'THOR', icon: <Bot size={20} />, href: '/thor' };

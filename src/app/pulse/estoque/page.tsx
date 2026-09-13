@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
+import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
 type Movimentacao = {
@@ -46,7 +47,8 @@ export default function PulseEstoquePage() {
   const [abaDetalhe, setAbaDetalhe] = useState<'movimentacoes' | 'precos'>('movimentacoes');
   // Chave de acesso -> link do DANFE/XML da nota, pra abrir a NF direto da movimentação
   // sem precisar ir procurar em /pulse/fiscal.
-  const [notasPorMovimentacao, setNotasPorMovimentacao] = useState<Record<number, { danfeUrl: string | null; xmlUrl: string | null }>>({});
+  const [notasPorMovimentacao, setNotasPorMovimentacao] = useState<Record<number, { notaId: number; danfeUrl: string | null; xmlUrl: string | null }>>({});
+  const [verNotaId, setVerNotaId] = useState<number | null>(null);
 
   const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
   const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
@@ -181,21 +183,21 @@ export default function PulseEstoquePage() {
       : { data: [] as { id: number; danfe_url: string | null; xml_url: string | null }[] };
     const notaPorId = new Map((notasPorItemRes || []).map(n => [n.id, n]));
 
-    const mapa: Record<number, { danfeUrl: string | null; xmlUrl: string | null }> = {};
+    const mapa: Record<number, { notaId: number; danfeUrl: string | null; xmlUrl: string | null }> = {};
     (itensLink || []).forEach(l => {
       const nota = notaPorId.get(l.nota_id);
-      if (nota) mapa[l.estoque_movimentacao_id] = { danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
+      if (nota) mapa[l.estoque_movimentacao_id] = { notaId: nota.id, danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
     });
     (notasDireto || []).forEach(n => {
       if (n.estoque_movimentacao_id != null && !mapa[n.estoque_movimentacao_id]) {
-        mapa[n.estoque_movimentacao_id] = { danfeUrl: n.danfe_url, xmlUrl: n.xml_url };
+        mapa[n.estoque_movimentacao_id] = { notaId: n.id, danfeUrl: n.danfe_url, xmlUrl: n.xml_url };
       }
     });
     const notaPorChave = new Map((notasPorChaveRes || []).map(n => [n.chave_acesso, n]));
     movs.forEach(m => {
       if (!mapa[m.id] && m.nf_chave_acesso) {
         const nota = notaPorChave.get(m.nf_chave_acesso);
-        if (nota) mapa[m.id] = { danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
+        if (nota) mapa[m.id] = { notaId: nota.id, danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
       }
     });
     setNotasPorMovimentacao(mapa);
@@ -408,11 +410,10 @@ export default function PulseEstoquePage() {
                             {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
                             {(() => {
                               const nota = notasPorMovimentacao[m.id];
-                              const link = nota?.danfeUrl || nota?.xmlUrl;
-                              return link ? (
-                                <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] font-black bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2 py-0.5 rounded uppercase transition-colors">
-                                  <FileText size={9} /> Abrir NF
-                                </a>
+                              return nota ? (
+                                <button onClick={() => setVerNotaId(nota.notaId)} className="inline-flex items-center gap-1 text-[9px] font-black bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2 py-0.5 rounded uppercase transition-colors">
+                                  <FileText size={9} /> Ver NF
+                                </button>
                               ) : null;
                             })()}
                             {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
@@ -514,6 +515,8 @@ export default function PulseEstoquePage() {
         tipo={notaTipo}
         onConcluido={() => fetchServicos()}
       />
+
+      <VerNotaFiscalModal aberto={verNotaId != null} onFechar={() => setVerNotaId(null)} notaId={verNotaId} />
     </div>
   );
 }

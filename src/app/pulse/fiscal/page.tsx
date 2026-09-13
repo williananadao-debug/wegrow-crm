@@ -6,6 +6,7 @@ import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
 import RevisarItensNotaModal from '@/components/RevisarItensNotaModal';
 import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
+import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 
 type NotaFiscal = {
   id: number; tipo: 'entrada' | 'saida'; chave_acesso: string | null;
@@ -58,6 +59,7 @@ export default function FiscalPage() {
   const [busca, setBusca] = useState('');
   const [chaveCopiada, setChaveCopiada] = useState<number | null>(null);
   const [notaEmRevisao, setNotaEmRevisao] = useState<NotaFiscal | null>(null);
+  const [verNotaId, setVerNotaId] = useState<number | null>(null);
   const [lancarNotaAberto, setLancarNotaAberto] = useState(false);
   const [buscandoHistorico, setBuscandoHistorico] = useState(false);
   const [resultadoHistorico, setResultadoHistorico] = useState<string | null>(null);
@@ -297,6 +299,11 @@ export default function FiscalPage() {
                           <PenLine size={9} /> Digitar itens na mão
                         </button>
                       )}
+                      {n.itens_status === 'processado' && (
+                        <button onClick={() => setVerNotaId(n.id)} className="inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase bg-white/[0.03] border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors">
+                          <ListChecks size={9} /> Ver itens
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[10px] text-slate-500">
                       {n.numero && <span className="text-slate-400 font-bold">NF {n.numero}{n.serie ? `/${n.serie}` : ''}</span>}
@@ -360,6 +367,8 @@ export default function FiscalPage() {
         userId={user?.id}
         onConcluido={carregar}
       />
+
+      <VerNotaFiscalModal aberto={verNotaId != null} onFechar={() => setVerNotaId(null)} notaId={verNotaId} />
     </div>
   );
 }

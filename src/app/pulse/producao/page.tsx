@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, registrarProducaoAutomatica, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
@@ -165,12 +166,6 @@ function PulseProducaoContent() {
   };
 
   // --- Registrar produção manual ---
-  const custoEstimado = useMemo(() => {
-    if (!produtoFinalId) return 0;
-    const itens = fichasPorProduto.get(produtoFinalId as number) || [];
-    const qtd = Number(quantidadeProduzida) || 0;
-    return itens.reduce((s, it) => s + it.quantidadePorUnidade * qtd * (servicoPorId.get(it.servicoId)?.preco_custo || 0), 0);
-  }, [produtoFinalId, quantidadeProduzida, fichasPorProduto, servicoPorId]);
 
   const registrarProducao = async () => {
     setErro('');
@@ -370,9 +365,14 @@ function PulseProducaoContent() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Produção nasce sozinha na venda — acompanhe etapas e prazos aqui</p>
         </div>
         {isLideranca && (
-          <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
-            <Settings2 size={14} /> Ficha técnica
-          </button>
+          <div className="flex flex-wrap gap-2 self-start md:self-auto">
+            <Link href="/pulse/producao/painel" target="_blank" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              <Tv size={14} /> Painel de TV
+            </Link>
+            <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              <Settings2 size={14} /> Ficha técnica
+            </button>
+          </div>
         )}
       </header>
 
@@ -475,13 +475,6 @@ function PulseProducaoContent() {
               </div>
             </div>
 
-            {produtoFinalId && Number(quantidadeProduzida) > 0 && (
-              <div className="flex items-center justify-between bg-black/30 border border-white/10 rounded-xl px-4 py-3 mb-4">
-                <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Custo estimado</span>
-                <span className="text-lg font-black text-[var(--cor-primaria)]">R$ {custoEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-            )}
-
             {erro && <p className="text-[12px] text-red-400 font-bold mb-3">{erro}</p>}
 
             <button onClick={registrarProducao} disabled={salvando}
@@ -572,8 +565,7 @@ function PulseProducaoContent() {
                           )}
                         </div>
 
-                        <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-white/5">
-                          <span className="text-[var(--cor-primaria)] font-black text-xs">R$ {p.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <div className="flex items-center justify-end mt-2.5 pt-2.5 border-t border-white/5">
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => abrirDetalhe(p)} className="flex items-center gap-1 text-slate-500 hover:text-white text-[9px] font-black uppercase">
                               <MessageSquare size={11} /> Detalhes

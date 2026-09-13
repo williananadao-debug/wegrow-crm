@@ -9,9 +9,11 @@ export function isPublicPage(pathname: string): boolean {
 // shell padrão (Navbar/Topbar navy+verde) — diferente de PUBLIC_*, que significa
 // "sem autenticação". Argus (nav própria no topo, ArgusTopNav) e Advocacia (mesma
 // ideia, AdvocaciaTopNav, paleta creme/dourado idêntica à do Argus) usam essa
-// estrutura de aba no topo. Mantido separado de propósito pra não confundir os
-// dois conceitos ("pular o menu" vs "pular login").
-const SHELL_EXCLUDED_PREFIXES = ['/argus', '/advocacia'];
+// estrutura de aba no topo. /pulse/producao/painel é o wallboard de TV da fábrica —
+// precisa da tela inteira, sem sidebar/topbar cortando espaço, pra ficar legível de
+// longe num monitor fixo no chão de fábrica. Mantido separado de propósito pra não
+// confundir os dois conceitos ("pular o menu" vs "pular login").
+const SHELL_EXCLUDED_PREFIXES = ['/argus', '/advocacia', '/pulse/producao/painel'];
 
 export function hasCustomShell(pathname: string): boolean {
   return SHELL_EXCLUDED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));

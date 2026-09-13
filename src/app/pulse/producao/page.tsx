@@ -38,6 +38,11 @@ function PulseProducaoContent() {
   const [fichas, setFichas] = useState<{ id: number; produto_final_id: number; servico_id: number; quantidade_por_unidade: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Última foto anexada de cada produção — mostrada em miniatura no card, pra dar pra
+  // liderança acompanhar visualmente o andamento sem abrir o detalhe de cada uma.
+  const [fotosPorProducao, setFotosPorProducao] = useState<Record<number, string>>({});
+  const [concluindoEtapaId, setConcluindoEtapaId] = useState<number | null>(null);
+
   // --- Ficha técnica ---
   const [abaFicha, setAbaFicha] = useState(false);
   const [fichaProdutoId, setFichaProdutoId] = useState<number | ''>('');
@@ -82,6 +87,17 @@ function PulseProducaoContent() {
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
     if (fichasData) setFichas(fichasData);
+
+    const ids = (producoesData || []).map(p => p.id);
+    if (ids.length > 0) {
+      const { data: fotos } = await supabase.from('pulse_producao_eventos')
+        .select('producao_id, foto_url, created_at').in('producao_id', ids)
+        .not('foto_url', 'is', null).order('created_at', { ascending: true });
+      const mapa: Record<number, string> = {};
+      // Ordenado crescente — a última sobrescreve as anteriores, então sobra sempre a mais recente.
+      (fotos || []).forEach(f => { if (f.foto_url) mapa[f.producao_id] = f.foto_url; });
+      setFotosPorProducao(mapa);
+    }
     setLoading(false);
   };
 
@@ -196,14 +212,33 @@ function PulseProducaoContent() {
 
   // Sub-etapa de fabricação (corte/solda/pintura/acabamento) — só faz sentido em "Em
   // produção"; avançar até o fim não move de coluna sozinho, quem decide isso ainda é o
-  // botão "Marcar Concluída" acima.
-  const avancarSubEtapa = async (p: Producao) => {
+  // botão "Marcar Concluída" acima. Exige foto pra concluir — LEAN: cada etapa fecha com
+  // registro visual de verdade, não só um clique; dá pra liderança acompanhar pelo card
+  // sem precisar perguntar pro time como está indo.
+  const concluirEtapaComFoto = async (p: Producao, file: File) => {
     if (p.etapa_fabricacao_idx >= ETAPAS_FABRICACAO.length - 1) return;
-    const novoIdx = p.etapa_fabricacao_idx + 1;
-    setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
-    await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
-    await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'etapa', texto: `Etapa concluída: ${ETAPAS_FABRICACAO[novoIdx - 1]}.`, user_id: user?.id }]);
-    if (detalheId === p.id) carregarEventos(p.id);
+    setConcluindoEtapaId(p.id);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${perfil?.empresa_id}/producao-${p.id}-etapa-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('produtos').getPublicUrl(path);
+      const novoIdx = p.etapa_fabricacao_idx + 1;
+      const etapaConcluida = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
+      setFotosPorProducao(prev => ({ ...prev, [p.id]: urlData.publicUrl }));
+      await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
+      await supabase.from('pulse_producao_eventos').insert([{
+        producao_id: p.id, tipo: 'etapa', texto: `Etapa concluída: ${etapaConcluida}.`,
+        foto_url: urlData.publicUrl, user_id: user?.id,
+      }]);
+      if (detalheId === p.id) carregarEventos(p.id);
+    } catch (err: any) {
+      alert('Erro ao concluir etapa: ' + (err?.message || 'tente novamente'));
+    } finally {
+      setConcluindoEtapaId(null);
+    }
   };
 
   const atualizarPrazo = async (p: Producao, valor: string) => {
@@ -334,12 +369,17 @@ function PulseProducaoContent() {
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Produção nasce sozinha na venda — acompanhe etapas e prazos aqui</p>
         </div>
-        <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
-          <Settings2 size={14} /> Ficha técnica
-        </button>
+        {isLideranca && (
+          <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
+            <Settings2 size={14} /> Ficha técnica
+          </button>
+        )}
       </header>
 
-      {abaFicha && (
+      {/* Ficha técnica e registro manual são configuração/planejamento — só liderança
+          precisa disso. Time de produção vê só o quadro, limpo e direto: qual etapa,
+          concluir com foto, próximo. */}
+      {isLideranca && abaFicha && (
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 mb-6">
           <p className="text-sm font-black uppercase text-slate-300 mb-1">Ficha técnica por produto</p>
           <p className="text-slate-500 text-[11px] font-bold mb-4">Cadastre quanto de cada matéria-prima 1 unidade do produto consome — opcional: sem ficha técnica, a produção acontece do mesmo jeito, só não baixa matéria-prima sozinha.</p>
@@ -405,6 +445,7 @@ function PulseProducaoContent() {
         </div>
       )}
 
+      {isLideranca && (
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 mb-6">
         <p className="text-sm font-black uppercase text-slate-300 mb-1">Registrar produção manual</p>
         <p className="text-slate-500 text-[11px] font-bold mb-4">Pra repor sem uma venda associada — se o produto tem ficha técnica, consome a matéria-prima automaticamente; senão só registra a produção.</p>
@@ -450,6 +491,7 @@ function PulseProducaoContent() {
           </>
         )}
       </div>
+      )}
 
       <div className="flex items-center gap-2 mb-3">
         <ClipboardList size={15} className="text-slate-500" />
@@ -500,11 +542,20 @@ function PulseProducaoContent() {
                           <div className="flex items-center justify-between mt-1.5">
                             <span className="text-[9px] text-slate-500 font-bold truncate">{ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]}</span>
                             {p.etapa_fabricacao_idx < ETAPAS_FABRICACAO.length - 1 && (
-                              <button onClick={() => avancarSubEtapa(p)} className="flex items-center gap-0.5 text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase flex-shrink-0">
-                                Próxima etapa <ChevronRight size={11} />
-                              </button>
+                              <label className="flex items-center gap-1 text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase flex-shrink-0 cursor-pointer">
+                                {concluindoEtapaId === p.id ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
+                                Concluir c/ foto
+                                <input
+                                  type="file" accept="image/*" capture="environment" className="hidden"
+                                  disabled={concluindoEtapaId === p.id}
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) concluirEtapaComFoto(p, f); e.target.value = ''; }}
+                                />
+                              </label>
                             )}
                           </div>
+                        )}
+                        {fotosPorProducao[p.id] && (
+                          <img src={fotosPorProducao[p.id]} alt="" className="mt-2 rounded-lg w-full h-20 object-cover border border-white/10" />
                         )}
 
                         <div className="grid grid-cols-2 gap-1.5 mt-2">

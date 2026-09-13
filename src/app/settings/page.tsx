@@ -74,6 +74,14 @@ export default function SettingsPage() {
   const { unidades } = useUnidades(perfil?.empresa_id);
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  // Catálogo (o que o cliente compra) e matéria-prima/insumo (consumido na ficha
+  // técnica, nunca vendido direto) viviam misturados na mesma lista — confuso pra
+  // quem só quer configurar preço/foto do produto e esbarra em "Chapa de Aço 2mm".
+  // "Nota Fiscal" (item que o sistema criou sozinho ao ler uma nota e não reconheceu)
+  // cai junto com matéria-prima — é isso que costuma ser na prática, e tira do
+  // catálogo de vendas algo que ninguém revisou ainda.
+  const [abaCategoria, setAbaCategoria] = useState<'venda' | 'materia_prima'>('venda');
+  const ehMateriaPrima = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Matéria-prima' || s.tipo === 'Nota Fiscal';
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [histModalId, setHistModalId] = useState<string | null>(null);
@@ -239,11 +247,11 @@ export default function SettingsPage() {
   const adicionarServico = () => {
     const novo: ServicoConfig = {
       id: `temp-${Date.now()}`,
-      nome: 'Novo Serviço',
+      nome: abaCategoria === 'materia_prima' ? 'Nova Matéria-Prima' : 'Novo Serviço',
       preco: 0,
-      tipo: 'Comercial Gravado',
+      tipo: abaCategoria === 'materia_prima' ? 'Matéria-prima' : 'Comercial Gravado',
       unidade: '',
-      estoque: null,
+      estoque: abaCategoria === 'materia_prima' ? 0 : null,
     };
     setServicos([...servicos, novo]);
   };
@@ -281,7 +289,7 @@ export default function SettingsPage() {
   // Grupos = produto (pai ou avulso) + suas variantes. O arraste reordena grupos inteiros
   // — variante nunca se solta do pai, ela só acompanha a posição dele na lista.
   const gruposProdutos = (() => {
-    const paisEAvulsos = servicos.filter(s => !s.produto_pai_id);
+    const paisEAvulsos = servicos.filter(s => !s.produto_pai_id && ehMateriaPrima(s) === (abaCategoria === 'materia_prima'));
     const porPai: Record<string, ServicoConfig[]> = {};
     servicos.filter(s => s.produto_pai_id).forEach(s => {
       const chave = String(s.produto_pai_id);
@@ -289,6 +297,9 @@ export default function SettingsPage() {
     });
     return paisEAvulsos.map(pai => ({ pai, variantes: porPai[pai.id] || [] }));
   })();
+
+  const qtdMateriaPrima = servicos.filter(s => !s.produto_pai_id && ehMateriaPrima(s)).length;
+  const qtdVenda = servicos.filter(s => !s.produto_pai_id && !ehMateriaPrima(s)).length;
 
   const onDragEndProdutos = async (result: DropResult) => {
     const { destination, source } = result;
@@ -704,6 +715,17 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {temPulse && (
+          <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-6 w-fit">
+            <button onClick={() => setAbaCategoria('venda')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaCategoria === 'venda' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+              Catálogo de Vendas ({qtdVenda})
+            </button>
+            <button onClick={() => setAbaCategoria('materia_prima')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaCategoria === 'materia_prima' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+              Matéria-Prima / Insumos ({qtdMateriaPrima})
+            </button>
+          </div>
+        )}
+
         {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                 <Loader2 className="animate-spin mb-2" size={32}/>
@@ -714,9 +736,9 @@ export default function SettingsPage() {
             <Droppable droppableId="produtos">
               {(providedDrop) => (
                 <div ref={providedDrop.innerRef} {...providedDrop.droppableProps} className="space-y-3">
-                {servicos.length === 0 && (
+                {gruposProdutos.length === 0 && (
                     <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
-                        <p className="text-slate-500 text-sm font-medium">Nenhum serviço cadastrado.</p>
+                        <p className="text-slate-500 text-sm font-medium">{abaCategoria === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum serviço cadastrado.'}</p>
                     </div>
                 )}
 

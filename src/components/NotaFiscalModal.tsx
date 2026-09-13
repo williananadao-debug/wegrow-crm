@@ -4,6 +4,7 @@ import { Loader2, Camera, ScanLine, X, CheckCircle2, Trash2 } from 'lucide-react
 import { supabase } from '@/lib/supabase';
 import { ServicoConfig } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
+import { uploadArquivoNotaFiscal, base64ParaBlob } from '@/lib/notaFiscalArquivo';
 
 type ItemNota = {
   descricao: string;
@@ -156,6 +157,10 @@ export default function NotaFiscalModal({
       }]);
       if (erroLancamento) throw new Error(erroLancamento.message);
 
+      // Sobe a própria foto lida — sem isso o botão "Abrir NF" no Kardex não tinha nada
+      // pra abrir, só os dados extraídos por IA.
+      const danfeUrl = imagem && empresaId ? await uploadArquivoNotaFiscal(empresaId, base64ParaBlob(imagem), 'jpg') : null;
+
       // Registro fiscal da nota em si (número/série/chave) — hoje é só o que a pessoa
       // digitou/leu por foto (origem 'manual'); quando entrar um provedor de verdade
       // (Focus NFe), essas mesmas linhas passam a ter origem/status vindos da API.
@@ -164,7 +169,7 @@ export default function NotaFiscalModal({
         chave_acesso: chaveAcesso || null, cnpj_participante: cnpjFornecedor || null,
         nome_participante: fornecedor || null, valor_total: Number(valorTotal),
         status: 'autorizada', origem: 'manual', data_emissao: dataEmissao || null,
-        estoque_movimentacao_id: ultimoMovimentoId,
+        estoque_movimentacao_id: ultimoMovimentoId, danfe_url: danfeUrl,
       }]);
 
       onConcluido({ fornecedor, valorTotal: Number(valorTotal), itens: itensValidos.length });

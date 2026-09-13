@@ -46,7 +46,7 @@ export default function PulseEstoquePage() {
   const [abaDetalhe, setAbaDetalhe] = useState<'movimentacoes' | 'precos'>('movimentacoes');
   // Chave de acesso -> link do DANFE/XML da nota, pra abrir a NF direto da movimentação
   // sem precisar ir procurar em /pulse/fiscal.
-  const [notasPorChave, setNotasPorChave] = useState<Record<string, { id: number; danfeUrl: string | null; xmlUrl: string | null }>>({});
+  const [notasPorMovimentacao, setNotasPorMovimentacao] = useState<Record<number, { danfeUrl: string | null; xmlUrl: string | null }>>({});
 
   const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
   const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
@@ -150,19 +150,55 @@ export default function PulseEstoquePage() {
     setHistoricoServico(s);
     setAbaDetalhe('movimentacoes');
     setCarregandoHistorico(true);
-    setNotasPorChave({});
+    setNotasPorMovimentacao({});
     const { data } = await supabase.from('estoque_movimentacoes').select('*').eq('servico_id', s.id).order('created_at', { ascending: false });
     const movs = (data || []) as Movimentacao[];
     setMovimentacoes(movs);
     setCarregandoHistorico(false);
+    if (movs.length === 0) return;
 
+    // Três jeitos de achar a nota de uma movimentação, do mais preciso pro mais frouxo:
+    // 1) fiscal_notas_itens.estoque_movimentacao_id — link item a item (LancarNotaFiscalModal);
+    // 2) fiscal_notas.estoque_movimentacao_id — link direto na nota, só o último item de
+    //    cada nota (NotaFiscalModal, o modal mais antigo/simples de foto);
+    // 3) nf_chave_acesso — só existe quando a nota tem chave de 44 dígitos (Focus NFe/XML),
+    //    nota manual/foto raramente tem. Sem essas três, nota manual sem chave nunca achava
+    //    link nenhum e o botão "Abrir NF" nunca aparecia pra maioria dos lançamentos.
+    const movIds = movs.map(m => m.id);
     const chaves = [...new Set(movs.map(m => m.nf_chave_acesso).filter((c): c is string => !!c))];
-    if (chaves.length > 0) {
-      const { data: notas } = await supabase.from('fiscal_notas').select('id, chave_acesso, danfe_url, xml_url').in('chave_acesso', chaves);
-      if (notas) {
-        setNotasPorChave(Object.fromEntries(notas.map(n => [n.chave_acesso as string, { id: n.id, danfeUrl: n.danfe_url, xmlUrl: n.xml_url }])));
+
+    const [{ data: itensLink }, { data: notasDireto }, { data: notasPorChaveRes }] = await Promise.all([
+      supabase.from('fiscal_notas_itens').select('estoque_movimentacao_id, nota_id').in('estoque_movimentacao_id', movIds),
+      supabase.from('fiscal_notas').select('id, estoque_movimentacao_id, danfe_url, xml_url').in('estoque_movimentacao_id', movIds),
+      chaves.length > 0
+        ? supabase.from('fiscal_notas').select('id, chave_acesso, danfe_url, xml_url').in('chave_acesso', chaves)
+        : Promise.resolve({ data: [] as { id: number; chave_acesso: string | null; danfe_url: string | null; xml_url: string | null }[] }),
+    ]);
+
+    const notaIdsPorItem = [...new Set((itensLink || []).map(l => l.nota_id))];
+    const { data: notasPorItemRes } = notaIdsPorItem.length > 0
+      ? await supabase.from('fiscal_notas').select('id, danfe_url, xml_url').in('id', notaIdsPorItem)
+      : { data: [] as { id: number; danfe_url: string | null; xml_url: string | null }[] };
+    const notaPorId = new Map((notasPorItemRes || []).map(n => [n.id, n]));
+
+    const mapa: Record<number, { danfeUrl: string | null; xmlUrl: string | null }> = {};
+    (itensLink || []).forEach(l => {
+      const nota = notaPorId.get(l.nota_id);
+      if (nota) mapa[l.estoque_movimentacao_id] = { danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
+    });
+    (notasDireto || []).forEach(n => {
+      if (n.estoque_movimentacao_id != null && !mapa[n.estoque_movimentacao_id]) {
+        mapa[n.estoque_movimentacao_id] = { danfeUrl: n.danfe_url, xmlUrl: n.xml_url };
       }
-    }
+    });
+    const notaPorChave = new Map((notasPorChaveRes || []).map(n => [n.chave_acesso, n]));
+    movs.forEach(m => {
+      if (!mapa[m.id] && m.nf_chave_acesso) {
+        const nota = notaPorChave.get(m.nf_chave_acesso);
+        if (nota) mapa[m.id] = { danfeUrl: nota.danfe_url, xmlUrl: nota.xml_url };
+      }
+    });
+    setNotasPorMovimentacao(mapa);
   };
 
   const renderLinhaEstoque = (s: ServicoConfig) => {
@@ -371,7 +407,7 @@ export default function PulseEstoquePage() {
                             {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
                             {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
                             {(() => {
-                              const nota = m.nf_chave_acesso ? notasPorChave[m.nf_chave_acesso] : undefined;
+                              const nota = notasPorMovimentacao[m.id];
                               const link = nota?.danfeUrl || nota?.xmlUrl;
                               return link ? (
                                 <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] font-black bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2 py-0.5 rounded uppercase transition-colors">

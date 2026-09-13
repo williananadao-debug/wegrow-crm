@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { ServicoConfig } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
 import { extrairCabecalhoXmlNfe, extrairItensXmlNfe } from '@/lib/nfeXmlParser';
+import { uploadArquivoNotaFiscal } from '@/lib/notaFiscalArquivo';
 
 type ItemNota = {
   chave: string; // id local, só pra key do React e remover linha — nunca vai pro banco
@@ -57,6 +58,11 @@ export default function LancarNotaFiscalModal({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // Guarda o arquivo original (foto/PDF/XML) selecionado — usado só pra IA/parser ler na
+  // hora, mas também sobe pro Storage no confirmar() final, pra dar ao botão "Abrir NF"
+  // (no Kardex do Estoque) algo de verdade pra abrir. Método 'manual' nunca tem arquivo.
+  const [arquivoOriginal, setArquivoOriginal] = useState<File | null>(null);
+
   // Histórico de descrições já digitadas — sugestão via <datalist> nativo enquanto
   // digita, pra não reinventar "Chapa de Aço 2mm" de um jeito diferente toda hora.
   const [historicoDescricoes, setHistoricoDescricoes] = useState<string[]>([]);
@@ -82,7 +88,7 @@ export default function LancarNotaFiscalModal({
     setFornecedor(''); setCnpjFornecedor(''); setNumero(''); setSerie('');
     setChaveAcesso(''); setDataEmissao(''); setValorTotal('');
     setDataVencimento(new Date().toISOString().substring(0, 10));
-    setItens([]); setErro(null);
+    setItens([]); setErro(null); setArquivoOriginal(null);
   };
 
   const fechar = () => { if (!salvando) { reset(); onFechar(); } };
@@ -124,6 +130,7 @@ export default function LancarNotaFiscalModal({
     e.target.value = '';
     if (!file || !metodo) return;
     setErro(null);
+    setArquivoOriginal(file);
 
     if (metodo === 'foto') {
       const reader = new FileReader();
@@ -172,7 +179,7 @@ export default function LancarNotaFiscalModal({
 
   const escolherMetodo = (m: Metodo) => {
     setMetodo(m); setErro(null);
-    if (m === 'manual') { setItens([]); setEtapa('revisao'); return; }
+    if (m === 'manual') { setItens([]); setArquivoOriginal(null); setEtapa('revisao'); return; }
     fileInputRef.current?.click();
   };
 
@@ -195,12 +202,23 @@ export default function LancarNotaFiscalModal({
     if (!empresaId) return setErro('Empresa não identificada.');
     setSalvando(true); setErro(null);
     try {
+      // Sobe o arquivo original (foto/PDF vira danfe_url, XML vira xml_url) — sem isso o
+      // botão "Abrir NF" no Kardex do Estoque não tinha nada de verdade pra abrir, só os
+      // dados que a IA/parser extraiu.
+      let danfeUrl: string | null = null;
+      let xmlUrl: string | null = null;
+      if (arquivoOriginal && (metodo === 'foto' || metodo === 'pdf')) {
+        danfeUrl = await uploadArquivoNotaFiscal(empresaId, arquivoOriginal, metodo === 'pdf' ? 'pdf' : 'jpg');
+      } else if (arquivoOriginal && metodo === 'xml') {
+        xmlUrl = await uploadArquivoNotaFiscal(empresaId, arquivoOriginal, 'xml');
+      }
+
       const { data: notaCriada, error: erroNota } = await supabase.from('fiscal_notas').insert([{
         empresa_id: empresaId, tipo, numero: numero || null, serie: serie || null,
         chave_acesso: chaveAcesso || null, cnpj_participante: cnpjFornecedor || null,
         nome_participante: fornecedor || null, valor_total: Number(valorTotal),
         status: 'autorizada', origem: 'manual', data_emissao: dataEmissao || null,
-        itens_status: 'processado',
+        itens_status: 'processado', danfe_url: danfeUrl, xml_url: xmlUrl,
       }]).select('id').single();
       if (erroNota || !notaCriada) throw new Error(erroNota?.message || 'Erro ao criar a nota.');
 

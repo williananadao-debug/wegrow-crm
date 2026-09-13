@@ -136,7 +136,15 @@ export function imprimirReciboOuOrcamento(alvo: any, unidadeInfo: any, empresaIn
     </div>`
   ).join('');
   janela.document.write(`
-    <html><head><title>Orçamento ${formatId(alvo.id)}</title></head>
+    <html><head><title>Orçamento ${formatId(alvo.id)}</title>
+      <style>
+        /* Sem isso o navegador some com cor de fundo/imagem de fundo na hora de imprimir
+           (ou salvar como PDF) — o cabeçalho colorido, a barra do total e a marca d'água
+           do produto saem tudo branco no impresso, só a versão em tela fica bonita. */
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        @page { margin: 12mm; }
+      </style>
+    </head>
     <body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#f5f5f5;color:#1a1a1a;">
       <div style="max-width:760px;margin:0 auto;background:#fff;">
         <div style="background:${cor};padding:32px 40px;display:flex;align-items:center;gap:16px;">

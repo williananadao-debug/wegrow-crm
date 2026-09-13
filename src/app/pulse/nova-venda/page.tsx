@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, Lock } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, Lock, PenTool } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima } from '../shared';
@@ -62,6 +62,16 @@ export default function PulseNovaVendaPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [vendaConcluida, setVendaConcluida] = useState<any>(null);
+
+  // Contrato via Docuseal — só pra venda fechada (não faz sentido em orçamento ainda não
+  // aprovado). clienteSelecionado continua em memória até "Nova venda" resetar, por isso
+  // dá pra reaproveitar endereço/e-mail dele aqui sem buscar de novo.
+  const [contratoAberto, setContratoAberto] = useState(false);
+  const [contratoEmail, setContratoEmail] = useState('');
+  const [contratoTelefone, setContratoTelefone] = useState('');
+  const [enviandoContrato, setEnviandoContrato] = useState(false);
+  const [contratoErro, setContratoErro] = useState<string | null>(null);
+  const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
 
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
@@ -433,6 +443,48 @@ export default function PulseNovaVendaPage() {
     }
   };
 
+  const abrirContrato = () => {
+    setContratoEmail(clienteSelecionado?.email || '');
+    setContratoTelefone(clienteSelecionado?.telefone || '');
+    setContratoErro(null);
+    setContratoLinks(null);
+    setContratoAberto(true);
+  };
+
+  const enviarContrato = async () => {
+    if (!contratoEmail.trim()) { setContratoErro('Informe o e-mail do cliente — o Docuseal manda o link de assinatura por lá.'); return; }
+    if (!vendaConcluida) return;
+    setEnviandoContrato(true); setContratoErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/docuseal/pulse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          empresa_id: perfil?.empresa_id,
+          venda: {
+            id: vendaConcluida.id, empresa: vendaConcluida.empresa, cnpj: vendaConcluida.cnpj,
+            telefone: contratoTelefone || vendaConcluida.telefone,
+            endereco: clienteSelecionado?.endereco, cidade: clienteSelecionado?.cidade,
+            itens: vendaConcluida.itens, desconto: vendaConcluida.desconto || 0, valor_total: vendaConcluida.valor_total,
+            parcelas: vendaConcluida.parcelas || '1', forma_pagamento: vendaConcluida.forma_pagamento,
+            prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaConcluida.unidade || unidadeSel,
+          },
+          signers: [{ name: vendaConcluida.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
+          consultor: { nome: perfil?.nome || 'Vendedor', email: user?.email },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao gerar contrato.');
+      setContratoLinks({ consultorSignUrl: json.consultor_sign_url, signUrl: json.sign_url });
+    } catch (err: any) {
+      setContratoErro(err?.message || 'Erro ao gerar contrato.');
+    } finally {
+      setEnviandoContrato(false);
+    }
+  };
+
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
   if (!temPulse) {
@@ -474,7 +526,13 @@ export default function PulseNovaVendaPage() {
             </div>
           )}
 
-          <div className="flex gap-2 mt-6">
+          {!ehOrcamento && (
+            <button onClick={abrirContrato} className="w-full mt-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              <PenTool size={14} /> Gerar contrato pra assinar
+            </button>
+          )}
+
+          <div className="flex gap-2 mt-2">
             <button onClick={() => imprimirReciboOuOrcamento(vendaConcluida, unidades.find(u => u.nome === unidadeSel), empresa)} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Printer size={14} /> {ehOrcamento ? 'Orçamento' : 'Recibo'}
             </button>
@@ -483,6 +541,44 @@ export default function PulseNovaVendaPage() {
             </button>
           </div>
         </div>
+
+        {contratoAberto && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoContrato && setContratoAberto(false)}>
+            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><PenTool size={18} className="text-purple-400" /> Contrato</h3>
+                <button onClick={() => setContratoAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+              </div>
+
+              {contratoLinks ? (
+                <div className="space-y-3">
+                  <p className="text-[var(--cor-primaria)] text-xs font-bold">Contrato gerado! Assine primeiro, depois o cliente recebe o link por e-mail automaticamente.</p>
+                  <a href={contratoLinks.consultorSignUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+                    <PenTool size={14} /> Assinar agora (vendedor)
+                  </a>
+                  <button onClick={() => setContratoAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-slate-500 text-xs font-bold">Minuta padrão de compra e venda — revisar com o jurídico antes do primeiro uso oficial. Vendedor assina primeiro, cliente recebe por e-mail em seguida.</p>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">E-mail do cliente</label>
+                    <input type="email" value={contratoEmail} onChange={e => setContratoEmail(e.target.value)} placeholder="cliente@email.com" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
+                    <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                  </div>
+                  {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
+                  <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+                    {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
+                    {enviandoContrato ? 'Gerando...' : 'Gerar e enviar'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

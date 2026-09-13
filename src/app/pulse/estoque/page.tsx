@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, History, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, BarChart3, ClipboardCheck } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -43,6 +43,7 @@ export default function PulseEstoquePage() {
   const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [abaDetalhe, setAbaDetalhe] = useState<'movimentacoes' | 'precos'>('movimentacoes');
 
   const [ajusteServico, setAjusteServico] = useState<ServicoConfig | null>(null);
   const [ajusteTipo, setAjusteTipo] = useState<'entrada' | 'saida' | 'definir'>('entrada');
@@ -141,6 +142,7 @@ export default function PulseEstoquePage() {
 
   const abrirHistorico = async (s: ServicoConfig) => {
     setHistoricoServico(s);
+    setAbaDetalhe('movimentacoes');
     setCarregandoHistorico(true);
     const { data } = await supabase.from('estoque_movimentacoes').select('*').eq('servico_id', s.id).order('created_at', { ascending: false });
     setMovimentacoes((data || []) as Movimentacao[]);
@@ -151,7 +153,7 @@ export default function PulseEstoquePage() {
     const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
     const valorEmEstoque = (s.preco || 0) * (s.estoque || 0);
     return (
-      <div key={s.id} className="flex items-center gap-3 p-4">
+      <div key={s.id} onClick={() => abrirHistorico(s)} className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] transition-colors">
         <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
           {s.imagem_url ? <img src={s.imagem_url} alt="" className="w-full h-full object-cover" /> : <Package size={16} className="text-slate-600" />}
         </div>
@@ -163,12 +165,11 @@ export default function PulseEstoquePage() {
             <span className="text-[9px] text-slate-600">· R$ {valorEmEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em estoque</span>
           </div>
         </div>
-        <button onClick={() => abrirHistorico(s)} title="Histórico de entradas" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-purple-400 flex-shrink-0"><History size={13} /></button>
-        <button onClick={() => abrirAjuste(s)} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={13} /></button>
-        <button onClick={() => ajustarEstoque(s, -1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
+        <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={13} /></button>
+        <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Minus size={13} /></button>
         <span className={`text-sm font-black w-10 text-center ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
-        <button onClick={() => ajustarEstoque(s, 1)} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
-        <div className="flex items-center gap-1 shrink-0" title="Estoque mínimo — dispara o alerta de estoque baixo">
+        <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, 1); }} className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300"><Plus size={13} /></button>
+        <div onClick={e => e.stopPropagation()} className="flex items-center gap-1 shrink-0" title="Estoque mínimo — dispara o alerta de estoque baixo">
           <span className="text-[9px] font-black text-slate-600 uppercase">mín.</span>
           <input
             type="number" min="0" value={s.estoque_minimo ?? 5}
@@ -177,6 +178,7 @@ export default function PulseEstoquePage() {
           />
         </div>
         {baixo && <span className="text-[9px] font-black text-red-400 uppercase ml-1">baixo</span>}
+        <ChevronRight size={15} className="text-slate-700 flex-shrink-0" />
       </div>
     );
   };
@@ -306,47 +308,113 @@ export default function PulseEstoquePage() {
         )}
       </div>
 
-      {historicoServico && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setHistoricoServico(null)}>
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><History size={18} className="text-purple-400" /> Histórico de entradas</h3>
-                <p className="text-slate-500 text-xs font-bold truncate">{historicoServico.nome}</p>
+      {historicoServico && (() => {
+        const margemAtual = historicoServico.preco_custo != null && historicoServico.preco > 0
+          ? ((historicoServico.preco - historicoServico.preco_custo) / historicoServico.preco) * 100
+          : null;
+        const historicoPrecos = [...(historicoServico.historico_precos || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setHistoricoServico(null)}>
+            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Package size={18} className="text-purple-400" /> Detalhe do produto</h3>
+                  <p className="text-slate-500 text-xs font-bold truncate">{historicoServico.nome}</p>
+                </div>
+                <button onClick={() => setHistoricoServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
               </div>
-              <button onClick={() => setHistoricoServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+
+              <div className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-2xl p-3 my-4">
+                <div className="flex-1">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Venda</p>
+                  <p className="text-white font-black text-sm">R$ {historicoServico.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                {historicoServico.preco_custo != null && (
+                  <div className="flex-1">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Custo</p>
+                    <p className="text-slate-300 font-bold text-sm">R$ {historicoServico.preco_custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                )}
+                {margemAtual != null && (
+                  <div className="flex-1">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Percent size={9} /> Margem</p>
+                    <p className={`font-black text-sm ${margemAtual >= 0 ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{margemAtual.toFixed(0)}%</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-4">
+                <button onClick={() => setAbaDetalhe('movimentacoes')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${abaDetalhe === 'movimentacoes' ? 'bg-purple-500 text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
+                  Movimentações
+                </button>
+                <button onClick={() => setAbaDetalhe('precos')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${abaDetalhe === 'precos' ? 'bg-purple-500 text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
+                  Histórico de preço {historicoPrecos.length > 0 && `(${historicoPrecos.length})`}
+                </button>
+              </div>
+
+              {abaDetalhe === 'movimentacoes' ? (
+                carregandoHistorico ? (
+                  <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
+                ) : movimentacoes.length === 0 ? (
+                  <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma movimentação registrada ainda pra esse produto.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {movimentacoes.map(m => {
+                      const info = TIPO_LABEL[m.tipo] || { label: m.tipo, cor: 'text-slate-400 bg-white/5' };
+                      const positivo = m.quantidade >= 0;
+                      return (
+                        <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
+                          <div className="flex items-center justify-between">
+                            <span className={`font-black text-sm ${positivo ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{positivo ? '+' : ''}{m.quantidade}</span>
+                            <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${info.cor}`}>{info.label}</span>
+                            {m.motivo && <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{MOTIVO_LABEL[m.motivo] || m.motivo}</span>}
+                            {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
+                            {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
+                            {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
+                            {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : historicoPrecos.length === 0 ? (
+                <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma mudança de preço registrada ainda — o histórico começa a partir da próxima edição em Configurações → Produtos.</p>
+              ) : (
+                <div className="space-y-2">
+                  {historicoPrecos.map((h, idx) => {
+                    const variacao = h.preco_anterior > 0 ? ((h.preco_novo - h.preco_anterior) / h.preco_anterior) * 100 : 0;
+                    const subiu = h.preco_novo >= h.preco_anterior;
+                    const margemNoMomento = historicoServico.preco_custo != null && h.preco_novo > 0
+                      ? ((h.preco_novo - historicoServico.preco_custo) / h.preco_novo) * 100
+                      : null;
+                    return (
+                      <div key={idx} className="bg-black/30 border border-white/5 rounded-2xl p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 text-xs font-bold">R$ {h.preco_anterior.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} → <span className="text-white font-black">R$ {h.preco_novo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></span>
+                          <span className="text-slate-500 text-[10px]">{new Date(h.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded uppercase ${subiu ? 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' : 'text-red-400 bg-red-500/10'}`}>
+                            {subiu ? <TrendingUp size={9} /> : <TrendingDown size={9} />} {subiu ? '+' : ''}{variacao.toFixed(1)}%
+                          </span>
+                          {margemNoMomento != null && (
+                            <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">margem com custo atual: {margemNoMomento.toFixed(0)}%</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-slate-600 text-[9px] font-bold pt-1">Margem calculada com o custo atual do produto (R$ {historicoServico.preco_custo?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '—'}) — o custo em si não tem histórico, só o preço de venda.</p>
+                </div>
+              )}
             </div>
-            {carregandoHistorico ? (
-              <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
-            ) : movimentacoes.length === 0 ? (
-              <p className="text-slate-500 text-sm font-bold text-center py-10">Nenhuma movimentação registrada ainda pra esse produto.</p>
-            ) : (
-              <div className="space-y-2">
-                {movimentacoes.map(m => {
-                  const info = TIPO_LABEL[m.tipo] || { label: m.tipo, cor: 'text-slate-400 bg-white/5' };
-                  const positivo = m.quantidade >= 0;
-                  return (
-                    <div key={m.id} className="bg-black/30 border border-white/5 rounded-2xl p-3">
-                      <div className="flex items-center justify-between">
-                        <span className={`font-black text-sm ${positivo ? 'text-[var(--cor-primaria)]' : 'text-red-400'}`}>{positivo ? '+' : ''}{m.quantidade}</span>
-                        <span className="text-slate-500 text-[10px]">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${info.cor}`}>{info.label}</span>
-                        {m.motivo && <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{MOTIVO_LABEL[m.motivo] || m.motivo}</span>}
-                        {m.fornecedor && <span className="text-slate-300 text-xs font-bold">{m.fornecedor}</span>}
-                        {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {m.nf_numero}</span>}
-                        {m.observacao && <span className="text-slate-500 text-[10px]">{m.observacao}</span>}
-                        {m.valor_unitario != null && <span className="text-slate-600 text-[10px]">R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {ajusteServico && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAjusteServico(null)}>

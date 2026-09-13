@@ -5,11 +5,17 @@ export type ClienteOpcao = {
   inscricao_estadual?: string; email?: string; cidade?: string; endereco?: string;
 };
 
+// Gravado em Configurações → Produtos toda vez que o preço de venda muda (compara com
+// o valor original carregado na tela antes de salvar) — não é um trigger de banco, é
+// feito na aplicação, então só pega mudança feita por ali.
+export type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
+
 export type ServicoConfig = {
   id: number; nome: string; preco: number; tipo?: string; unidade?: string;
   estoque?: number | null; imagem_url?: string | null;
   sku?: string | null; preco_custo?: number | null; estoque_minimo?: number | null;
   prazo_fabricacao_dias?: number | null; descricao?: string | null;
+  historico_precos?: HistoricoPreco[] | null;
 };
 
 // Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto

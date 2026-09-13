@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, registrarProducaoAutomatica, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -67,16 +67,6 @@ function PulseProducaoContent() {
   const [novoComentario, setNovoComentario] = useState('');
   const [enviandoComentario, setEnviandoComentario] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
-
-  // --- Registrar produção manual ---
-  const [produtoFinalId, setProdutoFinalId] = useState<number | ''>('');
-  const [quantidadeProduzida, setQuantidadeProduzida] = useState('');
-  const [previsaoEntrega, setPrevisaoEntrega] = useState('');
-  const [responsavelId, setResponsavelId] = useState('');
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState('');
-
-  useEffect(() => { if (!responsavelId) setResponsavelId(user?.id || ''); }, [user?.id]);
 
   const carregar = async () => {
     setLoading(true);
@@ -162,36 +152,6 @@ function PulseProducaoContent() {
       setErroFicha(err?.message || 'Erro ao salvar ficha técnica.');
     } finally {
       setSalvandoFicha(false);
-    }
-  };
-
-  // --- Registrar produção manual ---
-
-  const registrarProducao = async () => {
-    setErro('');
-    const qtd = Number(quantidadeProduzida);
-    if (!produtoFinalId) { setErro('Selecione o produto final.'); return; }
-    if (!qtd) { setErro('Informe a quantidade a produzir (maior que zero).'); return; }
-    // Ficha técnica é opcional — sem ela, a produção é registrada igual, só que sem
-    // consumir matéria-prima automaticamente (registrarProducaoAutomatica lida bem com
-    // lista vazia). Quem quer o consumo automático configura a ficha antes; quem não usa
-    // ficha técnica (ex: Trailer Travel) não fica travado por isso.
-    const fichaItens = fichasPorProduto.get(produtoFinalId as number) || [];
-    const produtoFinal = servicoPorId.get(produtoFinalId as number);
-    if (!produtoFinal) return;
-    setSalvando(true);
-    try {
-      await registrarProducaoAutomatica({
-        empresaId: perfil?.empresa_id, produtoFinal, quantidadeProduzida: qtd, fichaItens,
-        materiaPrimaPorId: servicoPorId, userId: user?.id, responsavelId,
-        previsaoEntrega: previsaoEntrega || null,
-      });
-      setProdutoFinalId(''); setQuantidadeProduzida(''); setPrevisaoEntrega('');
-      carregar();
-    } catch (err: any) {
-      setErro(err?.message || 'Erro ao registrar produção.');
-    } finally {
-      setSalvando(false);
     }
   };
 
@@ -443,47 +403,6 @@ function PulseProducaoContent() {
             </div>
           </div>
         </div>
-      )}
-
-      {isLideranca && (
-      <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 mb-6">
-        <p className="text-sm font-black uppercase text-slate-300 mb-1">Registrar produção manual</p>
-        <p className="text-slate-500 text-[11px] font-bold mb-4">Pra repor sem uma venda associada — se o produto tem ficha técnica, consome a matéria-prima automaticamente; senão só registra a produção.</p>
-
-        {produtosFinaisDisponiveis.length === 0 ? (
-          <p className="text-slate-500 text-xs font-bold py-4">Nenhum produto cadastrado ainda.</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-              <div className="md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Produto</label>
-                <select value={produtoFinalId} onChange={e => setProdutoFinalId(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]">
-                  <option value="">Selecione...</option>
-                  {produtosFinaisDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}{(fichasPorProduto.get(s.id) || []).length === 0 ? ' (sem ficha técnica)' : ''}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Quantidade</label>
-                <input type="number" value={quantidadeProduzida} onChange={e => setQuantidadeProduzida(e.target.value)}
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" placeholder="1" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Previsão de entrega</label>
-                <input type="date" value={previsaoEntrega} onChange={e => setPrevisaoEntrega(e.target.value)}
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--cor-primaria)]" />
-              </div>
-            </div>
-
-            {erro && <p className="text-[12px] text-red-400 font-bold mb-3">{erro}</p>}
-
-            <button onClick={registrarProducao} disabled={salvando}
-              className="w-full md:w-auto bg-[var(--cor-primaria)] hover:bg-[#1ea34d] disabled:opacity-50 text-[#0B1120] px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2">
-              {salvando ? <Loader2 size={16} className="animate-spin" /> : <Factory size={16} />} Registrar produção
-            </button>
-          </>
-        )}
-      </div>
       )}
 
       <div className="flex items-center gap-2 mb-3">

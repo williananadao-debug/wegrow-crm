@@ -64,6 +64,11 @@ export default function PulseEstoquePage() {
   // completo (esse já tem tela própria em /pulse/estoque/movimentacoes).
   const [consumoRecente, setConsumoRecente] = useState<{ servico_id: number; quantidade: number; created_at: string }[]>([]);
 
+  // Última NF associada a cada produto — mesma resolução em 3 caminhos usada no modal de
+  // detalhe (item→nota, nota→movimentação direto, ou chave de acesso), só que calculada
+  // pra todo o catálogo de uma vez em vez de por produto ao abrir o detalhe.
+  const [nfPorServico, setNfPorServico] = useState<Record<number, { notaId: number | null; numero: string }>>({});
+
   const fetchServicos = async () => {
     setLoadingServicos(true);
     const { data } = await supabase.from('servicos').select('*').order('nome', { ascending: true });
@@ -77,6 +82,45 @@ export default function PulseEstoquePage() {
     supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at').lt('quantidade', 0).gte('created_at', desde)
       .then(({ data }) => { if (data) setConsumoRecente(data); });
   }, []);
+
+  useEffect(() => {
+    const ids = servicos.filter(s => s.estoque !== null && s.estoque !== undefined).map(s => s.id);
+    if (ids.length === 0) { setNfPorServico({}); return; }
+    (async () => {
+      type MovComNf = { id: number; servico_id: number; nf_numero: string; nf_chave_acesso: string | null };
+      const { data: movs } = await supabase.from('estoque_movimentacoes')
+        .select('id, servico_id, nf_numero, nf_chave_acesso')
+        .in('servico_id', ids).not('nf_numero', 'is', null).order('created_at', { ascending: true });
+      if (!movs || movs.length === 0) { setNfPorServico({}); return; }
+
+      // Ordenado crescente — a última sobrescreve, sobra sempre a NF mais recente por produto.
+      const ultimoPorServico = new Map<number, MovComNf>();
+      (movs as MovComNf[]).forEach(m => ultimoPorServico.set(m.servico_id, m));
+
+      const movIds = [...ultimoPorServico.values()].map(m => m.id);
+      const chaves = [...new Set([...ultimoPorServico.values()].map(m => m.nf_chave_acesso).filter((c): c is string => !!c))];
+
+      const [{ data: itensLink }, { data: notasDireto }, { data: notasPorChaveRes }] = await Promise.all([
+        supabase.from('fiscal_notas_itens').select('estoque_movimentacao_id, nota_id').in('estoque_movimentacao_id', movIds),
+        supabase.from('fiscal_notas').select('id, estoque_movimentacao_id').in('estoque_movimentacao_id', movIds),
+        chaves.length > 0
+          ? supabase.from('fiscal_notas').select('id, chave_acesso').in('chave_acesso', chaves)
+          : Promise.resolve({ data: [] as { id: number; chave_acesso: string | null }[] }),
+      ]);
+
+      const notaIdPorMov: Record<number, number> = {};
+      (itensLink || []).forEach((l: any) => { notaIdPorMov[l.estoque_movimentacao_id] = l.nota_id; });
+      (notasDireto || []).forEach((n: any) => { if (n.estoque_movimentacao_id != null && notaIdPorMov[n.estoque_movimentacao_id] == null) notaIdPorMov[n.estoque_movimentacao_id] = n.id; });
+      const notaPorChave = new Map((notasPorChaveRes || []).map((n: any) => [n.chave_acesso, n.id]));
+
+      const mapa: Record<number, { notaId: number | null; numero: string }> = {};
+      ultimoPorServico.forEach((m, servicoId) => {
+        const notaId = notaIdPorMov[m.id] ?? (m.nf_chave_acesso ? notaPorChave.get(m.nf_chave_acesso) ?? null : null);
+        mapa[servicoId] = { notaId, numero: m.nf_numero };
+      });
+      setNfPorServico(mapa);
+    })();
+  }, [servicos]);
 
 
   const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
@@ -219,13 +263,14 @@ export default function PulseEstoquePage() {
     setNotasPorMovimentacao(mapa);
   };
 
-  // Grid fixo (não flex) — colunas sempre alinhadas de linha em linha (Produto/SKU/Preço/
-  // Estoque/Mín. sempre na mesma posição horizontal), em vez do bloco de texto corrido +
-  // botões soltos de antes. Cabeçalho abaixo usa o MESMO template de colunas.
-  const COLUNAS_ESTOQUE = 'grid-cols-[40px_minmax(0,1fr)_100px_90px_128px_64px_64px]';
+  // Grid fixo (não flex) — colunas sempre alinhadas de linha em linha (Produto/SKU/NF/
+  // Preço/Estoque/Mín. sempre na mesma posição horizontal), em vez do bloco de texto
+  // corrido + botões soltos de antes. Cabeçalho abaixo usa o MESMO template de colunas.
+  const COLUNAS_ESTOQUE = 'grid-cols-[40px_minmax(0,1fr)_100px_100px_90px_128px_64px_64px]';
 
   const renderLinhaEstoque = (s: ServicoConfig) => {
     const baixo = (s.estoque as number) <= (s.estoque_minimo ?? 5);
+    const nf = nfPorServico[s.id];
     return (
       <div key={s.id} onClick={() => abrirHistorico(s)} className={`grid ${COLUNAS_ESTOQUE} items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition-colors`}>
         <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -238,6 +283,18 @@ export default function PulseEstoquePage() {
         </div>
 
         <p className="text-slate-400 text-[11px] font-mono font-bold truncate" title={s.sku || ''}>{s.sku || '—'}</p>
+
+        {nf ? (
+          nf.notaId != null ? (
+            <button onClick={e => { e.stopPropagation(); setVerNotaId(nf.notaId); }} className="inline-flex items-center gap-1 text-[11px] font-black text-purple-400 hover:text-purple-300 truncate w-fit">
+              <FileText size={11} className="flex-shrink-0" /> {nf.numero}
+            </button>
+          ) : (
+            <span className="text-slate-500 text-[11px] font-bold truncate">{nf.numero}</span>
+          )
+        ) : (
+          <span className="text-slate-700 text-[11px]">—</span>
+        )}
 
         <p className="text-slate-300 text-xs font-bold truncate">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
 
@@ -365,11 +422,12 @@ export default function PulseEstoquePage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-[680px]">
+            <div className="min-w-[760px]">
               <div className={`grid ${COLUNAS_ESTOQUE} items-center gap-3 px-4 py-2 border-b border-white/5 text-[9px] font-black text-slate-600 uppercase tracking-widest`}>
                 <span />
                 <span>Produto</span>
                 <span>SKU</span>
+                <span>NF</span>
                 <span>Preço</span>
                 <span className="text-center">Estoque</span>
                 <span className="text-center">Mín.</span>

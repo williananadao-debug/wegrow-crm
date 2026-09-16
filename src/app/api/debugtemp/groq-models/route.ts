@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (testarVisao) {
     // Imagem PNG 1x1 branca — só pra ver se o modelo aceita image_url sem 400/404, não
     // importa o que ele "vê".
-    const pixelBranco = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const pixelBranco = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFklEQVR42mNk+P+/noGBgYGBiYGBAAAQCgQBBYSyeQAAAABJRU5ErkJggg==';
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },

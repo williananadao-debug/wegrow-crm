@@ -88,7 +88,7 @@ export default function SettingsPage() {
   const [savingNfse, setSavingNfse] = useState(false);
   const [feedbackNfse, setFeedbackNfse] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [modulosAtuais, setModulosAtuais] = useState<Record<string, any>>({});
-  const [etapasProducao, setEtapasProducao] = useState<string[]>(ETAPAS_FABRICACAO_PADRAO);
+  const [etapasProducao, setEtapasProducao] = useState<{ nome: string; prazoDias: string }[]>(ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '' })));
   const [savingEtapas, setSavingEtapas] = useState(false);
   const [feedbackEtapas, setFeedbackEtapas] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
@@ -116,7 +116,13 @@ export default function SettingsPage() {
     if (emp?.nfse_config) setNfseConfig({ ...NFSE_CONFIG_VAZIA, ...emp.nfse_config });
     setModulosAtuais(emp?.modulos || {});
     const etapasSalvas = emp?.modulos?.pulse_etapas_fabricacao;
-    setEtapasProducao(Array.isArray(etapasSalvas) && etapasSalvas.length > 0 ? etapasSalvas : ETAPAS_FABRICACAO_PADRAO);
+    // Compatível com o formato antigo (só string[], sem prazo) e o novo ({nome, prazoDias}[]).
+    setEtapasProducao(
+      Array.isArray(etapasSalvas) && etapasSalvas.length > 0
+        ? etapasSalvas.map((e: string | { nome: string; prazoDias?: number | null }) =>
+            typeof e === 'string' ? { nome: e, prazoDias: '' } : { nome: e.nome, prazoDias: e.prazoDias ? String(e.prazoDias) : '' })
+        : ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '' }))
+    );
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('ordem', { ascending: true, nullsFirst: false }).order('id', { ascending: true });
     
     if (error) console.error("Erro ao carregar:", error);
@@ -477,9 +483,10 @@ export default function SettingsPage() {
     }
   };
 
-  const atualizarEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? valor : e));
+  const atualizarEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? { ...e, nome: valor } : e));
+  const atualizarPrazoEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? { ...e, prazoDias: valor } : e));
   const removerEtapa = (idx: number) => setEtapasProducao(prev => prev.filter((_, i) => i !== idx));
-  const adicionarEtapa = () => setEtapasProducao(prev => [...prev, '']);
+  const adicionarEtapa = () => setEtapasProducao(prev => [...prev, { nome: '', prazoDias: '' }]);
   const moverEtapa = (idx: number, direcao: -1 | 1) => setEtapasProducao(prev => {
     const alvo = idx + direcao;
     if (alvo < 0 || alvo >= prev.length) return prev;
@@ -489,7 +496,9 @@ export default function SettingsPage() {
   });
 
   const salvarEtapas = async () => {
-    const etapasValidas = etapasProducao.map(e => e.trim()).filter(Boolean);
+    const etapasValidas = etapasProducao
+      .map(e => ({ nome: e.nome.trim(), prazoDias: e.prazoDias.trim() ? Number(e.prazoDias) : null }))
+      .filter(e => e.nome);
     if (etapasValidas.length === 0) return;
     setSavingEtapas(true);
     setFeedbackEtapas(null);
@@ -498,7 +507,7 @@ export default function SettingsPage() {
       const { error } = await supabase.from('empresas').update({ modulos: novosModulos }).eq('id', perfil?.empresa_id);
       if (error) throw error;
       setModulosAtuais(novosModulos);
-      setEtapasProducao(etapasValidas);
+      setEtapasProducao(etapasValidas.map(e => ({ nome: e.nome, prazoDias: e.prazoDias != null ? String(e.prazoDias) : '' })));
       setFeedbackEtapas({ type: 'success', msg: 'Etapas de produção salvas com sucesso!' });
     } catch (err: any) {
       setFeedbackEtapas({ type: 'error', msg: 'Erro: ' + (err.message || 'Verifique o console') });
@@ -901,7 +910,7 @@ export default function SettingsPage() {
             <Factory size={18} className="text-amber-400" />
             <div>
               <h2 className="font-bold text-sm uppercase tracking-wide">Etapas de Produção (Pulse)</h2>
-              <p className="text-slate-500 text-[10px] font-medium mt-0.5">O fluxo que aparece no Kanban de Produção — cada negócio tem o seu (ex: chassi → elétrica → acabamento). Mudar aqui não afeta produções já em andamento.</p>
+              <p className="text-slate-500 text-[10px] font-medium mt-0.5">O fluxo que aparece no Kanban de Produção — cada negócio tem o seu (ex: chassi → elétrica → acabamento). Mudar aqui não afeta produções já em andamento. O prazo em dias é opcional e serve pra comparar com o tempo real de cada produção no card (produtividade).</p>
             </div>
           </div>
 
@@ -910,11 +919,21 @@ export default function SettingsPage() {
               <div key={idx} className="flex items-center gap-2">
                 <span className="w-6 text-center text-[10px] font-black text-slate-600">{idx + 1}</span>
                 <input
-                  value={etapa}
+                  value={etapa.nome}
                   onChange={e => atualizarEtapa(idx, e.target.value)}
                   placeholder="Nome da etapa"
                   className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-amber-400"
                 />
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <input
+                    type="number" min={0} value={etapa.prazoDias}
+                    onChange={e => atualizarPrazoEtapa(idx, e.target.value)}
+                    placeholder="—"
+                    title="Prazo padrão dessa etapa, em dias (usado pra medir produtividade)"
+                    className="w-16 bg-white/[0.03] border border-white/10 rounded-xl px-2 py-2.5 text-white text-sm font-bold text-center outline-none focus:border-amber-400"
+                  />
+                  <span className="text-[9px] font-black text-slate-500 uppercase">dias</span>
+                </div>
                 <button type="button" onClick={() => moverEtapa(idx, -1)} disabled={idx === 0} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowUp size={13} /></button>
                 <button type="button" onClick={() => moverEtapa(idx, 1)} disabled={idx === etapasProducao.length - 1} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowDown size={13} /></button>
                 <button type="button" onClick={() => removerEtapa(idx)} disabled={etapasProducao.length <= 1} className="w-8 h-8 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg text-red-400"><Trash2 size={13} /></button>

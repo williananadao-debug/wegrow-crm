@@ -36,9 +36,28 @@ export const ehMateriaPrima = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Ma
 // empresa ainda não personalizou.
 export const ETAPAS_FABRICACAO_PADRAO = ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'];
 
+// Etapa salva tanto no formato antigo (string simples) quanto no novo (nome + prazo em dias
+// pra medir produtividade — configurável em Configurações → Etapas de Produção). As duas
+// formas convivem porque empresa que já tinha etapas configuradas antes dessa mudança salvou
+// só string[].
+export type EtapaFabricacao = string | { nome: string; prazoDias?: number | null };
+
 export function etapasFabricacaoDe(modulos: Record<string, any> | null | undefined): string[] {
-  const custom = modulos?.pulse_etapas_fabricacao;
-  return Array.isArray(custom) && custom.length > 0 ? custom : ETAPAS_FABRICACAO_PADRAO;
+  const custom = modulos?.pulse_etapas_fabricacao as EtapaFabricacao[] | undefined;
+  if (!Array.isArray(custom) || custom.length === 0) return ETAPAS_FABRICACAO_PADRAO;
+  return custom.map(e => typeof e === 'string' ? e : e.nome);
+}
+
+// Prazo (em dias) configurado pra cada etapa, pra comparar com o tempo real que uma
+// produção específica ficou nela — a métrica de produtividade que a liderança pediu.
+export function prazosEtapasFabricacaoDe(modulos: Record<string, any> | null | undefined): Record<string, number> {
+  const custom = modulos?.pulse_etapas_fabricacao as EtapaFabricacao[] | undefined;
+  const mapa: Record<string, number> = {};
+  if (!Array.isArray(custom)) return mapa;
+  for (const e of custom) {
+    if (typeof e !== 'string' && e.prazoDias != null && e.prazoDias > 0) mapa[e.nome] = e.prazoDias;
+  }
+  return mapa;
 }
 
 // avulso=true: item digitado na hora, fora do catálogo (ex: personalização de um projeto

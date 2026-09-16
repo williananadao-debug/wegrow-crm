@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, ehMateriaPrima } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -32,6 +32,7 @@ const PROXIMA_ETAPA: Record<StatusProducao, StatusProducao | null> = { em_produc
 function PulseProducaoContent() {
   const { authLoading, temPulse, user, perfil, empresa, isLideranca, usersMap } = usePulseAccess();
   const ETAPAS_FABRICACAO = useMemo(() => etapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
+  const PRAZOS_ETAPA = useMemo(() => prazosEtapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
@@ -42,6 +43,10 @@ function PulseProducaoContent() {
   // Última foto anexada de cada produção — mostrada em miniatura no card, pra dar pra
   // liderança acompanhar visualmente o andamento sem abrir o detalhe de cada uma.
   const [fotosPorProducao, setFotosPorProducao] = useState<Record<number, string>>({});
+  // Quando a etapa atual começou (= data em que a etapa anterior foi concluída, ou o
+  // início da produção se ainda está na primeira) — comparado com PRAZOS_ETAPA pra medir
+  // produtividade direto no card.
+  const [etapaIniciadaEmPorProducao, setEtapaIniciadaEmPorProducao] = useState<Record<number, string>>({});
   const [concluindoEtapaId, setConcluindoEtapaId] = useState<number | null>(null);
 
   // --- Ficha técnica ---
@@ -88,6 +93,15 @@ function PulseProducaoContent() {
       // Ordenado crescente — a última sobrescreve as anteriores, então sobra sempre a mais recente.
       (fotos || []).forEach(f => { if (f.foto_url) mapa[f.producao_id] = f.foto_url; });
       setFotosPorProducao(mapa);
+
+      // Só eventos tipo "etapa" (conclusão de sub-etapa) — não usa o mesmo filtro de foto_url
+      // acima porque anexo de comentário também tem foto_url e ia contar como troca de etapa.
+      const { data: eventosEtapa } = await supabase.from('pulse_producao_eventos')
+        .select('producao_id, created_at').in('producao_id', ids)
+        .eq('tipo', 'etapa').order('created_at', { ascending: true });
+      const mapaEtapa: Record<number, string> = {};
+      (eventosEtapa || []).forEach(e => { mapaEtapa[e.producao_id] = e.created_at; });
+      setEtapaIniciadaEmPorProducao(mapaEtapa);
     }
     setLoading(false);
   };
@@ -475,9 +489,22 @@ function PulseProducaoContent() {
                             ))}
                           </div>
                         )}
-                        {p.status === 'em_producao' && (
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[9px] text-slate-500 font-bold truncate">{ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]}</span>
+                        {p.status === 'em_producao' && (() => {
+                          const nomeEtapaAtual = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+                          const prazoEtapa = PRAZOS_ETAPA[nomeEtapaAtual];
+                          const inicioEtapa = etapaIniciadaEmPorProducao[p.id] || p.created_at;
+                          const diasNaEtapa = Math.floor((Date.now() - new Date(inicioEtapa).getTime()) / 86400000);
+                          return (
+                          <div className="flex items-center justify-between mt-1.5 gap-1.5">
+                            <span className="text-[9px] text-slate-500 font-bold truncate">{nomeEtapaAtual}</span>
+                            {prazoEtapa != null && (
+                              <span
+                                title={`${diasNaEtapa} dia(s) nessa etapa — prazo configurado: ${prazoEtapa} dia(s)`}
+                                className={`text-[9px] font-black uppercase flex-shrink-0 ${diasNaEtapa > prazoEtapa ? 'text-red-400' : 'text-emerald-400'}`}
+                              >
+                                {diasNaEtapa}d / {prazoEtapa}d
+                              </span>
+                            )}
                             {p.etapa_fabricacao_idx < ETAPAS_FABRICACAO.length - 1 && (
                               <label className="flex items-center gap-1 text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase flex-shrink-0 cursor-pointer">
                                 {concluindoEtapaId === p.id ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
@@ -490,7 +517,8 @@ function PulseProducaoContent() {
                               </label>
                             )}
                           </div>
-                        )}
+                          );
+                        })()}
                         {fotosPorProducao[p.id] && (
                           <img src={fotosPorProducao[p.id]} alt="" className="mt-2 rounded-lg w-full h-20 object-cover border border-white/10" />
                         )}

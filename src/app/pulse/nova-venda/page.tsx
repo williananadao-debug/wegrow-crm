@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, Lock, PenTool } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima } from '../shared';
@@ -27,8 +27,10 @@ export default function PulseNovaVendaPage() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Atalho pra cadastrar cliente sem sair da tela de venda — some com o antigo fluxo de
-  // "cliente novo é criado automaticamente ao finalizar", porque agora nenhum item entra
-  // no carrinho sem cliente selecionado (ver clienteDefinido abaixo).
+  // "cliente novo é criado automaticamente ao finalizar". Catálogo fica livre pra navegar
+  // sem cliente selecionado (só precisa ter um na hora de fechar a venda de verdade,
+  // validado em finalizarVenda), pra dar pra mostrar produto num atendimento sem travar
+  // tudo esperando o cadastro do cliente primeiro.
   const [modalClienteAberto, setModalClienteAberto] = useState(false);
   const [formCliente, setFormCliente] = useState({ nome_empresa: '', telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
   const [salvandoCliente, setSalvandoCliente] = useState(false);
@@ -143,10 +145,6 @@ export default function PulseNovaVendaPage() {
   // técnica cadastrada em Produção antes de poder ser vendido, porque é ela que dispara a
   // produção automaticamente ao fechar o pedido.
   const ehSobEncomenda = (s: ServicoConfig) => !ehMateriaPrima(s) && (s.estoque === null || s.estoque === undefined);
-
-  // Trava o catálogo até ter cliente selecionado — evita montar pedido inteiro e só
-  // descobrir na hora de fechar que esqueceu de vincular o cliente.
-  const clienteDefinido = !!clienteSelecionado;
 
   const abrirCadastroCliente = (nomeInicial = '') => {
     setFormCliente({ nome_empresa: nomeInicial, telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
@@ -691,13 +689,6 @@ export default function PulseNovaVendaPage() {
           </div>
 
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 relative">
-            {!clienteDefinido && (
-              <div className="absolute inset-0 z-10 bg-[#0F172A]/95 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center gap-2 text-center p-6">
-                <Lock size={26} className="text-slate-600" />
-                <p className="text-slate-300 font-black text-sm uppercase">Selecione um cliente para começar</p>
-                <p className="text-slate-500 text-xs">Escolha um cliente existente ou cadastre um novo acima antes de montar o pedido.</p>
-              </div>
-            )}
             {catalogoGrande && (
               <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 mb-4 focus-within:border-[var(--cor-primaria)]">
                 <Search size={14} className="text-slate-500 flex-shrink-0" />
@@ -766,7 +757,7 @@ export default function PulseNovaVendaPage() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5">
             <div className="flex items-center justify-between mb-3">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block">Pedido</label>
-              <button onClick={abrirCriarPersonalizado} disabled={!clienteDefinido} className="text-[10px] font-black uppercase text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors">
+              <button onClick={abrirCriarPersonalizado} className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
                 <Plus size={11} /> Produto personalizado
               </button>
             </div>

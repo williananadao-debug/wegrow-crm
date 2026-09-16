@@ -34,7 +34,10 @@ export async function processarBackfillSaida(params: {
   const cnpjEmpresaDigitos = soDigitos(cnpjEmpresa);
 
   const backups = await listarBackupsMensais(token, ambiente, cnpjEmpresa);
-  console.log(`[focusNfeBackupSaida] ${backups.length} mês(es) de backup encontrado(s) pro CNPJ ${cnpjEmpresaDigitos} (ambiente ${ambiente}):`, backups.map(b => ({ mes: b.mes, temXml: !!b.xmls })));
+  // Dump cru — "xmls: null" nos 3 meses do primeiro teste real não bateu com o nome de
+  // campo esperado pela doc (pode ser nome de campo diferente do documentado, ou backup
+  // que simplesmente ainda não foi gerado pro período). Log completo até confirmar qual é.
+  console.log(`[focusNfeBackupSaida] resposta crua de /v2/backups/${cnpjEmpresaDigitos}.json (ambiente ${ambiente}):`, JSON.stringify(backups));
 
   const { data: existentes } = await db.from('fiscal_notas')
     .select('chave_acesso').eq('empresa_id', empresaId).not('chave_acesso', 'is', null);

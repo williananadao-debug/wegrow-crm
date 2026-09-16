@@ -554,6 +554,19 @@ export default function CustomersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deep-link vindo de "Cadastrar cliente" no Nova Venda (/customers?novo=1&nome=X) —
+  // abre o formulário completo (com upload de documento, aba Nexus) já com o nome que a
+  // pessoa tinha digitado na busca, em vez do modal simplificado de antes.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('novo') !== '1') return;
+    handleOpenModal();
+    const nome = params.get('nome');
+    if (nome) setFormData(prev => ({ ...prev, nome_empresa: nome }));
+    window.history.replaceState({}, '', '/customers');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSaveCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome_empresa) return alert("Nome é obrigatório");

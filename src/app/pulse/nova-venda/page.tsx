@@ -26,15 +26,9 @@ export default function PulseNovaVendaPage() {
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Atalho pra cadastrar cliente sem sair da tela de venda — some com o antigo fluxo de
-  // "cliente novo é criado automaticamente ao finalizar". Catálogo fica livre pra navegar
-  // sem cliente selecionado (só precisa ter um na hora de fechar a venda de verdade,
-  // validado em finalizarVenda), pra dar pra mostrar produto num atendimento sem travar
-  // tudo esperando o cadastro do cliente primeiro.
-  const [modalClienteAberto, setModalClienteAberto] = useState(false);
-  const [formCliente, setFormCliente] = useState({ nome_empresa: '', telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
-  const [salvandoCliente, setSalvandoCliente] = useState(false);
-  const [erroCliente, setErroCliente] = useState<string | null>(null);
+  // Catálogo fica livre pra navegar sem cliente selecionado (só precisa ter um na hora de
+  // fechar a venda de verdade, validado em finalizarVenda), pra dar pra mostrar produto
+  // num atendimento sem travar tudo esperando o cadastro do cliente primeiro.
 
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [desconto, setDesconto] = useState(0);
@@ -146,34 +140,12 @@ export default function PulseNovaVendaPage() {
   // produção automaticamente ao fechar o pedido.
   const ehSobEncomenda = (s: ServicoConfig) => !ehMateriaPrima(s) && (s.estoque === null || s.estoque === undefined);
 
+  // Abre a tela cheia de Clientes (CNPJ automático, documento/Nexus, tudo) em vez do
+  // mini-formulário de antes — nova aba pra não perder o carrinho em andamento aqui.
+  // Depois de cadastrar lá, volta nessa aba e busca pelo nome pra selecionar.
   const abrirCadastroCliente = (nomeInicial = '') => {
-    setFormCliente({ nome_empresa: nomeInicial, telefone: '', cnpj: '', email: '', cidade: '', endereco: '' });
-    setErroCliente(null);
-    setModalClienteAberto(true);
-  };
-
-  const salvarClienteRapido = async () => {
-    if (!formCliente.nome_empresa.trim()) { setErroCliente('Nome é obrigatório.'); return; }
-    setSalvandoCliente(true); setErroCliente(null);
-    try {
-      const { data, error } = await supabase.from('clientes').insert([{
-        nome_empresa: formCliente.nome_empresa.trim(),
-        telefone: formCliente.telefone.trim() || null,
-        cnpj: formCliente.cnpj.trim() || null,
-        email: formCliente.email.trim() || null,
-        cidade: formCliente.cidade.trim() || null,
-        endereco: formCliente.endereco.trim() || null,
-        status: 'ativo', status_risco: 'em_analise', empresa_id: perfil?.empresa_id,
-      }]).select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco').single();
-      if (error) throw error;
-      setClienteSelecionado(data as ClienteOpcao);
-      setClienteQuery(''); setClienteResultados([]);
-      setModalClienteAberto(false);
-    } catch (err: any) {
-      setErroCliente(err?.message || 'Erro ao cadastrar cliente.');
-    } finally {
-      setSalvandoCliente(false);
-    }
+    const url = `/customers?novo=1${nomeInicial ? `&nome=${encodeURIComponent(nomeInicial)}` : ''}`;
+    window.open(url, '_blank');
   };
 
   useEffect(() => {
@@ -982,34 +954,6 @@ export default function PulseNovaVendaPage() {
         );
       })()}
 
-      {modalClienteAberto && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalClienteAberto(false)}>
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-sm p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-white font-black text-sm uppercase flex items-center gap-1.5"><UserPlus size={14} /> Cadastrar cliente</p>
-              <button onClick={() => setModalClienteAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={16} /></button>
-            </div>
-            <div className="space-y-2">
-              <input value={formCliente.nome_empresa} onChange={e => setFormCliente(p => ({ ...p, nome_empresa: e.target.value }))} placeholder="Nome / Razão social *" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-              <input value={formCliente.telefone} onChange={e => setFormCliente(p => ({ ...p, telefone: e.target.value }))} placeholder="Telefone" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-              <input value={formCliente.cnpj} onChange={e => setFormCliente(p => ({ ...p, cnpj: e.target.value }))} placeholder="CNPJ/CPF (precisa pra emitir NF)" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-              <input value={formCliente.email} onChange={e => setFormCliente(p => ({ ...p, email: e.target.value }))} placeholder="E-mail" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={formCliente.cidade} onChange={e => setFormCliente(p => ({ ...p, cidade: e.target.value }))} placeholder="Cidade" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-                <input value={formCliente.endereco} onChange={e => setFormCliente(p => ({ ...p, endereco: e.target.value }))} placeholder="Endereço" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
-              </div>
-            </div>
-            {erroCliente && <p className="text-red-400 text-xs font-bold mt-2">{erroCliente}</p>}
-            <button
-              onClick={salvarClienteRapido}
-              disabled={salvandoCliente || !formCliente.nome_empresa.trim()}
-              className="w-full mt-4 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2"
-            >
-              {salvandoCliente ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={14} />} {salvandoCliente ? 'Salvando...' : 'Cadastrar e selecionar'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

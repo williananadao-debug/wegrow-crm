@@ -9,7 +9,7 @@ import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAdit
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
-  id: number; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
+  id: number; produto_final_id: number | null; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
   status: StatusProducao; previsao_entrega: string | null; responsavel_id: string | null; lead_id: number | null;
   etapa_fabricacao_idx: number;
 };
@@ -72,7 +72,7 @@ function PulseProducaoContent() {
     setLoading(true);
     const [{ data: servicosData }, { data: producoesData }, { data: fichasData }] = await Promise.all([
       supabase.from('servicos').select('*').order('nome', { ascending: true }),
-      supabase.from('pulse_producoes').select('id, produto_final_nome, quantidade_produzida, custo_total, created_at, status, previsao_entrega, responsavel_id, lead_id, etapa_fabricacao_idx').order('created_at', { ascending: false }).limit(60),
+      supabase.from('pulse_producoes').select('id, produto_final_id, produto_final_nome, quantidade_produzida, custo_total, created_at, status, previsao_entrega, responsavel_id, lead_id, etapa_fabricacao_idx').order('created_at', { ascending: false }).limit(60),
       supabase.from('pulse_fichas_tecnicas').select('id, produto_final_id, servico_id, quantidade_por_unidade'),
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
@@ -450,9 +450,13 @@ function PulseProducaoContent() {
                     const proxima = PROXIMA_ETAPA[p.status];
                     const proximaInfo = proxima ? COLUNAS.find(c => c.status === proxima) : null;
                     const atrasada = p.previsao_entrega && new Date(p.previsao_entrega) < new Date() && p.status !== 'entregue';
+                    // Foto de progresso (anexada ao concluir etapa) tem prioridade — quando
+                    // ainda não tem nenhuma, cai pra foto do produto cadastrada no catálogo.
+                    const fotoCard = fotosPorProducao[p.id] || servicoPorId.get(p.produto_final_id ?? -1)?.imagem_url || null;
                     return (
                       <div key={p.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-3">
-                        <button onClick={() => abrirDetalhe(p)} className="w-full text-left">
+                        <button onClick={() => abrirDetalhe(p)} className="w-full text-left flex items-center gap-2">
+                          {fotoCard && <img src={fotoCard} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0" />}
                           <p className="text-white font-bold text-sm truncate hover:underline">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
                         </button>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">

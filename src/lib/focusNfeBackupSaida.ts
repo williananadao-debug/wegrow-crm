@@ -22,7 +22,8 @@ export async function listarBackupsMensais(token: string, ambiente: FocusNfeAmbi
 }
 
 export type ResultadoBackfillSaida = {
-  mesesProcessados: number; xmlsLidos: number; notasNovas: number; falhas: number;
+  mesesEncontrados: number; mesesProcessados: number; xmlsLidos: number;
+  xmlsDeSaidaEncontrados: number; notasNovas: number; falhas: number;
 };
 
 export async function processarBackfillSaida(params: {
@@ -33,31 +34,35 @@ export async function processarBackfillSaida(params: {
   const cnpjEmpresaDigitos = soDigitos(cnpjEmpresa);
 
   const backups = await listarBackupsMensais(token, ambiente, cnpjEmpresa);
+  console.log(`[focusNfeBackupSaida] ${backups.length} mês(es) de backup encontrado(s) pro CNPJ ${cnpjEmpresaDigitos} (ambiente ${ambiente}):`, backups.map(b => ({ mes: b.mes, temXml: !!b.xmls })));
 
   const { data: existentes } = await db.from('fiscal_notas')
     .select('chave_acesso').eq('empresa_id', empresaId).not('chave_acesso', 'is', null);
   const chavesConhecidas = new Set((existentes || []).map((n: { chave_acesso: string }) => n.chave_acesso));
 
-  let mesesProcessados = 0, xmlsLidos = 0, notasNovas = 0, falhas = 0;
+  let mesesProcessados = 0, xmlsLidos = 0, xmlsDeSaidaEncontrados = 0, notasNovas = 0, falhas = 0;
+  const emitentesVistos = new Set<string>();
 
   for (const mes of backups) {
     if (!mes.xmls) continue;
     try {
       const zipRes = await fetch(mes.xmls, { headers: headerAuth(token) });
-      if (!zipRes.ok) { falhas++; continue; }
+      if (!zipRes.ok) { console.error(`[focusNfeBackupSaida] falha ao baixar zip do mês ${mes.mes}: status ${zipRes.status}`); falhas++; continue; }
       const zip = await JSZip.loadAsync(await zipRes.arrayBuffer());
+      const nomesXml = Object.keys(zip.files).filter(n => !zip.files[n].dir && n.toLowerCase().endsWith('.xml'));
+      console.log(`[focusNfeBackupSaida] mês ${mes.mes}: ${nomesXml.length} XML(s) no zip`);
 
       const linhasNovas: Record<string, unknown>[] = [];
-      for (const nomeArquivo of Object.keys(zip.files)) {
-        const arquivo = zip.files[nomeArquivo];
-        if (arquivo.dir || !nomeArquivo.toLowerCase().endsWith('.xml')) continue;
+      for (const nomeArquivo of nomesXml) {
         xmlsLidos++;
-        const xml = await arquivo.async('text');
+        const xml = await zip.files[nomeArquivo].async('text');
         const cab = extrairCabecalhoXmlNfe(xml);
+        if (cab.cnpjEmitente) emitentesVistos.add(soDigitos(cab.cnpjEmitente));
         if (!cab.chaveAcesso || chavesConhecidas.has(cab.chaveAcesso)) continue;
         // Só saída: XML onde o emitente é a própria empresa. Entrada (fornecedor emitiu
         // contra a empresa) já é coberta pelo backfill de recebidas — ignora aqui pra não duplicar.
         if (soDigitos(cab.cnpjEmitente) !== cnpjEmpresaDigitos) continue;
+        xmlsDeSaidaEncontrados++;
 
         chavesConhecidas.add(cab.chaveAcesso);
         linhasNovas.push({
@@ -72,7 +77,7 @@ export async function processarBackfillSaida(params: {
 
       if (linhasNovas.length > 0) {
         const { error } = await db.from('fiscal_notas').insert(linhasNovas);
-        if (error) { falhas += linhasNovas.length; } else { notasNovas += linhasNovas.length; }
+        if (error) { console.error(`[focusNfeBackupSaida] falha ao gravar notas do mês ${mes.mes}:`, error.message); falhas += linhasNovas.length; } else { notasNovas += linhasNovas.length; }
       }
       mesesProcessados++;
     } catch (err) {
@@ -81,5 +86,7 @@ export async function processarBackfillSaida(params: {
     }
   }
 
-  return { mesesProcessados, xmlsLidos, notasNovas, falhas };
+  console.log(`[focusNfeBackupSaida] CNPJs emitentes vistos nos XMLs (esperado: incluir ${cnpjEmpresaDigitos}):`, [...emitentesVistos]);
+
+  return { mesesEncontrados: backups.length, mesesProcessados, xmlsLidos, xmlsDeSaidaEncontrados, notasNovas, falhas };
 }

@@ -136,7 +136,12 @@ export default function FiscalPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao buscar histórico de saída.');
-      const partes = [`${json.mesesProcessados} mês(es) verificado(s)`, `${json.notasNovas} nota(s) de saída nova(s)`];
+      const partes = [
+        `${json.mesesEncontrados} mês(es) de backup encontrado(s) no Focus NFe`,
+        `${json.xmlsLidos} XML(s) lido(s) no total`,
+        `${json.xmlsDeSaidaEncontrados} de saída (dessa empresa)`,
+        `${json.notasNovas} nota(s) de saída nova(s) gravada(s)`,
+      ];
       if (json.falhas) partes.push(`${json.falhas} falha(s)`);
       setResultadoHistoricoSaida(partes.join(', ') + '.');
       carregar();

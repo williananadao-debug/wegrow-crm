@@ -68,6 +68,8 @@ export default function FiscalPage() {
   const [lancarNotaAberto, setLancarNotaAberto] = useState(false);
   const [buscandoHistorico, setBuscandoHistorico] = useState(false);
   const [resultadoHistorico, setResultadoHistorico] = useState<string | null>(null);
+  const [buscandoHistoricoSaida, setBuscandoHistoricoSaida] = useState(false);
+  const [resultadoHistoricoSaida, setResultadoHistoricoSaida] = useState<string | null>(null);
   // "Agora" travado num state em vez de Date.now() dentro do useMemo — chamar função
   // impura no render é proibido pela regra de pureza do React. A tela não fica aberta
   // por dias, então fixar na montagem é suficiente pro corte de período.
@@ -117,6 +119,32 @@ export default function FiscalPage() {
       setResultadoHistorico(`Erro: ${msg}`);
     } finally {
       setBuscandoHistorico(false);
+    }
+  };
+
+  // Nota de saída não tem endpoint de "listar histórico" no Focus NFe (só o webhook, que
+  // só pega daqui pra frente) — o único jeito de trazer nota antiga é pelo backup mensal,
+  // ver focusNfeBackupSaida.ts.
+  const buscarHistoricoSaida = async () => {
+    setBuscandoHistoricoSaida(true); setResultadoHistoricoSaida(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/backfill-saida', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao buscar histórico de saída.');
+      const partes = [`${json.mesesProcessados} mês(es) verificado(s)`, `${json.notasNovas} nota(s) de saída nova(s)`];
+      if (json.falhas) partes.push(`${json.falhas} falha(s)`);
+      setResultadoHistoricoSaida(partes.join(', ') + '.');
+      carregar();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'falha ao buscar histórico de saída.';
+      setResultadoHistoricoSaida(`Erro: ${msg}`);
+    } finally {
+      setBuscandoHistoricoSaida(false);
     }
   };
 
@@ -193,7 +221,13 @@ export default function FiscalPage() {
           {isLideranca && (
             <button onClick={buscarHistoricoCompleto} disabled={buscandoHistorico} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
               {buscandoHistorico ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
-              {buscandoHistorico ? 'Buscando...' : 'Buscar histórico completo'}
+              {buscandoHistorico ? 'Buscando...' : 'Buscar histórico (entrada)'}
+            </button>
+          )}
+          {isLideranca && (
+            <button onClick={buscarHistoricoSaida} disabled={buscandoHistoricoSaida} title="Traz nota de saída emitida antes do webhook estar ativo, via backup mensal do Focus NFe" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              {buscandoHistoricoSaida ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
+              {buscandoHistoricoSaida ? 'Buscando...' : 'Buscar histórico (saída)'}
             </button>
           )}
           <button onClick={() => setLancarNotaAberto(true)} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
@@ -216,6 +250,12 @@ export default function FiscalPage() {
       {resultadoHistorico && (
         <div className={`mb-4 rounded-xl p-3 text-xs font-bold ${resultadoHistorico.startsWith('Erro') ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
           {resultadoHistorico}
+        </div>
+      )}
+
+      {resultadoHistoricoSaida && (
+        <div className={`mb-4 rounded-xl p-3 text-xs font-bold ${resultadoHistoricoSaida.startsWith('Erro') ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+          {resultadoHistoricoSaida}
         </div>
       )}
 

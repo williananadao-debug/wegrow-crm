@@ -9,7 +9,10 @@ export { extrairItensXmlNfe } from '@/lib/nfeXmlParser';
 
 export type FocusNfeAmbiente = 'producao' | 'homologacao';
 
-function baseUrl(ambiente: FocusNfeAmbiente) {
+// Exportado — reaproveitado pelo webhook de nota emitida (server-side) pra montar tanto a
+// URL da chamada de consulta (GET /v2/nfe/{ref}) quanto pra completar caminho_danfe/
+// caminho_xml_nota_fiscal, que a Focus NFe manda como path relativo, não URL completa.
+export function baseUrl(ambiente: FocusNfeAmbiente) {
   return ambiente === 'producao' ? 'https://api.focusnfe.com.br' : 'https://homologacao.focusnfe.com.br';
 }
 
@@ -17,6 +20,8 @@ function baseUrl(ambiente: FocusNfeAmbiente) {
 function headerAuth(token: string) {
   return { Authorization: `Basic ${Buffer.from(`${token}:`).toString('base64')}` };
 }
+
+export { headerAuth };
 
 export type NfeRecebidaResumo = {
   nome_emitente: string | null;

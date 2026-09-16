@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { baseUrl, headerAuth, type FocusNfeAmbiente } from '@/lib/focusNfe';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,31 @@ function primeiro(...valores: any[]) {
   return valores.find(v => v !== undefined && v !== null && v !== '') ?? null;
 }
 
+// Confirmado com um teste real do time (payload de exemplo do próprio Focus NFe): o corpo
+// que chega no webhook é raso — cnpj_emitente, ref, status, status_sefaz, mensagem_sefaz,
+// chave_nfe, numero, serie, protocolo, caminho_xml_nota_fiscal, caminho_danfe. NÃO vem
+// destinatário, valor nem data de emissão nesse nível — isso só aparece consultando de
+// volta com ?completa=1 (dentro de requisicao_nota_fiscal). caminho_danfe/
+// caminho_xml_nota_fiscal também vêm como path relativo ("/arquivos/..."), não URL
+// completa — precisa prefixar com o domínio do Focus NFe.
+async function buscarDetalhesCompletos(ref: string, token: string, ambiente: FocusNfeAmbiente) {
+  try {
+    const res = await fetch(`${baseUrl(ambiente)}/v2/nfe/${ref}?completa=1`, { headers: headerAuth(token) });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const req = json?.requisicao_nota_fiscal || {};
+    return {
+      valorTotal: primeiro(req.valor_total),
+      nomeDestinatario: primeiro(req.nome_destinatario),
+      cnpjDestinatario: primeiro(req.cnpj_destinatario, req.cpf_destinatario),
+      dataEmissao: primeiro(req.data_emissao),
+    };
+  } catch (err) {
+    console.error('[webhook/focus-nfe/emitida] falha ao consultar detalhes completos:', err);
+    return null;
+  }
+}
+
 // POST — Focus NFe chama isso pra qualquer NF-e (evento "nfe") ligada ao CNPJ da empresa
 // ficar autorizada, seja ela emitida pela nossa própria integração (fluxo de "entrega
 // futura" do Pulse) ou emitida direto no painel do Focus NFe pela empresa (ex: Trailer
@@ -27,7 +53,9 @@ export async function POST(request: Request) {
   if (!secretRecebido) return NextResponse.json({ erro: 'Sem assinatura.' }, { status: 401 });
 
   const db = supabaseAdmin();
-  const { data: integracao } = await db.from('fiscal_integracoes').select('empresa_id').eq('webhook_secret', secretRecebido).maybeSingle();
+  const { data: integracao } = await db.from('fiscal_integracoes')
+    .select('empresa_id, token_producao, token_homologacao, ambiente_ativo')
+    .eq('webhook_secret', secretRecebido).maybeSingle();
   if (!integracao) return NextResponse.json({ erro: 'Assinatura inválida.' }, { status: 401 });
 
   let payload: any;
@@ -40,23 +68,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignorado: true, status });
   }
 
+  const ambiente: FocusNfeAmbiente = integracao.ambiente_ativo === 'producao' ? 'producao' : 'homologacao';
+  const token = ambiente === 'producao' ? integracao.token_producao : integracao.token_homologacao;
+
+  const ref = primeiro(payload.ref);
   const chaveAcesso = primeiro(payload.chave_nfe, payload.chave_acesso, payload.chave);
-  const cnpjDestinatario = primeiro(payload.cnpj_destinatario, payload.cpf_destinatario);
-  const nomeDestinatario = primeiro(payload.nome_destinatario, payload.razao_social_destinatario);
   const numero = primeiro(payload.numero, payload.numero_nfe);
   const serie = primeiro(payload.serie);
-  const valorTotal = primeiro(payload.valor_total, payload.valor_nota, payload.valor);
-  const dataEmissao = primeiro(payload.data_emissao, payload.data);
-  const danfeUrl = primeiro(payload.caminho_danfe, payload.url_danfe);
-  const xmlUrl = primeiro(payload.caminho_xml_nota_fiscal, payload.caminho_xml, payload.url_xml);
+  const caminhoDanfe = primeiro(payload.caminho_danfe);
+  const caminhoXml = primeiro(payload.caminho_xml_nota_fiscal, payload.caminho_xml);
+  const danfeUrl = caminhoDanfe ? `${baseUrl(ambiente)}${caminhoDanfe}` : null;
+  const xmlUrl = caminhoXml ? `${baseUrl(ambiente)}${caminhoXml}` : null;
+
+  // Valor/destinatário/data não vêm no corpo do webhook — busca numa segunda chamada só
+  // se tiver ref e token (nota emitida fora do nosso token não teria ref que a gente
+  // reconheça, mas o Focus NFe manda o ref dela mesmo assim; se falhar, a nota entra sem
+  // esses dados em vez de travar o webhook inteiro).
+  const detalhes = ref && token ? await buscarDetalhesCompletos(ref, token, ambiente) : null;
 
   if (chaveAcesso) {
     const { data: existente } = await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('chave_acesso', chaveAcesso).maybeSingle();
     if (existente) {
       // Reenvio do mesmo evento (Focus NFe faz retry) ou a nota amadureceu de
-      // "processando" pra "autorizado" — atualiza o que muda (link do DANFE/XML só fica
-      // disponível depois de autorizada) em vez de duplicar linha.
-      await db.from('fiscal_notas').update({ status: 'autorizada', danfe_url: danfeUrl, xml_url: xmlUrl }).eq('id', existente.id);
+      // "processando" pra "autorizado" — atualiza o que muda em vez de duplicar linha.
+      await db.from('fiscal_notas').update({
+        status: 'autorizada', danfe_url: danfeUrl, xml_url: xmlUrl,
+        ...(detalhes?.valorTotal != null ? { valor_total: detalhes.valorTotal } : {}),
+        ...(detalhes?.nomeDestinatario ? { nome_participante: detalhes.nomeDestinatario, cnpj_participante: detalhes.cnpjDestinatario } : {}),
+        ...(detalhes?.dataEmissao ? { data_emissao: detalhes.dataEmissao } : {}),
+      }).eq('id', existente.id);
       return NextResponse.json({ ok: true, atualizado: true });
     }
   }
@@ -66,16 +106,16 @@ export async function POST(request: Request) {
     tipo: 'saida',
     chave_acesso: chaveAcesso,
     numero, serie,
-    cnpj_participante: cnpjDestinatario,
-    nome_participante: nomeDestinatario,
-    valor_total: valorTotal,
+    cnpj_participante: detalhes?.cnpjDestinatario ?? null,
+    nome_participante: detalhes?.nomeDestinatario ?? null,
+    valor_total: detalhes?.valorTotal ?? null,
     status: 'autorizada',
     origem: 'focus_nfe_emitida',
-    data_emissao: dataEmissao,
+    data_emissao: detalhes?.dataEmissao ?? null,
     danfe_url: danfeUrl,
     xml_url: xmlUrl,
     itens_status: 'processado',
-    observacao: `Payload bruto do webhook (conferir mapeamento de campos na primeira nota real): ${JSON.stringify(payload).slice(0, 1800)}`,
+    observacao: `Payload bruto do webhook: ${JSON.stringify(payload).slice(0, 1800)}`,
   }]);
 
   return NextResponse.json({ ok: true });

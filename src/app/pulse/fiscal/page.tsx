@@ -32,6 +32,11 @@ const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
 const ORIGEM_LABEL: Record<string, string> = {
   manifestacao_focus_nfe: 'Capturada automática',
   emissao_focus_nfe: 'Emitida pelo sistema',
+  // Pega nota de saída autorizada no Focus NFe independente de quem emitiu — pela nossa
+  // integração (futuro botão de emissão) ou direto no painel do Focus NFe pela própria
+  // empresa. "emissao_focus_nfe" acima fica reservado pra quando for certeza que foi a
+  // nossa própria chamada de API que criou a nota.
+  focus_nfe_emitida: 'Emitida (Focus NFe)',
   manual: 'Lançada na mão',
 };
 

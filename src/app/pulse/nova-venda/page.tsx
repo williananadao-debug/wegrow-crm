@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
@@ -8,8 +9,9 @@ import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecni
 
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
-export default function PulseNovaVendaPage() {
+function PulseNovaVendaContent() {
   const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa } = usePulseAccess();
+  const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
@@ -323,6 +325,18 @@ export default function PulseNovaVendaPage() {
     setMostrarHistorico(false);
     setErro(null);
   };
+
+  // Vem do botão "Editar" em /pulse (Painel → Orçamentos em aberto) — busca o orçamento
+  // direto (essa aba não carrega o histórico sozinha) e já abre pra edição.
+  useEffect(() => {
+    const idParam = searchParams.get('editarOrcamento');
+    if (!idParam) return;
+    supabase.from('leads').select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
+      .eq('id', Number(idParam)).single()
+      .then(({ data }) => { if (data) editarOrcamento(data); });
+    window.history.replaceState({}, '', '/pulse/nova-venda');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);
@@ -1195,5 +1209,13 @@ export default function PulseNovaVendaPage() {
       {renderModalContrato()}
       {renderModalCobranca()}
     </div>
+  );
+}
+
+export default function PulseNovaVendaPage() {
+  return (
+    <Suspense fallback={<div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>}>
+      <PulseNovaVendaContent />
+    </Suspense>
   );
 }

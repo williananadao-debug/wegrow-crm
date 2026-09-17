@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package } from 'lucide-react';
+import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, etapasFabricacaoDe } from './shared';
@@ -424,6 +424,9 @@ export default function PulsePainelPage() {
                   <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade), empresa)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Orçamento
                   </button>
+                  <Link href={`/pulse/nova-venda?editarOrcamento=${v.id}`} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                    <Pencil size={10} /> Editar
+                  </Link>
                   <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <CheckCircle2 size={10} /> Converter em Pedido
                   </button>

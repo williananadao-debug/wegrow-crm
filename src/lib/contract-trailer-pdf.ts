@@ -1,12 +1,12 @@
 import PDFDocument from 'pdfkit';
 
-// ⚠️ RASCUNHO — as cláusulas de "OUTRAS CONDIÇÕES" abaixo são um modelo padrão de
-// mercado pra venda de bem manufaturado sob encomenda, escrito pra a empresa revisar
-// com advogado antes de usar com cliente de verdade. Não é aconselhamento jurídico.
-// Estrutura/código copiados de contract-radio-pdf.ts (mesmo padrão de geração de PDF +
-// Docuseal), conteúdo das cláusulas é todo novo (venda de mercadoria != veiculação de
-// publicidade — prazo de fabricação, garantia e cancelamento de encomenda não existem
-// no contrato de rádio).
+// Texto das cláusulas segue o contrato real que a Trailer Travel já usa e já assinou com
+// clientes (o mesmo modelo enviado pela empresa, usado nas vendas do Alex Simões Franco e
+// da Thirty Marketing Solutions em 27-28/08/2026) — não é mais um rascunho genérico.
+// Única diferença deliberada: a cláusula de validade de assinatura eletrônica no fim, que
+// o contrato original não tinha (eles assinam por certificado ICP-Brasil via gov.br) mas
+// que é necessária aqui porque a assinatura é feita pelo DocuSeal.
+// Estrutura de geração de PDF (header/rodapé/paginação) copiada de contract-radio-pdf.ts.
 
 export type ItemContratoTrailer = {
   servico: string; quantidade: number; precoUnitario: number; descricao?: string | null;
@@ -60,16 +60,6 @@ function fmtVencimentos(vencimento: string, parcelas: string, vencimentosDatas?:
   if (!vencimento) return fmtData('');
   return Array.from({ length: qtd }, (_, i) => fmtData(somarMeses(vencimento, i))).join(',          ');
 }
-const UF_NOMES: Record<string, string> = {
-  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará',
-  DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso',
-  MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
-  PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
-  RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
-  SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
-};
-function nomeEstado(uf?: string) { return uf ? (UF_NOMES[uf.toUpperCase()] || uf) : ''; }
-
 export type ContratoTrailerBufferResult = { buffer: Buffer; sigPage: number; sigYFrac: number };
 
 export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<ContratoTrailerBufferResult> {
@@ -89,15 +79,9 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       let paginaAtual = 1;
       doc.on('pageAdded', () => { paginaAtual++; });
 
-      // ── AVISO DE MINUTA ────────────────────────────────────────────
-      doc.rect(50, 50, doc.page.width - 100, 22).fillAndStroke('#fef3c7', '#d97706');
-      doc.fillColor('#92400e').font('Helvetica-Bold').fontSize(8)
-        .text('MINUTA — MODELO PADRÃO, SUJEITO A REVISÃO JURÍDICA ANTES DO USO OFICIAL', 50, 57, { width: doc.page.width - 100, align: 'center' });
-      doc.moveDown(2.2);
-
       // ── HEADER ──────────────────────────────────────────────────
       doc.fontSize(16).font('Helvetica-Bold').fillColor(corTitulo)
-        .text('CONTRATO DE COMPRA E VENDA DE BEM MÓVEL SOB ENCOMENDA', { align: 'center' });
+        .text('CONTRATO PARTICULAR DE COMPRA E FABRICAÇÃO DE TRAILER SOB ENCOMENDA', { align: 'center' });
       doc.fontSize(8).font('Helvetica').fillColor('#555')
         .text(`${data.vendedora_nome}  ·  Protocolo #${data.protocolo}`, { align: 'center' });
       doc.moveDown(0.8);
@@ -107,21 +91,23 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       // ── INTRO / PARTES ───────────────────────────────────────────
       doc.fontSize(8).font('Helvetica').fillColor('#000');
       const localVendedora = data.vendedora_cidade
-        ? `, na cidade de ${data.vendedora_cidade}${data.vendedora_estado ? ` - Estado de ${nomeEstado(data.vendedora_estado)}` : ''}`
+        ? `, com sede na cidade de ${data.vendedora_cidade}${data.vendedora_estado ? `/${data.vendedora_estado}` : ''}`
         : '';
-      doc.text('Pelo presente instrumento particular, de um lado ', { continued: true })
-        .font('Helvetica-Bold').text(data.vendedora_razao, { continued: true })
+      doc.text('Pelo presente instrumento particular, de um lado: ', { continued: true })
+        .font('Helvetica-Bold').text('CONTRATADA: ', { continued: true })
         .font('Helvetica').text(
-          `, com sede à ${data.vendedora_endereco || '___'}${localVendedora}, CNPJ: ${data.vendedora_cnpj || '___'}, doravante denominada VENDEDORA, e de outro lado o COMPRADOR:`,
+          `${data.vendedora_razao}, pessoa jurídica de direito privado, inscrita no CNPJ nº ${data.vendedora_cnpj || '___'}${localVendedora}, neste ato representada por sua representante legal, doravante denominada simplesmente CONTRATADA;`,
           { align: 'justify' }
         );
-      doc.moveDown(0.8);
+      doc.moveDown(0.6);
+      doc.text('e, de outro lado:', { align: 'justify' });
+      doc.moveDown(0.4);
 
       const linha = (label: string, valor: string) => {
         doc.font('Helvetica-Bold').fontSize(8).text(label, 50, doc.y, { continued: true })
           .font('Helvetica').text(valor || '___________________________');
       };
-      doc.font('Helvetica-Bold').fontSize(8).text('COMPRADOR: ', 50, doc.y);
+      doc.font('Helvetica-Bold').fontSize(8).text('CONTRATANTE: ', 50, doc.y);
       linha('Nome/Razão Social: ', (data.cliente_razao_social || data.cliente).toUpperCase());
       const y1 = doc.y;
       doc.font('Helvetica-Bold').text('CPF/CNPJ: ', 50, y1, { continued: true, width: 240 })
@@ -136,77 +122,153 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.moveDown(0.6);
 
       doc.font('Helvetica').fontSize(8).fillColor('#000')
-        .text('Têm entre si justo e acordado o presente contrato de compra e venda de bem móvel fabricado sob encomenda, conforme especificações e condições a seguir.', { align: 'justify' });
+        .text('Têm entre si justo e contratado o presente Contrato Particular de Compra e Fabricação de Trailer Sob Encomenda, doravante simplesmente CONTRATANTE, mediante as cláusulas e condições seguintes.', { align: 'justify' });
       doc.moveDown(0.8);
 
-      // ── 1. OBJETO ────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('1. OBJETO E ESPECIFICAÇÕES');
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
-      doc.font('Helvetica').fontSize(8).fillColor('#000');
-      for (const item of data.itens) {
-        doc.font('Helvetica-Bold').text(`${item.servico} — ${item.quantidade}x ${fmt(item.precoUnitario)}`);
-        if (item.descricao) {
-          doc.font('Helvetica').fontSize(7.5).fillColor('#333').text(item.descricao, { align: 'justify' });
-          doc.fillColor('#000').fontSize(8);
-        }
+      const clausula = (n: string, titulo: string) => {
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`CLÁUSULA ${n} – ${titulo}`);
+        doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
         doc.moveDown(0.4);
-      }
+      };
 
-      // ── 2. PRAZO DE ENTREGA ────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('2. PRAZO DE ENTREGA');
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
-      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
-        data.prazoFabricacaoDias
-          ? `O prazo estimado de fabricação e entrega é de ${data.prazoFabricacaoDias} dias corridos, contados a partir da assinatura deste contrato e da confirmação do pagamento do sinal (quando aplicável). O prazo é estimado e pode variar conforme personalização solicitada, disponibilidade de insumos e casos fortuitos ou de força maior, sem que isso gere multa ou indenização à VENDEDORA.`
-          : 'O prazo de entrega será acordado entre as partes conforme especificações do item, disponibilidade de insumos e casos fortuitos ou de força maior, sem que isso gere multa ou indenização à VENDEDORA.',
+      // ── 1ª – DO OBJETO ──────────────────────────────────────────────
+      clausula('1ª', 'DO OBJETO');
+      doc.font('Helvetica').fontSize(8).fillColor('#000');
+      const totalUnidades = data.itens.reduce((s, i) => s + i.quantidade, 0);
+      doc.text(
+        `O presente contrato tem por objeto a fabricação, montagem, venda, documentação e entrega de ${totalUnidades} (${totalUnidades === 1 ? 'um' : totalUnidades}) trailer(s) produzido(s) sob encomenda pela CONTRATADA, conforme as características e especificações estabelecidas neste instrumento.`,
         { align: 'justify' }
       );
-      doc.moveDown(0.8);
+      doc.moveDown(0.3);
+      for (const item of data.itens) {
+        doc.font('Helvetica-Bold').fontSize(8).text(`Modelo: ${item.servico}${item.quantidade > 1 ? ` (${item.quantidade} unidades)` : ''}`);
+      }
+      doc.font('Helvetica-Bold').fontSize(8).text(`Valor: ${fmt(data.valor_total)}`);
+      doc.moveDown(0.6);
 
-      // ── 3. VALOR E FORMA DE PAGAMENTO ──────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('3. VALOR E FORMA DE PAGAMENTO');
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
-      doc.fontSize(9).fillColor('#000');
+      // ── 2ª – DAS ESPECIFICAÇÕES DO TRAILER ───────────────────────────
+      clausula('2ª', 'DAS ESPECIFICAÇÕES DO TRAILER');
+      doc.font('Helvetica').fontSize(8).fillColor('#000')
+        .text('O trailer será fabricado contemplando os seguintes itens e características:', { align: 'justify' });
+      doc.moveDown(0.3);
+      for (const item of data.itens) {
+        if (item.descricao) {
+          doc.font('Helvetica').fontSize(7.5).fillColor('#333').text(item.descricao, { align: 'left' });
+          doc.fillColor('#000').fontSize(8);
+          doc.moveDown(0.3);
+        }
+      }
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'O trailer será entregue documentado e emplacado em nome do CONTRATANTE, observadas as exigências e procedimentos dos órgãos competentes.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── 3ª – DO VALOR E DA FORMA DE PAGAMENTO ─────────────────────────
+      clausula('3ª', 'DO VALOR E DA FORMA DE PAGAMENTO');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        `O valor total ajustado para fabricação e fornecimento do(s) trailer(s) objeto deste contrato é de ${fmt(data.valor_total)}.`,
+        { align: 'justify' }
+      );
+      doc.moveDown(0.3);
       const subtotal = data.itens.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
       if (data.desconto > 0) {
         linha('Subtotal: ', fmt(subtotal));
         linha('Desconto: ', `- ${fmt(data.desconto)}`);
       }
-      linha('Valor Total: ', fmt(data.valor_total));
       linha('Parcela(s): ', data.parcelas || '1');
       linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
       if (data.forma_pagamento) linha('Forma de Pagamento: ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
-      doc.moveDown(0.8);
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'A entrega definitiva e liberação do trailer ficam condicionadas à quitação integral do valor contratado, bem como de eventuais itens adicionais solicitados e previamente aprovados pelo CONTRATANTE. O atraso no pagamento de qualquer parcela poderá acarretar incidência de multa de 2% sobre o valor em atraso, acrescida de juros de 1% ao mês, calculados proporcionalmente ao período de atraso.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── 4ª – DO PRAZO DE FABRICAÇÃO E ENTREGA ─────────────────────────
+      clausula('4ª', 'DO PRAZO DE FABRICAÇÃO E ENTREGA');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        data.prazoFabricacaoDias
+          ? `A previsão para conclusão e entrega é de ${data.prazoFabricacaoDias} dias corridos, contados a partir da assinatura deste contrato. Por se tratar de produto fabricado sob encomenda e de forma personalizada, o CONTRATANTE declara estar ciente de que o prazo poderá sofrer ajustes em situações decorrentes de fatores externos, indisponibilidade de componentes específicos, atrasos de fornecedores, alterações solicitadas pelo próprio CONTRATANTE, caso fortuito ou força maior. A CONTRATADA deverá comunicar ao CONTRATANTE eventual situação relevante que possa impactar significativamente a previsão de conclusão e entrega.`
+          : 'A previsão de conclusão e entrega será acordada entre as partes. Por se tratar de produto fabricado sob encomenda e de forma personalizada, o CONTRATANTE declara estar ciente de que o prazo poderá sofrer ajustes em situações decorrentes de fatores externos, indisponibilidade de componentes específicos, atrasos de fornecedores, alterações solicitadas pelo próprio CONTRATANTE, caso fortuito ou força maior.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── 5ª – DAS ALTERAÇÕES E ITENS ADICIONAIS ────────────────────────
+      clausula('5ª', 'DAS ALTERAÇÕES E ITENS ADICIONAIS');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Qualquer alteração de projeto, acabamento, equipamento ou configuração solicitada pelo CONTRATANTE após a aprovação inicial estará sujeita à análise de viabilidade técnica pela CONTRATADA. Itens adicionais ou alterações que impliquem aumento de custos serão previamente orçados e somente serão executados após a aprovação do CONTRATANTE, passando a integrar o presente contrato mediante orçamento, termo aditivo ou outro documento escrito. Alterações realizadas durante o processo de fabricação poderão ocasionar alteração no prazo inicialmente previsto para entrega.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
 
       if (data.observacao) {
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text('4. OBSERVAÇÕES');
-        doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
-        doc.moveDown(0.4);
+        clausula('6ª', 'OBSERVAÇÕES');
         doc.font('Helvetica').fontSize(8).fillColor('#000').text(data.observacao, { align: 'justify' });
-        doc.moveDown(0.8);
+        doc.moveDown(0.6);
       }
+      const nClausula = (base: number) => data.observacao ? base + 1 : base;
 
-      // ── OUTRAS CONDIÇÕES ────────────────────────────────────────────
-      const proximaSecao = data.observacao ? 5 : 4;
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`${proximaSecao}. OUTRAS CONDIÇÕES`);
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
-      const condicoes = [
-        '1) Trata-se de bem fabricado sob encomenda, de acordo com as especificações acordadas entre as partes — não se aplica direito de arrependimento após o início da fabricação.',
-        '2) Em caso de cancelamento solicitado pelo COMPRADOR após o início da fabricação, a VENDEDORA reterá do sinal/valores já pagos o montante correspondente aos custos de material e mão de obra já empregados até a data do pedido de cancelamento, a ser apurado e informado ao COMPRADOR.',
-        '3) A VENDEDORA garante o bem contra defeitos de fabricação pelo prazo de 90 (noventa) dias, contados da data de entrega, excluindo-se desgaste natural de uso, mau uso, acidentes, alterações ou reparos realizados por terceiros não autorizados.',
-        '4) A propriedade e os riscos sobre o bem transferem-se ao COMPRADOR mediante a quitação integral do valor total e a efetiva entrega/retirada do bem.',
-        '5) Despesas de documentação, emplacamento e registro perante os órgãos competentes correm por conta do COMPRADOR, salvo disposição em contrário acordada por escrito entre as partes.',
-        '6) As parcelas pagas fora do prazo de vencimento incidirão em juros e multa de mora conforme legislação aplicável.',
-        `7) Fica eleito o Foro da Comarca de ${data.vendedora_cidade || '___________'} para dirimir quaisquer dúvidas ou questões oriundas do presente contrato.`,
-        '8) As partes reconhecem e aceitam, para todos os fins de direito, a validade jurídica da assinatura eletrônica utilizada na celebração deste contrato, nos termos do art. 10, §2º, da Medida Provisória nº 2.200-2/2001, dispensando a necessidade de certificado digital no padrão ICP-Brasil. A autenticidade e integridade das assinaturas são atestadas pelo registro de auditoria (endereço IP, data, hora e e-mail de cada signatário) gerado pela plataforma de assinatura eletrônica utilizada, o qual constitui parte integrante e inseparável deste instrumento.',
-      ];
-      doc.font('Helvetica').fontSize(8).fillColor('#000');
-      for (const c of condicoes) { doc.text(c, { align: 'justify' }); doc.moveDown(0.2); }
-      doc.moveDown(1.2);
+      // ── DOCUMENTAÇÃO E EMPLACAMENTO ───────────────────────────────────
+      clausula(`${nClausula(6)}ª`, 'DA DOCUMENTAÇÃO E EMPLACAMENTO');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'O trailer será entregue documentado e emplacado em nome do CONTRATANTE, observados os procedimentos e exigências dos órgãos competentes. O CONTRATANTE compromete-se a fornecer, dentro dos prazos solicitados, todos os documentos e informações necessários para realização do registro e emplacamento. Eventuais atrasos decorrentes da ausência de documentos ou informações de responsabilidade do CONTRATANTE, ou decorrentes dos procedimentos e prazos dos órgãos públicos competentes, não serão considerados atraso de fabricação imputável à CONTRATADA.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── ENTREGA E CONFERÊNCIA ─────────────────────────────────────────
+      clausula(`${nClausula(7)}ª`, 'DA ENTREGA E CONFERÊNCIA');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'No momento da entrega, o CONTRATANTE deverá realizar a conferência do trailer, de seus equipamentos, acabamentos e das especificações previstas neste contrato, sendo apresentadas orientações básicas referentes ao funcionamento dos principais sistemas e equipamentos instalados. A retirada e liberação definitiva do trailer ocorrerão somente após a quitação integral do contrato, incluindo eventuais itens adicionais contratados durante o processo de fabricação.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── GARANTIA ───────────────────────────────────────────────────
+      clausula(`${nClausula(8)}ª`, 'DA GARANTIA');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'A CONTRATADA assegurará garantia sobre os serviços de fabricação e montagem realizados diretamente por ela, observados os prazos e condições previstos na legislação aplicável. Equipamentos e componentes fornecidos por terceiros (ar-condicionado, televisão, bateria, inversor, placa solar, eletrodomésticos e demais acessórios) estarão sujeitos às condições e prazos de garantia dos respectivos fabricantes. A garantia não abrangerá danos decorrentes de mau uso, acidentes, excesso de carga, utilização inadequada, modificações ou reparos realizados por terceiros sem autorização, falta de manutenção preventiva, desgaste natural decorrente do uso, ou utilização em desacordo com as especificações e orientações técnicas.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── OBRIGAÇÕES DO CONTRATANTE ────────────────────────────────────
+      clausula(`${nClausula(9)}ª`, 'DAS OBRIGAÇÕES DO CONTRATANTE');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Compete ao CONTRATANTE: efetuar os pagamentos nos valores, datas e condições estabelecidos neste contrato; fornecer os documentos necessários para documentação e emplacamento; aprovar, dentro de prazo razoável, definições de projeto, cores, acabamentos e demais escolhas solicitadas pela CONTRATADA; utilizar o trailer de acordo com suas especificações técnicas; respeitar os limites de peso e capacidade do conjunto; utilizar veículo trator compatível com o peso e as características do trailer; realizar as manutenções preventivas necessárias; e respeitar as orientações de segurança referentes ao transporte de animais e utilização da cavaleira, quando aplicável.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── RESCISÃO ───────────────────────────────────────────────────
+      clausula(`${nClausula(10)}ª`, 'DA RESCISÃO');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Em caso de desistência ou rescisão por iniciativa do CONTRATANTE após o início da fabricação, deverão ser considerados os custos efetivamente assumidos pela CONTRATADA, incluindo materiais adquiridos, componentes encomendados, mão de obra empregada e demais despesas diretamente relacionadas à fabricação personalizada do trailer, sempre observada a legislação aplicável. Eventual rescisão deverá ser formalizada por escrito entre as partes.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
+      // ── DISPOSIÇÕES GERAIS ────────────────────────────────────────────
+      clausula(`${nClausula(11)}ª`, 'DAS DISPOSIÇÕES GERAIS');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Fotos, desenhos, plantas, projetos, imagens e representações em 3D apresentados durante a negociação poderão possuir caráter ilustrativo, prevalecendo as especificações expressamente estabelecidas neste contrato e eventuais alterações posteriormente aprovadas por escrito pelas partes. Eventuais tolerâncias de medidas poderão ocorrer em razão das características construtivas e técnicas do projeto, desde que não comprometam sua finalidade e utilização. Por se tratar de fabricação personalizada e sob encomenda, eventuais alterações solicitadas pelo CONTRATANTE deverão ser formalizadas e aprovadas pela CONTRATADA antes de sua execução.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.3);
+      doc.text(
+        `Fica eleito o foro da Comarca de ${data.vendedora_cidade || '___________'}${data.vendedora_estado ? `/${data.vendedora_estado}` : ''}, observadas as disposições da legislação aplicável, para dirimir eventuais controvérsias decorrentes deste contrato que não possam ser solucionadas amigavelmente entre as partes.`,
+        { align: 'justify' }
+      );
+      doc.moveDown(0.3);
+      doc.font('Helvetica-Oblique').fontSize(7.5).fillColor('#333').text(
+        'As partes reconhecem e aceitam, para todos os fins de direito, a validade jurídica da assinatura eletrônica utilizada na celebração deste contrato, nos termos do art. 10, §2º, da Medida Provisória nº 2.200-2/2001, dispensando a necessidade de certificado digital no padrão ICP-Brasil. A autenticidade e integridade das assinaturas são atestadas pelo registro de auditoria (endereço IP, data, hora e e-mail de cada signatário) gerado pela plataforma de assinatura eletrônica utilizada, o qual constitui parte integrante e inseparável deste instrumento.',
+        { align: 'justify' }
+      );
+      doc.fillColor('#000').fontSize(8);
+      doc.moveDown(1);
 
       // ── ASSINATURAS ──────────────────────────────────────────────
       const sigPage = paginaAtual;
@@ -216,8 +278,8 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.moveTo(50, sigY).lineTo(50 + sigW, sigY).strokeColor('#000').lineWidth(0.8).stroke();
       doc.moveTo(doc.page.width - 50 - sigW, sigY).lineTo(doc.page.width - 50, sigY).stroke();
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000')
-        .text('Assinatura do Comprador', 50, sigY + 4, { width: sigW, align: 'center' });
-      doc.text(`Representante da ${data.vendedora_nome || 'Vendedora'}`, doc.page.width - 50 - sigW, sigY + 4, { width: sigW, align: 'center' });
+        .text('CONTRATANTE', 50, sigY + 4, { width: sigW, align: 'center' });
+      doc.text('CONTRATADA', doc.page.width - 50 - sigW, sigY + 4, { width: sigW, align: 'center' });
 
       // ── FOOTER (em todas as páginas) — zera a margem inferior de cada página nesse
       // momento: sem isso o pdfkit acha que o rodapé estourou o limite e cria página extra em branco.

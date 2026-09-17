@@ -310,6 +310,11 @@ function PulseNovaVendaContent() {
   // recuperar o servicoId original, leads.itens só guarda nome/preço/qtd como snapshot da
   // venda), então perde o vínculo com o catálogo mas mantém tudo editável na mesma tela.
   const editarOrcamento = async (h: any) => {
+    // Se a telinha de "venda concluída" de uma ação anterior ainda estava na tela, ela
+    // continuava aparecendo por cima do carrinho mesmo depois de clicar em Editar — os
+    // dados carregavam certo por baixo, mas só apareciam depois de sair da telinha (ex:
+    // clicando "Nova venda") e clicar em Editar de novo. Isso sai daquela tela na hora.
+    setVendaConcluida(null);
     const itens = Array.isArray(h.itens) ? h.itens : [];
     setCarrinho(itens.map((it: any) => ({
       servicoId: proximoIdAvulsoRef.current--, nome: it.servico, quantidade: it.quantidade,

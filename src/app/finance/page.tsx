@@ -51,7 +51,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const { unidades } = useUnidades(perfil?.empresa_id);
   const hoje = new Date().toISOString().substring(0, 10);
 
-  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar' | 'dre'>('alertas');
+  const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar' | 'contas_receber' | 'dre'>('alertas');
   const [leads, setLeads] = useState<LeadFinance[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState<string | null>(null);
@@ -132,10 +132,16 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     carregarDespesas();
   };
 
-  const marcarDespesaPaga = async (id: number) => {
+  // Data de pagamento escolhida por linha (marcar como pago com data diferente de hoje,
+  // ex: registrar um pagamento que já aconteceu há alguns dias) — chave é o id do
+  // lançamento, compartilhado entre despesas e entradas (mesma tabela, id nunca colide).
+  const [dataPagamentoPorLinha, setDataPagamentoPorLinha] = useState<Record<number, string>>({});
+  const [editandoDataPagoId, setEditandoDataPagoId] = useState<number | null>(null);
+
+  const marcarDespesaPaga = async (id: number, data: string) => {
     setSalvando(String(id));
-    await supabase.from('lancamentos').update({ status: 'pago', data_pagamento: hoje }).eq('id', id);
-    setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pago', data_pagamento: hoje } : d));
+    await supabase.from('lancamentos').update({ status: 'pago', data_pagamento: data }).eq('id', id);
+    setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pago', data_pagamento: data } : d));
     setSalvando(null);
   };
 
@@ -143,6 +149,65 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setSalvando(String(id));
     await supabase.from('lancamentos').update({ status: 'pendente', data_pagamento: null }).eq('id', id);
     setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pendente', data_pagamento: null } : d));
+    setSalvando(null);
+  };
+
+  // Corrige a data de um lançamento já marcado como pago, sem mexer no status — pro caso
+  // de ter marcado com a data errada (ex: clicou "hoje" mas o pagamento foi há 3 dias).
+  const corrigirDataPagamento = async (id: number, data: string, tabela: 'despesa' | 'entrada') => {
+    setSalvando(String(id));
+    await supabase.from('lancamentos').update({ data_pagamento: data }).eq('id', id);
+    if (tabela === 'despesa') setDespesas(prev => prev.map(d => d.id === id ? { ...d, data_pagamento: data } : d));
+    else setEntradas(prev => prev.map(d => d.id === id ? { ...d, data_pagamento: data } : d));
+    setSalvando(null);
+    setEditandoDataPagoId(null);
+  };
+
+  // --- Contas a Receber (entradas de venda — parcelas geradas pelo Pulse, boleto/Pix etc) ---
+  const [entradas, setEntradas] = useState<Despesa[]>([]);
+  const [loadingEntradas, setLoadingEntradas] = useState(true);
+  const [mesEntradas, setMesEntradas] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  useEffect(() => {
+    if (perfil?.empresa_id) carregarEntradas();
+  }, [perfil?.empresa_id]);
+
+  const carregarEntradas = async () => {
+    setLoadingEntradas(true);
+    const { data } = await supabase
+      .from('lancamentos')
+      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente, nf_numero, nf_chave_acesso')
+      .eq('empresa_id', perfil?.empresa_id)
+      .eq('tipo', 'entrada')
+      .order('data_vencimento', { ascending: true });
+    setEntradas((data || []) as Despesa[]);
+    setLoadingEntradas(false);
+  };
+
+  const entradasDoMes = useMemo(
+    () => entradas
+      .filter(d => d.data_vencimento?.substring(0, 7) === mesEntradas)
+      .filter(d => !filtroUnidade || d.unidade === filtroUnidade),
+    [entradas, mesEntradas, filtroUnidade]
+  );
+  const totalEntradasMes = entradasDoMes.reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalEntradasRecebidas = entradasDoMes.filter(d => d.status === 'pago').reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalEntradasPendentes = totalEntradasMes - totalEntradasRecebidas;
+
+  const marcarEntradaPaga = async (id: number, data: string) => {
+    setSalvando(String(id));
+    await supabase.from('lancamentos').update({ status: 'pago', data_pagamento: data }).eq('id', id);
+    setEntradas(prev => prev.map(d => d.id === id ? { ...d, status: 'pago', data_pagamento: data } : d));
+    setSalvando(null);
+  };
+
+  const estornarEntradaPaga = async (id: number) => {
+    setSalvando(String(id));
+    await supabase.from('lancamentos').update({ status: 'pendente', data_pagamento: null }).eq('id', id);
+    setEntradas(prev => prev.map(d => d.id === id ? { ...d, status: 'pendente', data_pagamento: null } : d));
     setSalvando(null);
   };
 
@@ -462,6 +527,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : 'Inadimplência', AlertTriangle],
           ['conciliacao', 'Conciliação', CheckCircle2],
           ['contas_pagar', 'Contas a Pagar', Wallet],
+          ['contas_receber', 'Contas a Receber', DollarSign],
           ['dre', 'DRE & Fluxo de Caixa', TrendingUp],
         ] as const).map(([key, label, Icon]) => (
           <button
@@ -787,9 +853,17 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         {d.recorrente && <span className="text-[9px] font-black text-blue-400 flex items-center gap-0.5"><Repeat size={9}/> Recorrente</span>}
                         {d.nf_numero && <span title={d.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {d.nf_numero}</span>}
                         {d.data_pagamento && (
-                          <span className="text-[9px] font-black bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] border border-[rgb(var(--cor-primaria-rgb)/30%)] px-2 py-0.5 rounded">
-                            Pago em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
-                          </span>
+                          editandoDataPagoId === d.id ? (
+                            <span className="flex items-center gap-1">
+                              <input type="date" autoFocus value={dataPagamentoPorLinha[d.id] ?? d.data_pagamento} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-white text-[9px] font-bold outline-none" />
+                              <button onClick={() => corrigirDataPagamento(d.id, dataPagamentoPorLinha[d.id] ?? d.data_pagamento!, 'despesa')} disabled={salvando === String(d.id)} className="text-[var(--cor-primaria)] hover:brightness-110"><CheckCircle2 size={12}/></button>
+                              <button onClick={() => setEditandoDataPagoId(null)} className="text-slate-500 hover:text-white"><X size={12}/></button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setEditandoDataPagoId(d.id)} title="Corrigir data de pagamento" className="text-[9px] font-black bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] border border-[rgb(var(--cor-primaria-rgb)/30%)] px-2 py-0.5 rounded hover:brightness-110">
+                              Pago em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -800,9 +874,12 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                           {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
                         </button>
                       ) : (
-                        <button onClick={() => marcarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
-                          {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Paga
-                        </button>
+                        <>
+                          <input type="date" value={dataPagamentoPorLinha[d.id] ?? hoje} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[10px] font-bold outline-none" />
+                          <button onClick={() => marcarDespesaPaga(d.id, dataPagamentoPorLinha[d.id] ?? hoje)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                            {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Paga
+                          </button>
+                        </>
                       )}
                       <button onClick={() => excluirDespesa(d.id)} className="text-slate-600 hover:text-red-400 p-1.5"><Trash2 size={14}/></button>
                     </div>
@@ -860,6 +937,92 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
               </div>
             </div>
           )}
+        </>
+      ) : aba === 'contas_receber' ? (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+              <Clock size={14} className="text-slate-500"/>
+              <input
+                type="month"
+                value={mesEntradas}
+                onChange={e => setMesEntradas(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total do mês</p>
+              <h2 className="text-2xl font-black text-white mt-1">R$ {totalEntradasMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pendente</p>
+              <h2 className="text-2xl font-black text-red-400 mt-1">R$ {totalEntradasPendentes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+            <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-5 rounded-2xl">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Recebido</p>
+              <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {totalEntradasRecebidas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+            </div>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+            <div className="p-5 border-b border-white/5">
+              <h3 className="font-black uppercase text-sm text-slate-300">Recebimentos — {new Date(mesEntradas + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+            </div>
+            {loadingEntradas ? (
+              <div className="p-10 text-center"><Loader2 className="animate-spin text-slate-600 mx-auto" size={28}/></div>
+            ) : entradasDoMes.length === 0 ? (
+              <div className="p-10 text-center">
+                <DollarSign size={32} className="text-slate-600 mx-auto mb-2"/>
+                <p className="text-slate-500 text-sm font-bold">Nenhum recebimento neste mês.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {entradasDoMes.map(d => (
+                  <div key={d.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-black text-white uppercase truncate">{d.titulo}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {d.unidade && <span className="text-[9px] text-slate-500">{d.unidade}</span>}
+                        <span className="text-[9px] text-slate-600">Vence: {new Date(d.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        {d.nf_numero && <span title={d.nf_chave_acesso || ''} className="text-[9px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded uppercase">NF {d.nf_numero}</span>}
+                        {d.data_pagamento && (
+                          editandoDataPagoId === d.id ? (
+                            <span className="flex items-center gap-1">
+                              <input type="date" autoFocus value={dataPagamentoPorLinha[d.id] ?? d.data_pagamento} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-1.5 py-0.5 text-white text-[9px] font-bold outline-none" />
+                              <button onClick={() => corrigirDataPagamento(d.id, dataPagamentoPorLinha[d.id] ?? d.data_pagamento!, 'entrada')} disabled={salvando === String(d.id)} className="text-[var(--cor-primaria)] hover:brightness-110"><CheckCircle2 size={12}/></button>
+                              <button onClick={() => setEditandoDataPagoId(null)} className="text-slate-500 hover:text-white"><X size={12}/></button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setEditandoDataPagoId(d.id)} title="Corrigir data de recebimento" className="text-[9px] font-black bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] border border-[rgb(var(--cor-primaria-rgb)/30%)] px-2 py-0.5 rounded hover:brightness-110">
+                              Recebido em {new Date(d.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-black text-white">R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                      {d.status === 'pago' ? (
+                        <button onClick={() => estornarEntradaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
+                        </button>
+                      ) : (
+                        <>
+                          <input type="date" value={dataPagamentoPorLinha[d.id] ?? hoje} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[10px] font-bold outline-none" />
+                          <button onClick={() => marcarEntradaPaga(d.id, dataPagamentoPorLinha[d.id] ?? hoje)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                            {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Recebida
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       ) : (
         <>

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2 } from 'lucide-react';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -34,7 +34,7 @@ const MOTIVOS_ENTRADA = ['compra', 'devolucao_cliente', 'transferencia', 'contag
 const MOTIVOS_SAIDA = ['venda', 'perda', 'devolucao_fornecedor', 'transferencia', 'uso_interno', 'contagem'] as const;
 
 export default function PulseEstoquePage() {
-  const { authLoading, temPulse, user, perfil } = usePulseAccess();
+  const { authLoading, temPulse, user, perfil, isLideranca } = usePulseAccess();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
@@ -299,7 +299,9 @@ export default function PulseEstoquePage() {
         <p className="text-slate-300 text-xs font-bold truncate">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
 
         <div className="flex items-center justify-center gap-1.5">
-          <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Minus size={12} /></button>
+          {isLideranca && (
+            <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} title="Retirada manual — dar saída pelo leitor em /pulse/estoque/saida-rapida é o padrão" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Minus size={12} /></button>
+          )}
           <span className={`text-sm font-black w-7 text-center flex-shrink-0 ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
           <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, 1); }} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Plus size={12} /></button>
         </div>
@@ -314,7 +316,9 @@ export default function PulseEstoquePage() {
 
         <div className="flex items-center justify-end gap-1.5">
           {baixo && <AlertTriangle size={12} className="text-red-400 flex-shrink-0" />}
-          <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={12} /></button>
+          {isLideranca && (
+            <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo) — restrito, saída do dia a dia é pelo leitor" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={12} /></button>
+          )}
           <ChevronRight size={14} className="text-slate-700 flex-shrink-0" />
         </div>
       </div>
@@ -344,6 +348,12 @@ export default function PulseEstoquePage() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
         </div>
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ScanLine size={14} /> Saída Rápida
+          </Link>
+          <Link href="/pulse/estoque/etiquetas" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <Tag size={14} /> Etiquetas
+          </Link>
           <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ListTree size={14} /> Kardex
           </Link>

@@ -78,6 +78,11 @@ export type ItemCarrinho = {
   // catálogo tem esse prazo no próprio cadastro (servicos.prazo_fabricacao_dias),
   // personalizado não tem de onde puxar, por isso carrega o valor direto na linha.
   prazoFabricacaoDias?: number | null;
+  // Descrição/especificações editável na linha — produto de catálogo já vem com a dele
+  // (servicos.descricao) e não precisa disso; existe pra produto personalizado e pra
+  // quando alguém edita a descrição de um item específico (ex: orçamento reaberto pra
+  // ajustar o que está incluso).
+  descricao?: string | null;
 };
 
 export type VendaPulse = {

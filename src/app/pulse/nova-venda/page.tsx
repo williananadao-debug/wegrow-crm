@@ -249,7 +249,7 @@ function PulseNovaVendaContent() {
     setCarrinho(prev => {
       if (editandoServicoId != null) {
         return prev.map(i => i.servicoId === editandoServicoId
-          ? { ...i, nome: s.nome, precoUnitario: s.preco, configuracoes: extras, prazoFabricacaoDias: s.prazo_fabricacao_dias ?? null }
+          ? { ...i, nome: s.nome, precoUnitario: s.preco, configuracoes: extras, prazoFabricacaoDias: s.prazo_fabricacao_dias ?? null, descricao: criandoPersonalizado ? (s.descricao ?? null) : i.descricao }
           : i);
       }
       const existente = !criandoPersonalizado ? prev.find(i => i.servicoId === s.id) : undefined;
@@ -260,6 +260,7 @@ function PulseNovaVendaContent() {
         servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: s.estoque ?? null,
         configuracoes: extras, avulso: criandoPersonalizado || undefined,
         prazoFabricacaoDias: criandoPersonalizado ? (s.prazo_fabricacao_dias ?? null) : undefined,
+        descricao: criandoPersonalizado ? (s.descricao ?? null) : undefined,
       }];
     });
     setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); setCriandoPersonalizado(false);
@@ -312,7 +313,7 @@ function PulseNovaVendaContent() {
     const itens = Array.isArray(h.itens) ? h.itens : [];
     setCarrinho(itens.map((it: any) => ({
       servicoId: proximoIdAvulsoRef.current--, nome: it.servico, quantidade: it.quantidade,
-      precoUnitario: it.precoUnitario, estoqueMax: null, avulso: true,
+      precoUnitario: it.precoUnitario, estoqueMax: null, avulso: true, descricao: it.descricao ?? null,
     })));
     setDesconto(Number(h.desconto) || 0);
     setAcrescimo(0);
@@ -360,7 +361,7 @@ function PulseNovaVendaContent() {
           servico: i.configuracoes?.length ? `${i.nome} (${i.configuracoes.map(c => c.descricao).join(', ')})` : i.nome,
           quantidade: i.quantidade,
           precoUnitario: i.precoUnitario + valorExtras(i),
-          descricao: servicoOriginal?.descricao || null,
+          descricao: i.descricao ?? servicoOriginal?.descricao ?? null,
           imagemUrl: servicoOriginal?.imagem_url || null,
         };
       });
@@ -982,7 +983,7 @@ function PulseNovaVendaContent() {
                     if (i.avulso) {
                       // Produto personalizado não tem cadastro no catálogo — reconstrói um
                       // objeto temporário com os dados já salvos na linha pra reabrir editável.
-                      setProdutoDetalhe({ id: i.servicoId, nome: i.nome, preco: i.precoUnitario, estoque: null, prazo_fabricacao_dias: i.prazoFabricacaoDias ?? null });
+                      setProdutoDetalhe({ id: i.servicoId, nome: i.nome, preco: i.precoUnitario, estoque: null, prazo_fabricacao_dias: i.prazoFabricacaoDias ?? null, descricao: i.descricao ?? null });
                       setCriandoPersonalizado(true);
                       setExtrasConfigurando(i.configuracoes || []);
                       setNovoExtraDescricao(''); setNovoExtraValor('');
@@ -1145,6 +1146,14 @@ function PulseNovaVendaContent() {
                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Prazo (dias, opcional)</label>
                         <input type="number" min="0" value={produtoDetalhe.prazo_fabricacao_dias ?? ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, prazo_fabricacao_dias: e.target.value ? Number(e.target.value) : null })} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
                       </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Descrição / especificações (aparece na venda e no orçamento)</label>
+                      <textarea
+                        value={produtoDetalhe.descricao ?? ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, descricao: e.target.value })}
+                        rows={5} placeholder="Ex: dimensões, itens inclusos, acabamento..."
+                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)] resize-y"
+                      />
                     </div>
                   </>
                 ) : (

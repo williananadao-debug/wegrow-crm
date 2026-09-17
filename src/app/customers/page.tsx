@@ -241,6 +241,13 @@ export default function CustomersPage() {
   const [nexusError, setNexusError] = useState('');
   const [nexusDetalhe, setNexusDetalhe] = useState<NexusArquivo | null>(null);
 
+  // Upload rápido de documento direto na aba "Dados Cadastrais" — sem precisar trocar
+  // pra aba Nexus. Mesmo storage/tabela do Nexus, só com categoria fixa em "documento" e
+  // sem os campos extras (tags, tipo) do formulário completo de lá.
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docError, setDocError] = useState('');
+
   const fetchNexus = async (clientId: number) => {
     const { data } = await supabase.from('nexus_arquivos').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
     if (data) setNexusItens(data as any);
@@ -290,6 +297,32 @@ export default function CustomersPage() {
       setNexusError(err?.message || 'Erro ao enviar arquivo.');
     } finally {
       setNexusUploading(false);
+    }
+  };
+
+  const handleUploadDocCadastro = async () => {
+    if (!docFile || !editingId || !perfil?.empresa_id) return;
+    setDocUploading(true);
+    setDocError('');
+    try {
+      const ext = docFile.name.split('.').pop() || 'bin';
+      const path = `${perfil.empresa_id}/${editingId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('nexus').upload(path, docFile, { upsert: false, contentType: docFile.type || undefined });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('nexus').getPublicUrl(path);
+      const payload = {
+        empresa_id: perfil.empresa_id, client_id: editingId, categoria: 'documento' as NexusCategoria,
+        titulo: docFile.name, tags: [], arquivo_url: urlData.publicUrl, arquivo_path: path,
+        responsavel_nome: perfil?.nome || null, user_id: user?.id,
+      };
+      const { data, error } = await supabase.from('nexus_arquivos').insert([payload]).select();
+      if (error) throw error;
+      if (data) setNexusItens(prev => [data[0] as NexusArquivo, ...prev]);
+      setDocFile(null);
+    } catch (err: any) {
+      setDocError(err?.message || 'Erro ao enviar documento.');
+    } finally {
+      setDocUploading(false);
     }
   };
 
@@ -1128,6 +1161,42 @@ export default function CustomersPage() {
                             <button type="button" onClick={() => { if (tagInput.trim() && !tags.includes(tagInput.trim())) { setTags([...tags, tagInput.trim()]); setTagInput(''); } }} className="bg-blue-600 text-white px-3 rounded-xl text-xs font-bold">+</button>
                         </div>
                     </div>
+
+                    {temNexus && (
+                        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                            <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Documento do Cliente</label>
+                            {!editingId ? (
+                                <p className="text-[11px] text-slate-500 font-bold">Salve o cadastro primeiro pra anexar documento.</p>
+                            ) : (
+                                <>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <input
+                                            type="file"
+                                            onChange={e => setDocFile(e.target.files?.[0] || null)}
+                                            className="flex-1 text-[11px] text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-white/10 file:text-white file:text-[10px] file:font-black file:uppercase file:cursor-pointer"
+                                        />
+                                        <button
+                                            type="button" onClick={handleUploadDocCadastro} disabled={!docFile || docUploading}
+                                            className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-black uppercase text-[10px] px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all flex-shrink-0"
+                                        >
+                                            {docUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Anexar
+                                        </button>
+                                    </div>
+                                    {docError && <p className="text-red-400 text-[10px] font-bold mt-2">{docError}</p>}
+                                    {nexusItens.filter(i => i.categoria === 'documento').length > 0 && (
+                                        <ul className="mt-3 space-y-1.5">
+                                            {nexusItens.filter(i => i.categoria === 'documento').map(item => (
+                                                <li key={item.id} className="flex items-center justify-between gap-2 bg-[#0B1120] border border-white/5 rounded-lg px-3 py-2">
+                                                    <a href={item.arquivo_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-slate-300 hover:text-white font-bold truncate">{item.titulo}</a>
+                                                    <button type="button" onClick={() => handleDeleteNexus(item)} className="text-slate-600 hover:text-red-400 flex-shrink-0"><Trash2 size={13} /></button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     <button type="submit" disabled={!editingId && !!cnpjDuplicado} className="w-full bg-[var(--cor-primaria)] text-[#0F172A] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 transition-all shadow-lg mt-4">
                         {!editingId && cnpjDuplicado ? 'Resolva o CNPJ duplicado acima' : (editingId ? 'Salvar Alterações' : (isCDL ? 'Cadastrar Associado' : 'Criar Cliente'))}

@@ -61,17 +61,35 @@ export async function POST(request: Request) {
   let payload: any;
   try { payload = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-  // Só nos interessa nota autorizada — rejeitada/cancelada/em processamento não vira
-  // registro em fiscal_notas ainda (evita linha "fantasma" pra nota que nunca saiu do papel).
   const status = primeiro(payload.status);
-  if (status && status !== 'autorizado' && status !== 'autorizada') {
+  const ref = primeiro(payload.ref);
+  const autorizada = status === 'autorizado' || status === 'autorizada';
+
+  // Nota emitida pela nossa própria integração (/api/pulse/fiscal/emitir-nf1|nf2) já tem
+  // uma linha "processando" gravada na hora do POST, identificada pelo "ref". Casar por ref
+  // primeiro (cobre inclusive erro/rejeição — sem isso a linha ficava "processando" pra
+  // sempre, escondendo do usuário que a emissão falhou de verdade).
+  const existentePorRef = ref
+    ? (await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('ref_focus_nfe', ref).maybeSingle()).data
+    : null;
+
+  if (existentePorRef && !autorizada) {
+    await db.from('fiscal_notas').update({
+      status: 'erro_autorizacao',
+      observacao: `Focus NFe recusou/rejeitou (status: ${status}). ${primeiro(payload.mensagem_sefaz, payload.mensagem) || ''}`.trim(),
+    }).eq('id', existentePorRef.id);
+    return NextResponse.json({ ok: true, atualizado: true, erro: true });
+  }
+
+  // Nota de terceiro (emitida fora da nossa integração) que não é autorizada não vira
+  // registro em fiscal_notas ainda — evita linha "fantasma" pra nota que nunca saiu do papel.
+  if (!existentePorRef && !autorizada) {
     return NextResponse.json({ ok: true, ignorado: true, status });
   }
 
   const ambiente: FocusNfeAmbiente = integracao.ambiente_ativo === 'producao' ? 'producao' : 'homologacao';
   const token = ambiente === 'producao' ? integracao.token_producao : integracao.token_homologacao;
 
-  const ref = primeiro(payload.ref);
   const chaveAcesso = primeiro(payload.chave_nfe, payload.chave_acesso, payload.chave);
   const numero = primeiro(payload.numero, payload.numero_nfe);
   const serie = primeiro(payload.serie);
@@ -86,19 +104,20 @@ export async function POST(request: Request) {
   // esses dados em vez de travar o webhook inteiro).
   const detalhes = ref && token ? await buscarDetalhesCompletos(ref, token, ambiente) : null;
 
-  if (chaveAcesso) {
-    const { data: existente } = await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('chave_acesso', chaveAcesso).maybeSingle();
-    if (existente) {
-      // Reenvio do mesmo evento (Focus NFe faz retry) ou a nota amadureceu de
-      // "processando" pra "autorizado" — atualiza o que muda em vez de duplicar linha.
-      await db.from('fiscal_notas').update({
-        status: 'autorizada', danfe_url: danfeUrl, xml_url: xmlUrl,
-        ...(detalhes?.valorTotal != null ? { valor_total: detalhes.valorTotal } : {}),
-        ...(detalhes?.nomeDestinatario ? { nome_participante: detalhes.nomeDestinatario, cnpj_participante: detalhes.cnpjDestinatario } : {}),
-        ...(detalhes?.dataEmissao ? { data_emissao: detalhes.dataEmissao } : {}),
-      }).eq('id', existente.id);
-      return NextResponse.json({ ok: true, atualizado: true });
-    }
+  const existentePorChave = !existentePorRef && chaveAcesso
+    ? (await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('chave_acesso', chaveAcesso).maybeSingle()).data
+    : null;
+  const existente = existentePorRef || existentePorChave;
+  if (existente) {
+    // Reenvio do mesmo evento (Focus NFe faz retry) ou a nota amadureceu de
+    // "processando" pra "autorizado" — atualiza o que muda em vez de duplicar linha.
+    await db.from('fiscal_notas').update({
+      status: 'autorizada', chave_acesso: chaveAcesso, numero, serie, danfe_url: danfeUrl, xml_url: xmlUrl,
+      ...(detalhes?.valorTotal != null ? { valor_total: detalhes.valorTotal } : {}),
+      ...(detalhes?.nomeDestinatario ? { nome_participante: detalhes.nomeDestinatario, cnpj_participante: detalhes.cnpjDestinatario } : {}),
+      ...(detalhes?.dataEmissao ? { data_emissao: detalhes.dataEmissao } : {}),
+    }).eq('id', existente.id);
+    return NextResponse.json({ ok: true, atualizado: true });
   }
 
   await db.from('fiscal_notas').insert([{

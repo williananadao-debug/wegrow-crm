@@ -183,6 +183,25 @@ function PulseProducaoContent() {
     await supabase.from('pulse_producoes').update({ status: proxima }).eq('id', p.id);
     await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'status', texto: `Movida para "${proximaInfo.label}".`, user_id: user?.id }]);
     if (detalheId === p.id) carregarEventos(p.id);
+
+    // Entrega futura: NF2 (remessa, CFOP 5116/6116) só faz sentido no momento real da
+    // entrega — dispara aqui, sem travar a mudança de coluna se a emissão falhar (dá pra
+    // tentar de novo depois em /pulse/fiscal).
+    if (proxima === 'entregue' && p.lead_id) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Sessão expirada.');
+        const res = await fetch('/api/pulse/fiscal/emitir-nf2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ leadId: p.lead_id }),
+        });
+        const json = await res.json();
+        if (!res.ok) alert(`Produção marcada como entregue, mas a NF de entrega não saiu: ${json.error || 'erro desconhecido'}. Pode tentar emitir manualmente em /pulse/fiscal.`);
+      } catch (err: any) {
+        alert(`Produção marcada como entregue, mas a NF de entrega não saiu: ${err?.message || 'erro desconhecido'}.`);
+      }
+    }
   };
 
   // Sub-etapa de fabricação (corte/solda/pintura/acabamento) — só faz sentido em "Em

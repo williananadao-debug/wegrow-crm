@@ -69,6 +69,12 @@ export default function PulseNovaVendaPage() {
   const [contratoErro, setContratoErro] = useState<string | null>(null);
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
 
+  // NF1 (entrega futura, CFOP 5922) — emitida na hora da venda. A NF2 (entrega, CFOP
+  // 5116/6116) fica pro momento real da entrega, disparada em /pulse/producao.
+  const [emitindoNf, setEmitindoNf] = useState(false);
+  const [nfErro, setNfErro] = useState<string | null>(null);
+  const [nfEmitida, setNfEmitida] = useState(false);
+
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
@@ -454,6 +460,27 @@ export default function PulseNovaVendaPage() {
     }
   };
 
+  const emitirNf1 = async () => {
+    if (!vendaConcluida) return;
+    setEmitindoNf(true); setNfErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId: vendaConcluida.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');
+      setNfEmitida(true);
+    } catch (err: any) {
+      setNfErro(err?.message || 'Erro ao emitir a NF.');
+    } finally {
+      setEmitindoNf(false);
+    }
+  };
+
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
   if (!temPulse) {
@@ -499,6 +526,20 @@ export default function PulseNovaVendaPage() {
             <button onClick={abrirContrato} className="w-full mt-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <PenTool size={14} /> Gerar contrato pra assinar
             </button>
+          )}
+
+          {!ehOrcamento && (
+            <div className="mt-2">
+              <button
+                onClick={emitirNf1} disabled={emitindoNf || nfEmitida}
+                className="w-full bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-50 border border-blue-500/30 text-blue-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+              >
+                {emitindoNf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                {nfEmitida ? 'NF enviada pra SEFAZ' : 'Emitir NF (entrega futura)'}
+              </button>
+              {nfErro && <p className="text-red-400 text-[10px] font-bold mt-1.5">{nfErro}</p>}
+              {nfEmitida && <p className="text-slate-500 text-[10px] mt-1.5">Confirmação de autorização chega em /pulse/fiscal em alguns segundos.</p>}
+            </div>
           )}
 
           <div className="flex gap-2 mt-2">

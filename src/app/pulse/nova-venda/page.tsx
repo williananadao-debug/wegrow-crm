@@ -812,7 +812,7 @@ export default function PulseNovaVendaPage() {
                     <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full flex-shrink-0 ${ehOrc ? 'text-purple-400 bg-purple-500/10' : 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]'}`}>
                       {ehOrc ? 'Orçamento' : 'Venda'}
                     </span>
-                    <span className="text-white font-black text-sm flex-shrink-0 w-24 text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-white font-black text-sm flex-shrink-0 whitespace-nowrap text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     {!ehOrc && (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button onClick={() => abrirContrato(h)} title="Gerar contrato" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-purple-500/10 text-slate-600 hover:text-purple-400"><PenTool size={13} /></button>

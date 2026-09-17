@@ -700,7 +700,7 @@ export default function PulseNovaVendaPage() {
                       )}
                       <div className="p-3">
                         <p className="text-white text-sm font-bold leading-snug">{s.nome}</p>
-                        <p className="text-[var(--cor-primaria)] text-base font-black mt-1">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-[var(--cor-primaria)] text-base font-black mt-1">A partir de R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         <div className="flex items-center gap-1.5 flex-wrap mt-1">
                           {s.estoque !== null && s.estoque !== undefined ? (
                             <span className={`text-[9px] font-bold ${semEstoque ? 'text-red-400' : 'text-slate-500'}`}>{semEstoque ? 'Sem estoque' : `${s.estoque} disponível`}</span>

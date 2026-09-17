@@ -110,7 +110,14 @@ export async function GET(request: Request) {
 
             let opecData: any[] = [{}];
             try {
-                 if(leadData) opecData = gerarJsonOpec(leadData, clienteData || {}, { nome: job.vendedor_nome }, finalConfig);
+                 // leadsMap guarda só 1 lead por client_id (o mais recente) — cliente com
+                 // job em mais de uma rádio ia usar a unidade desse lead "genérico" pra
+                 // identificar a emissora em TODOS os jobs dele, mesmo os de outra rádio.
+                 // job.unidade é o dado certo (é do próprio job), tem prioridade aqui.
+                 if (leadData) {
+                     const leadParaOpec = { ...leadData, unidade: job.unidade || leadData.unidade };
+                     opecData = gerarJsonOpec(leadParaOpec, clienteData || {}, { nome: job.vendedor_nome }, finalConfig);
+                 }
             } catch(e) { console.error('[opec] gerarJsonOpec error:', e); }
             
             const pacoteFinal = {

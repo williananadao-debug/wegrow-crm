@@ -333,16 +333,19 @@ function PulseNovaVendaContent() {
   };
 
   // Vem do botão "Editar" em /pulse (Painel → Orçamentos em aberto) — busca o orçamento
-  // direto (essa aba não carrega o histórico sozinha) e já abre pra edição.
+  // direto (essa aba não carrega o histórico sozinha) e já abre pra edição. Depende do
+  // valor do parâmetro (não de [] fixo) — sem isso, voltar pra essa mesma tela clicando em
+  // "Editar" de novo (Next.js às vezes reaproveita a instância já montada em vez de
+  // recarregar do zero) fazia o parâmetro novo ser ignorado, e só um segundo clique direto
+  // no lápis do histórico (que não depende desse efeito) realmente abria a edição.
+  const editarOrcamentoParam = searchParams.get('editarOrcamento');
   useEffect(() => {
-    const idParam = searchParams.get('editarOrcamento');
-    if (!idParam) return;
+    if (!editarOrcamentoParam) return;
     supabase.from('leads').select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
-      .eq('id', Number(idParam)).single()
+      .eq('id', Number(editarOrcamentoParam)).single()
       .then(({ data }) => { if (data) editarOrcamento(data); });
     window.history.replaceState({}, '', '/pulse/nova-venda');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editarOrcamentoParam]);
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);

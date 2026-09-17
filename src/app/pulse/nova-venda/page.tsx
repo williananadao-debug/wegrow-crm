@@ -141,11 +141,10 @@ export default function PulseNovaVendaPage() {
   const ehSobEncomenda = (s: ServicoConfig) => !ehMateriaPrima(s) && (s.estoque === null || s.estoque === undefined);
 
   // Abre a tela cheia de Clientes (CNPJ automático, documento/Nexus, tudo) em vez do
-  // mini-formulário de antes — nova aba pra não perder o carrinho em andamento aqui.
-  // Depois de cadastrar lá, volta nessa aba e busca pelo nome pra selecionar.
+  // mini-formulário de antes — navega na mesma aba, a pedido do usuário.
   const abrirCadastroCliente = (nomeInicial = '') => {
     const url = `/customers?novo=1${nomeInicial ? `&nome=${encodeURIComponent(nomeInicial)}` : ''}`;
-    window.open(url, '_blank');
+    window.location.href = url;
   };
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima } from '../shared';
@@ -74,6 +74,16 @@ export default function PulseNovaVendaPage() {
   const [emitindoNf, setEmitindoNf] = useState(false);
   const [nfErro, setNfErro] = useState<string | null>(null);
   const [nfEmitida, setNfEmitida] = useState(false);
+
+  // Boleto/Pix (Asaas) — valor e vencimento editáveis porque a venda pode ser cobrada em
+  // partes (ex: só a entrada agora), não necessariamente o valor_total de uma vez.
+  const [cobrancaAberto, setCobrancaAberto] = useState(false);
+  const [cobrancaTipo, setCobrancaTipo] = useState<'PIX' | 'BOLETO'>('PIX');
+  const [cobrancaValor, setCobrancaValor] = useState('');
+  const [cobrancaVencimento, setCobrancaVencimento] = useState('');
+  const [enviandoCobranca, setEnviandoCobranca] = useState(false);
+  const [cobrancaErro, setCobrancaErro] = useState<string | null>(null);
+  const [cobrancaResultado, setCobrancaResultado] = useState<{ invoiceUrl: string | null; bankSlipUrl: string | null; linhaDigitavel: string | null; pixPayload: string | null } | null>(null);
 
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
@@ -481,6 +491,43 @@ export default function PulseNovaVendaPage() {
     }
   };
 
+  const abrirCobranca = () => {
+    if (!vendaConcluida) return;
+    setCobrancaValor(String(vendaConcluida.valor_total));
+    setCobrancaVencimento(new Date().toISOString().split('T')[0]);
+    setCobrancaErro(null);
+    setCobrancaResultado(null);
+    setCobrancaAberto(true);
+  };
+
+  const gerarCobranca = async () => {
+    if (!vendaConcluida) return;
+    const cpfCnpj = vendaConcluida.cnpj || clienteSelecionado?.cnpj;
+    if (!cpfCnpj) { setCobrancaErro('Cliente sem CPF/CNPJ cadastrado — necessário pro Asaas.'); return; }
+    if (!cobrancaValor || Number(cobrancaValor) <= 0) { setCobrancaErro('Informe um valor válido.'); return; }
+    if (!cobrancaVencimento) { setCobrancaErro('Informe o vencimento.'); return; }
+    setEnviandoCobranca(true); setCobrancaErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/cobranca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          leadId: vendaConcluida.id, nome: vendaConcluida.empresa, cpfCnpj,
+          email: clienteSelecionado?.email, valor: Number(cobrancaValor), vencimento: cobrancaVencimento, tipo: cobrancaTipo,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao gerar cobrança.');
+      setCobrancaResultado({ invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl, linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload });
+    } catch (err: any) {
+      setCobrancaErro(err?.message || 'Erro ao gerar cobrança.');
+    } finally {
+      setEnviandoCobranca(false);
+    }
+  };
+
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
   if (!temPulse) {
@@ -542,6 +589,12 @@ export default function PulseNovaVendaPage() {
             </div>
           )}
 
+          {!ehOrcamento && (
+            <button onClick={abrirCobranca} className="w-full mt-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              <Zap size={14} /> Gerar boleto ou Pix
+            </button>
+          )}
+
           <div className="flex gap-2 mt-2">
             <button onClick={() => imprimirReciboOuOrcamento(vendaConcluida, unidades.find(u => u.nome === unidadeSel), empresa)} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Printer size={14} /> {ehOrcamento ? 'Orçamento' : 'Recibo'}
@@ -583,6 +636,70 @@ export default function PulseNovaVendaPage() {
                   <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
                     {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
                     {enviandoContrato ? 'Gerando...' : 'Gerar e enviar'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {cobrancaAberto && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoCobranca && setCobrancaAberto(false)}>
+            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Zap size={18} className="text-emerald-400" /> Cobrança</h3>
+                <button onClick={() => setCobrancaAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+              </div>
+
+              {cobrancaResultado ? (
+                <div className="space-y-3">
+                  <p className="text-emerald-400 text-xs font-bold">Cobrança gerada!</p>
+                  {cobrancaTipo === 'PIX' && cobrancaResultado.pixPayload && (
+                    <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Copia e cola</p>
+                      <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.pixPayload}</p>
+                      <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.pixPayload || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <Copy size={11} /> Copiar
+                      </button>
+                    </div>
+                  )}
+                  {cobrancaTipo === 'BOLETO' && cobrancaResultado.linhaDigitavel && (
+                    <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Linha digitável</p>
+                      <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.linhaDigitavel}</p>
+                      <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.linhaDigitavel || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <Copy size={11} /> Copiar
+                      </button>
+                    </div>
+                  )}
+                  {(cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl) && (
+                    <a href={cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+                      Abrir cobrança
+                    </a>
+                  )}
+                  <button onClick={() => setCobrancaAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex bg-black/30 border border-white/10 rounded-xl p-1 gap-1">
+                    {(['PIX', 'BOLETO'] as const).map(t => (
+                      <button key={t} type="button" onClick={() => setCobrancaTipo(t)} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${cobrancaTipo === t ? 'bg-emerald-500 text-[#0B1120]' : 'text-slate-400 hover:bg-white/5'}`}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
+                    <input type="number" step="0.01" value={cobrancaValor} onChange={e => setCobrancaValor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
+                    <input type="date" value={cobrancaVencimento} onChange={e => setCobrancaVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+                  </div>
+                  {cobrancaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>}
+                  <button onClick={gerarCobranca} disabled={enviandoCobranca} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+                    {enviandoCobranca ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                    {enviandoCobranca ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
                   </button>
                 </div>
               )}

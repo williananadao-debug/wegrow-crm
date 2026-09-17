@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, PackageMinus, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
+import JsBarcode from 'jsbarcode';
+import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
@@ -40,6 +41,34 @@ export default function PulseEstoquePage() {
   const [loadingServicos, setLoadingServicos] = useState(true);
   const [notaModalAberto, setNotaModalAberto] = useState(false);
   const [notaTipo, setNotaTipo] = useState<'entrada' | 'saida'>('entrada');
+
+  // Etiqueta de código de barras — clica no item, gera e já manda pra impressão, sem tela
+  // de seleção. Código de barras = SKU do produto (o mesmo lido na Saída Rápida). Abre numa
+  // janelinha só com a etiqueta em vez de esconder a página inteira via CSS de impressão
+  // (frágil — dependeria de conhecer o DOM completo do layout do app, navbar incluída).
+  const imprimirEtiqueta = (s: ServicoConfig) => {
+    if (!s.sku) { alert('Esse produto não tem SKU cadastrado — não dá pra gerar código de barras.'); return; }
+    const canvas = document.createElement('canvas');
+    try {
+      JsBarcode(canvas, s.sku, { format: 'CODE128', width: 1.6, height: 38, fontSize: 11, margin: 4 });
+    } catch {
+      alert('SKU com caractere que o código de barras (CODE128) não aceita.');
+      return;
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank', 'width=320,height=220');
+    if (!win) { alert('O navegador bloqueou a janela de impressão — permite pop-up pra esse site.'); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>Etiqueta</title><style>
+      @page { size: 58mm auto; margin: 0; }
+      body { margin: 0; padding: 8px; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; width: 58mm; }
+      p { font-size: 9px; font-weight: 900; text-transform: uppercase; text-align: center; margin: 0 0 2px; }
+      img { max-width: 100%; }
+    </style></head><body>
+      <p>${s.nome.replace(/</g, '')}</p>
+      <img src="${dataUrl}" onload="window.print(); window.onafterprint = () => window.close();" />
+    </body></html>`);
+    win.document.close();
+  };
 
   const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
@@ -316,6 +345,7 @@ export default function PulseEstoquePage() {
 
         <div className="flex items-center justify-end gap-1.5">
           {baixo && <AlertTriangle size={12} className="text-red-400 flex-shrink-0" />}
+          <button onClick={e => { e.stopPropagation(); imprimirEtiqueta(s); }} title="Imprimir etiqueta com código de barras (SKU)" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-blue-400 flex-shrink-0"><Tag size={12} /></button>
           {isLideranca && (
             <button onClick={e => { e.stopPropagation(); abrirAjuste(s); }} title="Ajuste manual (quantidade exata + motivo) — restrito, saída do dia a dia é pelo leitor" className="w-7 h-7 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-amber-400 flex-shrink-0"><Pencil size={12} /></button>
           )}
@@ -351,9 +381,6 @@ export default function PulseEstoquePage() {
           <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Saída Rápida
           </Link>
-          <Link href="/pulse/estoque/etiquetas" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <Tag size={14} /> Etiquetas
-          </Link>
           <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ListTree size={14} /> Kardex
           </Link>
@@ -366,9 +393,6 @@ export default function PulseEstoquePage() {
           <Link href="/pulse/fiscal" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Receipt size={14} /> Notas Fiscais
           </Link>
-          <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <PackageMinus size={14} /> Dar saída por Nota Fiscal
-          </button>
           <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Dar entrada por Nota Fiscal
           </button>

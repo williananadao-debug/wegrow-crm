@@ -1895,9 +1895,15 @@ export default function DealsPage() {
           if (filtroUnidade !== 'todas' && l.unidade !== filtroUnidade) return false;
           if (filtroAtrasados && !(l.followup_em && l.followup_em < hojeStr && l.status !== 'ganho' && l.status !== 'perdido')) return false;
           if (filtroSemAssinatura && !(l.status === 'ganho' && !l.docuseal_assinado && !l.contrato_manual_url)) return false;
-          const dataLead = l.created_at?.substring(0, 10);
-          if (dataInicio && dataLead && dataLead < dataInicio) return false;
-          if (dataFim && dataLead && dataLead > dataFim) return false;
+          // Lead aberto nunca some do funil por causa do filtro de período — sem isso,
+          // lead criado no mês passado e ainda não fechado desaparecia sozinho quando o
+          // mês virava, e o vendedor esquecia dele (relatado pela Demais FM). O filtro de
+          // data continua valendo normal pra ganho/perdido, que é reporte de período.
+          if (l.status !== 'aberto') {
+            const dataLead = l.created_at?.substring(0, 10);
+            if (dataInicio && dataLead && dataLead < dataInicio) return false;
+            if (dataFim && dataLead && dataLead > dataFim) return false;
+          }
           return true;
       });
   }, [leads, filtroVendedor, filtroUnidade, filtroAtrasados, filtroSemAssinatura, dataInicio, dataFim]);

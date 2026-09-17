@@ -80,6 +80,14 @@ export default function RevisarItensNotaModal({
   const confirmar = async () => {
     if (!notaId || !empresaId) return;
 
+    // Sem isso, a movimentação de estoque nascia sem nf_numero/nf_chave_acesso — a NF
+    // aparecia certinha em /pulse/fiscal, mas o item confirmado ficava sem nenhum vínculo
+    // visível em /pulse/estoque (coluna "NF" sempre vazia pra item que veio da captura
+    // automática do Focus NFe, só funcionava pro fluxo antigo de leitura por foto).
+    const { data: nota } = await supabase.from('fiscal_notas')
+      .select('numero, serie, chave_acesso, nome_participante, cnpj_participante')
+      .eq('id', notaId).maybeSingle();
+
     // Linha manual em branco (usuário clicou "+" mas não preencheu) não trava a
     // confirmação — só ignora silenciosamente. Quantidade/valor têm que ser número
     // válido pra não gravar lixo no estoque.
@@ -118,6 +126,8 @@ export default function RevisarItensNotaModal({
           empresa_id: empresaId, servico_id: servicoId, quantidade: item.quantidade,
           valor_unitario: item.valor_unitario, user_id: userId,
           tipo: 'entrada_nf', motivo: 'compra',
+          fornecedor: nota?.nome_participante ?? null, cnpj_participante: nota?.cnpj_participante ?? null,
+          nf_numero: nota?.numero ?? null, nf_serie: nota?.serie ?? null, nf_chave_acesso: nota?.chave_acesso ?? null,
           observacao: 'Item confirmado a partir do XML da NF-e (captura automática Focus NFe).',
         }]).select('id').single();
 
@@ -159,6 +169,8 @@ export default function RevisarItensNotaModal({
           empresa_id: empresaId, servico_id: servicoId, quantidade,
           valor_unitario: valorUnitario, user_id: userId,
           tipo: 'entrada_nf', motivo: 'compra',
+          fornecedor: nota?.nome_participante ?? null, cnpj_participante: nota?.cnpj_participante ?? null,
+          nf_numero: nota?.numero ?? null, nf_serie: nota?.serie ?? null, nf_chave_acesso: nota?.chave_acesso ?? null,
           observacao: 'Item digitado na mão (XML da NF-e não disponível).',
         }]).select('id').single();
 

@@ -34,6 +34,9 @@ export default function PulseNovaVendaPage() {
   const [desconto, setDesconto] = useState(0);
   const [acrescimo, setAcrescimo] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState('pix');
+  // Não-nulo = reabriu um orçamento salvo pra editar; "salvar" vira update dessa linha em
+  // vez de criar venda nova (ver finalizarVenda).
+  const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<number | null>(null);
 
   // Produto 100% personalizado (fora do catálogo, ex: trailer sob medida que não é
   // nenhum dos modelos prontos) usa o mesmo configurador dos produtos de catálogo — id
@@ -96,7 +99,7 @@ export default function PulseNovaVendaPage() {
     if (!perfil?.empresa_id) return;
     setCarregandoHistorico(true);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id')
+      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
       .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
       .order('created_at', { ascending: false }).limit(30);
     setHistorico(data || []);
@@ -297,7 +300,28 @@ export default function PulseNovaVendaPage() {
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
     setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
-    setProducoesIniciadas([]);
+    setProducoesIniciadas([]); setOrcamentoEditandoId(null);
+  };
+
+  // Reabre um orçamento salvo pra edição — itens voltam como linha avulsa (não dá pra
+  // recuperar o servicoId original, leads.itens só guarda nome/preço/qtd como snapshot da
+  // venda), então perde o vínculo com o catálogo mas mantém tudo editável na mesma tela.
+  const editarOrcamento = async (h: any) => {
+    const itens = Array.isArray(h.itens) ? h.itens : [];
+    setCarrinho(itens.map((it: any) => ({
+      servicoId: proximoIdAvulsoRef.current--, nome: it.servico, quantidade: it.quantidade,
+      precoUnitario: it.precoUnitario, estoqueMax: null, avulso: true,
+    })));
+    setDesconto(Number(h.desconto) || 0);
+    setAcrescimo(0);
+    if (h.forma_pagamento) setFormaPagamento(h.forma_pagamento);
+    if (h.client_id) {
+      const { data: cliente } = await supabase.from('clientes').select('*').eq('id', h.client_id).single();
+      if (cliente) setClienteSelecionado(cliente as ClienteOpcao);
+    }
+    setOrcamentoEditandoId(h.id);
+    setMostrarHistorico(false);
+    setErro(null);
   };
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
@@ -326,6 +350,24 @@ export default function PulseNovaVendaPage() {
           imagemUrl: servicoOriginal?.imagem_url || null,
         };
       });
+
+      // Editando um orçamento já salvo — atualiza a mesma linha em vez de criar venda
+      // nova, e não dispara nenhum dos efeitos de "pedido" (lançamento, produção, baixa de
+      // estoque) porque orçamento em edição continua sendo só orçamento, nunca vira pedido
+      // por aqui — conversão pra pedido é outro fluxo (Painel), fora do escopo dessa edição.
+      if (orcamentoEditandoId) {
+        const { data: leadAtualizado, error: erroUpdate } = await supabase.from('leads').update({
+          empresa: nomeCliente, telefone: clienteSelecionado.telefone || null, cnpj: clienteSelecionado.cnpj || null,
+          valor_total: total, desconto, itens: itensPayload,
+          unidade: unidadeSel || null, forma_pagamento: formaPagamento, client_id: clientId,
+        }).eq('id', orcamentoEditandoId).select().single();
+        if (erroUpdate) throw erroUpdate;
+        setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload, status: 'orcamento' });
+        setOrcamentoEditandoId(null);
+        if (mostrarHistorico) carregarHistorico();
+        setSalvando(false);
+        return;
+      }
 
       const { data: leadData, error: erroLead } = await supabase.from('leads').insert([{
         empresa: nomeCliente,
@@ -779,9 +821,12 @@ export default function PulseNovaVendaPage() {
                       </div>
                     )}
                     {ehOrc && (
-                      <button onClick={() => cancelarOrcamento(h.id)} disabled={cancelandoId === h.id} title="Cancelar orçamento" className="flex-shrink-0 text-slate-600 hover:text-red-400 disabled:opacity-50">
-                        {cancelandoId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                      </button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => editarOrcamento(h)} title="Editar orçamento" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-amber-500/10 text-slate-600 hover:text-amber-400"><Pencil size={13} /></button>
+                        <button onClick={() => cancelarOrcamento(h.id)} disabled={cancelandoId === h.id} title="Cancelar orçamento" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-400 disabled:opacity-50">
+                          {cancelandoId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -1024,15 +1069,30 @@ export default function PulseNovaVendaPage() {
             </div>
           )}
 
-          <div className="flex gap-2">
-            <button onClick={() => finalizarVenda('orcamento')} disabled={salvando} className="flex-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 disabled:opacity-50 text-purple-400 font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
-              <FileText size={16} /> Orçamento
-            </button>
-            <button onClick={() => finalizarVenda('pedido')} disabled={salvando} className="flex-1 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
-              {salvando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-              {salvando ? 'Salvando...' : 'Fechar venda'}
-            </button>
-          </div>
+          {orcamentoEditandoId ? (
+            <div className="space-y-2">
+              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Pencil size={11} /> Editando orçamento {formatId(orcamentoEditandoId)}</p>
+              <div className="flex gap-2">
+                <button onClick={resetar} disabled={salvando} className="bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-black uppercase text-xs py-4 px-4 rounded-xl transition-all">
+                  Cancelar
+                </button>
+                <button onClick={() => finalizarVenda('orcamento')} disabled={salvando} className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+                  {salvando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                  {salvando ? 'Salvando...' : 'Salvar alterações'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => finalizarVenda('orcamento')} disabled={salvando} className="flex-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 disabled:opacity-50 text-purple-400 font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+                <FileText size={16} /> Orçamento
+              </button>
+              <button onClick={() => finalizarVenda('pedido')} disabled={salvando} className="flex-1 bg-[var(--cor-primaria)] hover:bg-[#16A34A] disabled:opacity-50 text-[#0B1120] font-black uppercase text-xs py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+                {salvando ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                {salvando ? 'Salvando...' : 'Fechar venda'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

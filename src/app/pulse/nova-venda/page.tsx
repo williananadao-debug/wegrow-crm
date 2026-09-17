@@ -62,6 +62,7 @@ export default function PulseNovaVendaPage() {
   // Contrato via Docuseal — só pra venda fechada (não faz sentido em orçamento ainda não
   // aprovado). clienteSelecionado continua em memória até "Nova venda" resetar, por isso
   // dá pra reaproveitar endereço/e-mail dele aqui sem buscar de novo.
+  const [vendaAlvo, setVendaAlvo] = useState<any>(null);
   const [contratoAberto, setContratoAberto] = useState(false);
   const [contratoEmail, setContratoEmail] = useState('');
   const [contratoTelefone, setContratoTelefone] = useState('');
@@ -95,7 +96,7 @@ export default function PulseNovaVendaPage() {
     if (!perfil?.empresa_id) return;
     setCarregandoHistorico(true);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento')
+      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id')
       .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
       .order('created_at', { ascending: false }).limit(30);
     setHistorico(data || []);
@@ -428,9 +429,13 @@ export default function PulseNovaVendaPage() {
     }
   };
 
-  const abrirContrato = () => {
-    setContratoEmail(clienteSelecionado?.email || '');
-    setContratoTelefone(clienteSelecionado?.telefone || '');
+  // venda-alvo das 3 ações (contrato/NF/cobrança) — normalmente a que acabou de fechar
+  // (vendaConcluida), mas também pode ser uma linha antiga clicada no histórico, já que
+  // a telinha de sucesso desaparece assim que sai dela.
+  const abrirContrato = (venda: any = vendaConcluida) => {
+    setVendaAlvo(venda);
+    setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
+    setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);
@@ -438,7 +443,7 @@ export default function PulseNovaVendaPage() {
 
   const enviarContrato = async () => {
     if (!contratoEmail.trim()) { setContratoErro('Informe o e-mail do cliente — o Docuseal manda o link de assinatura por lá.'); return; }
-    if (!vendaConcluida) return;
+    if (!vendaAlvo) return;
     setEnviandoContrato(true); setContratoErro(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -449,14 +454,14 @@ export default function PulseNovaVendaPage() {
         body: JSON.stringify({
           empresa_id: perfil?.empresa_id,
           venda: {
-            id: vendaConcluida.id, empresa: vendaConcluida.empresa, cnpj: vendaConcluida.cnpj,
-            telefone: contratoTelefone || vendaConcluida.telefone,
+            id: vendaAlvo.id, empresa: vendaAlvo.empresa, cnpj: vendaAlvo.cnpj,
+            telefone: contratoTelefone || vendaAlvo.telefone,
             endereco: clienteSelecionado?.endereco, cidade: clienteSelecionado?.cidade,
-            itens: vendaConcluida.itens, desconto: vendaConcluida.desconto || 0, valor_total: vendaConcluida.valor_total,
-            parcelas: vendaConcluida.parcelas || '1', forma_pagamento: vendaConcluida.forma_pagamento,
-            prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaConcluida.unidade || unidadeSel,
+            itens: vendaAlvo.itens, desconto: vendaAlvo.desconto || 0, valor_total: vendaAlvo.valor_total,
+            parcelas: vendaAlvo.parcelas || '1', forma_pagamento: vendaAlvo.forma_pagamento,
+            prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaAlvo.unidade || unidadeSel,
           },
-          signers: [{ name: vendaConcluida.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
+          signers: [{ name: vendaAlvo.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
           consultor: { nome: perfil?.nome || 'Vendedor', email: user?.email },
         }),
       });
@@ -470,30 +475,34 @@ export default function PulseNovaVendaPage() {
     }
   };
 
-  const emitirNf1 = async () => {
-    if (!vendaConcluida) return;
-    setEmitindoNf(true); setNfErro(null);
+  const emitirNf1 = async (venda: any = vendaConcluida) => {
+    if (!venda) return;
+    setEmitindoNf(true); setNfErro(null); setNfEmitida(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: vendaConcluida.id }),
+        body: JSON.stringify({ leadId: venda.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');
       setNfEmitida(true);
+      // Vindo do histórico não tem o card de sucesso pra mostrar o aviso inline.
+      if (venda.id !== vendaConcluida?.id) alert('NF enviada pra SEFAZ. Confirmação de autorização chega em /pulse/fiscal em alguns segundos.');
     } catch (err: any) {
       setNfErro(err?.message || 'Erro ao emitir a NF.');
+      if (venda.id !== vendaConcluida?.id) alert(`Erro ao emitir a NF: ${err?.message || 'erro desconhecido'}`);
     } finally {
       setEmitindoNf(false);
     }
   };
 
-  const abrirCobranca = () => {
-    if (!vendaConcluida) return;
-    setCobrancaValor(String(vendaConcluida.valor_total));
+  const abrirCobranca = (venda: any = vendaConcluida) => {
+    if (!venda) return;
+    setVendaAlvo(venda);
+    setCobrancaValor(String(venda.valor_total));
     setCobrancaVencimento(new Date().toISOString().split('T')[0]);
     setCobrancaErro(null);
     setCobrancaResultado(null);
@@ -501,8 +510,8 @@ export default function PulseNovaVendaPage() {
   };
 
   const gerarCobranca = async () => {
-    if (!vendaConcluida) return;
-    const cpfCnpj = vendaConcluida.cnpj || clienteSelecionado?.cnpj;
+    if (!vendaAlvo) return;
+    const cpfCnpj = vendaAlvo.cnpj || clienteSelecionado?.cnpj;
     if (!cpfCnpj) { setCobrancaErro('Cliente sem CPF/CNPJ cadastrado — necessário pro Asaas.'); return; }
     if (!cobrancaValor || Number(cobrancaValor) <= 0) { setCobrancaErro('Informe um valor válido.'); return; }
     if (!cobrancaVencimento) { setCobrancaErro('Informe o vencimento.'); return; }
@@ -514,7 +523,7 @@ export default function PulseNovaVendaPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          leadId: vendaConcluida.id, nome: vendaConcluida.empresa, cpfCnpj,
+          leadId: vendaAlvo.id, nome: vendaAlvo.empresa, cpfCnpj,
           email: clienteSelecionado?.email, valor: Number(cobrancaValor), vencimento: cobrancaVencimento, tipo: cobrancaTipo,
         }),
       });
@@ -527,6 +536,110 @@ export default function PulseNovaVendaPage() {
       setEnviandoCobranca(false);
     }
   };
+
+  // Extraído em função (em vez de JSX duplicado) porque os 2 modais precisam aparecer
+  // tanto na telinha de sucesso quanto na tela principal (acionados pelo histórico).
+  const renderModalContrato = () => contratoAberto && (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoContrato && setContratoAberto(false)}>
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><PenTool size={18} className="text-purple-400" /> Contrato</h3>
+          <button onClick={() => setContratoAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+        </div>
+
+        {contratoLinks ? (
+          <div className="space-y-3">
+            <p className="text-[var(--cor-primaria)] text-xs font-bold">Contrato gerado! Assine primeiro, depois o cliente recebe o link por e-mail automaticamente.</p>
+            <a href={contratoLinks.consultorSignUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              <PenTool size={14} /> Assinar agora (vendedor)
+            </a>
+            <button onClick={() => setContratoAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-slate-500 text-xs font-bold">Minuta padrão de compra e venda — revisar com o jurídico antes do primeiro uso oficial. Vendedor assina primeiro, cliente recebe por e-mail em seguida.</p>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">E-mail do cliente</label>
+              <input type="email" value={contratoEmail} onChange={e => setContratoEmail(e.target.value)} placeholder="cliente@email.com" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
+              <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+            </div>
+            {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
+            <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
+              {enviandoContrato ? 'Gerando...' : 'Gerar e enviar'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderModalCobranca = () => cobrancaAberto && (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoCobranca && setCobrancaAberto(false)}>
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Zap size={18} className="text-emerald-400" /> Cobrança</h3>
+          <button onClick={() => setCobrancaAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+        </div>
+
+        {cobrancaResultado ? (
+          <div className="space-y-3">
+            <p className="text-emerald-400 text-xs font-bold">Cobrança gerada!</p>
+            {cobrancaTipo === 'PIX' && cobrancaResultado.pixPayload && (
+              <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Copia e cola</p>
+                <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.pixPayload}</p>
+                <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.pixPayload || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                  <Copy size={11} /> Copiar
+                </button>
+              </div>
+            )}
+            {cobrancaTipo === 'BOLETO' && cobrancaResultado.linhaDigitavel && (
+              <div className="bg-black/40 border border-white/10 rounded-xl p-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Linha digitável</p>
+                <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.linhaDigitavel}</p>
+                <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.linhaDigitavel || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                  <Copy size={11} /> Copiar
+                </button>
+              </div>
+            )}
+            {(cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl) && (
+              <a href={cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+                Abrir cobrança
+              </a>
+            )}
+            <button onClick={() => setCobrancaAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex bg-black/30 border border-white/10 rounded-xl p-1 gap-1">
+              {(['PIX', 'BOLETO'] as const).map(t => (
+                <button key={t} type="button" onClick={() => setCobrancaTipo(t)} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${cobrancaTipo === t ? 'bg-emerald-500 text-[#0B1120]' : 'text-slate-400 hover:bg-white/5'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
+              <input type="number" step="0.01" value={cobrancaValor} onChange={e => setCobrancaValor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
+              <input type="date" value={cobrancaVencimento} onChange={e => setCobrancaVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+            </div>
+            {cobrancaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>}
+            <button onClick={gerarCobranca} disabled={enviandoCobranca} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+              {enviandoCobranca ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              {enviandoCobranca ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -605,107 +718,8 @@ export default function PulseNovaVendaPage() {
           </div>
         </div>
 
-        {contratoAberto && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoContrato && setContratoAberto(false)}>
-            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><PenTool size={18} className="text-purple-400" /> Contrato</h3>
-                <button onClick={() => setContratoAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
-              </div>
-
-              {contratoLinks ? (
-                <div className="space-y-3">
-                  <p className="text-[var(--cor-primaria)] text-xs font-bold">Contrato gerado! Assine primeiro, depois o cliente recebe o link por e-mail automaticamente.</p>
-                  <a href={contratoLinks.consultorSignUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-                    <PenTool size={14} /> Assinar agora (vendedor)
-                  </a>
-                  <button onClick={() => setContratoAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-slate-500 text-xs font-bold">Minuta padrão de compra e venda — revisar com o jurídico antes do primeiro uso oficial. Vendedor assina primeiro, cliente recebe por e-mail em seguida.</p>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">E-mail do cliente</label>
-                    <input type="email" value={contratoEmail} onChange={e => setContratoEmail(e.target.value)} placeholder="cliente@email.com" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
-                    <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
-                  </div>
-                  {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
-                  <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-                    {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
-                    {enviandoContrato ? 'Gerando...' : 'Gerar e enviar'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {cobrancaAberto && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoCobranca && setCobrancaAberto(false)}>
-            <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-left" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Zap size={18} className="text-emerald-400" /> Cobrança</h3>
-                <button onClick={() => setCobrancaAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
-              </div>
-
-              {cobrancaResultado ? (
-                <div className="space-y-3">
-                  <p className="text-emerald-400 text-xs font-bold">Cobrança gerada!</p>
-                  {cobrancaTipo === 'PIX' && cobrancaResultado.pixPayload && (
-                    <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Copia e cola</p>
-                      <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.pixPayload}</p>
-                      <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.pixPayload || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
-                        <Copy size={11} /> Copiar
-                      </button>
-                    </div>
-                  )}
-                  {cobrancaTipo === 'BOLETO' && cobrancaResultado.linhaDigitavel && (
-                    <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Linha digitável</p>
-                      <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.linhaDigitavel}</p>
-                      <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.linhaDigitavel || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
-                        <Copy size={11} /> Copiar
-                      </button>
-                    </div>
-                  )}
-                  {(cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl) && (
-                    <a href={cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-                      Abrir cobrança
-                    </a>
-                  )}
-                  <button onClick={() => setCobrancaAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex bg-black/30 border border-white/10 rounded-xl p-1 gap-1">
-                    {(['PIX', 'BOLETO'] as const).map(t => (
-                      <button key={t} type="button" onClick={() => setCobrancaTipo(t)} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${cobrancaTipo === t ? 'bg-emerald-500 text-[#0B1120]' : 'text-slate-400 hover:bg-white/5'}`}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
-                    <input type="number" step="0.01" value={cobrancaValor} onChange={e => setCobrancaValor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
-                    <input type="date" value={cobrancaVencimento} onChange={e => setCobrancaVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
-                  </div>
-                  {cobrancaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>}
-                  <button onClick={gerarCobranca} disabled={enviandoCobranca} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-                    {enviandoCobranca ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                    {enviandoCobranca ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {renderModalContrato()}
+        {renderModalCobranca()}
       </div>
     );
   }
@@ -757,6 +771,13 @@ export default function PulseNovaVendaPage() {
                       {ehOrc ? 'Orçamento' : 'Venda'}
                     </span>
                     <span className="text-white font-black text-sm flex-shrink-0 w-24 text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    {!ehOrc && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => abrirContrato(h)} title="Gerar contrato" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-purple-500/10 text-slate-600 hover:text-purple-400"><PenTool size={13} /></button>
+                        <button onClick={() => emitirNf1(h)} title="Emitir NF" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-500/10 text-slate-600 hover:text-blue-400"><FileText size={13} /></button>
+                        <button onClick={() => abrirCobranca(h)} title="Gerar boleto/Pix" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-emerald-500/10 text-slate-600 hover:text-emerald-400"><Zap size={13} /></button>
+                      </div>
+                    )}
                     {ehOrc && (
                       <button onClick={() => cancelarOrcamento(h.id)} disabled={cancelandoId === h.id} title="Cancelar orçamento" className="flex-shrink-0 text-slate-600 hover:text-red-400 disabled:opacity-50">
                         {cancelandoId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -1111,6 +1132,8 @@ export default function PulseNovaVendaPage() {
         );
       })()}
 
+      {renderModalContrato()}
+      {renderModalCobranca()}
     </div>
   );
 }

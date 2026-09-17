@@ -30,6 +30,7 @@ type ServicoConfig = {
   estoque?: number | null;
   imagem_url?: string | null;
   sku?: string | null;
+  ncm?: string | null;
   preco_custo?: number | null;
   estoque_minimo?: number | null;
   produto_pai_id?: number | null;
@@ -139,6 +140,7 @@ export default function SettingsPage() {
         estoque: item.estoque ?? null,
         imagem_url: item.imagem_url ?? null,
         sku: item.sku ?? null,
+        ncm: item.ncm ?? null,
         preco_custo: item.preco_custo ?? null,
         estoque_minimo: item.estoque_minimo ?? 5,
         produto_pai_id: item.produto_pai_id ?? null,
@@ -201,6 +203,7 @@ export default function SettingsPage() {
                 unidade: s.unidade,
                 estoque: s.estoque ?? null,
                 sku: s.sku?.trim() || null,
+                ncm: s.ncm?.trim() || null,
                 preco_custo: s.preco_custo ?? null,
                 estoque_minimo: s.estoque_minimo ?? 5,
                 produto_pai_id: s.produto_pai_id ?? null,
@@ -233,6 +236,7 @@ export default function SettingsPage() {
                         unidade: s.unidade,
                         estoque: s.estoque ?? null,
                         sku: s.sku?.trim() || null,
+                        ncm: s.ncm?.trim() || null,
                         preco_custo: s.preco_custo ?? null,
                         estoque_minimo: s.estoque_minimo ?? 5,
                         variante_nome: s.variante_nome?.trim() || null,
@@ -659,6 +663,13 @@ export default function SettingsPage() {
                         >
                             <Wand2 size={12} />
                         </button>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2" title="Necessário pra emitir NF-e desse produto">NCM</span>
+                        <input
+                            value={servico.ncm ?? ''}
+                            onChange={(e) => atualizarServico(servico.id, 'ncm', e.target.value)}
+                            className="w-24 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none focus:border-blue-500"
+                            placeholder="00000000"
+                        />
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-2">Custo</span>
                         <div className="flex items-center gap-1 bg-[#0F172A] border border-white/5 rounded-lg px-2 py-1 focus-within:border-blue-500">
                             <span className="text-[9px] text-slate-500">R$</span>

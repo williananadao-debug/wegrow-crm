@@ -5,14 +5,20 @@ import * as Sentry from '@sentry/nextjs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const ASAAS_BASE = 'https://api.asaas.com/v3';
+function asaasBase(ambiente: string) {
+    return ambiente === 'sandbox' ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3';
+}
 
-async function asaas(method: string, path: string, body?: any) {
-    const res = await fetch(`${ASAAS_BASE}${path}`, {
+// Antes usava a ASAAS_API_KEY global (da própria WeGrow) pra TODO lead de TODA empresa —
+// cobrança recorrente de cliente de qualquer tenant caía na conta Asaas da WeGrow. Agora
+// busca a chave própria de cada empresa (financeiro_integracoes); lead de empresa sem
+// chave configurada é pulado, não gera cobrança nenhuma (ver loop principal abaixo).
+async function asaas(apiKey: string, ambiente: string, method: string, path: string, body?: any) {
+    const res = await fetch(`${asaasBase(ambiente)}${path}`, {
         method,
         headers: {
             'Content-Type': 'application/json',
-            'access_token': process.env.ASAAS_API_KEY!,
+            'access_token': apiKey,
             'User-Agent': 'WeGrow-CRM/1.0',
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -41,11 +47,9 @@ export async function GET(request: Request) {
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
         return NextResponse.json({ erro: 'Não autorizado.' }, { status: 401 });
     }
-    if (!process.env.ASAAS_API_KEY) {
-        return NextResponse.json({ erro: 'ASAAS_API_KEY não configurada.' }, { status: 500 });
-    }
-
     const supabase = db();
+    const { data: integracoes } = await supabase.from('financeiro_integracoes').select('empresa_id, asaas_api_key, ambiente');
+    const integracaoPorEmpresa = new Map((integracoes || []).map(i => [i.empresa_id, i]));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 
@@ -77,6 +81,12 @@ export async function GET(request: Request) {
             continue;
         }
 
+        const integracao = lead.empresa_id ? integracaoPorEmpresa.get(lead.empresa_id) : null;
+        if (!integracao?.asaas_api_key) {
+            resultados.push({ lead: lead.id, empresa: lead.empresa, status: 'pulado', motivo: 'empresa sem conta Asaas própria conectada' });
+            continue;
+        }
+
         const valorParcela = Number(((Number(lead.valor_total) || 0) / qtdParcelas).toFixed(2));
         if (valorParcela <= 0) continue;
 
@@ -88,22 +98,22 @@ export async function GET(request: Request) {
 
         try {
             const cpfCnpjClean = String(lead.cnpj).replace(/\D/g, '');
-            const search = await asaas('GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
+            const search = await asaas(integracao.asaas_api_key, integracao.ambiente, 'GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
             let customerId: string;
             if (search.data?.length > 0) {
                 customerId = search.data[0].id;
             } else {
-                const cliente = await asaas('POST', '/customers', { name: lead.empresa, cpfCnpj: cpfCnpjClean, ...(email ? { email } : {}) });
+                const cliente = await asaas(integracao.asaas_api_key, integracao.ambiente, 'POST', '/customers', { name: lead.empresa, cpfCnpj: cpfCnpjClean, ...(email ? { email } : {}) });
                 customerId = cliente.id;
             }
 
             const vencimentoParcela = datas?.find((d: string) => d?.substring(0, 7) === mesAtual) || `${mesAtual}-05`;
-            const payment = await asaas('POST', '/payments', {
+            const payment = await asaas(integracao.asaas_api_key, integracao.ambiente, 'POST', '/payments', {
                 customer: customerId,
                 billingType: 'BOLETO',
                 value: valorParcela,
                 dueDate: vencimentoParcela,
-                description: `Cobrança recorrente WeGrow — ${lead.empresa} (${mesAtual})`,
+                description: `Cobrança recorrente — ${lead.empresa} (${mesAtual})`,
                 externalReference: String(lead.id),
             });
 

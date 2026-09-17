@@ -3,14 +3,20 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const ASAAS_BASE = 'https://api.asaas.com/v3';
+function asaasBase(ambiente: string) {
+    return ambiente === 'sandbox' ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3';
+}
 
-async function asaas(method: string, path: string, body?: any) {
-    const res = await fetch(`${ASAAS_BASE}${path}`, {
+// Antes usava uma ASAAS_API_KEY global (a da própria WeGrow) — fazia boleto/Pix de
+// QUALQUER empresa cair na conta Asaas da WeGrow em vez da conta da empresa dona da
+// venda. Agora exige a chave própria de cada empresa (financeiro_integracoes), igual ao
+// fiscal_integracoes do Focus NFe.
+async function asaas(apiKey: string, ambiente: string, method: string, path: string, body?: any) {
+    const res = await fetch(`${asaasBase(ambiente)}${path}`, {
         method,
         headers: {
             'Content-Type': 'application/json',
-            'access_token': process.env.ASAAS_API_KEY!,
+            'access_token': apiKey,
             'User-Agent': 'WeGrow-CRM/1.0',
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -36,6 +42,17 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
     if (!user) return NextResponse.json({ erro: 'Token inválido.' }, { status: 401 });
 
+    const { data: perfil } = await supabaseAdmin.from('profiles').select('empresa_id').eq('id', user.id).single();
+    if (!perfil?.empresa_id) return NextResponse.json({ erro: 'Empresa não identificada.' }, { status: 400 });
+
+    const { data: integracao } = await supabaseAdmin.from('financeiro_integracoes')
+        .select('asaas_api_key, ambiente').eq('empresa_id', perfil.empresa_id).maybeSingle();
+    if (!integracao?.asaas_api_key) {
+        return NextResponse.json({ erro: 'Sua empresa ainda não conectou uma conta Asaas própria — configure em Configurações antes de gerar boleto/Pix. Sem isso, o dinheiro não cairia na sua conta.' }, { status: 400 });
+    }
+    const apiKey = integracao.asaas_api_key;
+    const ambiente = integracao.ambiente;
+
     let body: any;
     try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
@@ -52,11 +69,11 @@ export async function POST(request: Request) {
 
         // Busca ou cria cliente no Asaas
         let customerId: string;
-        const search = await asaas('GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
+        const search = await asaas(apiKey, ambiente, 'GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
         if (search.data?.length > 0) {
             customerId = search.data[0].id;
         } else {
-            const cliente = await asaas('POST', '/customers', {
+            const cliente = await asaas(apiKey, ambiente, 'POST', '/customers', {
                 name: nome,
                 cpfCnpj: cpfCnpjClean,
                 ...(email ? { email } : {}),
@@ -65,12 +82,12 @@ export async function POST(request: Request) {
         }
 
         // Cria cobrança
-        const payment = await asaas('POST', '/payments', {
+        const payment = await asaas(apiKey, ambiente, 'POST', '/payments', {
             customer: customerId,
             billingType: tipo,
             value: Number(valor),
             dueDate: vencimento,
-            description: `Cobrança WeGrow — ${nome}`,
+            description: `Cobrança — ${nome}`,
             externalReference: String(leadId),
         });
 
@@ -78,7 +95,7 @@ export async function POST(request: Request) {
         let pixPayload: string | null = null;
         let pixQrcode: string | null = null;
         if (tipo === 'PIX' && payment.id) {
-            const pix = await asaas('GET', `/payments/${payment.id}/pixQrCode`);
+            const pix = await asaas(apiKey, ambiente, 'GET', `/payments/${payment.id}/pixQrCode`);
             pixPayload = pix.payload || null;
             pixQrcode = pix.encodedImage || null;
         }

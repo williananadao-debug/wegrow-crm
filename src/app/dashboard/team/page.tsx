@@ -317,6 +317,7 @@ export default function TeamPage() {
                             <select className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold" value={editCargo} onChange={e => setEditCargo(e.target.value)}>
                                 <option value="vendedor">Vendedor</option>
                                 <option value="producao">Produção</option>
+                                <option value="almoxarifado">Almoxarifado</option>
                                 <option value="gerente">Gerente</option>
                                 <option value="diretor">Diretor (Admin)</option>
                                 <option value="opec">Opec</option>

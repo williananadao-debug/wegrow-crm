@@ -18,3 +18,13 @@ const SHELL_EXCLUDED_PREFIXES = ['/argus', '/advocacia', '/pulse/producao/painel
 export function hasCustomShell(pathname: string): boolean {
   return SHELL_EXCLUDED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
+
+// Cargo "almoxarifado" só cuida de estoque/entrada-saída — só enxerga Estoque
+// (e sub-rotas: movimentações, relatório, contagem, saída rápida) e Notas Fiscais.
+// Aplicado em AuthContext (redireciona quem tentar entrar em qualquer outra rota
+// direto pela URL) — o menu (navbar.tsx) só espelha isso visualmente.
+const ALMOXARIFADO_ALLOWED_PREFIXES = ['/pulse/estoque', '/pulse/fiscal'];
+
+export function almoxarifadoPodeAcessar(pathname: string): boolean {
+  return ALMOXARIFADO_ALLOWED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+}

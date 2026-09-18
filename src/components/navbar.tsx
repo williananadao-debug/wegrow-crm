@@ -53,23 +53,30 @@ export default function Navbar() {
   const isManager = perfil?.cargo === 'gerente';
   const modulos = empresa?.modulos || {};
 
+  // Almoxarifado só cuida de estoque/entrada-saída — não precisa (e não deve) ver
+  // funil, clientes, financeiro ou qualquer outro módulo. Em vez de filtrar item por
+  // item nos dois layouts (mobile/desktop) e no rail colapsado, zera aqui os
+  // "mostrar*" de todo grupo que não seja Pulse — os três lugares que os consomem
+  // ficam automaticamente restritos, sem precisar tocar no JSX de renderização.
+  const isAlmoxarifado = perfil?.cargo === 'almoxarifado';
+
   const isCDL = Boolean(modulos.cdl);
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
-  const mostrarNexus = Boolean(modulos.nexus);
+  const mostrarNexus = Boolean(modulos.nexus) && !isAlmoxarifado;
   const mostrarPulse = Boolean(modulos.pulse);
-  const mostrarThor = Boolean(modulos.thor);
-  const mostrarMax = Boolean(modulos.max);
-  const mostrarObras = Boolean(modulos.obras);
-  const mostrarArgus = Boolean(modulos.argus);
-  const mostrarRedesSociais = Boolean(modulos.redes_sociais);
-  const mostrarFinanceiro = Boolean(modulos.financeiro);
+  const mostrarThor = Boolean(modulos.thor) && !isAlmoxarifado;
+  const mostrarMax = Boolean(modulos.max) && !isAlmoxarifado;
+  const mostrarObras = Boolean(modulos.obras) && !isAlmoxarifado;
+  const mostrarArgus = Boolean(modulos.argus) && !isAlmoxarifado;
+  const mostrarRedesSociais = Boolean(modulos.redes_sociais) && !isAlmoxarifado;
+  const mostrarFinanceiro = Boolean(modulos.financeiro) && !isAlmoxarifado;
   // Temporário — restrito a diretor enquanto o módulo está em teste (18/08).
-  const mostrarMidia = Boolean(modulos.midia) && isDirector;
-  const mostrarAdvocacia = Boolean(modulos.advocacia);
+  const mostrarMidia = Boolean(modulos.midia) && isDirector && !isAlmoxarifado;
+  const mostrarAdvocacia = Boolean(modulos.advocacia) && !isAlmoxarifado;
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
-  const mostrarCRM = modulos.crm !== false;
+  const mostrarCRM = modulos.crm !== false && !isAlmoxarifado;
 
   // Marca no menu é por tenant, não fixa "WeGrow" — cada empresa vê o próprio nome aqui,
   // WeGrow é só o fornecedor por trás.
@@ -109,7 +116,9 @@ export default function Navbar() {
       { name: 'Nexus', icon: <Brain size={20} />, href: '/nexus' },
   ];
 
-  const pulseItems: any[] = [
+  // Almoxarifado enxerga só Estoque e Notas Fiscais dentro do grupo Pulse — o resto
+  // do grupo (Painel, Nova Venda, Produtos, Produção, Minha Equipe) fica de fora.
+  const pulseItemsCompleto: any[] = [
       { name: 'Painel', icon: <LayoutGrid size={20} />, href: '/pulse' },
       { name: 'Nova Venda', icon: <ShoppingBag size={20} />, href: '/pulse/nova-venda' },
       { name: 'Produtos', icon: <Package size={20} />, href: '/settings' },
@@ -123,6 +132,9 @@ export default function Navbar() {
       // uma seção nova só pra isso).
       (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];
+  const pulseItems: any[] = isAlmoxarifado
+    ? pulseItemsCompleto.filter(i => i.href === '/pulse/estoque' || i.href === '/pulse/fiscal')
+    : pulseItemsCompleto;
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
   const thorItem = { name: 'THOR', icon: <Bot size={20} />, href: '/thor' };
@@ -143,7 +155,7 @@ export default function Navbar() {
   // Usado só no rail colapsado (ícone-only) — ali não cabe cabeçalho de grupo, então achata tudo.
   const flatItems: any[] = [
       ...(mostrarCRM ? crmItems : []),
-      clientesItem,
+      ...(isAlmoxarifado ? [] : [clientesItem]),
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
       ...(mostrarThor ? [thorItem] : []),
@@ -212,9 +224,11 @@ export default function Navbar() {
             );
           })()}
 
-          <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-            {clientesItem.icon} {clientesItem.name}
-          </Link>
+          {!isAlmoxarifado && (
+            <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {clientesItem.icon} {clientesItem.name}
+            </Link>
+          )}
 
           {mostrarNexus && (() => {
             const g = grupos.find(x => x.key === 'nexus')!;
@@ -371,10 +385,12 @@ export default function Navbar() {
                     );
                   })()}
 
-                  <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                    <div className="min-w-[20px]">{clientesItem.icon}</div>
-                    <span className="text-sm font-semibold">{clientesItem.name}</span>
-                  </Link>
+                  {!isAlmoxarifado && (
+                    <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{clientesItem.icon}</div>
+                      <span className="text-sm font-semibold">{clientesItem.name}</span>
+                    </Link>
+                  )}
 
                   {mostrarNexus && (() => {
                     const g = grupos.find(x => x.key === 'nexus')!;

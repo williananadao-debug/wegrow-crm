@@ -44,6 +44,13 @@ type LeadFinance = {
   cnpj?: string | null;
 };
 
+// Rótulo em cima da barra do gráfico Receita×Despesa precisa caber num espaço
+// mínimo — valor cheio (R$ 1.370.381,60) estoura a largura da coluna mensal.
+function formatCompacto(valor: number): string {
+  if (valor >= 1000) return `${(valor / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k`;
+  return valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
 function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const auth = useAuth() || {};
   const perfil = auth.perfil;
@@ -1056,14 +1063,22 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
 
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 mb-6">
             <h3 className="font-black uppercase text-sm text-slate-300 mb-5">Receita × Despesa por mês</h3>
-            <div className="flex items-end gap-2 h-40 border-b border-white/5">
+            <div className="flex items-end gap-2 h-40 border-b border-white/5 pt-5">
               {dreMensal.map(m => {
                 const maxVal = Math.max(...dreMensal.map(x => Math.max(x.receita, x.despesa)), 1);
                 return (
                   <div key={m.label} className="flex-1 flex flex-col items-center justify-end h-full gap-0.5">
                     <div className="w-full flex items-end justify-center gap-0.5 h-full">
-                      <div className="flex-1 bg-[var(--cor-primaria)] rounded-t-sm" style={{ height: `${Math.max((m.receita / maxVal) * 100, m.receita > 0 ? 3 : 0)}%` }} title={`Receita: R$ ${m.receita.toLocaleString('pt-BR')}`} />
-                      <div className="flex-1 bg-red-500/70 rounded-t-sm" style={{ height: `${Math.max((m.despesa / maxVal) * 100, m.despesa > 0 ? 3 : 0)}%` }} title={`Despesa: R$ ${m.despesa.toLocaleString('pt-BR')}`} />
+                      <div className="flex-1 relative bg-[var(--cor-primaria)] rounded-t-sm" style={{ height: `${Math.max((m.receita / maxVal) * 100, m.receita > 0 ? 3 : 0)}%` }} title={`Receita: R$ ${m.receita.toLocaleString('pt-BR')}`}>
+                        {m.receita > 0 && (
+                          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-slate-400 whitespace-nowrap">{formatCompacto(m.receita)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 relative bg-red-500/70 rounded-t-sm" style={{ height: `${Math.max((m.despesa / maxVal) * 100, m.despesa > 0 ? 3 : 0)}%` }} title={`Despesa: R$ ${m.despesa.toLocaleString('pt-BR')}`}>
+                        {m.despesa > 0 && (
+                          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-slate-400 whitespace-nowrap">{formatCompacto(m.despesa)}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

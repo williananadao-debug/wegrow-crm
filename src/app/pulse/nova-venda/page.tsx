@@ -759,7 +759,7 @@ function PulseNovaVendaContent() {
           )}
 
           {!ehOrcamento && (
-            <button onClick={abrirContrato} className="w-full mt-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+            <button onClick={() => abrirContrato()} className="w-full mt-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <PenTool size={14} /> Gerar contrato pra assinar
             </button>
           )}
@@ -767,7 +767,7 @@ function PulseNovaVendaContent() {
           {!ehOrcamento && (
             <div className="mt-2">
               <button
-                onClick={emitirNf1} disabled={emitindoNf || nfEmitida}
+                onClick={() => emitirNf1()} disabled={emitindoNf || nfEmitida}
                 className="w-full bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-50 border border-blue-500/30 text-blue-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
               >
                 {emitindoNf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
@@ -779,7 +779,7 @@ function PulseNovaVendaContent() {
           )}
 
           {!ehOrcamento && (
-            <button onClick={abrirCobranca} className="w-full mt-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
+            <button onClick={() => abrirCobranca()} className="w-full mt-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               <Zap size={14} /> Gerar boleto ou Pix
             </button>
           )}

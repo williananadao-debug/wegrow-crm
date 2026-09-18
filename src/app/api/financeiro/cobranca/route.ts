@@ -57,8 +57,12 @@ export async function POST(request: Request) {
     try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
     const { leadId, nome, cpfCnpj, email, valor, vencimento, tipo } = body;
-    if (!leadId || !nome || !cpfCnpj || !valor || !vencimento || !tipo) {
-        return NextResponse.json({ erro: 'Campos obrigatórios: leadId, nome, cpfCnpj, valor, vencimento, tipo.' }, { status: 422 });
+    const faltando = [
+        !leadId && 'leadId', !nome && 'nome', !cpfCnpj && 'cpfCnpj',
+        !valor && 'valor', !vencimento && 'vencimento', !tipo && 'tipo',
+    ].filter(Boolean);
+    if (faltando.length > 0) {
+        return NextResponse.json({ erro: `Campo(s) obrigatório(s) faltando: ${faltando.join(', ')}.` }, { status: 422 });
     }
     if (!['BOLETO', 'PIX'].includes(tipo)) {
         return NextResponse.json({ erro: 'tipo deve ser BOLETO ou PIX.' }, { status: 422 });

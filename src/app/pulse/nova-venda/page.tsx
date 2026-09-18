@@ -90,6 +90,7 @@ function PulseNovaVendaContent() {
   const [enviandoCobranca, setEnviandoCobranca] = useState(false);
   const [cobrancaErro, setCobrancaErro] = useState<string | null>(null);
   const [cobrancaResultado, setCobrancaResultado] = useState<{ invoiceUrl: string | null; bankSlipUrl: string | null; linhaDigitavel: string | null; pixPayload: string | null } | null>(null);
+  const [cancelandoCobranca, setCancelandoCobranca] = useState<string | null>(null);
 
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
@@ -585,6 +586,39 @@ function PulseNovaVendaContent() {
     setCobrancaAberto(true);
   };
 
+  // Espelha uma mudança em cobrancas_manuais nos três lugares que podem estar
+  // mostrando a mesma venda na tela (modal aberto, tela pós-venda, linha do histórico)
+  // sem precisar recarregar do banco.
+  const atualizarCobrancasLocal = (leadId: number, transformar: (lista: any[]) => any[]) => {
+    setVendaAlvo((v: any) => v && v.id === leadId ? { ...v, cobrancas_manuais: transformar(v.cobrancas_manuais || []) } : v);
+    setVendaConcluida((v: any) => v && v.id === leadId ? { ...v, cobrancas_manuais: transformar(v.cobrancas_manuais || []) } : v);
+    setHistorico(hs => hs.map(h => h.id === leadId ? { ...h, cobrancas_manuais: transformar(h.cobrancas_manuais || []) } : h));
+  };
+
+  const cancelarCobranca = async (asaasPaymentId: string) => {
+    if (!vendaAlvo) return;
+    if (!confirm('Cancelar esta cobrança? Essa ação não pode ser desfeita na Asaas.')) return;
+    setCancelandoCobranca(asaasPaymentId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/cobranca', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId: vendaAlvo.id, asaasPaymentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao cancelar cobrança.');
+      atualizarCobrancasLocal(vendaAlvo.id, lista => lista.map((c: any) =>
+        c.asaasPaymentId === asaasPaymentId ? { ...c, cancelada: true, canceladoEm: new Date().toISOString() } : c
+      ));
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao cancelar cobrança.');
+    } finally {
+      setCancelandoCobranca(null);
+    }
+  };
+
   const gerarCobranca = async () => {
     if (!vendaAlvo) return;
     const cpfCnpj = vendaAlvo.cnpj || clienteSelecionado?.cnpj;
@@ -613,11 +647,7 @@ function PulseNovaVendaContent() {
         geradoEm: new Date().toISOString(), invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl,
         linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload,
       };
-      setVendaAlvo((v: any) => v ? { ...v, cobrancas_manuais: [...(v.cobrancas_manuais || []), novaCobranca] } : v);
-      if (vendaConcluida?.id === vendaAlvo.id) {
-        setVendaConcluida((v: any) => v ? { ...v, cobrancas_manuais: [...(v.cobrancas_manuais || []), novaCobranca] } : v);
-      }
-      setHistorico(hs => hs.map(h => h.id === vendaAlvo.id ? { ...h, cobrancas_manuais: [...(h.cobrancas_manuais || []), novaCobranca] } : h));
+      atualizarCobrancasLocal(vendaAlvo.id, lista => [...lista, novaCobranca]);
     } catch (err: any) {
       setCobrancaErro(err?.message || 'Erro ao gerar cobrança.');
     } finally {
@@ -679,11 +709,24 @@ function PulseNovaVendaContent() {
             {[...vendaAlvo.cobrancas_manuais].reverse().map((c: any, idx: number) => (
               <div key={idx} className="bg-black/30 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-white text-xs font-bold truncate">{c.tipo} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className={`text-xs font-bold truncate ${c.cancelada ? 'text-slate-500 line-through' : 'text-white'}`}>{c.tipo} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   <p className="text-slate-500 text-[10px]">Vence {c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
                 </div>
-                {(c.bankSlipUrl || c.invoiceUrl) && (
-                  <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
+                {c.cancelada ? (
+                  <span className="flex-shrink-0 text-slate-500 text-[10px] font-black uppercase">Cancelada</span>
+                ) : (
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    {(c.bankSlipUrl || c.invoiceUrl) && (
+                      <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
+                    )}
+                    <button
+                      onClick={() => cancelarCobranca(c.asaasPaymentId)}
+                      disabled={cancelandoCobranca === c.asaasPaymentId}
+                      className="text-red-400 hover:text-red-300 disabled:opacity-50 text-[10px] font-black uppercase"
+                    >
+                      {cancelandoCobranca === c.asaasPaymentId ? '...' : 'Cancelar'}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}

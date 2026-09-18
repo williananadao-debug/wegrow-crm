@@ -141,3 +141,55 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: error.message || 'Erro ao gerar cobrança.' }, { status: 500 });
     }
 }
+
+export async function DELETE(request: Request) {
+    const accessToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    if (!accessToken) return NextResponse.json({ erro: 'Não autenticado.' }, { status: 401 });
+
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false } }
+    );
+
+    const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
+    if (!user) return NextResponse.json({ erro: 'Token inválido.' }, { status: 401 });
+
+    const { data: perfil } = await supabaseAdmin.from('profiles').select('empresa_id').eq('id', user.id).single();
+    if (!perfil?.empresa_id) return NextResponse.json({ erro: 'Empresa não identificada.' }, { status: 400 });
+
+    const { data: integracao } = await supabaseAdmin.from('financeiro_integracoes')
+        .select('asaas_api_key, ambiente').eq('empresa_id', perfil.empresa_id).maybeSingle();
+    if (!integracao?.asaas_api_key) {
+        return NextResponse.json({ erro: 'Sua empresa ainda não conectou uma conta Asaas própria.' }, { status: 400 });
+    }
+
+    let body: any;
+    try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
+    const { leadId, asaasPaymentId } = body;
+    if (!leadId || !asaasPaymentId) {
+        return NextResponse.json({ erro: 'Campo(s) obrigatório(s) faltando: leadId, asaasPaymentId.' }, { status: 422 });
+    }
+
+    try {
+        // Só confirma dono da cobrança antes de mexer — o lead precisa ser da mesma empresa
+        // do usuário logado (RLS não se aplica aqui porque é service role).
+        const { data: lead } = await supabaseAdmin.from('leads').select('cobrancas_manuais, empresa_id').eq('id', leadId).single();
+        if (!lead || lead.empresa_id !== perfil.empresa_id) {
+            return NextResponse.json({ erro: 'Venda não encontrada.' }, { status: 404 });
+        }
+
+        await asaas(integracao.asaas_api_key, integracao.ambiente, 'DELETE', `/payments/${asaasPaymentId}`);
+
+        const cobrancasAtuais = Array.isArray(lead.cobrancas_manuais) ? lead.cobrancas_manuais : [];
+        const cobrancasAtualizadas = cobrancasAtuais.map((c: any) =>
+            c.asaasPaymentId === asaasPaymentId ? { ...c, cancelada: true, canceladoEm: new Date().toISOString() } : c
+        );
+        await supabaseAdmin.from('leads').update({ cobrancas_manuais: cobrancasAtualizadas }).eq('id', leadId);
+
+        return NextResponse.json({ ok: true });
+    } catch (error: any) {
+        console.error('[financeiro/cobranca DELETE]', error.message);
+        return NextResponse.json({ erro: error.message || 'Erro ao cancelar cobrança.' }, { status: 500 });
+    }
+}

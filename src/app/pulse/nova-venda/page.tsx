@@ -320,8 +320,14 @@ function PulseNovaVendaContent() {
       servicoId: proximoIdAvulsoRef.current--, nome: it.servico, quantidade: it.quantidade,
       precoUnitario: it.precoUnitario, estoqueMax: null, avulso: true, descricao: it.descricao ?? null,
     })));
-    setDesconto(Number(h.desconto) || 0);
-    setAcrescimo(0);
+    const descontoOriginal = Number(h.desconto) || 0;
+    setDesconto(descontoOriginal);
+    // Acréscimo nunca foi salvo no banco (só desconto e o valor_total final) — sem
+    // reconstruir aqui, reabrir um orçamento que tinha acréscimo zerava o valor dele na
+    // tela (ex: R$ 189.900 virando R$ 169.900), e salvar de novo gravava o total errado.
+    // subtotal - desconto + acréscimo = valor_total  →  acréscimo = valor_total - subtotal + desconto.
+    const subtotalReconstruido = itens.reduce((s: number, it: any) => s + (Number(it.precoUnitario) || 0) * (Number(it.quantidade) || 1), 0);
+    setAcrescimo(Math.max(0, (Number(h.valor_total) || 0) - subtotalReconstruido + descontoOriginal));
     if (h.forma_pagamento) setFormaPagamento(h.forma_pagamento);
     if (h.client_id) {
       const { data: cliente } = await supabase.from('clientes').select('*').eq('id', h.client_id).single();
@@ -336,16 +342,21 @@ function PulseNovaVendaContent() {
   // direto (essa aba não carrega o histórico sozinha) e já abre pra edição. Depende do
   // valor do parâmetro (não de [] fixo) — sem isso, voltar pra essa mesma tela clicando em
   // "Editar" de novo (Next.js às vezes reaproveita a instância já montada em vez de
-  // recarregar do zero) fazia o parâmetro novo ser ignorado, e só um segundo clique direto
-  // no lápis do histórico (que não depende desse efeito) realmente abria a edição.
+  // recarregar do zero) fazia o parâmetro novo ser ignorado.
+  //
+  // Também espera perfil?.empresa_id estar pronto antes de buscar — numa página recém
+  // carregada (link direto do Painel), a sessão do Supabase ainda pode não ter terminado
+  // de restaurar nesse exato momento; buscando cedo demais, o RLS filtra tudo em silêncio
+  // (sem erro, só devolve vazio), a tela fica parecendo um Nova Venda em branco normal, e
+  // só um segundo clique em Editar (já com a sessão pronta) realmente carregava o orçamento.
   const editarOrcamentoParam = searchParams.get('editarOrcamento');
   useEffect(() => {
-    if (!editarOrcamentoParam) return;
+    if (!editarOrcamentoParam || !perfil?.empresa_id) return;
     supabase.from('leads').select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
       .eq('id', Number(editarOrcamentoParam)).single()
       .then(({ data }) => { if (data) editarOrcamento(data); });
     window.history.replaceState({}, '', '/pulse/nova-venda');
-  }, [editarOrcamentoParam]);
+  }, [editarOrcamentoParam, perfil?.empresa_id]);
 
   const finalizarVenda = async (modo: 'orcamento' | 'pedido') => {
     setErro(null);

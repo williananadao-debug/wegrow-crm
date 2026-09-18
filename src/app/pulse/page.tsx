@@ -424,9 +424,14 @@ export default function PulsePainelPage() {
                   <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade), empresa)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Orçamento
                   </button>
-                  <Link href={`/pulse/nova-venda?editarOrcamento=${v.id}`} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                  {/* <a> normal, não <Link> do Next — precisa forçar recarregamento completo
+                  da página. Com navegação "leve" do Next, voltar pra Nova Venda clicando em
+                  Editar de novo podia reaproveitar a instância já montada da tela e ignorar
+                  o parâmetro novo da URL (só abria de fato clicando 2x). Recarregar do zero
+                  garante que o parâmetro sempre é processado. */}
+                  <a href={`/pulse/nova-venda?editarOrcamento=${v.id}`} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Pencil size={10} /> Editar
-                  </Link>
+                  </a>
                   <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <CheckCircle2 size={10} /> Converter em Pedido
                   </button>

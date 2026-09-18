@@ -4,7 +4,7 @@ import {
   Users, Search, Plus, Trash2,
   Phone, FileText, X, History, CheckCircle2, XCircle,
   Loader2, ChevronDown, Building2, User, Upload, Hash, MapPin, Mail, Zap, ShieldAlert, AlertTriangle,
-  Brain, Download
+  Brain, Download, Pencil
 } from 'lucide-react';
 import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG, NexusIcon, NexusThumb } from '@/components/nexus-shared';
 import { SkeletonRow } from '@/components/Skeleton';
@@ -1263,9 +1263,16 @@ export default function CustomersPage() {
                                     {venda.unidade && <span className="text-[9px] bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{venda.unidade}</span>}
                                     <span className="text-[9px] text-slate-600 font-mono">{formatId(venda.id, 'LD')}</span>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-sm font-black text-white">R$ {(venda.valor_total || 0).toLocaleString('pt-BR')}</p>
-                                    <p className="text-[9px] text-slate-500">{new Date(venda.created_at).toLocaleDateString('pt-BR')}</p>
+                                <div className="text-right flex items-start gap-2">
+                                    <div>
+                                        <p className="text-sm font-black text-white">R$ {(venda.valor_total || 0).toLocaleString('pt-BR')}</p>
+                                        <p className="text-[9px] text-slate-500">{new Date(venda.created_at).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    {venda.status === 'orcamento' && (
+                                        <a href={`/pulse/nova-venda?editarOrcamento=${venda.id}`} title="Editar orçamento" className="flex-shrink-0 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1">
+                                            <Pencil size={10} /> Editar
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                             {Array.isArray(venda.itens) && venda.itens.length > 0 && (

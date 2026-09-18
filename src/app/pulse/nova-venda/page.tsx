@@ -249,7 +249,7 @@ function PulseNovaVendaContent() {
     setCarrinho(prev => {
       if (editandoServicoId != null) {
         return prev.map(i => i.servicoId === editandoServicoId
-          ? { ...i, nome: s.nome, precoUnitario: s.preco, configuracoes: extras, prazoFabricacaoDias: s.prazo_fabricacao_dias ?? null, descricao: criandoPersonalizado ? (s.descricao ?? null) : i.descricao }
+          ? { ...i, nome: s.nome, precoUnitario: s.preco, configuracoes: extras, prazoFabricacaoDias: s.prazo_fabricacao_dias ?? null, descricao: s.descricao ?? null }
           : i);
       }
       const existente = !criandoPersonalizado ? prev.find(i => i.servicoId === s.id) : undefined;
@@ -260,7 +260,7 @@ function PulseNovaVendaContent() {
         servicoId: s.id, nome: s.nome, quantidade: 1, precoUnitario: s.preco, estoqueMax: s.estoque ?? null,
         configuracoes: extras, avulso: criandoPersonalizado || undefined,
         prazoFabricacaoDias: criandoPersonalizado ? (s.prazo_fabricacao_dias ?? null) : undefined,
-        descricao: criandoPersonalizado ? (s.descricao ?? null) : undefined,
+        descricao: s.descricao ?? undefined,
       }];
     });
     setProdutoDetalhe(null); setEditandoServicoId(null); setExtrasConfigurando([]); setCriandoPersonalizado(false);
@@ -1184,9 +1184,14 @@ function PulseNovaVendaContent() {
                         <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias
                       </p>
                     )}
-                    {produtoDetalhe.descricao && (
-                      <p className="text-slate-300 text-sm mt-4 whitespace-pre-line leading-relaxed">{produtoDetalhe.descricao}</p>
-                    )}
+                    <div className="mt-4">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Descrição / especificações (só nesta venda — não altera o cadastro do produto)</label>
+                      <textarea
+                        value={produtoDetalhe.descricao ?? ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, descricao: e.target.value })}
+                        rows={5} placeholder="Dimensões, itens inclusos, acabamento..."
+                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-slate-300 text-sm outline-none focus:border-[var(--cor-primaria)] resize-y whitespace-pre-line"
+                      />
+                    </div>
                   </>
                 )}
 

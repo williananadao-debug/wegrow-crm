@@ -87,9 +87,10 @@ function PulseNovaVendaContent() {
   const [cobrancaTipo, setCobrancaTipo] = useState<'PIX' | 'BOLETO'>('PIX');
   const [cobrancaValor, setCobrancaValor] = useState('');
   const [cobrancaVencimento, setCobrancaVencimento] = useState('');
+  const [cobrancaParcelas, setCobrancaParcelas] = useState('1');
   const [enviandoCobranca, setEnviandoCobranca] = useState(false);
   const [cobrancaErro, setCobrancaErro] = useState<string | null>(null);
-  const [cobrancaResultado, setCobrancaResultado] = useState<{ invoiceUrl: string | null; bankSlipUrl: string | null; linhaDigitavel: string | null; pixPayload: string | null } | null>(null);
+  const [cobrancaResultado, setCobrancaResultado] = useState<Array<{ parcela: string | null; tipo: string; valor: number; invoiceUrl: string | null; bankSlipUrl: string | null; linhaDigitavel: string | null; pixPayload: string | null }> | null>(null);
   const [cancelandoCobranca, setCancelandoCobranca] = useState<string | null>(null);
 
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
@@ -581,6 +582,7 @@ function PulseNovaVendaContent() {
     setVendaAlvo(venda);
     setCobrancaValor(String(venda.valor_total));
     setCobrancaVencimento(new Date().toISOString().split('T')[0]);
+    setCobrancaParcelas('1');
     setCobrancaErro(null);
     setCobrancaResultado(null);
     setCobrancaAberto(true);
@@ -619,35 +621,58 @@ function PulseNovaVendaContent() {
     }
   };
 
+  // Divide o valor total em N parcelas mensais iguais (a última absorve a
+  // diferença de centavos do arredondamento) a partir do 1º vencimento informado.
+  const calcularParcelas = (valorTotal: number, qtd: number, primeiroVencimento: string) => {
+    const centavosTotal = Math.round(valorTotal * 100);
+    const centavosParcela = Math.floor(centavosTotal / qtd);
+    const parcelas: { valor: number; vencimento: string }[] = [];
+    const dataBase = new Date(primeiroVencimento + 'T00:00:00');
+    for (let i = 0; i < qtd; i++) {
+      const centavos = i === qtd - 1 ? centavosTotal - centavosParcela * (qtd - 1) : centavosParcela;
+      const data = new Date(dataBase);
+      data.setMonth(data.getMonth() + i);
+      parcelas.push({ valor: centavos / 100, vencimento: data.toISOString().split('T')[0] });
+    }
+    return parcelas;
+  };
+
   const gerarCobranca = async () => {
     if (!vendaAlvo) return;
     const cpfCnpj = vendaAlvo.cnpj || clienteSelecionado?.cnpj;
     if (!cpfCnpj) { setCobrancaErro('Cliente sem CPF/CNPJ cadastrado — necessário pro Asaas.'); return; }
     if (!cobrancaValor || Number(cobrancaValor) <= 0) { setCobrancaErro('Informe um valor válido.'); return; }
     if (!cobrancaVencimento) { setCobrancaErro('Informe o vencimento.'); return; }
+    const qtdParcelas = Math.max(1, Number(cobrancaParcelas) || 1);
     setEnviandoCobranca(true); setCobrancaErro(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
+      const parcelas = qtdParcelas > 1 ? calcularParcelas(Number(cobrancaValor), qtdParcelas, cobrancaVencimento) : undefined;
       const res = await fetch('/api/financeiro/cobranca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           leadId: vendaAlvo.id, nome: vendaAlvo.empresa, cpfCnpj,
           email: clienteSelecionado?.email, valor: Number(cobrancaValor), vencimento: cobrancaVencimento, tipo: cobrancaTipo,
+          ...(parcelas ? { parcelas } : {}),
         }),
       });
       const json = await res.json();
+      // Mesmo se falhou no meio (ex: parcela 3 de 5 deu erro), a rota já salvou as
+      // que geraram de verdade na Asaas antes de responder — reflete essas aqui
+      // também, não só no caminho de sucesso, senão o registro local fica incompleto.
+      const resultados: any[] = json.parcelas || [];
+      if (resultados.length > 0) {
+        const novasCobrancas = resultados.map(r => ({
+          asaasPaymentId: r.paymentId, parcela: r.parcela, tipo: r.tipo, valor: r.valor, vencimento: r.vencimento,
+          geradoEm: new Date().toISOString(), invoiceUrl: r.invoiceUrl, bankSlipUrl: r.bankSlipUrl,
+          linhaDigitavel: r.linhaDigitavel, pixPayload: r.pixPayload,
+        }));
+        atualizarCobrancasLocal(vendaAlvo.id, lista => [...lista, ...novasCobrancas]);
+      }
       if (!res.ok) throw new Error(json.erro || 'Erro ao gerar cobrança.');
-      setCobrancaResultado({ invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl, linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload });
-      // Reflete na hora sem precisar recarregar o histórico — a rota já persistiu
-      // isso em leads.cobrancas_manuais, aqui só espelha localmente.
-      const novaCobranca = {
-        asaasPaymentId: json.paymentId, tipo: json.tipo, valor: json.valor, vencimento: json.vencimento,
-        geradoEm: new Date().toISOString(), invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl,
-        linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload,
-      };
-      atualizarCobrancasLocal(vendaAlvo.id, lista => [...lista, novaCobranca]);
+      setCobrancaResultado(resultados);
     } catch (err: any) {
       setCobrancaErro(err?.message || 'Erro ao gerar cobrança.');
     } finally {
@@ -709,7 +734,7 @@ function PulseNovaVendaContent() {
             {[...vendaAlvo.cobrancas_manuais].reverse().map((c: any, idx: number) => (
               <div key={idx} className="bg-black/30 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className={`text-xs font-bold truncate ${c.cancelada ? 'text-slate-500 line-through' : 'text-white'}`}>{c.tipo} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className={`text-xs font-bold truncate ${c.cancelada ? 'text-slate-500 line-through' : 'text-white'}`}>{c.tipo}{c.parcela ? ` · parcela ${c.parcela}` : ''} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   <p className="text-slate-500 text-[10px]">Vence {c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
                 </div>
                 {c.cancelada ? (
@@ -735,31 +760,38 @@ function PulseNovaVendaContent() {
 
         {cobrancaResultado ? (
           <div className="space-y-3">
-            <p className="text-emerald-400 text-xs font-bold">Cobrança gerada!</p>
-            {cobrancaTipo === 'PIX' && cobrancaResultado.pixPayload && (
-              <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Copia e cola</p>
-                <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.pixPayload}</p>
-                <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.pixPayload || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
-                  <Copy size={11} /> Copiar
-                </button>
-              </div>
-            )}
-            {cobrancaTipo === 'BOLETO' && cobrancaResultado.linhaDigitavel && (
-              <div className="bg-black/40 border border-white/10 rounded-xl p-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Linha digitável</p>
-                <p className="text-white text-[10px] font-mono break-all">{cobrancaResultado.linhaDigitavel}</p>
-                <button onClick={() => navigator.clipboard.writeText(cobrancaResultado.linhaDigitavel || '')} className="mt-2 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
-                  <Copy size={11} /> Copiar
-                </button>
-              </div>
-            )}
-            {(cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl) && (
-              <a href={cobrancaResultado.bankSlipUrl || cobrancaResultado.invoiceUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
-                Abrir cobrança
-              </a>
-            )}
-            <button onClick={() => setCobrancaAberto(false)} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
+            <p className="text-emerald-400 text-xs font-bold">{cobrancaResultado.length > 1 ? `${cobrancaResultado.length} cobranças geradas!` : 'Cobrança gerada!'}</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {cobrancaResultado.map((r, idx) => (
+                <div key={idx} className="bg-black/40 border border-white/10 rounded-xl p-3 space-y-2">
+                  {r.parcela && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parcela {r.parcela}</p>}
+                  <p className="text-white text-xs font-bold">R$ {Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  {r.tipo === 'PIX' && r.pixPayload && (
+                    <div>
+                      <p className="text-white text-[10px] font-mono break-all">{r.pixPayload}</p>
+                      <button onClick={() => navigator.clipboard.writeText(r.pixPayload || '')} className="mt-1.5 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <Copy size={11} /> Copiar
+                      </button>
+                    </div>
+                  )}
+                  {r.tipo === 'BOLETO' && r.linhaDigitavel && (
+                    <div>
+                      <p className="text-white text-[10px] font-mono break-all">{r.linhaDigitavel}</p>
+                      <button onClick={() => navigator.clipboard.writeText(r.linhaDigitavel || '')} className="mt-1.5 w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] py-2 rounded-lg flex items-center justify-center gap-1.5">
+                        <Copy size={11} /> Copiar
+                      </button>
+                    </div>
+                  )}
+                  {(r.bankSlipUrl || r.invoiceUrl) && (
+                    <a href={r.bankSlipUrl || r.invoiceUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] py-2.5 rounded-xl flex items-center justify-center gap-2">
+                      Abrir cobrança
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            {cobrancaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>}
+            <button onClick={() => { setCobrancaAberto(false); setCobrancaResultado(null); }} className="w-full bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs py-3 rounded-xl">Fechar</button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -771,17 +803,26 @@ function PulseNovaVendaContent() {
               ))}
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{Number(cobrancaParcelas) > 1 ? 'Valor total (R$)' : 'Valor (R$)'}</label>
               <input type="number" step="0.01" value={cobrancaValor} onChange={e => setCobrancaValor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{Number(cobrancaParcelas) > 1 ? '1º vencimento' : 'Vencimento'}</label>
               <input type="date" value={cobrancaVencimento} onChange={e => setCobrancaVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Parcelas</label>
+              <input type="number" min="1" step="1" value={cobrancaParcelas} onChange={e => setCobrancaParcelas(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+              {Number(cobrancaParcelas) > 1 && Number(cobrancaValor) > 0 && (
+                <p className="text-slate-500 text-[10px] mt-1.5">
+                  {cobrancaParcelas}x de ~R$ {(Number(cobrancaValor) / Number(cobrancaParcelas)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, mensal a partir do 1º vencimento — gera {cobrancaParcelas} {cobrancaTipo.toLowerCase()}s separados.
+                </p>
+              )}
             </div>
             {cobrancaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{cobrancaErro}</div>}
             <button onClick={gerarCobranca} disabled={enviandoCobranca} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               {enviandoCobranca ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-              {enviandoCobranca ? 'Gerando...' : `Gerar ${cobrancaTipo}`}
+              {enviandoCobranca ? 'Gerando...' : Number(cobrancaParcelas) > 1 ? `Gerar ${cobrancaParcelas} ${cobrancaTipo.toLowerCase()}s` : `Gerar ${cobrancaTipo}`}
             </button>
           </div>
         )}

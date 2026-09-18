@@ -56,10 +56,9 @@ export async function POST(request: Request) {
     let body: any;
     try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
 
-    const { leadId, nome, cpfCnpj, email, valor, vencimento, tipo } = body;
+    const { leadId, nome, cpfCnpj, email, valor, vencimento, tipo, parcelas } = body;
     const faltando = [
-        !leadId && 'leadId', !nome && 'nome', !cpfCnpj && 'cpfCnpj',
-        !valor && 'valor', !vencimento && 'vencimento', !tipo && 'tipo',
+        !leadId && 'leadId', !nome && 'nome', !cpfCnpj && 'cpfCnpj', !tipo && 'tipo',
     ].filter(Boolean);
     if (faltando.length > 0) {
         return NextResponse.json({ erro: `Campo(s) obrigatório(s) faltando: ${faltando.join(', ')}.` }, { status: 422 });
@@ -68,10 +67,47 @@ export async function POST(request: Request) {
         return NextResponse.json({ erro: 'tipo deve ser BOLETO ou PIX.' }, { status: 422 });
     }
 
+    // Uma cobrança única (valor/vencimento no corpo) ou várias parcelas de uma vez
+    // (array `parcelas`, uma cobrança Asaas por item) — mesmo formato internamente.
+    const itensParcelas: { valor: number; vencimento: string }[] = Array.isArray(parcelas) && parcelas.length > 0
+        ? parcelas
+        : [{ valor: Number(valor), vencimento }];
+    const parcelaInvalida = itensParcelas.find(p => !p.valor || !(Number(p.valor) > 0) || !p.vencimento);
+    if (parcelaInvalida) {
+        return NextResponse.json({ erro: 'Toda parcela precisa de valor e vencimento válidos.' }, { status: 422 });
+    }
+
+    // Salva no lead o que já foi gerado até aqui — mesmo padrão do cron de cobrança
+    // recorrente (leads.cobrancas_recorrentes), em coluna própria. Chamado tanto no
+    // sucesso quanto se uma parcela no meio do laço falhar: as anteriores já foram
+    // criadas de verdade na Asaas, não pode perder o rastro delas por causa de uma
+    // parcela seguinte que deu erro.
+    const persistirCobrancas = async (resultados: any[]) => {
+        if (resultados.length === 0) return;
+        const { data: leadAtual } = await supabaseAdmin.from('leads').select('cobrancas_manuais').eq('id', leadId).single();
+        const cobrancasExistentes = Array.isArray(leadAtual?.cobrancas_manuais) ? leadAtual.cobrancas_manuais : [];
+        const novasCobrancas = resultados.map(r => ({
+            asaasPaymentId: r.paymentId,
+            parcela: r.parcela,
+            tipo: r.tipo,
+            valor: r.valor,
+            vencimento: r.vencimento,
+            geradoEm: new Date().toISOString(),
+            invoiceUrl: r.invoiceUrl,
+            bankSlipUrl: r.bankSlipUrl,
+            linhaDigitavel: r.linhaDigitavel,
+            pixPayload: r.pixPayload,
+        }));
+        await supabaseAdmin.from('leads')
+            .update({ cobrancas_manuais: [...cobrancasExistentes, ...novasCobrancas] })
+            .eq('id', leadId);
+    };
+
+    const resultados: any[] = [];
     try {
         const cpfCnpjClean = String(cpfCnpj).replace(/\D/g, '');
 
-        // Busca ou cria cliente no Asaas
+        // Busca ou cria cliente no Asaas — uma vez só, reaproveitado pra todas as parcelas
         let customerId: string;
         const search = await asaas(apiKey, ambiente, 'GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
         if (search.data?.length > 0) {
@@ -85,60 +121,52 @@ export async function POST(request: Request) {
             customerId = cliente.id;
         }
 
-        // Cria cobrança
-        const payment = await asaas(apiKey, ambiente, 'POST', '/payments', {
-            customer: customerId,
-            billingType: tipo,
-            value: Number(valor),
-            dueDate: vencimento,
-            description: `Cobrança — ${nome}`,
-            externalReference: String(leadId),
-        });
+        const totalParcelas = itensParcelas.length;
+        for (let i = 0; i < totalParcelas; i++) {
+            const p = itensParcelas[i];
+            const descricao = totalParcelas > 1 ? `Cobrança — ${nome} (parcela ${i + 1}/${totalParcelas})` : `Cobrança — ${nome}`;
+            const payment = await asaas(apiKey, ambiente, 'POST', '/payments', {
+                customer: customerId,
+                billingType: tipo,
+                value: Number(p.valor),
+                dueDate: p.vencimento,
+                description: descricao,
+                externalReference: String(leadId),
+            });
 
-        // Para PIX, busca QR Code
-        let pixPayload: string | null = null;
-        let pixQrcode: string | null = null;
-        if (tipo === 'PIX' && payment.id) {
-            const pix = await asaas(apiKey, ambiente, 'GET', `/payments/${payment.id}/pixQrCode`);
-            pixPayload = pix.payload || null;
-            pixQrcode = pix.encodedImage || null;
+            let pixPayload: string | null = null;
+            let pixQrcode: string | null = null;
+            if (tipo === 'PIX' && payment.id) {
+                const pix = await asaas(apiKey, ambiente, 'GET', `/payments/${payment.id}/pixQrCode`);
+                pixPayload = pix.payload || null;
+                pixQrcode = pix.encodedImage || null;
+            }
+
+            resultados.push({
+                paymentId: payment.id,
+                parcela: totalParcelas > 1 ? `${i + 1}/${totalParcelas}` : null,
+                tipo,
+                valor: payment.value,
+                vencimento: payment.dueDate,
+                invoiceUrl: payment.invoiceUrl || null,
+                bankSlipUrl: payment.bankSlipUrl || null,
+                linhaDigitavel: payment.identificationField || null,
+                pixPayload,
+                pixQrcode,
+            });
         }
 
-        // Salva no lead pra não sumir quando fechar o modal — mesmo padrão do
-        // cron de cobrança recorrente (leads.cobrancas_recorrentes), em coluna própria.
-        const { data: leadAtual } = await supabaseAdmin.from('leads').select('cobrancas_manuais').eq('id', leadId).single();
-        const cobrancasExistentes = Array.isArray(leadAtual?.cobrancas_manuais) ? leadAtual.cobrancas_manuais : [];
-        const novaCobranca = {
-            asaasPaymentId: payment.id,
-            tipo,
-            valor: payment.value,
-            vencimento: payment.dueDate,
-            geradoEm: new Date().toISOString(),
-            invoiceUrl: payment.invoiceUrl || null,
-            bankSlipUrl: payment.bankSlipUrl || null,
-            linhaDigitavel: payment.identificationField || null,
-            pixPayload,
-        };
-        await supabaseAdmin.from('leads')
-            .update({ cobrancas_manuais: [...cobrancasExistentes, novaCobranca] })
-            .eq('id', leadId);
-
-        return NextResponse.json({
-            ok: true,
-            paymentId: payment.id,
-            tipo,
-            valor: payment.value,
-            vencimento: payment.dueDate,
-            invoiceUrl: payment.invoiceUrl || null,
-            bankSlipUrl: payment.bankSlipUrl || null,
-            linhaDigitavel: payment.identificationField || null,
-            pixPayload,
-            pixQrcode,
-        });
+        await persistirCobrancas(resultados);
+        return NextResponse.json({ ok: true, parcelas: resultados });
 
     } catch (error: any) {
         console.error('[financeiro/cobranca]', error.message);
-        return NextResponse.json({ erro: error.message || 'Erro ao gerar cobrança.' }, { status: 500 });
+        await persistirCobrancas(resultados);
+        const geradas = resultados.length;
+        const msg = geradas > 0
+            ? `${geradas} parcela(s) foram geradas antes do erro (salvas). Falhou em: ${error.message || 'erro desconhecido'}`
+            : (error.message || 'Erro ao gerar cobrança.');
+        return NextResponse.json({ erro: msg, parcelas: resultados }, { status: 500 });
     }
 }
 

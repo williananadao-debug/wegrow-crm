@@ -101,7 +101,7 @@ function PulseNovaVendaContent() {
     if (!perfil?.empresa_id) return;
     setCarregandoHistorico(true);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
+      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto, cobrancas_manuais')
       .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
       .order('created_at', { ascending: false }).limit(30);
     setHistorico(data || []);
@@ -606,6 +606,18 @@ function PulseNovaVendaContent() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.erro || 'Erro ao gerar cobrança.');
       setCobrancaResultado({ invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl, linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload });
+      // Reflete na hora sem precisar recarregar o histórico — a rota já persistiu
+      // isso em leads.cobrancas_manuais, aqui só espelha localmente.
+      const novaCobranca = {
+        asaasPaymentId: json.paymentId, tipo: json.tipo, valor: json.valor, vencimento: json.vencimento,
+        geradoEm: new Date().toISOString(), invoiceUrl: json.invoiceUrl, bankSlipUrl: json.bankSlipUrl,
+        linhaDigitavel: json.linhaDigitavel, pixPayload: json.pixPayload,
+      };
+      setVendaAlvo((v: any) => v ? { ...v, cobrancas_manuais: [...(v.cobrancas_manuais || []), novaCobranca] } : v);
+      if (vendaConcluida?.id === vendaAlvo.id) {
+        setVendaConcluida((v: any) => v ? { ...v, cobrancas_manuais: [...(v.cobrancas_manuais || []), novaCobranca] } : v);
+      }
+      setHistorico(hs => hs.map(h => h.id === vendaAlvo.id ? { ...h, cobrancas_manuais: [...(h.cobrancas_manuais || []), novaCobranca] } : h));
     } catch (err: any) {
       setCobrancaErro(err?.message || 'Erro ao gerar cobrança.');
     } finally {
@@ -660,6 +672,23 @@ function PulseNovaVendaContent() {
           <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Zap size={18} className="text-emerald-400" /> Cobrança</h3>
           <button onClick={() => setCobrancaAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
         </div>
+
+        {Array.isArray(vendaAlvo?.cobrancas_manuais) && vendaAlvo.cobrancas_manuais.length > 0 && (
+          <div className="mb-4 space-y-2 max-h-40 overflow-y-auto">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Já geradas</p>
+            {[...vendaAlvo.cobrancas_manuais].reverse().map((c: any, idx: number) => (
+              <div key={idx} className="bg-black/30 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-white text-xs font-bold truncate">{c.tipo} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-slate-500 text-[10px]">Vence {c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                </div>
+                {(c.bankSlipUrl || c.invoiceUrl) && (
+                  <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {cobrancaResultado ? (
           <div className="space-y-3">

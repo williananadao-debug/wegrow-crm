@@ -104,6 +104,25 @@ export async function POST(request: Request) {
             pixQrcode = pix.encodedImage || null;
         }
 
+        // Salva no lead pra não sumir quando fechar o modal — mesmo padrão do
+        // cron de cobrança recorrente (leads.cobrancas_recorrentes), em coluna própria.
+        const { data: leadAtual } = await supabaseAdmin.from('leads').select('cobrancas_manuais').eq('id', leadId).single();
+        const cobrancasExistentes = Array.isArray(leadAtual?.cobrancas_manuais) ? leadAtual.cobrancas_manuais : [];
+        const novaCobranca = {
+            asaasPaymentId: payment.id,
+            tipo,
+            valor: payment.value,
+            vencimento: payment.dueDate,
+            geradoEm: new Date().toISOString(),
+            invoiceUrl: payment.invoiceUrl || null,
+            bankSlipUrl: payment.bankSlipUrl || null,
+            linhaDigitavel: payment.identificationField || null,
+            pixPayload,
+        };
+        await supabaseAdmin.from('leads')
+            .update({ cobrancas_manuais: [...cobrancasExistentes, novaCobranca] })
+            .eq('id', leadId);
+
         return NextResponse.json({
             ok: true,
             paymentId: payment.id,

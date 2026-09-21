@@ -30,6 +30,9 @@ const OPCIONAIS_PADRAO = [
   'Start-up e operação assistida',
 ];
 
+const LABEL = 'block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1';
+const INPUT = 'w-full h-9 bg-black/50 border border-white/10 rounded-lg px-3 text-xs text-white font-semibold placeholder:text-slate-600 placeholder:font-normal outline-none focus:border-[var(--cor-primaria)] transition-colors';
+
 const somaOpcionais = (i: ItemFabrica) => (i.configuracoes || []).reduce((s, c) => s + (Number(c.valor) || 0), 0);
 const recalcula = (i: ItemFabrica): ItemFabrica => ({ ...i, precoUnitario: (Number(i.precoBase) || 0) + somaOpcionais(i) });
 
@@ -92,67 +95,59 @@ export default function ItensFabrica({ servicos, itens, onChange }: {
         <div className="space-y-3 pt-4 border-t border-white/5">
           {itens.map((item, i) => (
             <div key={i} className="bg-[#0F172A] border border-white/5 rounded-xl p-3 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-16 h-16 bg-white rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-white rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
                   {item.imagemUrl ? <img src={item.imagemUrl} alt="" className="w-full h-full object-contain" /> : <Package size={20} className="text-slate-400" />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-white uppercase leading-tight">{item.servico}</p>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    <label className="block">
-                      <span className="text-[8px] font-bold uppercase text-slate-500">Qtd</span>
-                      <input type="number" min="1" value={item.quantidade} onChange={e => atualiza(i, { quantidade: Math.max(1, Number(e.target.value) || 1) })}
-                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-xs text-white font-bold outline-none focus:border-[var(--cor-primaria)]" />
-                    </label>
-                    <label className="block col-span-2">
-                      <span className="text-[8px] font-bold uppercase text-slate-500">Valor do equipamento (R$)</span>
-                      <input type="number" min="0" step="0.01" value={item.precoBase ?? ''} onChange={e => atualiza(i, { precoBase: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-xs text-white font-bold outline-none focus:border-[var(--cor-primaria)]" />
-                    </label>
-                  </div>
-                </div>
-                <button type="button" onClick={() => onChange(itens.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-1.5 bg-red-500/10 hover:bg-red-500 rounded transition-colors shrink-0"><Trash2 size={12} /></button>
+                <p className="flex-1 min-w-0 text-sm font-black text-white uppercase leading-tight">{item.servico}</p>
+                <button type="button" onClick={() => onChange(itens.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-white p-2 bg-red-500/10 hover:bg-red-500 rounded-lg transition-colors shrink-0"><Trash2 size={14} /></button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <label className="block">
-                  <span className="text-[8px] font-bold uppercase text-slate-500">Capacidade / tamanho (ex: 400.000 kcal/h, economizador 25)</span>
-                  <input value={item.capacidade || ''} onChange={e => atualiza(i, { capacidade: e.target.value })}
-                    className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                  <span className={LABEL}>Quantidade</span>
+                  <input type="number" min="1" value={item.quantidade} onChange={e => atualiza(i, { quantidade: Math.max(1, Number(e.target.value) || 1) })} className={INPUT} />
                 </label>
                 <label className="block">
-                  <span className="text-[8px] font-bold uppercase text-slate-500">Observação (combustível, layout, etc.)</span>
-                  <input value={item.observacao || ''} onChange={e => atualiza(i, { observacao: e.target.value })}
-                    className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+                  <span className={LABEL}>Valor (R$)</span>
+                  <input type="number" min="0" step="0.01" value={item.precoBase ?? ''} placeholder="0,00" onChange={e => atualiza(i, { precoBase: parseFloat(e.target.value) || 0 })} className={INPUT} />
+                </label>
+                <label className="block">
+                  <span className={LABEL}>Capacidade</span>
+                  <input value={item.capacidade || ''} placeholder="Ex: 400.000 kcal/h" onChange={e => atualiza(i, { capacidade: e.target.value })} className={INPUT} />
+                </label>
+                <label className="block">
+                  <span className={LABEL}>Observação</span>
+                  <input value={item.observacao || ''} placeholder="Combustível, layout…" onChange={e => atualiza(i, { observacao: e.target.value })} className={INPUT} />
                 </label>
               </div>
 
               <div>
-                <span className="text-[8px] font-bold uppercase text-slate-500">Opcionais / adicionais desta máquina</span>
+                <span className={LABEL}>Opcionais / adicionais</span>
                 <div className="space-y-1.5 mt-1">
                   {(item.configuracoes || []).map((c, ci) => (
                     <div key={c.chave} className="flex items-center gap-2">
                       <input value={c.descricao} onChange={e => atualiza(i, { configuracoes: (item.configuracoes || []).map((x, xi) => xi === ci ? { ...x, descricao: e.target.value } : x) })}
-                        className="flex-1 min-w-0 bg-black/50 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                        className={`${INPUT} flex-1 min-w-0`} />
                       <input type="number" step="0.01" value={c.valor || ''} placeholder="R$" onChange={e => atualiza(i, { configuracoes: (item.configuracoes || []).map((x, xi) => xi === ci ? { ...x, valor: parseFloat(e.target.value) || 0 } : x) })}
-                        className="w-28 bg-black/50 border border-white/10 rounded px-2 py-1.5 text-[11px] text-white text-right outline-none" />
+                        className={`${INPUT} w-32 text-right`} />
                       <button type="button" onClick={() => atualiza(i, { configuracoes: (item.configuracoes || []).filter((_, xi) => xi !== ci) })} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={12} /></button>
                     </div>
                   ))}
                   <div className="flex items-center gap-2">
                     <select value="" onChange={e => { adicionaOpcional(i, e.target.value); }}
-                      className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[11px] text-slate-300 outline-none">
+                      className={`${INPUT} flex-1 text-slate-300`}>
                       <option value="">+ Adicionar opcional…</option>
                       {OPCIONAIS_PADRAO.filter(o => !(item.configuracoes || []).some(c => c.descricao === o)).map(o => <option key={o} value={o} className="bg-[#0F172A]">{o}</option>)}
                     </select>
-                    <button type="button" onClick={() => adicionaOpcional(i, 'Outro opcional')} className="flex items-center gap-1 text-[10px] font-black uppercase text-slate-400 hover:text-white bg-white/5 border border-white/10 rounded px-2 py-1.5"><Plus size={10} /> Outro</button>
+                    <button type="button" onClick={() => adicionaOpcional(i, 'Outro opcional')} className="flex items-center gap-1 h-9 text-[10px] font-black uppercase text-slate-300 hover:text-white bg-white/5 border border-white/10 rounded-lg px-3 shrink-0"><Plus size={10} /> Outro</button>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px]">
-                <span className="text-slate-500 font-bold">{item.quantidade} × R$ {item.precoUnitario.toLocaleString('pt-BR')}{somaOpcionais(item) !== 0 && ` (inclui R$ ${somaOpcionais(item).toLocaleString('pt-BR')} de opcionais)`}</span>
-                <span className="font-black text-[var(--cor-primaria)]">R$ {(item.quantidade * item.precoUnitario).toLocaleString('pt-BR')}</span>
+                <span className="text-slate-400 font-semibold">{item.quantidade} × R$ {item.precoUnitario.toLocaleString('pt-BR')}{somaOpcionais(item) !== 0 && ` (inclui R$ ${somaOpcionais(item).toLocaleString('pt-BR')} de opcionais)`}</span>
+                <span className={`font-black text-sm ${item.precoUnitario > 0 ? 'text-[var(--cor-primaria)]' : 'text-amber-400'}`}>{item.precoUnitario > 0 ? `R$ ${(item.quantidade * item.precoUnitario).toLocaleString('pt-BR')}` : 'Informar valor'}</span>
               </div>
             </div>
           ))}

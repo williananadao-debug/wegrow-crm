@@ -10,6 +10,9 @@ DECLARE
   v_emp uuid := 'dc3c3320-f652-4289-ae91-eab23ef956f2';
   n bigint;
 BEGIN
+  DELETE FROM visitas WHERE empresa_id = v_emp AND observacao LIKE 'DEMO-SEED%';
+  GET DIAGNOSTICS n = ROW_COUNT; RAISE NOTICE 'visitas: %', n;
+
   DELETE FROM estoque_movimentacoes WHERE empresa_id = v_emp AND nf_numero = 'DEMO';
   GET DIAGNOSTICS n = ROW_COUNT; RAISE NOTICE 'movimentações de estoque: %', n;
 

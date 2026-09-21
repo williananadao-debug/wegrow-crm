@@ -345,7 +345,7 @@ export default function Navbar() {
 
         {/* 👇 AQUI FOI REMOVIDA A "JAULA" (overflow-hidden) 👇 */}
         <div className={`flex flex-col h-full ${isCollapsed ? 'px-4' : 'px-6'} py-6 relative`}>
-            <div className={`flex items-center gap-3 mb-10 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
+            <div className={`flex items-center gap-3 mb-6 shrink-0 text-white transition-all ${isCollapsed ? 'justify-center' : ''}`}>
               <div className="min-w-[40px]"><MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={40} /></div>
               <div className={`flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 <span className="font-bold text-lg tracking-tighter uppercase italic leading-none truncate">{nomeMarca}</span>
@@ -353,7 +353,8 @@ export default function Navbar() {
               </div>
             </div>
 
-            <nav className="flex flex-col gap-2 flex-1">
+            {/* min-h-0 + scroll: sem isso o menu estourava a altura da tela e cortava os últimos itens (Clientes etc.). Recolhido não rola porque os tooltips laterais seriam cortados. */}
+            <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? '' : 'overflow-y-auto custom-scrollbar pr-1'}`}>
               {isCollapsed ? (
                 flatItems.map((item) => (
                   <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>

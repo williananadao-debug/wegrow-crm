@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
+import ItensFabrica from './ItensFabrica';
 import { CDL } from '@/lib/cdl-config';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false })
 
 // --- TIPOS ---
 type TipoEspecialItem = 'bonificacao' | 'doacao';
-type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; };
+type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; precoBase?: number; capacidade?: string; observacao?: string; imagemUrl?: string | null; configuracoes?: { chave: string; descricao: string; valor: number }[]; };
 
 // "bonificacao" era um checkbox (só um tipo). Vira lista suspensa com mais opções —
 // tipoEspecial é o campo novo; bonificacao (boolean) continua sendo lido pra não perder
@@ -110,6 +111,17 @@ const STAGES = {
   2: { title: 'Proposta', color: 'border-purple-500' },
   3: { title: 'Negociação', color: 'border-yellow-500' },
   4: { title: 'Ganhos', color: 'border-[var(--cor-primaria)]' },
+  5: { title: 'Perdidos', color: 'border-red-500' },
+};
+
+// Fábrica (Pulse + CRM): venda técnica com engenharia/dimensionamento e aprovação do
+// proprietário antes de fechar — mesmos índices (0–5), só muda o rótulo.
+const FABRICA_STAGES = {
+  0: { title: 'Lead / Levantamento', color: 'border-slate-500' },
+  1: { title: 'Visita / Engenharia', color: 'border-blue-500' },
+  2: { title: 'Proposta Enviada', color: 'border-purple-500' },
+  3: { title: 'Negociação / Aprovação', color: 'border-yellow-500' },
+  4: { title: 'Fechado → Fábrica', color: 'border-[var(--cor-primaria)]' },
   5: { title: 'Perdidos', color: 'border-red-500' },
 };
 
@@ -222,7 +234,9 @@ export default function DealsPage() {
   const isLideranca = isDirector || isGerente;
   const isCDL = Boolean(empresa?.modulos?.cdl);
   const isVeiculos = Boolean(empresa?.modulos?.veiculos);
-  const ACTIVE_STAGES = isCDL ? CDL_STAGES : STAGES;
+  // Empresa com Pulse + CRM = fábrica: catálogo com foto/opcionais e funil técnico.
+  const modoFabrica = !isCDL && Boolean(empresa?.modulos?.pulse) && empresa?.modulos?.crm !== false;
+  const ACTIVE_STAGES = isCDL ? CDL_STAGES : modoFabrica ? FABRICA_STAGES : STAGES;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2428,6 +2442,10 @@ export default function DealsPage() {
                             </div>
                         </div>
                         
+                        {modoFabrica ? (
+                            <ItensFabrica servicos={listaServicos as any} itens={itensTemporarios as any} onChange={(n) => setItensTemporarios(n as any)} />
+                        ) : (
+                        <>
                         {!novaUnidade ? (
                             <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-center"><p className="text-xs font-black text-orange-400 uppercase tracking-widest animate-pulse">Selecione a Unidade para abrir a tabela de preços!</p></div>
                         ) : !categoriaSelecionada ? (
@@ -2497,6 +2515,8 @@ export default function DealsPage() {
                                     </div>
                                 ))}
                             </div>
+                        )}
+                        </>
                         )}
 
                         {isLideranca && itensTemporarios.length > 0 && (

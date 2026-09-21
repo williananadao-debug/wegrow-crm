@@ -354,7 +354,7 @@ export default function Navbar() {
             </div>
 
             {/* min-h-0 + scroll: sem isso o menu estourava a altura da tela e cortava os últimos itens (Clientes etc.). Recolhido não rola porque os tooltips laterais seriam cortados. */}
-            <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? '' : 'overflow-y-auto custom-scrollbar pr-1'}`}>
+            <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? '' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'}`}>
               {isCollapsed ? (
                 flatItems.map((item) => (
                   <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>

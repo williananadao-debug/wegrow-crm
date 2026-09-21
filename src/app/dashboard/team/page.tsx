@@ -2,9 +2,18 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, TrendingUp, KeyRound } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
+
+const CARGO_CFG: Record<string, { label: string; cor: string; vende: boolean }> = {
+  diretor:      { label: 'Diretor',      cor: 'bg-purple-500/15 text-purple-300 border-purple-500/30', vende: true },
+  gerente:      { label: 'Gerente',      cor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',       vende: true },
+  vendedor:     { label: 'Vendedor',     cor: 'bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/30',    vende: true },
+  producao:     { label: 'Produção',     cor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',    vende: false },
+  almoxarifado: { label: 'Almoxarifado', cor: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',       vende: false },
+  opec:         { label: 'Opec',         cor: 'bg-pink-500/15 text-pink-300 border-pink-500/30',       vende: false },
+};
 
 export default function TeamPage() {
   const auth = useAuth() || {};
@@ -31,9 +40,14 @@ export default function TeamPage() {
   const [showToast, setShowToast] = useState(false);
   const [resetandoSenha, setResetandoSenha] = useState(false);
 
+  const [busca, setBusca] = useState('');
+
+  // Só carrega com a empresa do usuário já conhecida — antes rodava na montagem, com perfil
+  // ainda nulo, e buscava a equipe sem filtro de empresa (lista piscando/misturada).
   useEffect(() => {
+    if (!perfil?.empresa_id) return;
     carregarEquipe();
-  }, []);
+  }, [perfil?.empresa_id]);
 
   // Função para aplicar máscara de CPF (000.000.000-00)
   const aplicarMascaraCPF = (value: string) => {
@@ -213,6 +227,7 @@ export default function TeamPage() {
               <h1 className="text-2xl md:text-3xl font-black uppercase italic text-white flex items-center gap-2">
                  <ShieldAlert className="text-[#22C55E]" size={28} /> Gestão de Equipe
               </h1>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{loading ? 'Carregando…' : `${members.length} ${members.length === 1 ? 'membro' : 'membros'} · desempenho do mês atual`}</p>
           </div>
           {isDirector && (
               <button onClick={abrirModalNovo} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-2">
@@ -224,55 +239,49 @@ export default function TeamPage() {
       {loading ? (
         <div className="flex justify-center items-center h-40 animate-pulse text-slate-500 font-bold">Carregando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {members.map((m) => {
+        <>
+          <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 mb-5 max-w-md">
+            <Search size={14} className="text-slate-500" />
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou e-mail..." className="flex-1 bg-transparent outline-none text-sm text-white placeholder:text-slate-600" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {members.filter(m => !busca.trim() || `${m.nome || ''} ${m.email || ''}`.toLowerCase().includes(busca.toLowerCase())).map((m) => {
             const s = perfStats[m.id];
             const taxa = s && s.leads > 0 ? Math.round((s.ganhos / s.leads) * 100) : 0;
+            const cfg = CARGO_CFG[m.cargo] || { label: m.cargo || 'Sem cargo', cor: 'bg-white/5 text-slate-300 border-white/10', vende: false };
             return (
-              <div key={m.id} className="bg-[#0F172A] border border-white/5 p-5 rounded-3xl relative shadow-xl flex flex-col h-full">
-                {isDirector && (
-                    <button onClick={() => abrirModalEdit(m)} className="absolute top-4 right-4 p-2 bg-white/5 text-slate-400 rounded-full hover:bg-blue-600 hover:text-white transition-all z-10"><Edit2 size={14} /></button>
+              <div key={m.id} className="bg-[#0F172A] border border-white/5 hover:border-white/15 rounded-2xl p-4 transition-colors flex flex-col gap-4 min-w-0">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 shrink-0 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center font-black text-base">{m.nome?.charAt(0).toUpperCase()}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-black text-sm uppercase truncate">{m.nome || 'Sem nome'}</p>
+                    <span className={`inline-block mt-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${cfg.cor}`}>{cfg.label}</span>
+                  </div>
+                  {isDirector && (
+                    <button onClick={() => abrirModalEdit(m)} title="Editar acesso" className="shrink-0 p-2 bg-white/5 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all"><Edit2 size={14} /></button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 text-[11px] text-slate-400">
+                  <p className="flex items-center gap-2 min-w-0"><Mail size={12} className="shrink-0 text-slate-600" /><span className="truncate">{m.email || '—'}</span></p>
+                  <p className="flex items-center gap-2 min-w-0"><MapPin size={12} className="shrink-0 text-slate-600" /><span className="truncate">{m.unidade || 'Sem unidade'}</span></p>
+                  <p className="flex items-center gap-2 min-w-0"><Fingerprint size={12} className="shrink-0 text-slate-600" /><span className="truncate font-mono">{m.cpf || 'CPF não cadastrado'}</span></p>
+                </div>
+
+                {cfg.vende && (
+                  <div className="grid grid-cols-4 gap-2 text-center bg-[#0B1120] border border-white/5 rounded-xl py-2.5 px-2 mt-auto">
+                    <div><p className="text-sm font-black text-white">{s?.leads ?? 0}</p><p className="text-[8px] text-slate-500 uppercase font-bold">Leads</p></div>
+                    <div><p className="text-sm font-black text-[#22C55E]">{s?.ganhos ?? 0}</p><p className="text-[8px] text-slate-500 uppercase font-bold">Ganhos</p></div>
+                    <div><p className="text-sm font-black text-orange-400">{taxa}%</p><p className="text-[8px] text-slate-500 uppercase font-bold">Conv.</p></div>
+                    <div><p className="text-sm font-black text-white">{(s?.faturamento ?? 0) >= 1000 ? `${Math.round((s?.faturamento ?? 0) / 1000)}k` : (s?.faturamento ?? 0)}</p><p className="text-[8px] text-slate-500 uppercase font-bold">R$ mês</p></div>
+                  </div>
                 )}
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center font-black text-lg border-2 border-[#0B1120]">{m.nome?.charAt(0).toUpperCase()}</div>
-                    <div className="overflow-hidden">
-                        <p className="font-black text-lg uppercase truncate">{m.nome || 'Sem Nome'}</p>
-                        <p className="text-[9px] text-slate-500 font-mono truncate">{m.cpf || 'CPF NÃO CADASTRADO'}</p>
-                    </div>
-                </div>
-
-                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-3 mb-4">
-                  <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1 mb-2"><TrendingUp size={9}/> Performance — mês atual</p>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <p className="text-lg font-black text-white">{s?.leads ?? 0}</p>
-                      <p className="text-[8px] text-slate-500 uppercase font-bold">Leads</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-black text-[#22C55E]">{s?.ganhos ?? 0}</p>
-                      <p className="text-[8px] text-slate-500 uppercase font-bold">Ganhos</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-black text-orange-400">{taxa}%</p>
-                      <p className="text-[8px] text-slate-500 uppercase font-bold">Conv.</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-white/5">
-                    <p className="text-[10px] font-black text-white text-center">
-                      R$ {(s?.faturamento ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
-                    </p>
-                    <p className="text-[8px] text-slate-500 uppercase font-bold text-center">Faturamento</p>
-                  </div>
-                </div>
-
-                <div className="mt-auto pt-4 border-t border-white/5 flex gap-2 flex-wrap">
-                    <span className="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[9px] font-black uppercase px-2 py-1 rounded">{m.cargo}</span>
-                    <span className="bg-white/5 text-slate-300 border border-white/10 px-2 py-1 rounded text-[9px] font-black uppercase">{m.unidade}</span>
-                </div>
               </div>
             );
           })}
-        </div>
+          </div>
+          {members.length === 0 && <p className="text-center text-slate-600 text-sm py-10">Nenhum membro cadastrado.</p>}
+        </>
       )}
 
       {isModalOpen && (

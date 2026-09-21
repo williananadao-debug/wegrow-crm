@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Loader2, Activity, ArrowLeft, ShoppingCart, ClipboardList, X, Copy, Send, PackageCheck, Ban, Check, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../../usePulseAccess';
-import { calcularNecessidades, ServicoEstoque, FichaLinha, LeadPipeline, NecessidadeMaterial } from '@/lib/estoqueGestao';
+import { calcularSugestoesCompra, ServicoEstoque, MovimentoSaida, SugestaoCompra } from '@/lib/estoqueGestao';
 
 type Fornecedor = { id: number; nome: string; prazo_entrega_dias: number | null; telefone: string | null };
 type Vinculo = { fornecedor_id: number; servico_id: number; codigo_fornecedor: string | null; ultimo_preco: number | null };
@@ -18,6 +18,11 @@ const STATUS_CFG: Record<Pedido['status'], { label: string; cor: string }> = {
   recebido: { label: 'Recebido', cor: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' },
   cancelado: { label: 'Cancelado', cor: 'text-red-300 bg-red-500/10 border-red-500/30' },
 };
+const MOTIVO_TXT: Record<string, { label: string; cor: string }> = {
+  zerado: { label: 'Zerado', cor: 'text-red-300 bg-red-500/10 border-red-500/30' },
+  abaixo_minimo: { label: 'Abaixo do mínimo', cor: 'text-orange-300 bg-orange-500/10 border-orange-500/30' },
+  vai_faltar: { label: 'Vai faltar antes da reposição', cor: 'text-amber-300 bg-amber-500/10 border-amber-500/30' },
+};
 const brl = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const inp = 'h-9 bg-black/40 border border-white/10 rounded-lg px-2 text-xs text-white outline-none focus:border-[var(--cor-primaria)]';
 
@@ -26,8 +31,7 @@ export default function ComprasPage() {
   const [aba, setAba] = useState<'necessidades' | 'pedidos'>('necessidades');
   const [loading, setLoading] = useState(true);
   const [servicos, setServicos] = useState<ServicoEstoque[]>([]);
-  const [fichas, setFichas] = useState<FichaLinha[]>([]);
-  const [leads, setLeads] = useState<LeadPipeline[]>([]);
+  const [movimentos, setMovimentos] = useState<MovimentoSaida[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -52,18 +56,18 @@ export default function ComprasPage() {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     const emp = perfil.empresa_id;
-    const [s, f, l, fo, v, p, pi] = await Promise.all([
+    const [s, f, , fo, v, p, pi] = await Promise.all([
       supabase.from('servicos').select('id, nome, tipo, estoque, estoque_minimo, estoque_maximo, prazo_reposicao_dias, fornecedor_padrao_id, preco_custo, unidade').eq('empresa_id', emp).not('estoque', 'is', null),
-      supabase.from('pulse_fichas_tecnicas').select('produto_final_id, servico_id, quantidade_por_unidade').eq('empresa_id', emp),
-      supabase.from('leads').select('id, empresa, etapa, status, itens').eq('empresa_id', emp).eq('status', 'aberto'),
+      supabase.from('estoque_movimentacoes').select('servico_id, quantidade, tipo, created_at').eq('empresa_id', emp).lt('quantidade', 0)
+        .gte('created_at', new Date(Date.now() - 60 * 86400000).toISOString()).limit(5000),
+      Promise.resolve(null),
       supabase.from('pulse_fornecedores').select('id, nome, prazo_entrega_dias, telefone').eq('empresa_id', emp).eq('ativo', true).order('nome'),
       supabase.from('pulse_fornecedor_itens').select('fornecedor_id, servico_id, codigo_fornecedor, ultimo_preco').eq('empresa_id', emp),
       supabase.from('pulse_pedidos_compra').select('*').eq('empresa_id', emp).order('created_at', { ascending: false }),
       supabase.from('pulse_pedidos_compra_itens').select('*'),
     ]);
     setServicos((s.data || []) as ServicoEstoque[]);
-    setFichas((f.data || []) as FichaLinha[]);
-    setLeads((l.data || []) as LeadPipeline[]);
+    setMovimentos((f.data || []) as MovimentoSaida[]);
     setFornecedores((fo.data || []) as Fornecedor[]);
     setVinculos((v.data || []) as Vinculo[]);
     setPedidos((p.data || []) as Pedido[]);
@@ -74,19 +78,19 @@ export default function ComprasPage() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const necessidades = useMemo(() => calcularNecessidades({ servicos, fichas, leads }), [servicos, fichas, leads]);
-  const visiveis = necessidades.filter(n => !soComSugestao || n.sugerido > 0 || n.possivel > 0);
+  const necessidades = useMemo(() => calcularSugestoesCompra({ servicos, movimentosSaida: movimentos }), [servicos, movimentos]);
+  const visiveis = necessidades.filter(n => !soComSugestao || n.motivo !== 'ok');
   const nomeForn = (id: number | null) => fornecedores.find(f => f.id === id)?.nome || 'Sem fornecedor';
-  const fornecedorDe = (n: NecessidadeMaterial): number | null => fornEscolhido[n.servico.id] !== undefined ? fornEscolhido[n.servico.id] : (n.servico.fornecedor_padrao_id ?? null);
+  const fornecedorDe = (n: SugestaoCompra): number | null => fornEscolhido[n.servico.id] !== undefined ? fornEscolhido[n.servico.id] : (n.servico.fornecedor_padrao_id ?? null);
   const precoDe = (servicoId: number, fornId: number | null) => vinculos.find(v => v.servico_id === servicoId && v.fornecedor_id === fornId)?.ultimo_preco ?? servicos.find(s => s.id === servicoId)?.preco_custo ?? 0;
-  const qtdDe = (n: NecessidadeMaterial) => qtdEditada[n.servico.id] ?? n.sugerido;
+  const qtdDe = (n: SugestaoCompra) => qtdEditada[n.servico.id] ?? n.sugerido;
 
   const gerarPedidos = async () => {
     if (!perfil?.empresa_id) return;
     const escolhidos = visiveis.filter(n => selecionados[n.servico.id] && qtdDe(n) > 0);
     if (escolhidos.length === 0) { avisar('Marque ao menos um item com quantidade maior que zero.'); return; }
     setGerando(true);
-    const porForn = new Map<number | null, NecessidadeMaterial[]>();
+    const porForn = new Map<number | null, SugestaoCompra[]>();
     escolhidos.forEach(n => { const k = fornecedorDe(n); porForn.set(k, [...(porForn.get(k) || []), n]); });
     let criados = 0; let erro: string | null = null;
     for (const [fornId, itens] of porForn) {
@@ -177,13 +181,13 @@ export default function ComprasPage() {
         <Link href="/pulse/estoque" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"><ArrowLeft size={16} className="text-slate-400" /></Link>
         <div>
           <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><ShoppingCart size={28} /> Compras</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">O que comprar pelas vendas em andamento e o acompanhamento dos pedidos</p>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">O que comprar pelo consumo real e o acompanhamento dos pedidos</p>
         </div>
         <Link href="/pulse/estoque/fornecedores" className="ml-auto text-[11px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl">Fornecedores</Link>
       </header>
 
       <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-5 w-fit">
-        {([['necessidades', 'Necessidade de material', ClipboardList], ['pedidos', `Pedidos (${pedidos.length})`, ShoppingCart]] as const).map(([k, l, Icon]) => (
+        {([['necessidades', 'Sugestão de compra', ClipboardList], ['pedidos', `Pedidos (${pedidos.length})`, ShoppingCart]] as const).map(([k, l, Icon]) => (
           <button key={k} onClick={() => setAba(k)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${aba === k ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}><Icon size={13} /> {l}</button>
         ))}
       </div>
@@ -192,27 +196,27 @@ export default function ComprasPage() {
         <>
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4 mb-4 flex items-start gap-3 text-xs text-slate-400 leading-relaxed">
             <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
-            <p>A necessidade vem das propostas <b className="text-white">abertas no funil</b> multiplicadas pela <b className="text-white">ficha técnica</b> de cada produto. <b className="text-white">Provável</b> = negociação/aprovação (entra na sugestão); <b className="text-white">Possível</b> = propostas anteriores (só informativo). A sugestão cobre o provável + estoque mínimo, respeitando o máximo. Produto sem ficha técnica não gera necessidade.</p>
+            <p>A sugestão vem do <b className="text-white">consumo real dos últimos 60 dias</b>. O item entra na lista quando o estoque cai até o <b className="text-white">ponto de pedido</b> = consumo diário × prazo de reposição + estoque mínimo. A quantidade leva o estoque até o <b className="text-white">máximo</b> cadastrado (sem máximo, cobre o prazo + 30 dias). Cadastre máximo, prazo e fornecedor no detalhe do item pra afinar.</p>
           </div>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-300"><input type="checkbox" checked={soComSugestao} onChange={e => setSoComSugestao(e.target.checked)} className="accent-[var(--cor-primaria)]" /> Só itens com sugestão ou demanda</label>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-300"><input type="checkbox" checked={soComSugestao} onChange={e => setSoComSugestao(e.target.checked)} className="accent-[var(--cor-primaria)]" /> Só itens que precisam de compra</label>
             {isLideranca && <button onClick={gerarPedidos} disabled={gerando} className="bg-[var(--cor-primaria)] text-[#0B1120] px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">{gerando ? <Loader2 size={13} className="animate-spin" /> : <ShoppingCart size={13} />} Gerar pedido(s) dos marcados</button>}
           </div>
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl overflow-x-auto">
             <table className="w-full text-xs min-w-[860px]">
               <thead><tr className="border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-500">
                 <th className="p-3 w-8" /><th className="p-3 text-left">Item</th><th className="p-3 text-right">Estoque</th><th className="p-3 text-right">Mín.</th>
-                <th className="p-3 text-right">Provável</th><th className="p-3 text-right">Possível</th><th className="p-3 text-right">Comprar</th><th className="p-3 text-left">Fornecedor</th>
+                <th className="p-3 text-right">Consumo/dia</th><th className="p-3 text-right">Dura</th><th className="p-3 text-right">Comprar</th><th className="p-3 text-left">Fornecedor</th>
               </tr></thead>
               <tbody className="divide-y divide-white/5">
                 {visiveis.map(n => (
                   <tr key={n.servico.id} className="hover:bg-white/[0.02]">
                     <td className="p-3"><input type="checkbox" checked={!!selecionados[n.servico.id]} onChange={e => setSelecionados(prev => ({ ...prev, [n.servico.id]: e.target.checked }))} className="accent-[var(--cor-primaria)]" /></td>
-                    <td className="p-3"><p className="font-bold text-white">{n.servico.nome}</p>{n.vendas.length > 0 && <p className="text-[10px] text-slate-500 truncate max-w-[280px]" title={n.vendas.map(v => `${v.cliente} (${v.quantidade})`).join(', ')}>{[...new Set(n.vendas.map(v => v.cliente))].slice(0, 3).join(', ')}</p>}</td>
+                    <td className="p-3"><p className="font-bold text-white">{n.servico.nome}</p>{(() => { const m = MOTIVO_TXT[n.motivo]; return m ? <span className={`inline-block mt-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${m.cor}`}>{m.label}</span> : null; })()}</td>
                     <td className={`p-3 text-right font-black ${n.estoque <= n.minimo ? 'text-red-400' : 'text-white'}`}>{n.estoque}</td>
                     <td className="p-3 text-right text-slate-400">{n.minimo}</td>
-                    <td className="p-3 text-right text-amber-300 font-bold">{n.provavel ? Number(n.provavel.toFixed(2)) : '—'}</td>
-                    <td className="p-3 text-right text-slate-500">{n.possivel ? Number(n.possivel.toFixed(2)) : '—'}</td>
+                    <td className="p-3 text-right text-slate-300">{n.consumoDiario > 0 ? n.consumoDiario.toFixed(1) : '—'}</td>
+                    <td className={`p-3 text-right font-bold ${n.diasRestantes != null && n.diasRestantes <= n.prazoDias ? 'text-red-400' : 'text-slate-400'}`}>{n.diasRestantes != null ? `${Math.floor(n.diasRestantes)}d` : '—'}</td>
                     <td className="p-3 text-right"><input type="number" min="0" value={qtdDe(n)} onChange={e => setQtdEditada(prev => ({ ...prev, [n.servico.id]: Number(e.target.value) }))} className={`${inp} w-20 text-right font-black ${n.sugerido > 0 ? 'text-[var(--cor-primaria)]' : ''}`} /></td>
                     <td className="p-3"><select value={fornecedorDe(n) ?? ''} onChange={e => setFornEscolhido(prev => ({ ...prev, [n.servico.id]: e.target.value === '' ? null : Number(e.target.value) }))} className={`${inp} w-44`}>
                       <option value="" className="bg-[#0B1120]">Sem fornecedor</option>{fornecedores.map(f => <option key={f.id} value={f.id} className="bg-[#0B1120]">{f.nome}</option>)}</select></td>
@@ -233,7 +237,7 @@ export default function ComprasPage() {
               <span className="font-black text-sm w-32 text-right tabular-nums">{brl(totalPedido(p.id))}</span>
             </button>
           ))}
-          {pedidos.length === 0 && <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center text-slate-500 text-sm font-bold">Nenhum pedido ainda. Marque itens na aba Necessidade de material e gere os pedidos.</div>}
+          {pedidos.length === 0 && <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center text-slate-500 text-sm font-bold">Nenhum pedido ainda. Marque itens na aba Sugestão de compra e gere os pedidos.</div>}
         </div>
       )}
 

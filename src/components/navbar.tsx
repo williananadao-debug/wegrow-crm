@@ -154,7 +154,7 @@ export default function Navbar() {
   ].filter(Boolean) as any[];
 
   // Usado só no rail colapsado (ícone-only) — ali não cabe cabeçalho de grupo, então achata tudo.
-  const flatItems: any[] = [
+  const flatItemsBrutos: any[] = [
       ...(mostrarCRM ? crmItems : []),
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
@@ -168,6 +168,9 @@ export default function Navbar() {
       ...(mostrarMidia ? [midiaItem] : []),
       ...(mostrarAdvocacia ? [advocaciaItem] : []),
   ];
+  // "Minha Equipe" existe nos grupos CRM e Pulse — na lista achatada (rail recolhido) ficava
+  // duplicada com a mesma key do React, o que deixava ícones fantasma/sobrepostos no menu.
+  const flatItems: any[] = flatItemsBrutos.filter((item, idx, arr) => arr.findIndex(x => x.href === item.href) === idx);
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
@@ -357,7 +360,7 @@ export default function Navbar() {
             <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? '' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'}`}>
               {isCollapsed ? (
                 flatItems.map((item) => (
-                  <Link key={item.name} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <Link key={item.href} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                     <div className="min-w-[20px]">{item.icon}</div>
                     <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
                       {item.name}

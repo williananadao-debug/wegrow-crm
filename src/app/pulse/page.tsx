@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil } from 'lucide-react';
+import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, etapasFabricacaoDe } from './shared';
@@ -40,6 +40,31 @@ export default function PulsePainelPage() {
   const [estornoMotivo, setEstornoMotivo] = useState('');
   const [estornoLoading, setEstornoLoading] = useState(false);
   const [estornoErro, setEstornoErro] = useState<string | null>(null);
+
+  // Excluir venda de verdade (sem rastro) — só diretor; pensado pra venda de teste/lançamento errado
+  const [excluirAlvo, setExcluirAlvo] = useState<VendaPulse | null>(null);
+  const [excluirTexto, setExcluirTexto] = useState('');
+  const [excluindo, setExcluindo] = useState(false);
+  const [excluirErro, setExcluirErro] = useState<string | null>(null);
+  const isDiretor = perfil?.cargo === 'diretor';
+
+  const confirmarExclusao = async () => {
+    if (!excluirAlvo) return;
+    setExcluindo(true); setExcluirErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/excluir-venda', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId: excluirAlvo.id, confirmacao: excluirTexto.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.erro || `Erro ${res.status}`);
+      setExcluirAlvo(null); setExcluirTexto('');
+      fetchVendas(); fetchServicos();
+    } catch (e: any) { setExcluirErro(e?.message || 'Erro ao excluir.'); }
+    finally { setExcluindo(false); }
+  };
 
   const fetchVendas = async () => {
     if (!perfil?.empresa_id) return;
@@ -457,6 +482,11 @@ export default function PulsePainelPage() {
                   <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <CheckCircle2 size={10} /> Converter em Pedido
                   </button>
+                  {isDiretor && (
+                    <button onClick={() => { setExcluirAlvo(v); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir orçamento" className="bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-slate-400 hover:text-red-400 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                      <Trash2 size={10} /> Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -505,6 +535,11 @@ export default function PulsePainelPage() {
                   <button onClick={() => abrirEstorno(v)} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Undo2 size={10} /> Estornar
                   </button>
+                  {isDiretor && (
+                    <button onClick={() => { setExcluirAlvo(v); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir a venda de vez (sem rastro)" className="bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-slate-400 hover:text-red-400 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                      <Trash2 size={10} /> Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -528,7 +563,12 @@ export default function PulsePainelPage() {
                     {v.estornado_motivo && <span className="text-[9px] text-slate-500">· {v.estornado_motivo}</span>}
                   </div>
                 </div>
-                <span className="font-bold text-slate-500 text-sm shrink-0">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-bold text-slate-500 text-sm">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  {isDiretor && (
+                    <button onClick={() => { setExcluirAlvo(v); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir de vez" className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={13} /></button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -711,6 +751,29 @@ export default function PulsePainelPage() {
                 {nfseLoading ? 'Emitindo...' : 'Emitir NFS-e'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {excluirAlvo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !excluindo && setExcluirAlvo(null)}>
+          <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Trash2 size={18} className="text-red-400" /> Excluir venda</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{excluirAlvo.empresa} · {formatId(excluirAlvo.id)} · R$ {(excluirAlvo.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <button onClick={() => setExcluirAlvo(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed mb-4">
+              Isso apaga a venda <b>de vez, sem deixar rastro</b>, e não dá pra desfazer. Junto vão: a produção dela (e o histórico de etapas), os lançamentos do financeiro ligados a ela e as visitas. O que ela baixou do estoque volta. Pra manter o registro e só compensar no financeiro, use <b>Estornar</b>.
+            </div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Digite EXCLUIR pra confirmar</label>
+            <input value={excluirTexto} onChange={e => setExcluirTexto(e.target.value)} placeholder="EXCLUIR" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-red-500 mb-3" />
+            {excluirErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{excluirErro}</div>}
+            <button onClick={confirmarExclusao} disabled={excluindo || excluirTexto.trim() !== 'EXCLUIR'} className="w-full bg-red-500 hover:bg-red-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40">
+              {excluindo ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} {excluindo ? 'Excluindo...' : 'Excluir definitivamente'}
+            </button>
           </div>
         </div>
       )}

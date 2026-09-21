@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, ClipboardCheck, ArrowLeft, Search, X, Check, AlertTriangle, History, PlayCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
 
 type ItemContagem = {
@@ -53,7 +54,7 @@ export default function ContagemEstoquePage() {
     if (ativa) {
       const { data: itensData } = await supabase.from('pulse_contagens_itens').select('*')
         .eq('contagem_id', ativa.id).order('nome_produto');
-      setItens(itensData || []);
+      setItens(ordenarPorNome((itensData || []).map((i: any) => ({ ...i, nome: i.nome_produto }))));
     } else {
       setItens([]);
     }

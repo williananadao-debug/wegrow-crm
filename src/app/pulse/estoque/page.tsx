@@ -4,6 +4,7 @@ import Link from 'next/link';
 import JsBarcode from 'jsbarcode';
 import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import NotaFiscalModal from '@/components/NotaFiscalModal';
@@ -101,7 +102,7 @@ export default function PulseEstoquePage() {
   const fetchServicos = async () => {
     setLoadingServicos(true);
     const { data } = await supabase.from('servicos').select('*').order('nome', { ascending: true });
-    if (data) setServicos(data as ServicoConfig[]);
+    if (data) setServicos(ordenarPorNome(data as ServicoConfig[]));
     setLoadingServicos(false);
   };
 
@@ -468,7 +469,7 @@ export default function PulseEstoquePage() {
                 <span />
               </div>
               <div className="divide-y divide-white/5">
-                {[...itensFiltrados].sort((a, b) => (a.estoque as number) - (b.estoque as number)).map(renderLinhaEstoque)}
+                {ordenarPorNome(itensFiltrados).map(renderLinhaEstoque)}
               </div>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, ListTree, ArrowLeft, Filter, X, Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
 import { ServicoConfig, formatId } from '../../shared';
 
@@ -52,7 +53,7 @@ export default function KardexPage() {
       supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).order('nome'),
       supabase.from('estoque_movimentacoes').select('*').eq('empresa_id', perfil.empresa_id).order('created_at', { ascending: false }).limit(1000),
     ]).then(([resServicos, resMov]) => {
-      if (resServicos.data) setServicos(resServicos.data as ServicoConfig[]);
+      if (resServicos.data) setServicos(ordenarPorNome(resServicos.data as ServicoConfig[]));
       if (resMov.data) setMovimentacoes(resMov.data as Movimentacao[]);
       setLoading(false);
     });

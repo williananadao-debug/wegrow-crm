@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, ArrowLeft, ScanLine, CheckCircle2, XCircle, PackageMinus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../../shared';
 
@@ -24,7 +25,7 @@ export default function SaidaRapidaPage() {
   useEffect(() => {
     if (!perfil?.empresa_id) return;
     supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).order('nome')
-      .then(({ data }) => { if (data) setServicos(data as ServicoConfig[]); setLoading(false); });
+      .then(({ data }) => { if (data) setServicos(ordenarPorNome(data as ServicoConfig[])); setLoading(false); });
   }, [perfil?.empresa_id]);
 
   useEffect(() => { inputRef.current?.focus(); }, [loading]);

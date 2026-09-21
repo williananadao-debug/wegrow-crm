@@ -155,7 +155,7 @@ function MidiaConfiguracoesContent() {
     let erro: string | null = null;
     if (novos.length > 0) {
       const { error } = await supabase.from('midia_aniversarios_municipios').insert(
-        novos.map(s => ({ empresa_id: perfil.empresa_id, municipio: s.municipio, uf: s.uf, praca: s.praca, dia: s.dia, mes: s.mes, observacao: s.observacao || null, criado_por: perfil.id }))
+        novos.map(s => ({ empresa_id: perfil.empresa_id, municipio: s.municipio, uf: s.uf, praca: s.praca, dia: s.dia, mes: s.mes, ano_emancipacao: s.ano_emancipacao ?? null, observacao: s.observacao || null, criado_por: perfil.id }))
       );
       if (error) erro = error.message;
     }
@@ -164,7 +164,7 @@ function MidiaConfiguracoesContent() {
     for (const s of existentes) {
       const atual = porNome.get(s.municipio.toLowerCase())!;
       if (atual.dia !== s.dia || atual.mes !== s.mes || atual.praca !== s.praca || (atual.observacao || '') !== (s.observacao || '')) {
-        const { error } = await supabase.from('midia_aniversarios_municipios').update({ dia: s.dia, mes: s.mes, praca: s.praca, observacao: s.observacao || null }).eq('id', atual.id);
+        const { error } = await supabase.from('midia_aniversarios_municipios').update({ dia: s.dia, mes: s.mes, praca: s.praca, observacao: s.observacao || null, ano_emancipacao: s.ano_emancipacao ?? null }).eq('id', atual.id);
         if (error) erro = error.message;
       }
     }

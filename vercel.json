@@ -5,6 +5,7 @@
     { "path": "/api/cron/advocacia-sync", "schedule": "0 8 * * *" },
     { "path": "/api/cron/fiscal-backfill-itens", "schedule": "30 8 * * *" },
     { "path": "/api/cron/estoque-reposicao", "schedule": "0 10 * * *" },
-    { "path": "/api/cron/snapshot-mrr", "schedule": "5 6 1 * *" }
+    { "path": "/api/cron/snapshot-mrr", "schedule": "5 6 1 * *" },
+    { "path": "/api/cron/aniversarios-municipios", "schedule": "0 10 * * *" }
   ]
 }

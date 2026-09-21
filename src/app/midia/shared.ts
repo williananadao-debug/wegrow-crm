@@ -95,6 +95,7 @@ export type MidiaAniversarioMunicipio = {
   mes: number;
   observacao: string | null;
   ativo: boolean;
+  ano_emancipacao?: number | null;
 };
 
 export type StatusVendaAniversario = 'nao_vendido' | 'sem_registro' | 'vendido' | 'vendido_sem_valor';
@@ -155,8 +156,10 @@ export function diasAteProximaOcorrencia(dia: number, mes: number, hoje = new Da
   return Math.round((proxima.getTime() - hojeSemHora.getTime()) / 86400000);
 }
 
-// Lista de cidades atendidas pelas 3 praças da Demais FM, com data de emancipação
-// pesquisada (Wikipédia — "Lista de municípios de Santa Catarina por data de criação"
+// Lista de cidades atendidas pelas 3 praças da Demais FM. Datas e anos (idade completa em 2025)
+// vêm do "Anexo - aniver municípios" enviado pela própria Demais FM (setembro/2026) — sobrepõem
+// as datas da Wikipédia usadas antes. Sempre conferir antes de ofertar. Histórico da pesquisa antiga:
+// // pesquisada (Wikipédia — "Lista de municípios de Santa Catarina por data de criação"
 // + fontes oficiais pra Rio Negro/PR). ⚠️ Em alguns municípios a data comemorada
 // localmente é a de INSTALAÇÃO, não a da lei de criação (ex.: Taió: lei 30/12/1948,
 // instalação 12/02/1949) — vale confirmar com cada prefeitura antes de usar pra vender.
@@ -165,34 +168,34 @@ export function diasAteProximaOcorrencia(dia: number, mes: number, hoje = new Da
 // parte dos casos (13 de 26). Priorizei o mês do painel (é o que a operação usa de
 // verdade) — nesses casos o DIA fica como 1 (placeholder, não confirmado) e a
 // observação avisa. Confirmar dia exato com cada prefeitura antes de usar pra vender.
-export const SUGESTOES_ANIVERSARIOS_DEMAIS_FM: { municipio: string; uf: string; praca: string; dia: number; mes: number; observacao?: string }[] = [
-  { municipio: 'Ibirama', uf: 'SC', praca: '107.9', dia: 1, mes: 3, observacao: 'Painel de vendas usa março; Wikipédia (lei de criação) diz 17/02/1934 — dia não confirmado' },
-  { municipio: 'José Boiteux', uf: 'SC', praca: '107.9', dia: 26, mes: 4 },
-  { municipio: 'Rio do Sul', uf: 'SC', praca: '107.9 / 104.7', dia: 1, mes: 4, observacao: 'Cobertura sobreposta 107.9/104.7 — painel de vendas usa abril nas duas; Wikipédia (lei de criação) diz 10/10/1930 — dia não confirmado' },
-  { municipio: 'Dona Emma', uf: 'SC', praca: '107.9', dia: 17, mes: 5 },
-  { municipio: 'Apiúna', uf: 'SC', praca: '107.9', dia: 1, mes: 6, observacao: 'Painel de vendas usa junho; Wikipédia (lei de criação) diz 04/01/1988 — dia não confirmado' },
-  { municipio: 'Presidente Getúlio', uf: 'SC', praca: '107.9', dia: 1, mes: 6, observacao: 'Painel de vendas usa junho; Wikipédia (lei de criação) diz 30/12/1953 — dia não confirmado' },
-  { municipio: 'Lontras', uf: 'SC', praca: '107.9', dia: 19, mes: 12 },
-  { municipio: 'Taió', uf: 'SC', praca: '104.7', dia: 12, mes: 2, observacao: 'Lei de criação foi 30/12/1948, mas a instalação (e o que o painel de vendas usa) foi 12/02/1949 — confirmado batendo com o painel' },
-  { municipio: 'Vitor Meireles', uf: 'SC', praca: '104.7', dia: 26, mes: 4 },
-  { municipio: 'Rio do Oeste', uf: 'SC', praca: '104.7', dia: 21, mes: 6 },
-  { municipio: 'Santa Cecília', uf: 'SC', praca: '104.7', dia: 21, mes: 6 },
-  { municipio: 'Witmarsum', uf: 'SC', praca: '104.7', dia: 1, mes: 6, observacao: 'Painel de vendas usa junho; Wikipédia (lei de criação) diz 17/05/1962 — dia não confirmado' },
-  { municipio: 'Pouso Redondo', uf: 'SC', praca: '104.7', dia: 1, mes: 7, observacao: 'Painel de vendas usa julho; Wikipédia (lei de criação) diz 21/06/1958 — dia não confirmado' },
-  { municipio: 'Braço do Trombudo', uf: 'SC', praca: '104.7', dia: 26, mes: 9 },
-  { municipio: 'Mirim Doce', uf: 'SC', praca: '104.7', dia: 26, mes: 9 },
-  { municipio: 'Santa Terezinha', uf: 'SC', praca: '104.7 / 101.1', dia: 26, mes: 9, observacao: 'Cobertura sobreposta 104.7/101.1 — evitar dupla contagem' },
-  { municipio: 'Rio do Campo', uf: 'SC', praca: '104.7', dia: 20, mes: 12 },
-  { municipio: 'Salete', uf: 'SC', praca: '104.7', dia: 20, mes: 12 },
-  { municipio: 'Major Vieira', uf: 'SC', praca: '101.1', dia: 1, mes: 1, observacao: 'Painel de vendas usa janeiro; Wikipédia (lei de criação) diz 23/12/1960 — dia não confirmado' },
-  { municipio: 'Campo Alegre', uf: 'SC', praca: '101.1', dia: 1, mes: 3, observacao: 'Painel de vendas usa março; Wikipédia (lei de criação) diz 17/10/1896 — dia não confirmado' },
-  { municipio: 'Papanduva', uf: 'SC', praca: '101.1', dia: 1, mes: 4, observacao: 'Painel de vendas usa abril; Wikipédia (lei de criação) diz 30/12/1953 — dia não confirmado' },
-  { municipio: 'Rio Negrinho', uf: 'SC', praca: '101.1', dia: 1, mes: 4, observacao: 'Painel de vendas usa abril; Wikipédia (lei de criação) diz 30/12/1953 — dia não confirmado' },
-  { municipio: 'Monte Castelo', uf: 'SC', praca: '101.1', dia: 1, mes: 5, observacao: 'Painel de vendas usa maio; Wikipédia (lei de criação) diz 23/04/1962 — dia não confirmado' },
-  { municipio: 'Mafra', uf: 'SC', praca: '101.1', dia: 1, mes: 9, observacao: 'Painel de vendas usa setembro; Wikipédia (lei de criação) diz 25/08/1917 — dia não confirmado' },
-  { municipio: 'São Bento do Sul', uf: 'SC', praca: '101.1', dia: 1, mes: 9, observacao: 'Painel de vendas usa setembro; Wikipédia (lei de criação) diz 21/05/1883 — dia não confirmado' },
-  { municipio: 'Itaiópolis', uf: 'SC', praca: '101.1', dia: 28, mes: 10 },
-  { municipio: 'Rio Negro', uf: 'PR', praca: '101.1', dia: 15, mes: 11, observacao: 'Data de instalação/comemorada — decreto de criação foi 02/04/1870' },
+export const SUGESTOES_ANIVERSARIOS_DEMAIS_FM: { municipio: string; uf: string; praca: string; dia: number; mes: number; ano_emancipacao?: number; observacao?: string }[] = [
+  { municipio: 'Ibirama', uf: 'SC', praca: '107.9', dia: 11, mes: 3, ano_emancipacao: 1934, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'José Boiteux', uf: 'SC', praca: '107.9', dia: 26, mes: 4, ano_emancipacao: 1989, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Rio do Sul', uf: 'SC', praca: '107.9 / 104.7', dia: 15, mes: 4, ano_emancipacao: 1931, observacao: 'Cobertura sobreposta 107.9/104.7 — evitar dupla contagem. Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Dona Emma', uf: 'SC', praca: '107.9', dia: 17, mes: 5, ano_emancipacao: 1962, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Apiúna', uf: 'SC', praca: '107.9', dia: 1, mes: 6, ano_emancipacao: 1989, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Presidente Getúlio', uf: 'SC', praca: '107.9', dia: 1, mes: 6, ano_emancipacao: 1904, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Lontras', uf: 'SC', praca: '107.9', dia: 31, mes: 12, ano_emancipacao: 1962, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Taió', uf: 'SC', praca: '104.7', dia: 12, mes: 2, ano_emancipacao: 1949, observacao: 'Lei de criação foi 30/12/1948, mas a instalação (e a data comemorada) é 12/02/1949.' },
+  { municipio: 'Vitor Meireles', uf: 'SC', praca: '104.7', dia: 26, mes: 4, ano_emancipacao: 1989, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Rio do Oeste', uf: 'SC', praca: '104.7', dia: 23, mes: 6, ano_emancipacao: 1958, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Santa Cecília', uf: 'SC', praca: '104.7', dia: 21, mes: 6, ano_emancipacao: 1958, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Witmarsum', uf: 'SC', praca: '104.7', dia: 15, mes: 6, ano_emancipacao: 1962, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Pouso Redondo', uf: 'SC', praca: '104.7', dia: 23, mes: 7, ano_emancipacao: 1958, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Braço do Trombudo', uf: 'SC', praca: '104.7', dia: 26, mes: 9, ano_emancipacao: 1991, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Mirim Doce', uf: 'SC', praca: '104.7', dia: 26, mes: 9, ano_emancipacao: 1991, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Santa Terezinha', uf: 'SC', praca: '104.7 / 101.1', dia: 26, mes: 9, ano_emancipacao: 1991, observacao: 'Cobertura sobreposta 104.7/101.1 — evitar dupla contagem. Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Rio do Campo', uf: 'SC', praca: '104.7', dia: 29, mes: 12, ano_emancipacao: 1961, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Salete', uf: 'SC', praca: '104.7', dia: 29, mes: 12, ano_emancipacao: 1961, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Major Vieira', uf: 'SC', praca: '101.1', dia: 23, mes: 1, ano_emancipacao: 1961, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Campo Alegre', uf: 'SC', praca: '101.1', dia: 18, mes: 3, ano_emancipacao: 1897, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Papanduva', uf: 'SC', praca: '101.1', dia: 11, mes: 4, ano_emancipacao: 1954, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Rio Negrinho', uf: 'SC', praca: '101.1', dia: 24, mes: 4, ano_emancipacao: 1880, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Monte Castelo', uf: 'SC', praca: '101.1', dia: 15, mes: 5, ano_emancipacao: 1962, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Mafra', uf: 'SC', praca: '101.1', dia: 8, mes: 9, ano_emancipacao: 1917, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'São Bento do Sul', uf: 'SC', praca: '101.1', dia: 23, mes: 9, ano_emancipacao: 1873, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Itaiópolis', uf: 'SC', praca: '101.1', dia: 28, mes: 10, ano_emancipacao: 1918, observacao: 'Data do anexo da Demais FM (conferir antes de ofertar).' },
+  { municipio: 'Rio Negro', uf: 'PR', praca: '101.1', dia: 15, mes: 11, ano_emancipacao: 1871, observacao: 'Data de instalação/comemorada — decreto de criação foi 02/04/1870.' },
 ];
 
 // Resultado de venda 2026 de cada cidade, extraído do painel de prestação de contas da

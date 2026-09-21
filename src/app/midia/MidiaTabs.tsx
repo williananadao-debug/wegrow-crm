@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Megaphone, Settings, LayoutGrid, Radio, Gift, Cake } from 'lucide-react';
+import { Megaphone, Settings, LayoutGrid, Radio, Gift, Cake, MapPinned } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 const ABAS = [
@@ -9,6 +9,7 @@ const ABAS = [
   { href: '/midia/emissoras', label: 'Emissoras', icon: Radio },
   { href: '/midia/promocoes', label: 'Promoções', icon: Gift },
   { href: '/midia/aniversarios', label: 'Aniversários', icon: Cake },
+  { href: '/midia/clusters', label: 'Clusters', icon: MapPinned },
 ];
 
 export default function MidiaTabs() {

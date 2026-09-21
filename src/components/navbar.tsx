@@ -120,7 +120,8 @@ export default function Navbar() {
   // do grupo (Painel, Nova Venda, Produtos, Produção, Minha Equipe) fica de fora.
   const pulseItemsCompleto: any[] = [
       { name: 'Painel', icon: <LayoutGrid size={20} />, href: '/pulse' },
-      { name: 'Nova Venda', icon: <ShoppingBag size={20} />, href: '/pulse/nova-venda' },
+      // Com CRM ativo a venda vem do funil, não do Pulse direto.
+      !mostrarCRM ? { name: 'Nova Venda', icon: <ShoppingBag size={20} />, href: '/pulse/nova-venda' } : null,
       { name: 'Produtos', icon: <Package size={20} />, href: '/settings' },
       { name: 'Estoque', icon: <Boxes size={20} />, href: '/pulse/estoque' },
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
@@ -155,9 +156,9 @@ export default function Navbar() {
   // Usado só no rail colapsado (ícone-only) — ali não cabe cabeçalho de grupo, então achata tudo.
   const flatItems: any[] = [
       ...(mostrarCRM ? crmItems : []),
-      ...(isAlmoxarifado ? [] : [clientesItem]),
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
+      ...(isAlmoxarifado ? [] : [clientesItem]),
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
@@ -224,11 +225,6 @@ export default function Navbar() {
             );
           })()}
 
-          {!isAlmoxarifado && (
-            <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              {clientesItem.icon} {clientesItem.name}
-            </Link>
-          )}
 
           {mostrarNexus && (() => {
             const g = grupos.find(x => x.key === 'nexus')!;
@@ -273,6 +269,12 @@ export default function Navbar() {
               </div>
             );
           })()}
+
+          {!isAlmoxarifado && (
+            <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {clientesItem.icon} {clientesItem.name}
+            </Link>
+          )}
 
           {mostrarThor && (
             <Link href={thorItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === thorItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
@@ -385,12 +387,6 @@ export default function Navbar() {
                     );
                   })()}
 
-                  {!isAlmoxarifado && (
-                    <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                      <div className="min-w-[20px]">{clientesItem.icon}</div>
-                      <span className="text-sm font-semibold">{clientesItem.name}</span>
-                    </Link>
-                  )}
 
                   {mostrarNexus && (() => {
                     const g = grupos.find(x => x.key === 'nexus')!;
@@ -435,6 +431,13 @@ export default function Navbar() {
                       </div>
                     );
                   })()}
+
+                  {!isAlmoxarifado && (
+                    <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{clientesItem.icon}</div>
+                      <span className="text-sm font-semibold">{clientesItem.name}</span>
+                    </Link>
+                  )}
 
                   {mostrarThor && (
                     <Link href={thorItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === thorItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>

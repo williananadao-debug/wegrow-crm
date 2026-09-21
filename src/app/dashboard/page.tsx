@@ -36,6 +36,7 @@ export default function DashboardPage() {
     const mostrarCRM = empresa?.modulos?.crm !== false;
     if (mostrarCRM) return;
     if (empresa?.modulos?.nexus) { router.replace('/nexus'); return; }
+    if (empresa?.modulos?.pulse) { router.replace('/pulse'); return; }
     router.replace('/customers');
   }, [(auth as any).loading, empresa, router]);
 

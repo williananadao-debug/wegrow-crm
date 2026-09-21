@@ -439,3 +439,77 @@ export async function aprovarAditivo(aditivo: PulseAditivo, empresaId: string, u
     status: 'aprovado', aprovado_por: userId || null, aprovado_em: new Date().toISOString(),
   }).eq('id', aditivo.id);
 }
+
+// Venda fechada no funil do CRM quando a empresa tem Pulse + CRM: a produção e o estoque
+// seguem as regras do Pulse (mesma lógica do "pedido" em Nova Venda) — baixa o estoque dos
+// itens controlados e abre produção automática pros itens sob encomenda. Idempotente por
+// lead: se já existe movimentação de venda pro lead, não faz nada (evita baixa dupla se o
+// card for arrastado pra "ganho" mais de uma vez).
+export async function processarVendaCrmNoPulse(params: {
+  leadId: number;
+  itens: { servico: string; quantidade: number }[];
+  empresaId: string;
+  userId?: string | null;
+  vendedorId?: string | null;
+}): Promise<{ producoes: { nome: string; ok: boolean }[] }> {
+  const { leadId, itens, empresaId, userId, vendedorId } = params;
+  const producoes: { nome: string; ok: boolean }[] = [];
+
+  const [{ data: jaProcessado }, { data: servicosData }, { data: fichasData }] = await Promise.all([
+    supabase.from('estoque_movimentacoes').select('id').eq('lead_id', leadId).eq('tipo', 'venda').limit(1),
+    supabase.from('servicos').select('*'),
+    supabase.from('pulse_fichas_tecnicas').select('produto_final_id, servico_id, quantidade_por_unidade'),
+  ]);
+  if (jaProcessado && jaProcessado.length > 0) return { producoes };
+
+  const servicos = (servicosData || []) as ServicoConfig[];
+  const servicoPorId = new Map(servicos.map(s => [s.id, { ...s }]));
+  const servicoPorNome = new Map(servicos.map(s => [s.nome, s.id]));
+  // Nome no lead pode vir com as configurações entre parênteses ("Trailer (cor azul)").
+  const acharId = (nome: string) => servicoPorNome.get(nome) ?? servicoPorNome.get(nome.replace(/\s*\(.*\)\s*$/, ''));
+
+  const fichasPorProduto = new Map<number, FichaTecnicaItem[]>();
+  for (const f of fichasData || []) {
+    const lista = fichasPorProduto.get(f.produto_final_id) || [];
+    lista.push({ servicoId: f.servico_id, quantidadePorUnidade: f.quantidade_por_unidade });
+    fichasPorProduto.set(f.produto_final_id, lista);
+  }
+
+  for (const item of itens) {
+    const id = acharId(item.servico);
+    const s = id != null ? servicoPorId.get(id) : undefined;
+    if (!s || ehMateriaPrima(s)) continue;
+
+    if (s.estoque !== null && s.estoque !== undefined) {
+      const antes = s.estoque;
+      const novo = Math.max(0, antes - item.quantidade);
+      alertarEstoqueBaixoSeCruzou(s.id, antes, novo, s.estoque_minimo ?? 5);
+      await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
+      await supabase.from('estoque_movimentacoes').insert([{
+        empresa_id: empresaId, servico_id: s.id, quantidade: novo - antes,
+        tipo: 'venda', lead_id: leadId, observacao: `Venda CRM — OS ${formatId(leadId)}`, user_id: userId || null,
+      }]);
+      s.estoque = novo;
+      continue;
+    }
+
+    // Sob encomenda (sem estoque controlado): abre produção com a ficha técnica.
+    const fichaItens = fichasPorProduto.get(s.id) || [];
+    try {
+      await registrarProducaoAutomatica({
+        empresaId, produtoFinal: s, quantidadeProduzida: item.quantidade, fichaItens,
+        materiaPrimaPorId: servicoPorId, userId, responsavelId: vendedorId || userId, leadId, status: 'em_producao',
+      });
+      for (const fi of fichaItens) {
+        const mp = servicoPorId.get(fi.servicoId);
+        if (mp && mp.estoque !== null && mp.estoque !== undefined) {
+          mp.estoque = Math.max(0, mp.estoque - fi.quantidadePorUnidade * item.quantidade);
+        }
+      }
+      producoes.push({ nome: item.servico, ok: true });
+    } catch {
+      producoes.push({ nome: item.servico, ok: false });
+    }
+  }
+  return { producoes };
+}

@@ -10,7 +10,7 @@ import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecni
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
 function PulseNovaVendaContent() {
-  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa } = usePulseAccess();
+  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa, vendaDiretaPulse } = usePulseAccess();
   const searchParams = useSearchParams();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
@@ -838,6 +838,18 @@ function PulseNovaVendaContent() {
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Activity size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vendaDiretaPulse) {
+    return (
+      <div className="p-4 md:p-8 pb-20 text-white">
+        <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
+          <ShoppingBag size={32} className="text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400 font-bold text-sm">Com o CRM ativo, as vendas são feitas pelo funil de Vendas.</p>
+          <Link href="/deals" className="inline-block mt-4 bg-[var(--cor-primaria)] text-[#0B1120] px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest">Ir para Vendas</Link>
         </div>
       </div>
     );

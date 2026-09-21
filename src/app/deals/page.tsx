@@ -9,6 +9,7 @@ import {
   Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { processarVendaCrmNoPulse } from '../pulse/shared';
 import { CDL } from '@/lib/cdl-config';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -752,9 +753,18 @@ export default function DealsPage() {
         if (error) throw error;
 
         if (novoStatus === 'ganho' && lead) {
+            // Empresa com Pulse: a produção segue a do Pulse (estoque + produção com ficha
+            // técnica), não o job da OPEC do CRM.
+            const usaPulse = Boolean(empresa?.modulos?.pulse);
+            const itensLead = (() => { try { return typeof lead.itens === 'string' ? JSON.parse(lead.itens as any) : (lead.itens || []); } catch { return []; } })();
+            const acaoProducao = usaPulse
+                ? (lead.status !== 'ganho' && perfil?.empresa_id
+                    ? processarVendaCrmNoPulse({ leadId: lead.id, itens: itensLead, empresaId: perfil.empresa_id, userId: user?.id, vendedorId: lead.user_id })
+                    : Promise.resolve())
+                : criarJobDeProducao(lead);
             const acoes = isCDL
                 ? [gerarCobrancaFinanceira(lead)]
-                : [criarJobDeProducao(lead), gerarCobrancaFinanceira(lead)];
+                : [acaoProducao, gerarCobrancaFinanceira(lead)];
             await Promise.all(acoes);
             setToastMessage(isCDL ? "🎉 Novo Associado Confirmado!" : "🎉 Venda Confirmada!");
             setShowToast(true);
@@ -766,7 +776,7 @@ export default function DealsPage() {
             setShowToast(true);
         }
     }
-  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira]);
+  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira, empresa?.modulos?.pulse, perfil?.empresa_id, user?.id]);
 
   const confirmarPerda = useCallback(async () => {
     if (!motivoPerda.trim() || motivoPerda.length < 5) return alert("Por favor, detalhe o motivo da perda. Precisamos dessa informação para melhorar as vendas.");

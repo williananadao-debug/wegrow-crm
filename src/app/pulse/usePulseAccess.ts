@@ -18,6 +18,9 @@ export function usePulseAccess() {
   const isGerente = perfil?.cargo === 'gerente';
   const isLideranca = isDirector || isGerente;
   const temPulse = Boolean(empresa?.modulos?.pulse);
+  // Com CRM ativo, toda venda nasce no funil (/deals) — a venda direta do Pulse fica desligada.
+  const temCRM = empresa?.modulos?.crm !== false;
+  const vendaDiretaPulse = temPulse && !temCRM;
 
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
 
@@ -29,5 +32,5 @@ export function usePulseAccess() {
       });
   }, [perfil?.empresa_id, isLideranca]);
 
-  return { authLoading, user, perfil, empresa, unidades, isLideranca, usersMap, temPulse };
+  return { authLoading, user, perfil, empresa, unidades, isLideranca, usersMap, temPulse, temCRM, vendaDiretaPulse };
 }

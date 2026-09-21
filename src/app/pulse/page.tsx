@@ -15,7 +15,7 @@ type EventoEntregaGerencial = { producao_id: number; created_at: string };
 type MovimentoNfGerencial = { quantidade: number; valor_unitario: number | null };
 
 export default function PulsePainelPage() {
-  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa } = usePulseAccess();
+  const { authLoading, perfil, user, unidades, isLideranca, usersMap, temPulse, empresa, temCRM, vendaDiretaPulse } = usePulseAccess();
   const ETAPAS_FABRICACAO = etapasFabricacaoDe(empresa?.modulos);
 
   const [vendas, setVendas] = useState<VendaPulse[]>([]);
@@ -45,11 +45,13 @@ export default function PulsePainelPage() {
     if (!perfil?.empresa_id) return;
     setLoadingVendas(true);
     const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
-    const { data } = await supabase.from('leads')
+    let q = supabase.from('leads')
       .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
-      .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
+      .eq('empresa_id', perfil.empresa_id)
       .gte('created_at', inicioMes.toISOString())
       .order('created_at', { ascending: false });
+    if (!temCRM) q = q.eq('tipo', 'Pulse');
+    const { data } = await q;
     if (data) setVendas(data as VendaPulse[]);
     setLoadingVendas(false);
   };
@@ -72,9 +74,13 @@ export default function PulsePainelPage() {
       const desde30d = new Date(); desde30d.setDate(desde30d.getDate() - 30);
 
       const [{ data: vendasAnterioresData }, { data: producoesData }, { data: entregasData }, { data: comprasData }, { data: consumoData }] = await Promise.all([
-        supabase.from('leads').select('valor_total')
-          .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse').eq('status', 'ganho')
-          .gte('created_at', inicioMesAnterior.toISOString()).lt('created_at', inicioMes.toISOString()),
+        (() => {
+          let qa = supabase.from('leads').select('valor_total')
+            .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
+            .gte('created_at', inicioMesAnterior.toISOString()).lt('created_at', inicioMes.toISOString());
+          if (!temCRM) qa = qa.eq('tipo', 'Pulse');
+          return qa;
+        })(),
         supabase.from('pulse_producoes').select('id, status, etapa_fabricacao_idx, custo_total, quantidade_produzida, created_at, previsao_entrega')
           .neq('status', 'entregue').order('created_at', { ascending: false }).limit(300),
         supabase.from('pulse_producao_eventos').select('producao_id, created_at')
@@ -229,7 +235,21 @@ export default function PulsePainelPage() {
       }).eq('id', estornoVenda.id);
       if (erroLead) throw new Error(erroLead.message);
 
-      const itens = estornoVenda.itens || [];
+      // Devolve exatamente o que a venda tirou do estoque (movimentações 'venda' ligadas ao
+      // lead) — funciona igual pra venda do Pulse e pra venda fechada no CRM, e não devolve
+      // nada de venda antiga que nunca baixou estoque. Só cai no casamento por nome do item
+      // (comportamento antigo) em empresa só-Pulse, pra vendas anteriores ao vínculo lead_id.
+      const { data: movsVenda } = await supabase.from('estoque_movimentacoes')
+        .select('servico_id, quantidade').eq('lead_id', estornoVenda.id).eq('tipo', 'venda');
+      const devolucoes: { servicoId: number; quantidade: number }[] = (movsVenda || []).length > 0
+        ? (movsVenda || []).map(m => ({ servicoId: m.servico_id, quantidade: Math.abs(Number(m.quantidade) || 0) }))
+        : temCRM ? [] : (estornoVenda.itens || []).flatMap(item => {
+            const s = servicos.find(x => x.nome === item.servico);
+            return s && s.estoque !== null && s.estoque !== undefined ? [{ servicoId: s.id, quantidade: item.quantidade }] : [];
+          });
+      const porServico = new Map<number, number>();
+      devolucoes.forEach(d => porServico.set(d.servicoId, (porServico.get(d.servicoId) || 0) + d.quantidade));
+
       await Promise.all([
         // Reversão do lançamento — nunca apaga o registro original, lança uma saída
         // compensatória em espelho, igual se faz em qualquer estorno contábil de verdade.
@@ -239,13 +259,13 @@ export default function PulsePainelPage() {
           data_vencimento: new Date().toISOString().split('T')[0],
           user_id: user?.id, empresa_id: perfil?.empresa_id,
         }]),
-        ...itens.flatMap(item => {
-          const s = servicos.find(x => x.nome === item.servico);
-          if (!s || s.estoque === null || s.estoque === undefined) return [];
+        ...[...porServico.entries()].flatMap(([servicoId, quantidade]) => {
+          const s = servicos.find(x => x.id === servicoId);
+          if (!s || quantidade <= 0) return [];
           return [
-            supabase.from('servicos').update({ estoque: (s.estoque || 0) + item.quantidade }).eq('id', s.id),
+            supabase.from('servicos').update({ estoque: (s.estoque || 0) + quantidade }).eq('id', servicoId),
             supabase.from('estoque_movimentacoes').insert([{
-              empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: item.quantidade,
+              empresa_id: perfil?.empresa_id, servico_id: servicoId, quantidade, lead_id: estornoVenda.id,
               tipo: 'estorno', observacao: estornoMotivo.trim() || `Estorno — OS ${formatId(estornoVenda.id)}`, user_id: user?.id,
             }]),
           ];
@@ -311,9 +331,11 @@ export default function PulsePainelPage() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Vendas sem funil — feche na hora, acompanhe aqui</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/pulse/nova-venda" className="inline-flex items-center gap-2 bg-[var(--cor-primaria)] text-[#0B1120] hover:scale-105 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <Plus size={14} /> Nova Venda
-          </Link>
+          {vendaDiretaPulse && (
+            <Link href="/pulse/nova-venda" className="inline-flex items-center gap-2 bg-[var(--cor-primaria)] text-[#0B1120] hover:scale-105 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              <Plus size={14} /> Nova Venda
+            </Link>
+          )}
           <Link href="/visitas" className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Navigation size={14} /> Rota do Dia
           </Link>
@@ -705,7 +727,7 @@ export default function PulsePainelPage() {
             </div>
             <div className="space-y-4">
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed">
-                Isso devolve {(estornoVenda.itens || []).length} item(ns) pro estoque, lança uma saída de R$ {(estornoVenda.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no financeiro pra compensar a entrada original, e a venda sai do faturamento do mês.
+                Isso devolve pro estoque o que a venda baixou, lança uma saída de R$ {(estornoVenda.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no financeiro pra compensar a entrada original, e a venda sai do faturamento do mês.
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Motivo (opcional)</label>

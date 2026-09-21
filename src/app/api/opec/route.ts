@@ -91,6 +91,25 @@ export async function GET(request: Request) {
         });
         const finalConfig = Object.keys(configEmissoras).length > 0 ? configEmissoras : undefined;
 
+        // Job → lead pelo "Ref: LD-####" gravado no briefing na hora que a venda fecha. Antes
+        // todo job pegava o lead MAIS RECENTE do cliente (leadsMap), o que entregava dados de
+        // outro contrato pra cliente com mais de uma venda (validação 21/09/2026: 34 de 88 jobs
+        // entregues vinham com o contrato errado). O lead mais recente segue como fallback.
+        const idsRef = [...new Set(jobsProntos
+            .map(j => Number(/Ref:\s*LD-0*(\d+)/i.exec(j.briefing || '')?.[1]))
+            .filter(n => Number.isFinite(n) && n > 0))];
+        const leadPorRef: Record<number, any> = {};
+        if (idsRef.length > 0) {
+            const { data: leadsRef } = await supabaseAdmin.from('leads').select('*').eq('empresa_id', codigoEmissora).in('id', idsRef);
+            (leadsRef || []).forEach(l => { leadPorRef[l.id] = l; });
+        }
+
+        // CPF do vendedor (o gabarito exige; antes ia sempre o placeholder 000.000.000-00)
+        const { data: perfisData } = await supabaseAdmin.from('profiles').select('nome, cpf').eq('empresa_id', codigoEmissora);
+        const norm = (t: string) => (t || '').trim().toLowerCase();
+        const cpfPorNome: Record<string, string> = {};
+        (perfisData || []).forEach((pf: any) => { if (pf.nome && pf.cpf) cpfPorNome[norm(pf.nome)] = pf.cpf; });
+
         if (clientIds.length > 0) {
             const [{ data: leadsData }, { data: clientesData }] = await Promise.all([
                 supabaseAdmin.from('leads').select('*').in('client_id', clientIds).order('created_at', { ascending: false }),
@@ -105,7 +124,8 @@ export async function GET(request: Request) {
         }
 
         for (const job of jobsProntos) {
-            const leadData = job.client_id ? (leadsMap[job.client_id] || null) : null;
+            const refId = Number(/Ref:\s*LD-0*(\d+)/i.exec(job.briefing || '')?.[1]);
+            const leadData = (Number.isFinite(refId) && leadPorRef[refId]) || (job.client_id ? (leadsMap[job.client_id] || null) : null);
             const clienteData = job.client_id ? (clientesMap[job.client_id] || null) : null;
 
             let opecData: any[] = [{}];
@@ -116,12 +136,16 @@ export async function GET(request: Request) {
                  // job.unidade é o dado certo (é do próprio job), tem prioridade aqui.
                  if (leadData) {
                      const leadParaOpec = { ...leadData, unidade: job.unidade || leadData.unidade };
-                     opecData = gerarJsonOpec(leadParaOpec, clienteData || {}, { nome: job.vendedor_nome }, finalConfig);
+                     const nomeVendedor = job.vendedor_nome || leadData.vendedor_nome;
+                     opecData = gerarJsonOpec(leadParaOpec, clienteData || {}, { nome: nomeVendedor, cpf: cpfPorNome[norm(nomeVendedor)] }, finalConfig);
                  }
             } catch(e) { console.error('[opec] gerarJsonOpec error:', e); }
             
             const pacoteFinal = {
-                ...opecData[0], 
+                ...opecData[0],
+                // Job sem lead vinculado não tem contrato pra montar o gabarito — sinaliza em vez
+                // de entregar um pacote sem os campos raiz sem explicação.
+                ...(leadData ? {} : { dados_incompletos: true, aviso: 'Job sem contrato (lead) vinculado — campos do gabarito OPEC indisponíveis.' }),
                 // 👇 NOVIDADE: Identificação de quem é o dono do dado 👇
                 origem: {
                     codigo_emissora: job.empresa_id || null,

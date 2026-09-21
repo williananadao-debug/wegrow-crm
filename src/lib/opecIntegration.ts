@@ -26,7 +26,17 @@ const CONFIG_EMISSORAS: Record<string, any> = {
 export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, configEmissoras?: Record<string, any>) => {
   const emissorasAtivas = (configEmissoras && Object.keys(configEmissoras).length > 0) ? configEmissoras : CONFIG_EMISSORAS;
   // Puxa a emissora baseada na unidade do Lead (com fallback de segurança)
-  const emissora = emissorasAtivas[lead.unidade] || Object.values(emissorasAtivas)[0] || {};
+  const emissoraBase = emissorasAtivas[lead.unidade] || Object.values(emissorasAtivas)[0] || {};
+  // config_opec da unidade pode existir com campos em branco (validação 21/09/2026: todos os
+  // itens saíam com mercado_* vazio e fatura sem CNPJ). CNPJ e descrição não mudam, então cai
+  // no dicionário fixo campo a campo. mercado_id/mercado_codigo NÃO são preenchidos por
+  // fallback (os do dicionário são provisórios) — precisam estar corretos em /settings.
+  const emissoraFixa = CONFIG_EMISSORAS[lead.unidade] || {};
+  const emissora = {
+    ...emissoraBase,
+    mercado_cnpj: emissoraBase.mercado_cnpj || emissoraFixa.mercado_cnpj || '',
+    mercado_descricao: emissoraBase.mercado_descricao || emissoraFixa.mercado_descricao || '',
+  };
   
   // Trata os itens vendidos (se vierem como string do banco, transforma em array)
   let itensContrato = [];

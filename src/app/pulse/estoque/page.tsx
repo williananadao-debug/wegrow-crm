@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import JsBarcode from 'jsbarcode';
-import { Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
+import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
@@ -30,6 +30,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   compra: 'Compra', devolucao_cliente: 'Devolução de cliente', transferencia: 'Transferência',
   contagem: 'Contagem física', outros: 'Outros', venda: 'Venda', perda: 'Perda/quebra',
   devolucao_fornecedor: 'Devolução ao fornecedor', uso_interno: 'Uso interno',
+  retrabalho: 'Retrabalho', producao: 'Uso em produção/obra', amostra: 'Amostra/brinde',
 };
 
 const MOTIVOS_ENTRADA = ['compra', 'devolucao_cliente', 'transferencia', 'contagem', 'outros'] as const;
@@ -97,6 +98,9 @@ export default function PulseEstoquePage() {
   // Última NF associada a cada produto — mesma resolução em 3 caminhos usada no modal de
   // detalhe (item→nota, nota→movimentação direto, ou chave de acesso), só que calculada
   // pra todo o catálogo de uma vez em vez de por produto ao abrir o detalhe.
+  // custo médio ponderado / último custo por item (view pulse_estoque_custos) + fornecedores ativos
+  const [custos, setCustos] = useState<Record<number, { custo_medio: number | null; ultimo_custo: number | null; ultima_entrada: string | null }>>({});
+  const [fornecedores, setFornecedores] = useState<{ id: number; nome: string }[]>([]);
   const [nfPorServico, setNfPorServico] = useState<Record<number, { notaId: number | null; numero: string }>>({});
 
   const fetchServicos = async () => {
@@ -108,6 +112,10 @@ export default function PulseEstoquePage() {
 
   useEffect(() => {
     fetchServicos();
+    supabase.from('pulse_estoque_custos').select('servico_id, custo_medio, ultimo_custo, ultima_entrada')
+      .then(({ data }) => { if (data) setCustos(Object.fromEntries(data.map((c: any) => [c.servico_id, c]))); });
+    supabase.from('pulse_fornecedores').select('id, nome').eq('ativo', true).order('nome')
+      .then(({ data }) => { if (data) setFornecedores(data as { id: number; nome: string }[]); });
     const desde = new Date(Date.now() - 30 * 86400000).toISOString();
     supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at').lt('quantidade', 0).gte('created_at', desde)
       .then(({ data }) => { if (data) setConsumoRecente(data); });
@@ -212,6 +220,12 @@ export default function PulseEstoquePage() {
     await supabase.from('servicos').update({ sku: valor || null }).eq('id', s.id);
   };
 
+  const salvarCampoServico = async (s: ServicoConfig, patch: Partial<ServicoConfig>) => {
+    setServicos(prev => prev.map(x => x.id === s.id ? { ...x, ...patch } : x));
+    setHistoricoServico(prev => prev && prev.id === s.id ? { ...prev, ...patch } : prev);
+    await supabase.from('servicos').update(patch).eq('id', s.id);
+  };
+
   const abrirAjuste = (s: ServicoConfig) => {
     setAjusteServico(s); setAjusteTipo('entrada'); setAjusteQtd(''); setAjusteMotivo(''); setAjusteMotivoCat('compra');
   };
@@ -309,7 +323,11 @@ export default function PulseEstoquePage() {
 
         <div className="min-w-0">
           <p className="text-white font-bold text-sm truncate">{s.nome}</p>
-          {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase inline-block mt-0.5">{s.tipo}</span>}
+          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+            {s.tipo && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{s.tipo}</span>}
+            {s.localizacao && <span className="text-[8px] font-black bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded uppercase">📍 {s.localizacao}</span>}
+            {s.estoque_maximo != null && (s.estoque as number) > s.estoque_maximo && <span className="text-[8px] font-black bg-amber-500/10 text-amber-300 px-1.5 py-0.5 rounded uppercase">acima do máx.</span>}
+          </div>
         </div>
 
         <p className="text-slate-400 text-[11px] font-mono font-bold truncate" title={s.sku || ''}>{s.sku || '—'}</p>
@@ -326,7 +344,10 @@ export default function PulseEstoquePage() {
           <span className="text-slate-700 text-[11px]">—</span>
         )}
 
-        <p className="text-slate-300 text-xs font-bold truncate">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        <div className="min-w-0">
+          <p className="text-slate-300 text-xs font-bold truncate">R$ {s.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          {custos[s.id]?.custo_medio != null && <p className="text-[9px] text-slate-500 font-bold truncate" title="Custo médio ponderado das entradas">custo méd. R$ {Number(custos[s.id].custo_medio).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>}
+        </div>
 
         <div className="flex items-center justify-center gap-1.5">
           {isLideranca && (
@@ -381,6 +402,12 @@ export default function PulseEstoquePage() {
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
           <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Saída Rápida
+          </Link>
+          <Link href="/pulse/estoque/compras" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ShoppingCart size={14} /> Compras
+          </Link>
+          <Link href="/pulse/estoque/fornecedores" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <Truck size={14} /> Fornecedores
           </Link>
           <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ListTree size={14} /> Kardex
@@ -528,6 +555,33 @@ export default function PulseEstoquePage() {
                   <Wand2 size={13} />
                 </button>
               </div>
+
+              {(() => {
+                const c = custos[historicoServico.id];
+                const campo = 'w-full h-9 bg-black/30 border border-white/10 rounded-lg px-2.5 text-white text-xs font-bold outline-none focus:border-purple-500';
+                const rot = 'block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1';
+                return (
+                  <div className="bg-black/20 border border-white/5 rounded-2xl p-4 mb-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Gestão do item</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <label className="block"><span className={rot}>Estoque máximo</span>
+                        <input type="number" min="0" defaultValue={historicoServico.estoque_maximo ?? ''} key={`mx${historicoServico.id}`} onBlur={e => salvarCampoServico(historicoServico, { estoque_maximo: e.target.value === '' ? null : Number(e.target.value) })} className={campo} /></label>
+                      <label className="block"><span className={rot}>Prazo de reposição (dias)</span>
+                        <input type="number" min="0" defaultValue={historicoServico.prazo_reposicao_dias ?? ''} key={`pz${historicoServico.id}`} onBlur={e => salvarCampoServico(historicoServico, { prazo_reposicao_dias: e.target.value === '' ? null : Number(e.target.value) })} className={campo} /></label>
+                      <label className="block"><span className={rot}>Localização</span>
+                        <input defaultValue={historicoServico.localizacao ?? ''} key={`lc${historicoServico.id}`} placeholder="Galpão / prateleira" onBlur={e => salvarCampoServico(historicoServico, { localizacao: e.target.value.trim() || null })} className={campo} /></label>
+                      <label className="block"><span className={rot}>Fornecedor padrão</span>
+                        <select value={historicoServico.fornecedor_padrao_id ?? ''} onChange={e => salvarCampoServico(historicoServico, { fornecedor_padrao_id: e.target.value === '' ? null : Number(e.target.value) })} className={campo}>
+                          <option value="" className="bg-[#0B1120]">—</option>{fornecedores.map(f => <option key={f.id} value={f.id} className="bg-[#0B1120]">{f.nome}</option>)}</select></label>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-white/5 text-center">
+                      <div><p className={rot}>Custo médio</p><p className="text-white font-black text-sm">{c?.custo_medio != null ? `R$ ${Number(c.custo_medio).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</p></div>
+                      <div><p className={rot}>Último custo</p><p className="text-slate-300 font-bold text-sm">{c?.ultimo_custo != null ? `R$ ${Number(c.ultimo_custo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</p></div>
+                      <div><p className={rot}>Última entrada</p><p className="text-slate-300 font-bold text-sm">{c?.ultima_entrada ? new Date(c.ultima_entrada).toLocaleDateString('pt-BR') : '—'}</p></div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-4">
                 <button onClick={() => setAbaDetalhe('movimentacoes')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${abaDetalhe === 'movimentacoes' ? 'bg-purple-500 text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>

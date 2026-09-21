@@ -5,8 +5,10 @@ import { Loader2, Activity, BarChart3, ArrowLeft, TrendingUp, TrendingDown, Wall
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../../usePulseAccess';
 import { ServicoConfig } from '../../shared';
+import { curvaABC } from '@/lib/estoqueGestao';
 
-type Movimentacao = { servico_id: number; quantidade: number; valor_unitario: number | null; created_at: string };
+type Movimentacao = { servico_id: number; quantidade: number; valor_unitario: number | null; created_at: string; tipo?: string | null; motivo?: string | null };
+const MOTIVOS_PERDA: Record<string, string> = { perda: 'Perda / quebra', retrabalho: 'Retrabalho', amostra: 'Amostra / brinde', devolucao_fornecedor: 'Devolução ao fornecedor' };
 
 const PERIODOS = [
   { id: '30d', label: '30 dias', dias: 30 }, { id: '90d', label: '90 dias', dias: 90 }, { id: '12m', label: '12 meses', dias: 365 },
@@ -19,6 +21,7 @@ export default function RelatorioEstoquePage() {
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [movimentos, setMovimentos] = useState<Movimentacao[]>([]);
+  const [custosMedios, setCustosMedios] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<typeof PERIODOS[number]['id']>('90d');
   const [agora] = useState(() => Date.now());
@@ -28,8 +31,10 @@ export default function RelatorioEstoquePage() {
     setLoading(true);
     Promise.all([
       supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).not('estoque', 'is', null),
-      supabase.from('estoque_movimentacoes').select('servico_id, quantidade, valor_unitario, created_at').eq('empresa_id', perfil.empresa_id).limit(5000),
-    ]).then(([resServicos, resMov]) => {
+      supabase.from('estoque_movimentacoes').select('servico_id, quantidade, valor_unitario, created_at, tipo, motivo').eq('empresa_id', perfil.empresa_id).limit(5000),
+      supabase.from('pulse_estoque_custos').select('servico_id, custo_medio').eq('empresa_id', perfil.empresa_id),
+    ]).then(([resServicos, resMov, resCustos]) => {
+      if (resCustos?.data) setCustosMedios(Object.fromEntries(resCustos.data.filter((c: any) => c.custo_medio != null).map((c: any) => [c.servico_id, Number(c.custo_medio)])));
       if (resServicos.data) setServicos(resServicos.data as ServicoConfig[]);
       if (resMov.data) setMovimentos(resMov.data as Movimentacao[]);
       setLoading(false);
@@ -44,7 +49,8 @@ export default function RelatorioEstoquePage() {
     return movimentos.filter(m => new Date(m.created_at).getTime() >= corte);
   }, [movimentos, periodo, agora]);
 
-  const custoDe = (s: ServicoConfig) => s.preco_custo ?? s.preco ?? 0;
+  // custo médio das entradas quando existe; senão o custo cadastrado; senão o preço
+  const custoDe = (s: ServicoConfig) => custosMedios[s.id] ?? s.preco_custo ?? s.preco ?? 0;
 
   const kpis = useMemo(() => {
     const valorTotalEstoque = servicos.reduce((acc, s) => acc + (s.estoque || 0) * custoDe(s), 0);
@@ -89,6 +95,32 @@ export default function RelatorioEstoquePage() {
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 8);
   }, [kpis.parados]);
+
+  // Curva ABC: valor consumido (saídas) no período — A = ~80% do valor, B = próximos 15%, C = resto
+  const abc = useMemo(() => {
+    const porItem = new Map<number, number>();
+    for (const m of dentroDoPeriodo) {
+      if (m.quantidade >= 0 || m.tipo === 'estorno') continue;
+      const s = servicoPorId.get(m.servico_id);
+      const valorUnit = m.valor_unitario ?? (s ? custoDe(s) : 0);
+      porItem.set(m.servico_id, (porItem.get(m.servico_id) || 0) + Math.abs(m.quantidade) * valorUnit);
+    }
+    return curvaABC([...porItem.entries()].map(([id, valor]) => ({ servicoId: id, nome: servicoPorId.get(id)?.nome || `#${id}`, valor })));
+  }, [dentroDoPeriodo, servicoPorId, custosMedios]);
+
+  // Perdas e sobras: saídas que não são venda nem consumo de produção, por motivo
+  const perdas = useMemo(() => {
+    const porMotivo = new Map<string, { valor: number; qtd: number }>();
+    for (const m of dentroDoPeriodo) {
+      if (m.quantidade >= 0 || !m.motivo || !MOTIVOS_PERDA[m.motivo]) continue;
+      const s = servicoPorId.get(m.servico_id);
+      const valorUnit = m.valor_unitario ?? (s ? custoDe(s) : 0);
+      const cur = porMotivo.get(m.motivo) || { valor: 0, qtd: 0 };
+      cur.valor += Math.abs(m.quantidade) * valorUnit; cur.qtd += 1;
+      porMotivo.set(m.motivo, cur);
+    }
+    return [...porMotivo.entries()].map(([motivo, v]) => ({ motivo, ...v })).sort((a, b) => b.valor - a.valor);
+  }, [dentroDoPeriodo, servicoPorId, custosMedios]);
 
   const maxBarra = Math.max(kpis.compradoRs, kpis.vendidoRs, 1);
 
@@ -230,6 +262,43 @@ export default function RelatorioEstoquePage() {
                       <p className="text-slate-600 text-[10px]">{x.servico.estoque} un parado</p>
                     </div>
                     <span className="text-amber-400 font-black text-xs shrink-0">{fmtR$(x.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden lg:col-span-2">
+            <div className="p-4 border-b border-white/5 flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="font-black uppercase text-xs text-slate-300 tracking-widest">Curva ABC — valor consumido no período</h3>
+              <div className="flex gap-3 text-[10px] font-black">
+                {(['A', 'B', 'C'] as const).map(c => <span key={c} className={c === 'A' ? 'text-emerald-400' : c === 'B' ? 'text-amber-400' : 'text-slate-400'}>{c}: {abc.filter(x => x.classe === c).length} itens</span>)}
+              </div>
+            </div>
+            {abc.length === 0 ? <p className="text-slate-500 text-xs text-center py-8">Sem consumo no período.</p> : (
+              <div className="divide-y divide-white/5 max-h-[420px] overflow-y-auto">
+                {abc.map(x => (
+                  <div key={x.servicoId} className="flex items-center gap-3 px-4 py-2">
+                    <span className={`w-6 h-6 rounded-md text-[10px] font-black flex items-center justify-center shrink-0 ${x.classe === 'A' ? 'bg-emerald-500/20 text-emerald-300' : x.classe === 'B' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-slate-400'}`}>{x.classe}</span>
+                    <p className="flex-1 min-w-0 text-white font-bold text-xs truncate">{x.nome}</p>
+                    <span className="text-slate-500 text-[10px] w-14 text-right">{x.percentual.toFixed(1)}%</span>
+                    <span className="text-slate-400 text-[10px] w-14 text-right">{x.acumulado.toFixed(0)}% acum.</span>
+                    <span className="text-white font-black text-xs w-24 text-right tabular-nums">{fmtR$(x.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="px-4 py-3 border-t border-white/5 text-[10px] text-slate-500">A = os itens que somam ~80% do consumo (contar toda semana e nunca deixar faltar). B = próximos 15%. C = cauda longa (contagem menos frequente).</p>
+          </div>
+
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden lg:col-span-2">
+            <div className="p-4 border-b border-white/5"><h3 className="font-black uppercase text-xs text-slate-300 tracking-widest">Perdas e sobras no período</h3></div>
+            {perdas.length === 0 ? <p className="text-slate-500 text-xs text-center py-8">Nenhuma perda, retrabalho ou amostra registrada. (Na Saída rápida, escolha o motivo pra aparecer aqui.)</p> : (
+              <div className="divide-y divide-white/5">
+                {perdas.map(x => (
+                  <div key={x.motivo} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div><p className="text-white font-bold text-xs">{MOTIVOS_PERDA[x.motivo]}</p><p className="text-slate-600 text-[10px]">{x.qtd} saída(s)</p></div>
+                    <span className="text-red-400 font-black text-xs">{fmtR$(x.valor)}</span>
                   </div>
                 ))}
               </div>

@@ -6,7 +6,7 @@
 
 export type MovimentoConsumo = { servico_id: number; quantidade: number; created_at: string };
 export type ProdutoParaReposicao = {
-  id: number; nome: string; estoque?: number | null; prazo_fabricacao_dias?: number | null;
+  id: number; nome: string; estoque?: number | null; prazo_fabricacao_dias?: number | null; prazo_reposicao_dias?: number | null;
 };
 
 export type AlertaReposicao = {
@@ -36,7 +36,9 @@ export function calcularAlertasReposicao(
     if (consumidoNaJanela <= 0) continue; // sem histórico de saída recente, não dá pra estimar ritmo — fica só no alerta de mínimo fixo
     const consumoDiario = consumidoNaJanela / JANELA_DIAS;
     const diasRestantes = produto.estoque / consumoDiario;
-    const limiarDias = produto.prazo_fabricacao_dias && produto.prazo_fabricacao_dias > 0 ? produto.prazo_fabricacao_dias : LIMIAR_PADRAO_DIAS;
+    // prazo de COMPRA do item (prazo_reposicao_dias) tem prioridade; cai no prazo de fabricação/padrão
+    const limiarDias = produto.prazo_reposicao_dias && produto.prazo_reposicao_dias > 0 ? produto.prazo_reposicao_dias
+      : produto.prazo_fabricacao_dias && produto.prazo_fabricacao_dias > 0 ? produto.prazo_fabricacao_dias : LIMIAR_PADRAO_DIAS;
     if (diasRestantes <= limiarDias) {
       alertas.push({ servicoId: produto.id, nome: produto.nome, estoqueAtual: produto.estoque, consumoDiario, diasRestantes, limiarDias });
     }

@@ -80,7 +80,7 @@ export async function GET(request: Request) {
 
   for (const empresa of empresasPulse) {
     const [{ data: servicos }, { data: movimentos }] = await Promise.all([
-      supabase.from('servicos').select('id, nome, estoque, prazo_fabricacao_dias').eq('empresa_id', empresa.id).not('estoque', 'is', null),
+      supabase.from('servicos').select('id, nome, estoque, prazo_fabricacao_dias, prazo_reposicao_dias').eq('empresa_id', empresa.id).not('estoque', 'is', null),
       supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at').eq('empresa_id', empresa.id).lt('quantidade', 0).gte('created_at', desde),
     ]);
 

@@ -11,7 +11,7 @@ type Movimentacao = {
   id: number; servico_id: number; quantidade: number; valor_unitario: number | null;
   fornecedor: string | null; cnpj_participante: string | null;
   nf_numero: string | null; nf_serie: string | null; nf_chave_acesso: string | null;
-  lead_id: number | null;
+  lead_id: number | null; destino?: string | null; requisicao_id?: string | null;
   created_at: string; tipo: string; motivo: string | null; observacao: string | null;
 };
 
@@ -28,6 +28,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   compra: 'Compra', devolucao_cliente: 'Devolução de cliente', transferencia: 'Transferência',
   contagem: 'Contagem física', outros: 'Outros', venda: 'Venda', perda: 'Perda/quebra',
   devolucao_fornecedor: 'Devolução ao fornecedor', uso_interno: 'Uso interno',
+  retrabalho: 'Retrabalho', producao: 'Uso em produção/obra', amostra: 'Amostra/brinde',
 };
 
 const PERIODOS = [
@@ -186,6 +187,8 @@ export default function KardexPage() {
                       {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-purple-400 font-bold">NF {m.nf_numero}{m.nf_serie ? `/${m.nf_serie}` : ''}</span>}
                       {m.lead_id && <span className="text-[var(--cor-primaria)] font-bold">OS {formatId(m.lead_id)}</span>}
                       {m.valor_unitario != null && <span>R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
+                      {m.destino && <span className="text-[8px] font-black bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded uppercase">→ {m.destino}</span>}
+                      {m.requisicao_id && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase font-mono" title="Requisição de saída">REQ {m.requisicao_id.slice(0, 8)}</span>}
                       {m.observacao && <span className="italic">{m.observacao}</span>}
                     </div>
                   </div>

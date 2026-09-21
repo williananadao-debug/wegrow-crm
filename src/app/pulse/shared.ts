@@ -15,6 +15,7 @@ export type ServicoConfig = {
   estoque?: number | null; imagem_url?: string | null;
   sku?: string | null; preco_custo?: number | null; estoque_minimo?: number | null;
   prazo_fabricacao_dias?: number | null; descricao?: string | null;
+  estoque_maximo?: number | null; prazo_reposicao_dias?: number | null; localizacao?: string | null; fornecedor_padrao_id?: number | null;
   historico_precos?: HistoricoPreco[] | null;
 };
 

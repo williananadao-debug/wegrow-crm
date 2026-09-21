@@ -30,7 +30,7 @@ type Prospect = {
 const STATUS_CFG: Record<string, { label: string; cor: string; dot: string }> = {
   bom_fit:      { label: 'Bom fit',      cor: 'text-blue-400 border-blue-500/30 bg-blue-500/10',       dot: 'bg-blue-400' },
   avancado:     { label: 'Avançado',     cor: 'text-amber-400 border-amber-500/30 bg-amber-500/10',    dot: 'bg-amber-400' },
-  cliente:      { label: 'Cliente',      cor: 'text-[#22C55E] border-[#22C55E]/30 bg-[#22C55E]/10',    dot: 'bg-[#22C55E]' },
+  cliente:      { label: 'Fechou',       cor: 'text-[#22C55E] border-[#22C55E]/30 bg-[#22C55E]/10',    dot: 'bg-[#22C55E]' },
   porte_grande: { label: 'Porte grande', cor: 'text-rose-400 border-rose-500/30 bg-rose-500/10',       dot: 'bg-rose-400' },
   perdido:      { label: 'Perdido',      cor: 'text-slate-500 border-slate-500/30 bg-slate-500/10',    dot: 'bg-slate-500' },
 };
@@ -161,7 +161,7 @@ export default function ProspeccaoPage() {
               <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
                 <Target size={22} className="text-[#22C55E]"/> Prospecção
               </h1>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Pipeline interno da WeGrow · não é dado de cliente</p>
+              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Pipeline interno da WeGrow · prospect que fechou vira empresa em teste no <Link href="/admin" className="underline hover:text-white">God Mode</Link>, e cliente quando converter</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -343,6 +343,12 @@ export default function ProspeccaoPage() {
                 <button onClick={() => excluir((editando as Prospect).id)} className="p-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 transition-colors">
                   <Trash2 size={16}/>
                 </button>
+              )}
+              {!criandoNovo && (
+                <Link href={`/admin?novaEmpresa=1&nome=${encodeURIComponent(editando.nome || '')}&contato=${encodeURIComponent(editando.contato || '')}`}
+                  className="py-3 px-4 rounded-xl font-black uppercase text-[10px] tracking-widest bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 transition-colors flex items-center justify-center whitespace-nowrap">
+                  Criar empresa em teste
+                </Link>
               )}
               <button onClick={() => setEditando(null)} className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
                 Fechar

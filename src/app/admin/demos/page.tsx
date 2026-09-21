@@ -140,7 +140,7 @@ export default function DemosPage() {
               <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
                 <Sparkles size={22} className="text-purple-400"/> Modelos de demo
               </h1>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Empresas fake usadas em apresentação comercial · não são clientes pagantes</p>
+              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Empresas fake de apresentação · não são clientes nem testes reais. Empresas em teste ficam no <Link href="/admin" className="underline hover:text-white">God Mode</Link></p>
             </div>
           </div>
           <div className="flex items-center gap-2">

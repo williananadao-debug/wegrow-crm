@@ -86,3 +86,24 @@ export function statusPgto(b: Billing | null): 'sem_dados' | 'ativo' | 'vencendo
 export const BILLING_VAZIO = (empresa_id: string): Billing => ({
   empresa_id, valor_mensal: 0, proximo_vencimento: null, whatsapp: null, contato: null, observacao: null,
 });
+
+// Estágio comercial da empresa, derivado de status + modulos.demo (sem coluna nova):
+//   demo     → empresa fake de apresentação (nunca é cliente pagante)
+//   teste    → status 'trial': primeiro contato / período de teste
+//   cliente  → status 'ativa': fechou e está operando
+//   suspensa → status 'suspensa': pausada/cancelada
+export type Estagio = 'cliente' | 'teste' | 'demo' | 'suspensa';
+
+export function estagioEmpresa(e: Pick<Empresa, 'status' | 'modulos'>): Estagio {
+  if (e.modulos?.demo) return 'demo';
+  if (e.status === 'suspensa') return 'suspensa';
+  if (e.status === 'trial') return 'teste';
+  return 'cliente';
+}
+
+export const ESTAGIO_CFG: Record<Estagio, { label: string; plural: string; cor: string; ajuda: string }> = {
+  cliente:  { label: 'Cliente',   plural: 'Clientes',  cor: 'bg-green-500/20 text-green-400 border-green-500/30',     ajuda: 'Fechado e operando' },
+  teste:    { label: 'Em teste',  plural: 'Em teste',  cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',  ajuda: 'Primeiro contato / período de teste' },
+  demo:     { label: 'Demo',      plural: 'Demos',     cor: 'bg-purple-500/10 text-purple-300 border-dashed border-purple-400/40', ajuda: 'Dado fake de apresentação' },
+  suspensa: { label: 'Suspensa',  plural: 'Suspensas', cor: 'bg-red-500/20 text-red-400 border-red-500/30',           ajuda: 'Pausada ou cancelada' },
+};

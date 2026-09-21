@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { estagioEmpresa } from '../abas/types';
 import {
   ArrowLeft, ShieldAlert, Loader2, RefreshCw, Wallet, X, Save,
   Plus, Trash2, TrendingUp, TrendingDown, Repeat, Receipt, CheckCircle2, Circle,
@@ -45,6 +46,12 @@ export default function FinanceiroPage() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [mrr, setMrr] = useState(0);
   const [empresasAtivas, setEmpresasAtivas] = useState(0);
+  const [mrrEmTeste, setMrrEmTeste] = useState(0);
+  const [empresasEmTeste, setEmpresasEmTeste] = useState(0);
+  // Saldo em caixa hoje — ponto de partida do caixa projetado. Só conveniência do viewer.
+  const [saldoInicial, setSaldoInicial] = useState(0);
+  useEffect(() => { try { const v = localStorage.getItem('wegrow_saldo_inicial'); if (v) setSaldoInicial(parseFloat(v) || 0); } catch {} }, []);
+  const salvarSaldoInicial = (v: number) => { setSaldoInicial(v); try { localStorage.setItem('wegrow_saldo_inicial', String(v)); } catch {} };
 
   const [editando, setEditando] = useState<Partial<Lancamento> | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
@@ -74,10 +81,14 @@ export default function FinanceiroPage() {
     }
     if (resEmpresas.ok) {
       const empresas = await resEmpresas.json();
-      const ativasIds = new Set((empresas || []).filter((e: any) => e.status !== 'suspensa').map((e: any) => e.id));
+      // MRR = só cliente fechado e operando; teste e demo não faturam (ver estagioEmpresa).
+      const ativasIds = new Set<string>((empresas || []).filter((e: any) => estagioEmpresa(e) === 'cliente').map((e: any) => e.id));
+      const testeIds = new Set<string>((empresas || []).filter((e: any) => estagioEmpresa(e) === 'teste').map((e: any) => e.id));
       setEmpresasAtivas(ativasIds.size);
-      const somaMrr = (resBillings.data || []).filter((b: any) => ativasIds.has(b.empresa_id)).reduce((s: number, b: any) => s + (b.valor_mensal ?? 0), 0);
-      setMrr(somaMrr);
+      setEmpresasEmTeste(testeIds.size);
+      const soma = (ids: Set<string>) => (resBillings.data || []).filter((b: any) => ids.has(b.empresa_id)).reduce((s: number, b: any) => s + (b.valor_mensal ?? 0), 0);
+      setMrr(soma(ativasIds));
+      setMrrEmTeste(soma(testeIds));
     }
     setLoading(false);
   };
@@ -116,7 +127,7 @@ export default function FinanceiroPage() {
     });
   };
 
-  const { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses } = useMemo(() => {
+  const { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado } = useMemo(() => {
     const recorrentes = lancamentos.filter(l => l.recorrente);
     const avulsos = lancamentos.filter(l => !l.recorrente).sort((a, b) => b.data.localeCompare(a.data));
     const despesaFixaMensal = recorrentes.filter(l => l.tipo === 'saida').reduce((s, l) => s + l.valor, 0);
@@ -138,8 +149,21 @@ export default function FinanceiroPage() {
       return { label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, entradas: entradasMes, saidas: saidasMes };
     });
 
-    return { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses };
-  }, [lancamentos, mrr]);
+    // Caixa projetado — mês atual + 5 à frente: MRR dos clientes + entradas fixas + avulsos
+    // datados no mês, menos despesas fixas, avulsos e imposto estimado sobre o MRR.
+    let acumulado = saldoInicial;
+    const caixaProjetado = Array.from({ length: 6 }).map((_, i) => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const entradas = mrr + entradaFixaMensal + avulsos.filter(l => l.tipo === 'entrada' && l.data.startsWith(chave)).reduce((s, l) => s + l.valor, 0);
+      const saidas = despesaFixaMensal + impostoEstimado + avulsos.filter(l => l.tipo === 'saida' && l.data.startsWith(chave)).reduce((s, l) => s + l.valor, 0);
+      const saldo = entradas - saidas;
+      acumulado += saldo;
+      return { chave, label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, entradas, saidas, saldo, acumulado };
+    });
+
+    return { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado };
+  }, [lancamentos, mrr, saldoInicial]);
 
   if (authLoading) return null;
   if (!isAdmin) return (
@@ -208,6 +232,50 @@ export default function FinanceiroPage() {
                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Resultado projetado (mês)</p>
                 <p className={`text-xl font-black ${resultadoMes >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {fmtBRL(resultadoMes)}</p>
               </div>
+            </div>
+
+            {/* Caixa projetado */}
+            <div className="bg-[#0F172A] border border-white/5 rounded-2xl overflow-hidden mb-6">
+              <div className="p-5 border-b border-white/5 flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Caixa projetado — próximos 6 meses</p>
+                  <p className="text-[10px] text-slate-600 mt-1">MRR dos {empresasAtivas} clientes + fixos + avulsos datados − imposto estimado (6% do MRR)</p>
+                </div>
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Saldo em caixa hoje
+                  <input type="number" step="0.01" value={saldoInicial || ''} placeholder="0,00" onChange={e => salvarSaldoInicial(parseFloat(e.target.value) || 0)}
+                    className="w-32 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs font-bold outline-none focus:border-[#22C55E]/50 text-right"/>
+                </label>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="text-left p-3 text-slate-500 font-black uppercase text-[9px]">Mês</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Entradas</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saídas</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saldo do mês</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Caixa acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {caixaProjetado.map(m => (
+                      <tr key={m.chave}>
+                        <td className="p-3 font-black text-white uppercase">{m.label}</td>
+                        <td className="p-3 text-right text-[#22C55E] font-bold">R$ {fmtBRL(m.entradas)}</td>
+                        <td className="p-3 text-right text-red-400 font-bold">R$ {fmtBRL(m.saidas)}</td>
+                        <td className={`p-3 text-right font-black ${m.saldo >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {fmtBRL(m.saldo)}</td>
+                        <td className={`p-3 text-right font-black ${m.acumulado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {fmtBRL(m.acumulado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {empresasEmTeste > 0 && (
+                <p className="px-5 py-3 text-[10px] text-slate-500 border-t border-white/5">
+                  {empresasEmTeste} empresa(s) em teste não entram na projeção.{mrrEmTeste > 0 && <> Se todas converterem: <span className="text-yellow-400 font-black">+R$ {fmtBRL(mrrEmTeste)}/mês</span>.</>}
+                </p>
+              )}
             </div>
 
             {/* Gráfico 6 meses */}

@@ -6,6 +6,7 @@ import { extrairCorDominante } from '@/lib/extrair-cor-logo';
 
 const PLANOS = ['essencial', 'pro', 'enterprise'];
 const STATUS_OPTS = ['trial', 'ativa', 'suspensa'];
+const STATUS_LABEL: Record<string, string> = { trial: 'Em teste (primeiro contato)', ativa: 'Cliente (fechado e operando)', suspensa: 'Suspensa' };
 
 export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
   const [nome, setNome] = useState(empresa.nome);
@@ -122,9 +123,9 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Status</label>
+          <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Estágio</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
-            {STATUS_OPTS.map(s => <option key={s} value={s} className="bg-[#0B1120] capitalize">{s}</option>)}
+            {STATUS_OPTS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{STATUS_LABEL[s] || s}</option>)}
           </select>
         </div>
       </div>

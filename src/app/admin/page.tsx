@@ -11,7 +11,7 @@ import {
   CheckCircle2, KeyRound, Trash2, Sparkles,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
-import { Empresa, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
+import { Empresa, Estagio, estagioEmpresa, ESTAGIO_CFG, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
 import AbaGeral from './abas/AbaGeral';
 import AbaModulos from './abas/AbaModulos';
 import AbaUnidades from './abas/AbaUnidades';
@@ -88,6 +88,7 @@ export default function AdminPage() {
 
   const [modoLista, setModoLista] = useState<'empresas' | 'cobranca'>('empresas');
   const [busca, setBusca] = useState('');
+  const [convertendoId, setConvertendoId] = useState<string | null>(null);
   const [registrandoPgtoId, setRegistrandoPgtoId] = useState<string | null>(null);
 
   // Form nova empresa
@@ -102,6 +103,17 @@ export default function AdminPage() {
   const [credenciaisCopiadas, setCredenciaisCopiadas] = useState(false);
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
+
+  // Vindo de /admin/prospeccao ("Criar empresa em teste"): abre o formulário já preenchido.
+  // Empresa nasce em teste (status trial) — vira cliente só no botão "Converter em cliente".
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('novaEmpresa') !== '1') return;
+    setNovaEmpresaNome(q.get('nome') || '');
+    setNovaEmpresaDiretorNome(q.get('contato') || '');
+    setShowNovaEmpresa(true);
+    window.history.replaceState(null, '', '/admin');
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -139,6 +151,18 @@ export default function AdminPage() {
       const atualizada = empresasData.find((e: any) => e.id === prev.id);
       return atualizada ? { ...atualizada, billing: billingMap[atualizada.id] ?? null } : prev;
     });
+  };
+
+  // Teste virou contrato fechado: só troca status pra 'ativa' (vira Cliente, entra no MRR).
+  const converterEmCliente = async (emp: Empresa) => {
+    if (!confirm(`Converter "${emp.nome}" em cliente? Ela passa a contar no MRR e na cobrança.`)) return;
+    setConvertendoId(emp.id);
+    try {
+      const res = await fetch('/api/admin/empresas', { method: 'PATCH', headers: headers(), body: JSON.stringify({ id: emp.id, status: 'ativa' }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(json.erro || `Erro ao converter (HTTP ${res.status}).`); return; }
+      await carregarEmpresas();
+    } finally { setConvertendoId(null); }
   };
 
   const abrirEmpresa = (e: Empresa, aba: Aba = 'geral') => {
@@ -272,7 +296,11 @@ export default function AdminPage() {
     </div>
   );
 
-  const empresasAtivas = empresas.filter(e => e.status !== 'suspensa');
+  // "Ativas" pra MRR/cobrança/custo = só cliente de verdade (fechado e operando) — teste,
+  // demo e suspensa não faturam e não podem inflar esses números.
+  const contagemEstagio = empresas.reduce((acc, e) => { acc[estagioEmpresa(e)]++; return acc; }, { cliente: 0, teste: 0, demo: 0, suspensa: 0 } as Record<Estagio, number>);
+  const empresasAtivas = empresas.filter(e => estagioEmpresa(e) === 'cliente');
+  const idsClientes = new Set(empresasAtivas.map(e => e.id));
   const mrr = empresasAtivas.reduce((s, c) => s + (c.billing?.valor_mensal ?? 0), 0);
   const vencendoBreve = empresasAtivas.filter(c => statusPgto(c.billing) === 'vencendo');
   const inadimplentes = empresasAtivas.filter(c => statusPgto(c.billing) === 'inadimplente');
@@ -315,7 +343,7 @@ export default function AdminPage() {
             <div className="text-right">
               <p className="text-xs text-slate-500 font-bold">{empresas.length} empresas</p>
               <p className="text-xs text-[#22C55E] font-black">
-                {empresas.filter(e => e.status === 'ativa').length} ativas
+                {contagemEstagio.cliente} clientes · {contagemEstagio.teste} em teste
               </p>
             </div>
             <button
@@ -361,8 +389,9 @@ export default function AdminPage() {
         {/* Visão geral */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Empresas ativas</p>
-            <p className="text-xl font-black text-white">{empresas.filter(e => e.status === 'ativa').length}</p>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Clientes operando</p>
+            <p className="text-xl font-black text-white">{contagemEstagio.cliente}</p>
+            <p className="text-[10px] text-slate-500 mt-1">{contagemEstagio.teste} em teste · {contagemEstagio.demo} demos</p>
           </div>
           <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Usuários ativos (7d)</p>
@@ -373,8 +402,8 @@ export default function AdminPage() {
             <p className="text-xl font-black text-white">{atividade?.leads_mes ?? '—'}</p>
           </div>
           <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Total de empresas</p>
-            <p className="text-xl font-black text-white">{empresas.length}</p>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Em teste (funil)</p>
+            <p className="text-xl font-black text-yellow-400">{contagemEstagio.teste}</p>
           </div>
         </div>
 
@@ -451,7 +480,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {atividade.por_empresa.filter(e => e.status === 'ativa').map(e => (
+                  {atividade.por_empresa.filter(e => idsClientes.has(e.id)).map(e => (
                     <tr key={e.id} className="border-b border-white/5 last:border-0">
                       <td className="py-2.5 pr-3 font-bold text-white truncate max-w-[200px]">{e.nome}</td>
                       <td className="py-2.5 px-3 text-right font-mono">
@@ -463,8 +492,8 @@ export default function AdminPage() {
                       <td className="py-2.5 pl-3 text-right text-slate-500">{e.ultimo_acesso ? tempoRelativo(e.ultimo_acesso) : '—'}</td>
                     </tr>
                   ))}
-                  {atividade.por_empresa.filter(e => e.status === 'ativa').length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-6 text-slate-600">Nenhuma empresa ativa.</td></tr>
+                  {atividade.por_empresa.filter(e => idsClientes.has(e.id)).length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-6 text-slate-600">Nenhum cliente operando.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -475,7 +504,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 print:hidden">
 
           {/* Lista de Empresas */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className={`${modoLista === 'empresas' && !empresaSelecionada ? 'lg:col-span-5' : 'lg:col-span-2'} space-y-3`}>
 
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-1">
               <button onClick={() => setModoLista('empresas')} className={`flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${modoLista === 'empresas' ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>Empresas</button>
@@ -524,33 +553,77 @@ export default function AdminPage() {
             {loading ? (
               <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-white/[0.03] border border-white/5 rounded-2xl animate-pulse"/>)}</div>
             ) : modoLista === 'empresas' ? (
-              listaFiltrada.map(e => (
-                <button
-                  key={e.id}
-                  onClick={() => abrirEmpresa(e)}
-                  className={`w-full text-left bg-[#0F172A] border rounded-2xl p-4 transition-all hover:border-white/20 flex items-center justify-between gap-3 ${empresaSelecionada?.id === e.id ? 'border-[#22C55E]/50 bg-[#22C55E]/5' : 'border-white/5'}`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shrink-0">
-                      <Building2 size={18} className="text-slate-400"/>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-black text-sm truncate">{e.nome}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[9px] font-black uppercase ${COR_PLANO[e.plano]}`}>{e.plano}</span>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${COR_STATUS[e.status]}`}>{e.status}</span>
-                        {Boolean((e.modulos as any)?.demo) && (
-                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-dashed border-purple-400/40 text-purple-300 bg-purple-500/10">Demo</span>
+              (() => {
+                const ativos = listaFiltrada.filter(e => estagioEmpresa(e) === 'cliente');
+                const prospeccao = listaFiltrada.filter(e => estagioEmpresa(e) === 'teste');
+                const outros = listaFiltrada.filter(e => ['demo', 'suspensa'].includes(estagioEmpresa(e)));
+
+                const cardEmpresa = (e: Empresa) => {
+                  const est = estagioEmpresa(e);
+                  return (
+                    <div key={e.id} className={`group bg-[#0F172A] border rounded-2xl transition-all hover:border-white/20 flex items-stretch ${empresaSelecionada?.id === e.id ? 'border-[#22C55E]/50 bg-[#22C55E]/5' : 'border-white/5'}`}>
+                      <button onClick={() => abrirEmpresa(e)} className="flex-1 min-w-0 text-left p-4 flex items-center gap-3">
+                        <div className="w-11 h-11 bg-white/5 rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+                          {e.logo_url
+                            ? <img src={e.logo_url} alt={e.nome} className="w-full h-full object-contain p-1" />
+                            : <Building2 size={18} className="text-slate-500"/>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-sm truncate">{e.nome}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`text-[9px] font-black uppercase ${COR_PLANO[e.plano]}`}>{e.plano}</span>
+                            {est !== 'cliente' && est !== 'teste' && (
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${ESTAGIO_CFG[est].cor}`}>{ESTAGIO_CFG[est].label}</span>
+                            )}
+                            <span className="text-slate-500 text-[10px] flex items-center gap-1"><Users size={10}/>{e.total_usuarios}</span>
+                          </div>
+                        </div>
+                        {est === 'cliente' && e.billing?.valor_mensal ? (
+                          <span className="text-[#22C55E] text-[11px] font-black shrink-0">R$ {e.billing.valor_mensal.toLocaleString('pt-BR')}<span className="text-slate-600 font-bold">/mês</span></span>
+                        ) : null}
+                      </button>
+                      <div className="flex flex-col justify-center gap-1 pr-2 shrink-0">
+                        {est === 'teste' && (
+                          <button onClick={() => converterEmCliente(e)} disabled={convertendoId === e.id} title="Converter em cliente"
+                            className="p-2 rounded-lg text-slate-500 hover:text-[#22C55E] hover:bg-[#22C55E]/10 transition-colors disabled:opacity-50">
+                            {convertendoId === e.id ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>}
+                          </button>
                         )}
+                        <button onClick={() => { setExcluindoEmpresa(e); setConfirmarNomeExcluir(''); setErroExcluir(null); }} title="Excluir empresa"
+                          className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                          <Trash2 size={14}/>
+                        </button>
                       </div>
                     </div>
+                  );
+                };
+
+                const coluna = (titulo: string, ajuda: string, lista: Empresa[], cor: string, vazio: string) => (
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex items-baseline justify-between px-1">
+                      <h3 className={`text-[11px] font-black uppercase tracking-widest ${cor}`}>{titulo} <span className="text-slate-600">{lista.length}</span></h3>
+                      <span className="text-[10px] text-slate-600 hidden md:inline">{ajuda}</span>
+                    </div>
+                    {lista.map(cardEmpresa)}
+                    {lista.length === 0 && <p className="text-slate-600 text-xs text-center py-6 border border-dashed border-white/10 rounded-2xl">{vazio}</p>}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-slate-500 text-[10px] flex items-center gap-1"><Users size={10}/>{e.total_usuarios}</span>
-                    <ChevronRight size={14} className="text-slate-600"/>
-                  </div>
-                </button>
-              ))
+                );
+
+                return (
+                  <>
+                    <div className={`grid grid-cols-1 ${empresaSelecionada ? '' : 'md:grid-cols-2'} gap-6`}>
+                      {coluna('Ativos', 'Fechados e operando', ativos, 'text-[#22C55E]', 'Nenhum cliente ativo.')}
+                      {coluna('Prospecção', 'Em teste / primeiro contato', prospeccao, 'text-yellow-400', 'Nenhuma empresa em teste.')}
+                    </div>
+                    {outros.length > 0 && (
+                      <details className="pt-2">
+                        <summary className="cursor-pointer text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-white px-1 py-2">Demos e suspensas ({outros.length})</summary>
+                        <div className={`grid grid-cols-1 ${empresaSelecionada ? '' : 'md:grid-cols-2'} gap-2 mt-2`}>{outros.map(cardEmpresa)}</div>
+                      </details>
+                    )}
+                  </>
+                );
+              })()
             ) : (
               listaFiltrada.map(e => {
                 const sp = statusPgto(e.billing);
@@ -592,11 +665,15 @@ export default function AdminPage() {
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                   <h2 className="font-black uppercase text-sm flex items-center gap-2">
                     <Edit2 size={14} className="text-[#22C55E]"/> {empresaSelecionada.nome}
-                    {Boolean((empresaSelecionada.modulos as any)?.demo) && (
-                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-dashed border-purple-400/40 text-purple-300 bg-purple-500/10">Demo</span>
-                    )}
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${ESTAGIO_CFG[estagioEmpresa(empresaSelecionada)].cor}`}>{ESTAGIO_CFG[estagioEmpresa(empresaSelecionada)].label}</span>
                   </h2>
                   <div className="flex items-center gap-2">
+                    {estagioEmpresa(empresaSelecionada) === 'teste' && (
+                      <button onClick={() => converterEmCliente(empresaSelecionada)} disabled={convertendoId === empresaSelecionada.id}
+                        className="bg-[#22C55E] text-[#0B1120] px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50">
+                        {convertendoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>} Converter em cliente
+                      </button>
+                    )}
                     <button onClick={() => resetarSenha(empresaSelecionada.id)} disabled={resetandoSenhaId === empresaSelecionada.id}
                       className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
                       {resetandoSenhaId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <KeyRound size={12}/>} Gerar nova senha

@@ -52,6 +52,16 @@ const formatCnpj = (v: string | null) => {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 };
 
+// Número/série da NF: usa o que veio gravado; notas capturadas automaticamente às vezes chegam
+// sem `numero`, mas ele está dentro da chave de acesso de 44 dígitos (posições 23-25 = série,
+// 26-34 = número).
+function numeroSerieDaNota(n: { numero: string | null; serie: string | null; chave_acesso: string | null }): { numero: string; serie: string | null } | null {
+  if (n.numero) return { numero: n.numero, serie: n.serie };
+  const c = (n.chave_acesso || '').replace(/\D/g, '');
+  if (c.length !== 44) return null;
+  return { numero: String(parseInt(c.slice(25, 34), 10)), serie: String(parseInt(c.slice(22, 25), 10)) };
+}
+
 export default function FiscalPage() {
   const { authLoading, temPulse, perfil, isLideranca, user } = usePulseAccess();
 
@@ -164,7 +174,7 @@ export default function FiscalPage() {
       if (filtroStatus !== 'todos' && n.status !== filtroStatus) return false;
       if (busca.trim()) {
         const alvo = busca.trim().toLowerCase();
-        const campos = [n.nome_participante, n.cnpj_participante, n.numero, n.chave_acesso].map(c => (c || '').toLowerCase());
+        const campos = [n.nome_participante, n.cnpj_participante, n.numero, numeroSerieDaNota(n)?.numero, n.chave_acesso].map(c => (c || '').toLowerCase());
         if (!campos.some(c => c.includes(alvo))) return false;
       }
       return true;
@@ -337,6 +347,9 @@ export default function FiscalPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-white font-bold text-sm truncate">{n.nome_participante || (entrada ? 'Fornecedor não identificado' : 'Cliente não identificado')}</p>
+                      {(() => { const ns = numeroSerieDaNota(n); return ns ? (
+                        <span className="text-[10px] font-black bg-white/10 text-white px-2 py-0.5 rounded border border-white/10 whitespace-nowrap" title={ns.serie ? `Série ${ns.serie}` : undefined}>NF {ns.numero}{ns.serie ? ` · Série ${ns.serie}` : ''}</span>
+                      ) : null; })()}
                       <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${status.cor}`}>{status.label}</span>
                       <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{ORIGEM_LABEL[n.origem] || n.origem}</span>
                       {n.itens_status === 'pendente_revisao' && (
@@ -356,7 +369,6 @@ export default function FiscalPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[10px] text-slate-500">
-                      {n.numero && <span className="text-slate-400 font-bold">NF {n.numero}{n.serie ? `/${n.serie}` : ''}</span>}
                       {n.cnpj_participante && <span>{formatCnpj(n.cnpj_participante)}</span>}
                       {n.chave_acesso && (
                         <button onClick={() => copiarChave(n)} className="inline-flex items-center gap-1 hover:text-white transition-colors font-mono" title={n.chave_acesso}>

@@ -131,7 +131,9 @@ export default function Navbar() {
       // inacessível pra quem não usa CRM. Duplicado aqui de propósito (empresa com os dois
       // módulos ativos vê em ambos os grupos — redundância aceitável, mais simples que criar
       // uma seção nova só pra isso).
-      (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
+      // Só aparece aqui quando o grupo CRM não existe (empresa só-Pulse) — com os dois módulos
+      // ativos ela já está no CRM, e repetir no Pulse deixava o mesmo item duas vezes no menu.
+      (isDirector || isManager) && !mostrarCRM ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];
   const pulseItems: any[] = isAlmoxarifado
     ? pulseItemsCompleto.filter(i => i.href === '/pulse/estoque' || i.href === '/pulse/fiscal')

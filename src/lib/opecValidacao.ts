@@ -37,7 +37,7 @@ export function validarPacote(r: any): ResultadoContrato {
 
   // Job sem contrato: não há gabarito nenhum pra conferir
   if (r?.dados_incompletos || r?.numero_contrato == null) {
-    erro('contrato', 'Job sem contrato (lead) vinculado — a OPEC recebe o pacote sem nenhum campo do gabarito.');
+    erro('contrato', r?.aviso ? `${r.aviso} A OPEC recebe o pacote sem nenhum campo do gabarito.` : 'Job sem contrato (lead) vinculado — a OPEC recebe o pacote sem nenhum campo do gabarito.');
     return base;
   }
 

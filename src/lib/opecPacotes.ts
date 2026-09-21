@@ -105,7 +105,11 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
 
         for (const job of jobsProntos) {
             const refId = Number(/Ref:\s*LD-0*(\d+)/i.exec(job.briefing || '')?.[1]);
-            const leadData = (Number.isFinite(refId) && leadPorRef[refId]) || (job.client_id ? (leadsMap[job.client_id] || null) : null);
+            // Briefing aponta pra um contrato (Ref: LD-####) que não existe mais: NÃO cai no "lead mais
+            // recente do cliente" — isso entregava os dados de OUTRO contrato como se fossem desse job.
+            // Só usa o fallback quando o briefing não tem referência (jobs antigos/manuais).
+            const temRef = Number.isFinite(refId) && refId > 0;
+            const leadData = temRef ? (leadPorRef[refId] || null) : (job.client_id ? (leadsMap[job.client_id] || null) : null);
             const clienteData = job.client_id ? (clientesMap[job.client_id] || null) : null;
 
             let opecData: any[] = [{}];
@@ -125,7 +129,7 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                 ...opecData[0],
                 // Job sem lead vinculado não tem contrato pra montar o gabarito — sinaliza em vez
                 // de entregar um pacote sem os campos raiz sem explicação.
-                ...(leadData ? {} : { dados_incompletos: true, aviso: 'Job sem contrato (lead) vinculado — campos do gabarito OPEC indisponíveis.' }),
+                ...(leadData ? {} : { dados_incompletos: true, aviso: temRef ? `Contrato LD-${String(refId).padStart(4, '0')} referenciado no briefing não existe mais — campos do gabarito OPEC indisponíveis.` : 'Job sem contrato (lead) vinculado — campos do gabarito OPEC indisponíveis.' }),
                 // 👇 NOVIDADE: Identificação de quem é o dono do dado 👇
                 origem: {
                     codigo_emissora: job.empresa_id || null,

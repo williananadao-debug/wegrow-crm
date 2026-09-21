@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima } from '../shared';
@@ -347,24 +347,6 @@ function PulseProducaoContent() {
     }
   };
 
-  // Zerar etapas (só diretor): volta pra etapa 0 e limpa o histórico de etapas — limpa avanço de teste
-  const zerarEtapas = async (alvo: Producao | 'todas') => {
-    const msg = alvo === 'todas'
-      ? 'Zerar as etapas de TODAS as produções? Elas voltam pra etapa 0 e o histórico de etapas é apagado. Não dá pra desfazer.'
-      : `Zerar as etapas de "${alvo.produto_final_nome}"? Volta pra etapa 0 e apaga o histórico de etapas. Não dá pra desfazer.`;
-    if (!confirm(msg)) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { alert('Sessão expirada.'); return; }
-    const res = await fetch('/api/pulse/zerar-producao', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify(alvo === 'todas' ? { todas: true } : { producaoId: alvo.id }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) { alert(json.erro || `Erro ${res.status}`); return; }
-    carregar();
-    if (alvo !== 'todas' && detalheId === alvo.id) carregarEventos(alvo.id);
-  };
-
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
@@ -394,11 +376,6 @@ function PulseProducaoContent() {
             <Link href="/pulse/producao/painel" target="_blank" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
               <Tv size={14} /> Painel de TV
             </Link>
-            {perfil?.cargo === 'diretor' && (
-              <button onClick={() => zerarEtapas('todas')} title="Volta todas as produções pra etapa 0 e apaga o histórico de etapas" className="inline-flex items-center gap-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/40 text-slate-300 hover:text-red-400 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-                <RotateCcw size={14} /> Zerar etapas
-              </button>
-            )}
             <button onClick={() => setAbaFicha(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
               <Settings2 size={14} /> Ficha técnica
             </button>
@@ -535,9 +512,6 @@ function PulseProducaoContent() {
                             </span>
                           )}
                           <span className="text-[9px] text-slate-500 font-bold">{new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                          {perfil?.cargo === 'diretor' && (p.etapa_fabricacao_idx > 0 || p.status !== 'em_producao') && (
-                            <button onClick={() => zerarEtapas(p)} title="Zerar etapas desta produção" className="ml-auto inline-flex items-center gap-1 text-[9px] font-black uppercase text-slate-500 hover:text-red-400"><RotateCcw size={10} /> Zerar</button>
-                          )}
                         </div>
 
                         {p.status === 'em_producao' && (

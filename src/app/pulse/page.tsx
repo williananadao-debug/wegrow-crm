@@ -66,14 +66,21 @@ export default function PulsePainelPage() {
     finally { setExcluindo(false); }
   };
 
+  // Mês exibido na lista de vendas (padrão: atual). Trocar deixa achar venda antiga — ex.: pra excluir venda de teste.
+  const chaveMes = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const mesAtualStr = chaveMes(new Date());
+  const [mesVendas, setMesVendas] = useState(mesAtualStr);
+
   const fetchVendas = async () => {
     if (!perfil?.empresa_id) return;
     setLoadingVendas(true);
-    const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+    const [anoSel, mesSel] = mesVendas.split('-').map(Number);
+    const inicioMes = new Date(anoSel, mesSel - 1, 1, 0, 0, 0, 0);
+    const fimMes = new Date(anoSel, mesSel, 1, 0, 0, 0, 0);
     let q = supabase.from('leads')
       .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
       .eq('empresa_id', perfil.empresa_id)
-      .gte('created_at', inicioMes.toISOString())
+      .gte('created_at', inicioMes.toISOString()).lt('created_at', fimMes.toISOString())
       .order('created_at', { ascending: false });
     if (!temCRM) q = q.eq('tipo', 'Pulse');
     const { data } = await q;
@@ -86,7 +93,7 @@ export default function PulsePainelPage() {
     if (data) setServicos(data as ServicoConfig[]);
   };
 
-  useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id]);
+  useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id, mesVendas]);
 
   // Dados extras só pra aba Gerencial — carrega junto (não é pesado), mas só se a pessoa
   // é liderança, já que ninguém mais vai ver essa aba.
@@ -496,7 +503,12 @@ export default function PulsePainelPage() {
 
       <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
         <div className="p-5 border-b border-white/5">
-          <h3 className="font-black uppercase text-sm text-slate-300">Vendas do mês ({pedidosFechados.length})</h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="font-black uppercase text-sm text-slate-300">Vendas de {new Date(mesVendas + '-01T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} ({pedidosFechados.length})</h3>
+            <select value={mesVendas} onChange={e => setMesVendas(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-[var(--cor-primaria)]">
+              {Array.from({ length: 12 }).map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); const v = chaveMes(d); return <option key={v} value={v} className="bg-[#0B1120]">{d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</option>; })}
+            </select>
+          </div>
         </div>
         {loadingVendas ? (
           <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>

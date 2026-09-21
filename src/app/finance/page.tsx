@@ -821,24 +821,24 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="bg-[#0F172A] border border-white/10 p-4 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total do mês</p>
-              <h2 className="text-2xl font-black text-white mt-1">R$ {totalDespesasMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className="text-xl font-black text-white mt-1">R$ {totalDespesasMes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
             </div>
-            <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl">
+            <div className="bg-red-500/5 border border-red-500/20 p-4 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pendente</p>
-              <h2 className="text-2xl font-black text-red-400 mt-1">R$ {totalDespesasPendentes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className="text-xl font-black text-red-400 mt-1">R$ {totalDespesasPendentes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
             </div>
-            <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-5 rounded-2xl">
+            <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-4 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pago</p>
-              <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {totalDespesasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
+              <h2 className="text-xl font-black text-[var(--cor-primaria)] mt-1">R$ {totalDespesasPagas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
             </div>
           </div>
 
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
-            <div className="p-5 border-b border-white/5">
-              <h3 className="font-black uppercase text-sm text-slate-300">Despesas — {new Date(mesDespesas + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+            <div className="px-4 py-3 border-b border-white/5">
+              <h3 className="font-black uppercase text-xs tracking-wide text-slate-300">Despesas — {new Date(mesDespesas + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
             </div>
             {loadingDespesas ? (
               <div className="p-10 text-center"><Loader2 className="animate-spin text-slate-600 mx-auto" size={28}/></div>
@@ -850,10 +850,10 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             ) : (
               <div className="divide-y divide-white/5">
                 {despesasDoMes.map(d => (
-                  <div key={d.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                  <div key={d.id} className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
                     <div className="min-w-0">
-                      <p className="font-black text-white uppercase truncate">{d.titulo}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <p className="text-[13px] font-bold text-white uppercase truncate" title={d.titulo}>{d.titulo}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <span className="text-[9px] font-black bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{d.categoria}</span>
                         {d.unidade && <span className="text-[9px] text-slate-500">{d.unidade}</span>}
                         <span className="text-[9px] text-slate-600">Vence: {new Date(d.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
@@ -874,21 +874,21 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-black text-white">R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="w-28 text-right text-sm font-black text-white tabular-nums">R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       {d.status === 'pago' ? (
-                        <button onClick={() => estornarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <button onClick={() => estornarDespesaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-white/5 hover:bg-white/10 text-slate-400 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1">
                           {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <X size={10}/>} Estornar
                         </button>
                       ) : (
                         <>
-                          <input type="date" value={dataPagamentoPorLinha[d.id] ?? hoje} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[10px] font-bold outline-none" />
-                          <button onClick={() => marcarDespesaPaga(d.id, dataPagamentoPorLinha[d.id] ?? hoje)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                          <input type="date" value={dataPagamentoPorLinha[d.id] ?? hoje} onChange={e => setDataPagamentoPorLinha(prev => ({ ...prev, [d.id]: e.target.value }))} className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-[10px] font-bold outline-none w-[112px]" />
+                          <button onClick={() => marcarDespesaPaga(d.id, dataPagamentoPorLinha[d.id] ?? hoje)} disabled={salvando === String(d.id)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-2.5 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1">
                             {salvando === String(d.id) ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Marcar Paga
                           </button>
                         </>
                       )}
-                      <button onClick={() => excluirDespesa(d.id)} className="text-slate-600 hover:text-red-400 p-1.5"><Trash2 size={14}/></button>
+                      <button onClick={() => excluirDespesa(d.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>
                     </div>
                   </div>
                 ))}

@@ -72,6 +72,8 @@ function PulseProducaoContent() {
   const [novoComentario, setNovoComentario] = useState('');
   const [enviandoComentario, setEnviandoComentario] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
+  // Cliente dono de cada produção (produção nasce de uma venda; o nome vem do lead)
+  const [clientePorLead, setClientePorLead] = useState<Record<number, string>>({});
 
   const carregar = async () => {
     setLoading(true);
@@ -83,6 +85,12 @@ function PulseProducaoContent() {
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
     if (fichasData) setFichas(fichasData);
+
+    const leadIds = [...new Set((producoesData || []).map(p => p.lead_id).filter((x): x is number => !!x))];
+    if (leadIds.length > 0) {
+      const { data: leadsData } = await supabase.from('leads').select('id, empresa').in('id', leadIds);
+      setClientePorLead(Object.fromEntries((leadsData || []).map((l: any) => [l.id, l.empresa])));
+    } else setClientePorLead({});
 
     const ids = (producoesData || []).map(p => p.id);
     if (ids.length > 0) {
@@ -513,7 +521,12 @@ function PulseProducaoContent() {
                       <div key={p.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-3">
                         <button onClick={() => abrirDetalhe(p)} className="w-full text-left flex items-center gap-2">
                           {fotoCard && <img src={fotoCard} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0" />}
-                          <p className="text-white font-bold text-sm truncate hover:underline">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-black uppercase tracking-wide text-[var(--cor-primaria)] truncate" title={p.lead_id ? clientePorLead[p.lead_id] : undefined}>
+                              {p.lead_id ? (clientePorLead[p.lead_id] || `Venda LD-${String(p.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}
+                            </p>
+                            <p className="text-white font-bold text-sm truncate hover:underline">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
+                          </div>
                         </button>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                           {p.lead_id && (
@@ -609,6 +622,7 @@ function PulseProducaoContent() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
               <div className="min-w-0">
+                <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{detalheProducao.lead_id ? (clientePorLead[detalheProducao.lead_id] || `Venda LD-${String(detalheProducao.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
               </div>

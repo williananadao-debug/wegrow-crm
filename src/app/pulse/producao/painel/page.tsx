@@ -7,7 +7,7 @@ import { etapasFabricacaoDe } from '../../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
-  id: number; produto_final_nome: string; quantidade_produzida: number; status: StatusProducao;
+  id: number; lead_id?: number | null; produto_final_nome: string; quantidade_produzida: number; status: StatusProducao;
   previsao_entrega: string | null; etapa_fabricacao_idx: number; created_at: string;
 };
 type EventoEntrega = { producao_id: number; created_at: string };
@@ -26,6 +26,7 @@ export default function PainelProducaoPage() {
   const [producoes, setProducoes] = useState<Producao[]>([]);
   const [entregas, setEntregas] = useState<EventoEntrega[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clientePorLead, setClientePorLead] = useState<Record<number, string>>({});
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [agora, setAgora] = useState(() => new Date());
 
@@ -34,13 +35,19 @@ export default function PainelProducaoPage() {
     const desde30d = new Date(); desde30d.setDate(desde30d.getDate() - 30);
     const [{ data: producoesData }, { data: entregasData }] = await Promise.all([
       supabase.from('pulse_producoes')
-        .select('id, produto_final_nome, quantidade_produzida, status, previsao_entrega, etapa_fabricacao_idx, created_at')
+        .select('id, lead_id, produto_final_nome, quantidade_produzida, status, previsao_entrega, etapa_fabricacao_idx, created_at')
         .neq('status', 'entregue').order('created_at', { ascending: false }).limit(200),
       supabase.from('pulse_producao_eventos')
         .select('producao_id, created_at').eq('tipo', 'status').ilike('texto', '%Entregue%')
         .gte('created_at', desde30d.toISOString()),
     ]);
     if (producoesData) setProducoes(producoesData as Producao[]);
+    // nome do cliente dono de cada projeto (só o nome — sem valor nem ID de venda, que o painel de TV não mostra)
+    const leadIds = [...new Set((producoesData || []).map((p: any) => p.lead_id).filter((x: any): x is number => !!x))];
+    if (leadIds.length > 0) {
+      const { data: leadsData } = await supabase.from('leads').select('id, empresa').in('id', leadIds);
+      setClientePorLead(Object.fromEntries((leadsData || []).map((l: any) => [l.id, l.empresa])));
+    }
     if (entregasData) setEntregas(entregasData as EventoEntrega[]);
     setAtualizadoEm(new Date());
     setLoading(false);
@@ -159,6 +166,7 @@ export default function PainelProducaoPage() {
               {atrasadas.map(p => (
                 <div key={p.id} className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
                   <div className="min-w-0">
+                    {p.lead_id && clientePorLead[p.lead_id] && <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{clientePorLead[p.lead_id]}</p>}
                     <p className="text-white font-bold text-sm truncate">{p.produto_final_nome} × {p.quantidade_produzida}</p>
                     <p className="text-red-300 text-xs font-bold">{p.status === 'em_producao' ? ETAPAS_FABRICACAO[p.etapa_fabricacao_idx] : 'Aguardando entrega'}</p>
                   </div>

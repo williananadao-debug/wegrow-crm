@@ -358,15 +358,12 @@ export default function Navbar() {
               </div>
             </div>
 
-            {/* min-h-0 + scroll: sem isso o menu estourava a altura da tela e cortava os últimos itens (Clientes etc.). Recolhido não rola porque os tooltips laterais seriam cortados. */}
-            <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? '' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'}`}>
+            {/* min-h-0 + scroll: sem isso o menu estourava a altura da tela e cortava/sobrepunha os últimos itens (Clientes etc.) por cima de Configurações/Sair. Recolhido rola sem mostrar barra e o nome do item vira tooltip nativo (title), já que um balão lateral seria cortado pelo scroll. */}
+            <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? 'overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'}`}>
               {isCollapsed ? (
                 flatItems.map((item) => (
-                  <Link key={item.href} href={item.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <Link key={item.href} href={item.href} title={item.name} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all shrink-0 justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                     <div className="min-w-[20px]">{item.icon}</div>
-                    <div className="absolute left-full ml-4 px-3 py-1.5 bg-[#1E293B] text-white text-[10px] font-bold uppercase rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-[999] border border-white/10 translate-x-2 group-hover:translate-x-0">
-                      {item.name}
-                    </div>
                   </Link>
                 ))
               ) : (
@@ -504,7 +501,7 @@ export default function Navbar() {
               )}
             </nav>
 
-            <div className="pt-4 border-t border-white/5 space-y-2 mt-2">
+            <div className="pt-4 border-t border-white/5 space-y-2 mt-2 shrink-0">
               {isDirector && (
                 <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <Settings size={20} />

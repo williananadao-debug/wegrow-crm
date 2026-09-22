@@ -58,6 +58,7 @@ export async function GET(request: Request) {
       status: emp?.status || 'trial',
       modulos: emp?.modulos || {},
       logo_url: emp?.logo_url || null,
+      cor_primaria: emp?.cor_primaria || null,
       created_at: emp?.created_at || null,
       canal_origem: emp?.canal_origem || null,
       cancelado_em: emp?.cancelado_em || null,

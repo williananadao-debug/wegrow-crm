@@ -532,6 +532,11 @@ export default function PulsePainelPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className="font-black text-white">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  {/* Mesma tela de editar orçamento serve pra venda já fechada — só atualiza
+                  cliente/itens/pagamento, nunca refaz estoque/produção/financeiro. */}
+                  <a href={`/pulse/nova-venda?editarOrcamento=${v.id}`} title="Editar venda (cliente, itens, pagamento)" className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                    <Pencil size={10} /> Editar
+                  </a>
                   <button onClick={() => imprimirReciboOuOrcamento(v, unidades.find(u => u.nome === perfil?.unidade), empresa)} className="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Printer size={10} /> Recibo
                   </button>

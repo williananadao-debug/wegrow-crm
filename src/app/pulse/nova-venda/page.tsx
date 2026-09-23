@@ -39,6 +39,10 @@ function PulseNovaVendaContent() {
   // Não-nulo = reabriu um orçamento salvo pra editar; "salvar" vira update dessa linha em
   // vez de criar venda nova (ver finalizarVenda).
   const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<number | null>(null);
+  // Rótulo do que está sendo editado — mesma tela/fluxo serve pra orçamento e pra venda já
+  // fechada (edição aqui só atualiza cliente/itens/pagamento; nunca refaz baixa de estoque,
+  // produção ou financeiro, isso só acontece na criação de um pedido novo).
+  const [editandoLabel, setEditandoLabel] = useState<'orçamento' | 'venda'>('orçamento');
 
   // Produto 100% personalizado (fora do catálogo, ex: trailer sob medida que não é
   // nenhum dos modelos prontos) usa o mesmo configurador dos produtos de catálogo — id
@@ -327,6 +331,7 @@ function PulseNovaVendaContent() {
     // dados carregavam certo por baixo, mas só apareciam depois de sair da telinha (ex:
     // clicando "Nova venda") e clicar em Editar de novo. Isso sai daquela tela na hora.
     setVendaConcluida(null);
+    setEditandoLabel(h.status === 'orcamento' ? 'orçamento' : 'venda');
     const itens = Array.isArray(h.itens) ? h.itens : [];
     setCarrinho(itens.map((it: any) => ({
       servicoId: proximoIdAvulsoRef.current--, nome: it.servico, quantidade: it.quantidade,
@@ -408,7 +413,7 @@ function PulseNovaVendaContent() {
           unidade: unidadeSel || null, forma_pagamento: formaPagamento, client_id: clientId,
         }).eq('id', orcamentoEditandoId).select().single();
         if (erroUpdate) throw erroUpdate;
-        setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload, status: 'orcamento' });
+        setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload });
         setOrcamentoEditandoId(null);
         if (mostrarHistorico) carregarHistorico();
         setSalvando(false);
@@ -1038,6 +1043,7 @@ function PulseNovaVendaContent() {
                     <span className="text-white font-black text-sm flex-shrink-0 whitespace-nowrap text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     {!ehOrc && (
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => editarOrcamento(h)} title="Editar venda (cliente, itens, pagamento)" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-amber-500/10 text-slate-600 hover:text-amber-400"><Pencil size={13} /></button>
                         <button onClick={() => abrirContrato(h)} title="Gerar contrato" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-purple-500/10 text-slate-600 hover:text-purple-400"><PenTool size={13} /></button>
                         <button onClick={() => emitirNf1(h)} title="Emitir NF" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-500/10 text-slate-600 hover:text-blue-400"><FileText size={13} /></button>
                         <button onClick={() => abrirCobranca(h)} title="Gerar boleto/Pix" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-emerald-500/10 text-slate-600 hover:text-emerald-400"><Zap size={13} /></button>
@@ -1294,7 +1300,7 @@ function PulseNovaVendaContent() {
 
           {orcamentoEditandoId ? (
             <div className="space-y-2">
-              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Pencil size={11} /> Editando orçamento {formatId(orcamentoEditandoId)}</p>
+              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Pencil size={11} /> Editando {editandoLabel} {formatId(orcamentoEditandoId)}</p>
               <div className="flex gap-2">
                 <button onClick={resetar} disabled={salvando} className="bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-black uppercase text-xs py-4 px-4 rounded-xl transition-all">
                   Cancelar

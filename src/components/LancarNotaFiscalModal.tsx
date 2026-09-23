@@ -81,9 +81,13 @@ export default function LancarNotaFiscalModal({
     setBuscandoPedido(true);
     debouncePedidoRef.current = setTimeout(async () => {
       const q = pedidoQuery.trim();
+      // Aceita o código da OS em qualquer formato ("49", "LD-0049", "LD 49") — sem isso,
+      // digitar o prefixo "LD-" quebrava a detecção de número e virava busca por nome de
+      // empresa (nunca encontrava nada, mesmo com o pedido existindo).
+      const soDigitos = q.replace(/^ld[\s-]*/i, '').replace(/\D/g, '');
       let query = supabase.from('leads').select('id, empresa, valor_total')
         .eq('empresa_id', empresaId).eq('tipo', 'Pulse').order('created_at', { ascending: false }).limit(10);
-      query = /^\d+$/.test(q) ? query.eq('id', Number(q)) : query.ilike('empresa', `%${q}%`);
+      query = soDigitos && /^(ld[\s-]*)?\d+$/i.test(q) ? query.eq('id', Number(soDigitos)) : query.ilike('empresa', `%${q}%`);
       const { data } = await query;
       setPedidoResultados((data as PedidoOpcao[]) || []);
       setBuscandoPedido(false);

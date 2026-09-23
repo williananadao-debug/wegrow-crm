@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine } from 'lucide-react';
+import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
@@ -64,6 +64,30 @@ function numeroSerieDaNota(n: { numero: string | null; serie: string | null; cha
 
 export default function FiscalPage() {
   const { authLoading, temPulse, perfil, isLideranca, user } = usePulseAccess();
+
+  // Excluir nota lançada errada — desfaz estoque/financeiro que ela gerou. Só diretor/gerente.
+  const [excluirAlvo, setExcluirAlvo] = useState<NotaFiscal | null>(null);
+  const [excluirTexto, setExcluirTexto] = useState('');
+  const [excluindo, setExcluindo] = useState(false);
+  const [excluirErro, setExcluirErro] = useState<string | null>(null);
+
+  const confirmarExclusaoNota = async () => {
+    if (!excluirAlvo) return;
+    setExcluindo(true); setExcluirErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/excluir-nota', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ notaId: excluirAlvo.id, confirmacao: excluirTexto.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.erro || `Erro ${res.status}`);
+      setExcluirAlvo(null); setExcluirTexto('');
+      carregar();
+    } catch (e: any) { setExcluirErro(e?.message || 'Erro ao excluir.'); }
+    finally { setExcluindo(false); }
+  };
 
   const [notas, setNotas] = useState<NotaFiscal[]>([]);
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
@@ -392,13 +416,20 @@ export default function FiscalPage() {
                       </div>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className={`font-black text-sm ${entrada ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`}>
-                      {n.valor_total != null ? `R$ ${n.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
-                    </p>
-                    <p className="text-slate-600 text-[10px] mt-0.5">
-                      {new Date(n.data_emissao || n.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                    </p>
+                  <div className="text-right shrink-0 flex items-start gap-2">
+                    <div>
+                      <p className={`font-black text-sm ${entrada ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`}>
+                        {n.valor_total != null ? `R$ ${n.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                      </p>
+                      <p className="text-slate-600 text-[10px] mt-0.5">
+                        {new Date(n.data_emissao || n.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      </p>
+                    </div>
+                    {isLideranca && (
+                      <button onClick={() => { setExcluirAlvo(n); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir esta nota (desfaz estoque e financeiro ligados a ela)" className="text-slate-600 hover:text-red-400 p-1 mt-0.5">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -408,6 +439,29 @@ export default function FiscalPage() {
       </div>
       {!loading && notas.length >= 1000 && (
         <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 notas mais recentes — refine os filtros pra achar algo mais antigo.</p>
+      )}
+
+      {excluirAlvo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !excluindo && setExcluirAlvo(null)}>
+          <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Trash2 size={18} className="text-red-400" /> Excluir nota fiscal</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{excluirAlvo.nome_participante || '—'} · {numeroSerieDaNota(excluirAlvo)?.numero ? `NF ${numeroSerieDaNota(excluirAlvo)!.numero}` : `#${excluirAlvo.id}`}</p>
+              </div>
+              <button onClick={() => setExcluirAlvo(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed mb-4">
+              Isso apaga a nota <b>de vez, sem deixar rastro</b>, e não dá pra desfazer. Junto vão: {excluirAlvo.tipo === 'entrada' ? 'a quantidade que ela somou volta a ser retirada do' : 'a quantidade que ela baixou volta pro'} estoque, os itens dela e o lançamento (conta a pagar/receber) que ela gerou no Financeiro — se já estiver pago, primeiro estorne no Financeiro.
+            </div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Digite EXCLUIR pra confirmar</label>
+            <input value={excluirTexto} onChange={e => setExcluirTexto(e.target.value)} placeholder="EXCLUIR" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-red-500 mb-3" />
+            {excluirErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{excluirErro}</div>}
+            <button onClick={confirmarExclusaoNota} disabled={excluindo || excluirTexto.trim() !== 'EXCLUIR'} className="w-full bg-red-500 hover:bg-red-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40">
+              {excluindo ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} {excluindo ? 'Excluindo...' : 'Excluir definitivamente'}
+            </button>
+          </div>
+        </div>
       )}
 
       <RevisarItensNotaModal

@@ -34,7 +34,7 @@ const METODOS: { id: Metodo; label: string; icone: typeof Camera; desc: string }
 // vindo de IA (foto/PDF) ou de leitura exata (XML), humano confere antes de mexer em
 // estoque — casamento automático de produto é só sugestão, nunca é definitivo sozinho.
 export default function LancarNotaFiscalModal({
-  aberto, onFechar, servicos, empresaId, userId, onConcluido,
+  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipoInicial = 'entrada',
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -42,11 +42,18 @@ export default function LancarNotaFiscalModal({
   empresaId?: string;
   userId?: string;
   onConcluido: () => void;
+  // Pré-seleciona o toggle Entrada/Saída ao abrir (ex: botão dedicado "Dar saída por Nota
+  // Fiscal" no Estoque) — a pessoa ainda pode trocar na tela, isso só poupa o clique.
+  tipoInicial?: 'entrada' | 'saida';
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [etapa, setEtapa] = useState<'escolha' | 'preparando' | 'lendo' | 'revisao'>('escolha');
   const [metodo, setMetodo] = useState<Metodo | null>(null);
-  const [tipo, setTipo] = useState<'entrada' | 'saida'>('entrada');
+  const [tipo, setTipo] = useState<'entrada' | 'saida'>(tipoInicial);
+
+  // Reabrir o modal (ex: fechou e abriu de novo com outro botão) precisa refletir o novo
+  // tipoInicial — sem isso, o segundo uso ficava preso no tipo do primeiro.
+  useEffect(() => { if (aberto) setTipo(tipoInicial); }, [aberto, tipoInicial]);
 
   const [fornecedor, setFornecedor] = useState('');
   const [cnpjFornecedor, setCnpjFornecedor] = useState('');
@@ -115,7 +122,7 @@ export default function LancarNotaFiscalModal({
   }, [aberto, empresaId]);
 
   const reset = () => {
-    setEtapa('escolha'); setMetodo(null); setTipo('entrada');
+    setEtapa('escolha'); setMetodo(null); setTipo(tipoInicial);
     setFornecedor(''); setCnpjFornecedor(''); setNumero(''); setSerie('');
     setChaveAcesso(''); setDataEmissao(''); setValorTotal('');
     setDataVencimento(new Date().toISOString().substring(0, 10));

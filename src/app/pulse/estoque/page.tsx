@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
-import NotaFiscalModal from '@/components/NotaFiscalModal';
+import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
 import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
@@ -424,6 +424,12 @@ export default function PulseEstoquePage() {
           <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Dar entrada por Nota Fiscal
           </button>
+          {/* Saída manual liberada pro Almoxarifado (mesmo cargo que só enxerga Estoque/Notas
+          Fiscais) — antes só existia entrada por aqui; pra dar saída sem passar pelo funil de
+          venda (ex: baixa avulsa com NF de venda já emitida em mãos), precisa desse atalho. */}
+          <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ScanLine size={14} /> Dar saída por Nota Fiscal
+          </button>
         </div>
       </header>
 
@@ -711,13 +717,13 @@ export default function PulseEstoquePage() {
         </div>
       )}
 
-      <NotaFiscalModal
+      <LancarNotaFiscalModal
         aberto={notaModalAberto}
         onFechar={() => setNotaModalAberto(false)}
         servicos={servicos}
         empresaId={perfil?.empresa_id}
         userId={user?.id}
-        tipo={notaTipo}
+        tipoInicial={notaTipo}
         onConcluido={() => fetchServicos()}
       />
 

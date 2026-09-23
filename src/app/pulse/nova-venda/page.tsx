@@ -75,6 +75,12 @@ function PulseNovaVendaContent() {
   // da venda) — só pro texto do contrato, não mexe em financeiro/estoque da venda em si.
   const [contratoValorEntrada, setContratoValorEntrada] = useState('');
   const [contratoFormaPagamentoEntrada, setContratoFormaPagamentoEntrada] = useState('');
+  // Pagamento do saldo/parcelas — a venda fechada não tem mais tela própria de edição (só
+  // orçamento tem "Editar"), então esses 3 campos ficam editáveis aqui e são salvos na
+  // venda ao gerar o contrato, pra sempre bater com o que realmente foi combinado.
+  const [contratoFormaPagamento, setContratoFormaPagamento] = useState('');
+  const [contratoParcelas, setContratoParcelas] = useState('1');
+  const [contratoVencimento, setContratoVencimento] = useState('');
   const [enviandoContrato, setEnviandoContrato] = useState(false);
   const [contratoErro, setContratoErro] = useState<string | null>(null);
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
@@ -518,7 +524,11 @@ function PulseNovaVendaContent() {
     setVendaAlvo(venda);
     setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
     setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
-    setContratoValorEntrada(''); setContratoFormaPagamentoEntrada('');
+    setContratoValorEntrada(venda?.valor_entrada ? String(venda.valor_entrada) : '');
+    setContratoFormaPagamentoEntrada(venda?.forma_pagamento_entrada || '');
+    setContratoFormaPagamento(venda?.forma_pagamento || '');
+    setContratoParcelas(venda?.parcelas || '1');
+    setContratoVencimento(venda?.vencimento || '');
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);
@@ -529,6 +539,17 @@ function PulseNovaVendaContent() {
     if (!vendaAlvo) return;
     setEnviandoContrato(true); setContratoErro(null);
     try {
+      // Salva as opções de pagamento na própria venda antes de gerar o contrato — sem isso,
+      // um contrato gerado de novo mais tarde voltava a mostrar os dados antigos (a venda
+      // fechada não tem mais nenhuma outra tela onde isso possa ser editado).
+      const { error: erroPagamento } = await supabase.from('leads').update({
+        forma_pagamento: contratoFormaPagamento || null,
+        parcelas: contratoParcelas || '1',
+        vencimento: contratoVencimento || null,
+        valor_entrada: contratoValorEntrada ? Number(contratoValorEntrada) : null,
+        forma_pagamento_entrada: contratoFormaPagamentoEntrada || null,
+      }).eq('id', vendaAlvo.id);
+      if (erroPagamento) throw new Error('Erro ao salvar as opções de pagamento: ' + erroPagamento.message);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/docuseal/pulse', {
@@ -541,7 +562,8 @@ function PulseNovaVendaContent() {
             telefone: contratoTelefone || vendaAlvo.telefone,
             endereco: clienteSelecionado?.endereco, cidade: clienteSelecionado?.cidade,
             itens: vendaAlvo.itens, desconto: vendaAlvo.desconto || 0, valor_total: vendaAlvo.valor_total,
-            parcelas: vendaAlvo.parcelas || '1', forma_pagamento: vendaAlvo.forma_pagamento,
+            parcelas: contratoParcelas || '1', vencimento: contratoVencimento || undefined,
+            forma_pagamento: contratoFormaPagamento || undefined,
             valor_entrada: contratoValorEntrada ? Number(contratoValorEntrada) : undefined,
             forma_pagamento_entrada: contratoFormaPagamentoEntrada || undefined,
             prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaAlvo.unidade || unidadeSel,
@@ -553,6 +575,7 @@ function PulseNovaVendaContent() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.erro || 'Erro ao gerar contrato.');
       setContratoLinks({ consultorSignUrl: json.consultor_sign_url, signUrl: json.sign_url });
+      if (mostrarHistorico) carregarHistorico();
     } catch (err: any) {
       setContratoErro(err?.message || 'Erro ao gerar contrato.');
     } finally {
@@ -716,20 +739,40 @@ function PulseNovaVendaContent() {
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
               <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
             </div>
-            <div className="border-t border-white/5 pt-3 grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Entrada — R$ (opcional)</label>
-                <input type="number" min="0" step="0.01" value={contratoValorEntrada} onChange={e => setContratoValorEntrada(e.target.value)} placeholder="Ex: 90000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+            <div className="border-t border-white/5 pt-3">
+              <p className="text-[10px] font-black text-purple-300 uppercase tracking-widest mb-2">Pagamento (edita a venda, sai no contrato)</p>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Entrada — R$ (opcional)</label>
+                  <input type="number" min="0" step="0.01" value={contratoValorEntrada} onChange={e => setContratoValorEntrada(e.target.value)} placeholder="Ex: 90000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pagamento da entrada</label>
+                  <select value={contratoFormaPagamentoEntrada} onChange={e => setContratoFormaPagamentoEntrada(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500">
+                    <option value="" className="bg-[#0B1120]">—</option>
+                    {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Parcelas (saldo)</label>
+                  <input type="number" min="1" value={contratoParcelas} onChange={e => setContratoParcelas(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">1º vencimento</label>
+                  <input type="date" value={contratoVencimento} onChange={e => setContratoVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                </div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pagamento da entrada</label>
-                <select value={contratoFormaPagamentoEntrada} onChange={e => setContratoFormaPagamentoEntrada(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500">
-                  <option value="" className="bg-[#0B1120]">—</option>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Forma de pagamento (saldo/parcelas)</label>
+                <select value={contratoFormaPagamento} onChange={e => setContratoFormaPagamento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500">
+                  <option value="" className="bg-[#0B1120]">Selecione</option>
                   {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>)}
                 </select>
               </div>
             </div>
-            <p className="text-slate-600 text-[9px] -mt-1">Se preenchido, o contrato mostra a entrada separada do saldo — o restante segue com "Pagamento" (venda) e as parcelas de baixo.</p>
+            <p className="text-slate-600 text-[9px] -mt-1">Esses campos são salvos na venda ao gerar o contrato — não é só pro texto, muda o cadastro dela também.</p>
             {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
             <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}

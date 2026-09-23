@@ -68,6 +68,8 @@ export async function POST(req: Request) {
         parcelas: venda.parcelas || '1', vencimento: venda.vencimento || '',
         vencimentos_datas: Array.isArray(venda.vencimentos_datas) ? venda.vencimentos_datas : undefined,
         forma_pagamento: venda.forma_pagamento || undefined,
+        valor_entrada: Number(venda.valor_entrada) > 0 ? Number(venda.valor_entrada) : undefined,
+        forma_pagamento_entrada: venda.forma_pagamento_entrada || undefined,
         prazoFabricacaoDias: venda.prazoFabricacaoDias ?? null,
         observacao: venda.observacao || '',
       });

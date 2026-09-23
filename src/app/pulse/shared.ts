@@ -97,6 +97,9 @@ export type RankingItem = { id: string; nome: string; count: number; total: numb
 
 export const FORMAS_PAGAMENTO: Record<string, string> = {
   dinheiro: 'Dinheiro', pix: 'PIX', cartao: 'Cartão', boleto: 'Boleto', transferencia: 'Transferência',
+  // Adicionados pra venda de equipamento (Biomaq/fábrica) — cliente entra com % via banco
+  // ou consórcio, quita saldo com máquina usada, etc. Texto livre no banco, sem migration.
+  financiamento: 'Financiamento bancário', consorcio: 'Consórcio', cheque: 'Cheque', permuta: 'Permuta/Troca',
 };
 
 export const formatId = (id: number) => `LD-${String(id).padStart(4, '0')}`;

@@ -71,6 +71,10 @@ function PulseNovaVendaContent() {
   const [contratoAberto, setContratoAberto] = useState(false);
   const [contratoEmail, setContratoEmail] = useState('');
   const [contratoTelefone, setContratoTelefone] = useState('');
+  // Entrada opcional (ex: 30% via boleto no fechamento, saldo parcelado no forma_pagamento
+  // da venda) — só pro texto do contrato, não mexe em financeiro/estoque da venda em si.
+  const [contratoValorEntrada, setContratoValorEntrada] = useState('');
+  const [contratoFormaPagamentoEntrada, setContratoFormaPagamentoEntrada] = useState('');
   const [enviandoContrato, setEnviandoContrato] = useState(false);
   const [contratoErro, setContratoErro] = useState<string | null>(null);
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
@@ -514,6 +518,7 @@ function PulseNovaVendaContent() {
     setVendaAlvo(venda);
     setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
     setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
+    setContratoValorEntrada(''); setContratoFormaPagamentoEntrada('');
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);
@@ -537,6 +542,8 @@ function PulseNovaVendaContent() {
             endereco: clienteSelecionado?.endereco, cidade: clienteSelecionado?.cidade,
             itens: vendaAlvo.itens, desconto: vendaAlvo.desconto || 0, valor_total: vendaAlvo.valor_total,
             parcelas: vendaAlvo.parcelas || '1', forma_pagamento: vendaAlvo.forma_pagamento,
+            valor_entrada: contratoValorEntrada ? Number(contratoValorEntrada) : undefined,
+            forma_pagamento_entrada: contratoFormaPagamentoEntrada || undefined,
             prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaAlvo.unidade || unidadeSel,
           },
           signers: [{ name: vendaAlvo.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
@@ -709,6 +716,20 @@ function PulseNovaVendaContent() {
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
               <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
             </div>
+            <div className="border-t border-white/5 pt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Entrada — R$ (opcional)</label>
+                <input type="number" min="0" step="0.01" value={contratoValorEntrada} onChange={e => setContratoValorEntrada(e.target.value)} placeholder="Ex: 90000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pagamento da entrada</label>
+                <select value={contratoFormaPagamentoEntrada} onChange={e => setContratoFormaPagamentoEntrada(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500">
+                  <option value="" className="bg-[#0B1120]">—</option>
+                  {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="text-slate-600 text-[9px] -mt-1">Se preenchido, o contrato mostra a entrada separada do saldo — o restante segue com "Pagamento" (venda) e as parcelas de baixo.</p>
             {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
             <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}

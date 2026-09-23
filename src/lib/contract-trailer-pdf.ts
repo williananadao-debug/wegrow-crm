@@ -33,12 +33,17 @@ export type ContratoTrailerData = {
   vencimento: string;
   vencimentos_datas?: string[];
   forma_pagamento?: string;
+  // Entrada opcional, paga separado do saldo parcelado (ex: 30% via boleto no fechamento,
+  // saldo em 8x). Sem valor_entrada, o contrato imprime só a seção de parcelas de sempre.
+  valor_entrada?: number;
+  forma_pagamento_entrada?: string;
   prazoFabricacaoDias: number | null;
   observacao?: string;
 };
 
 const FORMAS_PAGAMENTO: Record<string, string> = {
   boleto: 'Boleto', dinheiro: 'Dinheiro', pix: 'PIX', cartao: 'Cartão', transferencia: 'Transferência',
+  financiamento: 'Financiamento bancário', consorcio: 'Consórcio', cheque: 'Cheque', permuta: 'Permuta/Troca',
 };
 
 function fmt(v: number) {
@@ -176,9 +181,18 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
         linha('Subtotal: ', fmt(subtotal));
         linha('Desconto: ', `- ${fmt(data.desconto)}`);
       }
+      if (data.valor_entrada && data.valor_entrada > 0) {
+        linha('Entrada: ', fmt(data.valor_entrada) + (data.forma_pagamento_entrada ? ` — ${FORMAS_PAGAMENTO[data.forma_pagamento_entrada] || data.forma_pagamento_entrada}` : ''));
+        linha('Saldo: ', fmt(Math.max(0, data.valor_total - data.valor_entrada)));
+      }
       linha('Parcela(s): ', data.parcelas || '1');
       linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
-      if (data.forma_pagamento) linha('Forma de Pagamento: ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
+      if (data.valor_total > 0) {
+        const qtdParcelasPagamento = Math.max(1, parseInt(data.parcelas || '1', 10) || 1);
+        const saldoParcelado = Math.max(0, data.valor_total - (data.valor_entrada || 0));
+        linha('Valor da Parcela: ', fmt(saldoParcelado / qtdParcelasPagamento));
+      }
+      if (data.forma_pagamento) linha('Forma de Pagamento (saldo): ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
       doc.moveDown(0.3);
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
         'A entrega definitiva e liberação do trailer ficam condicionadas à quitação integral do valor contratado, bem como de eventuais itens adicionais solicitados e previamente aprovados pelo CONTRATANTE. O atraso no pagamento de qualquer parcela poderá acarretar incidência de multa de 2% sobre o valor em atraso, acrescida de juros de 1% ao mês, calculados proporcionalmente ao período de atraso.',

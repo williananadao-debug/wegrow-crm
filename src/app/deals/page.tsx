@@ -78,6 +78,10 @@ type Lead = {
   vencimento?: string;
   vencimentos_datas?: string[];
   forma_pagamento?: string;
+  // Entrada opcional paga separado do saldo parcelado (ex: 30% via boleto no fechamento,
+  // saldo em N parcelas) — só entra no contrato se preenchida.
+  valor_entrada?: number;
+  forma_pagamento_entrada?: string;
   criado_por?: string;
   atividades?: Atividade[];
   docuseal_submission_id?: string;
@@ -175,6 +179,11 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
     pix: 'PIX',
     cartao: 'Cartão',
     transferencia: 'Transferência',
+    // Adicionados pra venda de equipamento (Biomaq/fábrica) — mesma lista de pulse/shared.ts
+    financiamento: 'Financiamento bancário',
+    consorcio: 'Consórcio',
+    cheque: 'Cheque',
+    permuta: 'Permuta/Troca',
 };
 
 const UF_NOMES: Record<string, string> = {
@@ -303,6 +312,8 @@ export default function DealsPage() {
   const [vencimento, setVencimento] = useState('');
   const [vencimentosDatas, setVencimentosDatas] = useState<string[]>([]);
   const [formaPagamento, setFormaPagamento] = useState('');
+  const [valorEntrada, setValorEntrada] = useState('');
+  const [formaPagamentoEntrada, setFormaPagamentoEntrada] = useState('');
   const [itensTemporarios, setItensTemporarios] = useState<ItemVenda[]>([]);
   const [desconto, setDesconto] = useState(0);
   const [valorTotalOverride, setValorTotalOverride] = useState<number | null>(null);
@@ -408,7 +419,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
     // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
     // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
@@ -1029,6 +1040,13 @@ export default function DealsPage() {
       ? lead.vencimentos_datas
       : gerarVencimentosPadrao(lead.vencimento || '', lead.parcelas || '1');
     const formaPagamentoLabel = lead.forma_pagamento ? (FORMAS_PAGAMENTO[lead.forma_pagamento] || lead.forma_pagamento) : '';
+    const valorEntradaContrato = Number(lead.valor_entrada) > 0 ? Number(lead.valor_entrada) : 0;
+    const formaPagamentoEntradaLabel = lead.forma_pagamento_entrada ? (FORMAS_PAGAMENTO[lead.forma_pagamento_entrada] || lead.forma_pagamento_entrada) : '';
+    const saldoContrato = Math.max(0, (lead.valor_total || 0) - valorEntradaContrato);
+    const blocoEntradaHtml = valorEntradaContrato > 0
+      ? `<strong>Entrada:</strong> R$ ${valorEntradaContrato.toLocaleString('pt-BR', {minimumFractionDigits: 2})}${formaPagamentoEntradaLabel ? ` — ${formaPagamentoEntradaLabel}` : ''}<br/>
+                    <strong>Saldo:</strong> R$ ${saldoContrato.toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>`
+      : '';
 
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
@@ -1148,10 +1166,11 @@ export default function DealsPage() {
 
                 <div class="secao-titulo">4. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
+                    ${blocoEntradaHtml}
                     <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
                     <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/><br/>
-                    ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(lead.valor_total / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
-                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
+                    ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(saldoContrato / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
+                    <strong>Forma de Pagamento${valorEntradaContrato > 0 ? ' (saldo)' : ''}:</strong> ${formaPagamentoLabel || ''}<br/><br/>
                     <strong>Contato para envio da cobrança (WhatsApp):</strong> ${lead.telefone || ''}<br/>
                 </div>
 
@@ -1268,10 +1287,11 @@ export default function DealsPage() {
 
                 <div class="secao-titulo">${ultimaNota ? 4 : 3}. FORMA DE PAGAMENTO</div>
                 <div class="cliente-box">
+                    ${blocoEntradaHtml}
                     <strong>Parcela(s):</strong> ${lead.parcelas || ''}<br/>
                     <strong>Vencimento(s):</strong> ${vencimentosEfetivos.length ? formatarVencimentosArray(vencimentosEfetivos) : ''}<br/><br/>
-                    ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(lead.valor_total / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
-                    <strong>Forma de Pagamento:</strong> ${formaPagamentoLabel || ''}<br/><br/>
+                    ${lead.valor_total ? `<strong>Valor da Parcela:</strong> R$ ${(saldoContrato / qtdParcelasContrato).toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br/>` : ''}
+                    <strong>Forma de Pagamento${valorEntradaContrato > 0 ? ' (saldo)' : ''}:</strong> ${formaPagamentoLabel || ''}<br/><br/>
                     <strong>Contato para envio da Fatura — WhatsApp / E-mail:</strong> ${lead.telefone || ''}<br/>
                     <strong>Praça de Pagamento:</strong> ${lead.cidade || ''}
                 </div>
@@ -1341,6 +1361,8 @@ export default function DealsPage() {
           vencimento,
           vencimentos_datas: vencimentosDatas,
           forma_pagamento: formaPagamento,
+          valor_entrada: valorEntrada ? Number(valorEntrada) : undefined,
+          forma_pagamento_entrada: formaPagamentoEntrada || undefined,
           observacao: ultimaNota,
         },
       }),
@@ -1724,6 +1746,8 @@ export default function DealsPage() {
         vencimento: vencimento || null,
         vencimentos_datas: vencimentosDatas.length ? vencimentosDatas : null,
         forma_pagamento: formaPagamento || null,
+        valor_entrada: valorEntrada ? Number(valorEntrada) : null,
+        forma_pagamento_entrada: formaPagamentoEntrada || null,
         status_aprovacao: novoStatusAprovacao,
         user_id: (isLideranca || isOpec) ? (leadUserId || null) : user.id,
         ...(editingLeadId ? {} : { status: 'aberto', etapa: 0, ordem: 0, criado_por: user.id }),
@@ -1816,6 +1840,8 @@ export default function DealsPage() {
         setParcelas(lead.parcelas || '1');
         setVencimento(lead.vencimento || '');
         setFormaPagamento(lead.forma_pagamento || '');
+        setValorEntrada(lead.valor_entrada ? String(lead.valor_entrada) : '');
+        setFormaPagamentoEntrada(lead.forma_pagamento_entrada || '');
         {
             const qtd = Math.max(1, parseInt(lead.parcelas || '1', 10) || 1);
             setVencimentosDatas(
@@ -1873,6 +1899,8 @@ export default function DealsPage() {
         setVencimento('');
         setVencimentosDatas([]);
         setFormaPagamento('');
+        setValorEntrada('');
+        setFormaPagamentoEntrada('');
         setDesconto(0);
         setValorTotalOverride(null);
         setHistorico([]);
@@ -2394,8 +2422,23 @@ export default function DealsPage() {
                                     <input type="date" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={vencimento} onChange={e => handleVencimentoChange(e.target.value)} />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Entrada — R$ (opcional)</label>
+                                    <input type="number" min="0" step="0.01" className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={valorEntrada} onChange={e => setValorEntrada(e.target.value)} placeholder="Ex: 90000" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Pagamento da entrada</label>
+                                    <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] cursor-pointer" value={formaPagamentoEntrada} onChange={e => setFormaPagamentoEntrada(e.target.value)}>
+                                        <option value="" className="bg-[#0B1120]">—</option>
+                                        {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => (
+                                            <option key={valor} value={valor} className="bg-[#0B1120]">{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                             <div>
-                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Forma de Pagamento</label>
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1"><Wallet size={10}/> Forma de Pagamento (saldo/parcelas)</label>
                                 <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] cursor-pointer" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
                                     <option value="" className="bg-[#0B1120]">Selecione</option>
                                     {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => (

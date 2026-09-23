@@ -28,7 +28,7 @@ const MOTIVOS_SAIDA: { value: string; label: string }[] = [
 ];
 
 export default function NotaFiscalModal({
-  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipo = 'entrada',
+  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipo = 'entrada', temCRM = false,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -37,6 +37,9 @@ export default function NotaFiscalModal({
   userId?: string;
   onConcluido: (resumo: { fornecedor: string; valorTotal: number; itens: number }) => void;
   tipo?: 'entrada' | 'saida';
+  // Empresa com CRM ativo: venda pode ter nascido no funil (tipo != 'Pulse') — busca de
+  // pedido pra saída não pode filtrar só por tipo='Pulse' nesse caso.
+  temCRM?: boolean;
 }) {
   const isSaida = tipo === 'saida';
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,14 +83,19 @@ export default function NotaFiscalModal({
       // digitar o prefixo "LD-" quebrava a detecção de número e virava busca por nome de
       // empresa (nunca encontrava nada, mesmo com o pedido existindo).
       const soDigitos = q.replace(/^ld[\s-]*/i, '').replace(/\D/g, '');
+      // Sem CRM, toda venda tem tipo 'Pulse' (Nova Venda) — filtra por isso pra nunca
+      // trazer lead de OUTRO módulo/produto. Com CRM ativo, a venda pode ter nascido no
+      // funil (tipo 'Direto' e outros) — sem essa distinção, o pedido de uma empresa
+      // CRM+Pulse nunca aparecia aqui (buscava só tipo='Pulse', que essas vendas não têm).
       let query = supabase.from('leads').select('id, empresa, valor_total')
-        .eq('empresa_id', empresaId).eq('tipo', 'Pulse').order('created_at', { ascending: false }).limit(10);
+        .eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10);
+      if (!temCRM) query = query.eq('tipo', 'Pulse');
       query = soDigitos && /^(ld[\s-]*)?\d+$/i.test(q) ? query.eq('id', Number(soDigitos)) : query.ilike('empresa', `%${q}%`);
       const { data } = await query;
       setPedidoResultados((data as PedidoOpcao[]) || []);
       setBuscandoPedido(false);
     }, 350);
-  }, [pedidoQuery, motivoSaida, isSaida, pedidoSelecionado, empresaId]);
+  }, [pedidoQuery, motivoSaida, isSaida, pedidoSelecionado, empresaId, temCRM]);
 
   const fechar = () => { if (!salvando) { reset(); onFechar(); } };
 

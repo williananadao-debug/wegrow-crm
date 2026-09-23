@@ -34,7 +34,7 @@ const METODOS: { id: Metodo; label: string; icone: typeof Camera; desc: string }
 // vindo de IA (foto/PDF) ou de leitura exata (XML), humano confere antes de mexer em
 // estoque — casamento automático de produto é só sugestão, nunca é definitivo sozinho.
 export default function LancarNotaFiscalModal({
-  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipoInicial = 'entrada',
+  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipoInicial = 'entrada', temCRM = false,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -45,6 +45,9 @@ export default function LancarNotaFiscalModal({
   // Pré-seleciona o toggle Entrada/Saída ao abrir (ex: botão dedicado "Dar saída por Nota
   // Fiscal" no Estoque) — a pessoa ainda pode trocar na tela, isso só poupa o clique.
   tipoInicial?: 'entrada' | 'saida';
+  // Empresa com CRM ativo: venda pode ter nascido no funil (tipo != 'Pulse') — busca de
+  // pedido pra saída não pode filtrar só por tipo='Pulse' nesse caso (ver useEffect abaixo).
+  temCRM?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [etapa, setEtapa] = useState<'escolha' | 'preparando' | 'lendo' | 'revisao'>('escolha');
@@ -92,14 +95,19 @@ export default function LancarNotaFiscalModal({
       // digitar o prefixo "LD-" quebrava a detecção de número e virava busca por nome de
       // empresa (nunca encontrava nada, mesmo com o pedido existindo).
       const soDigitos = q.replace(/^ld[\s-]*/i, '').replace(/\D/g, '');
+      // Sem CRM, toda venda tem tipo 'Pulse' (Nova Venda) — filtra por isso pra nunca
+      // trazer lead de OUTRO módulo/produto. Com CRM ativo, a venda pode ter nascido no
+      // funil (tipo 'Direto' e outros) — sem essa distinção, o pedido de uma empresa
+      // CRM+Pulse nunca aparecia aqui (buscava só tipo='Pulse', que essas vendas não têm).
       let query = supabase.from('leads').select('id, empresa, valor_total')
-        .eq('empresa_id', empresaId).eq('tipo', 'Pulse').order('created_at', { ascending: false }).limit(10);
+        .eq('empresa_id', empresaId).order('created_at', { ascending: false }).limit(10);
+      if (!temCRM) query = query.eq('tipo', 'Pulse');
       query = soDigitos && /^(ld[\s-]*)?\d+$/i.test(q) ? query.eq('id', Number(soDigitos)) : query.ilike('empresa', `%${q}%`);
       const { data } = await query;
       setPedidoResultados((data as PedidoOpcao[]) || []);
       setBuscandoPedido(false);
     }, 350);
-  }, [pedidoQuery, tipo, pedidoSelecionado, empresaId]);
+  }, [pedidoQuery, tipo, pedidoSelecionado, empresaId, temCRM]);
 
   // Histórico de descrições já digitadas — sugestão via <datalist> nativo enquanto
   // digita, pra não reinventar "Chapa de Aço 2mm" de um jeito diferente toda hora.

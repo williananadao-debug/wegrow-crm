@@ -37,7 +37,7 @@ const MOTIVOS_ENTRADA = ['compra', 'devolucao_cliente', 'transferencia', 'contag
 const MOTIVOS_SAIDA = ['venda', 'perda', 'devolucao_fornecedor', 'transferencia', 'uso_interno', 'contagem'] as const;
 
 export default function PulseEstoquePage() {
-  const { authLoading, temPulse, user, perfil, isLideranca } = usePulseAccess();
+  const { authLoading, temPulse, user, perfil, isLideranca, temCRM } = usePulseAccess();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
@@ -724,6 +724,7 @@ export default function PulseEstoquePage() {
         empresaId={perfil?.empresa_id}
         userId={user?.id}
         tipoInicial={notaTipo}
+        temCRM={temCRM}
         onConcluido={() => fetchServicos()}
       />
 

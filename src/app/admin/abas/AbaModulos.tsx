@@ -6,10 +6,12 @@ import { AbaProps, headersAuth } from './types';
 // "crm" é o macro-toggle: liga/desliga o produto inteiro de pipeline/vendas de uma vez.
 // Ausente no JSON (empresas criadas antes disso existir) conta como ligado — só desliga
 // se alguém marcar explicitamente crm:false, senão o deploy apagaria o menu de quem já usa.
-// "financeiro" saiu daqui: já é vendável sozinho (ex: cliente só quer controle de
-// contas a pagar/receber, sem funil de vendas) e ficava travado quando CRM estava
-// desligado — o bloco de submódulos vira opacity-40 + pointer-events-none junto com CRM.
-const CRM_SUBMODULOS = ['opec', 'ia', 'whatsapp', 'assinatura'];
+// "financeiro" e "assinatura" saíram daqui: os dois são vendáveis sozinhos (financeiro:
+// cliente só quer contas a pagar/receber, sem funil; assinatura: usada tanto pelo contrato
+// do CRM quanto pelo Nova Venda do Pulse — api/docuseal/pulse só depende de
+// modulos.assinatura, não de modulos.crm) e ficavam travados quando CRM estava desligado —
+// o bloco de submódulos vira opacity-40 + pointer-events-none junto com CRM.
+const CRM_SUBMODULOS = ['opec', 'ia', 'whatsapp'];
 
 export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
   const [modulos, setModulos] = useState<Record<string, any>>(empresa.modulos || {});
@@ -86,6 +88,7 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
       </div>
 
       <Toggle label="Financeiro" chave="financeiro" corAtivo="bg-emerald-500/10 border-emerald-500/40 text-emerald-400" />
+      <Toggle label="Assinatura eletrônica (Docuseal)" chave="assinatura" corAtivo="bg-sky-500/10 border-sky-500/40 text-sky-400" />
       <Toggle label="Redes Sociais" chave="redes_sociais" corAtivo="bg-fuchsia-500/10 border-fuchsia-500/40 text-fuchsia-400" />
       <Toggle label="Nexus" chave="nexus" corAtivo="bg-indigo-500/10 border-indigo-500/40 text-indigo-400" />
       <Toggle label="Pulse" chave="pulse" corAtivo="bg-amber-500/10 border-amber-500/40 text-amber-400" />

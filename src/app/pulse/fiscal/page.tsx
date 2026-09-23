@@ -63,7 +63,7 @@ function numeroSerieDaNota(n: { numero: string | null; serie: string | null; cha
 }
 
 export default function FiscalPage() {
-  const { authLoading, temPulse, perfil, isLideranca, user } = usePulseAccess();
+  const { authLoading, temPulse, perfil, isLideranca, user, temCRM } = usePulseAccess();
 
   // Excluir nota lançada errada — desfaz estoque/financeiro que ela gerou. Só diretor/gerente.
   const [excluirAlvo, setExcluirAlvo] = useState<NotaFiscal | null>(null);
@@ -481,6 +481,7 @@ export default function FiscalPage() {
         servicos={servicos}
         empresaId={perfil?.empresa_id}
         userId={user?.id}
+        temCRM={temCRM}
         onConcluido={carregar}
       />
 

@@ -359,9 +359,9 @@ export default function PulseEstoquePage() {
         </div>
 
         <div className="flex items-center justify-center gap-1.5">
-          {isLideranca && (
-            <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} title="Retirada manual — dar saída pelo leitor em /pulse/estoque/saida-rapida é o padrão" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Minus size={12} /></button>
-          )}
+          {/* Retirada rápida — mesmo nível do "+" ao lado, aberta pro Almoxarifado. Ajuste com
+          quantidade exata + motivo continua restrito (botão do lápis mais abaixo). */}
+          <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, -1); }} title="Retirada manual — dar saída pelo leitor em /pulse/estoque/saida-rapida é o padrão" className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Minus size={12} /></button>
           <span className={`text-sm font-black w-7 text-center flex-shrink-0 ${baixo ? 'text-red-400' : 'text-white'}`}>{s.estoque}</span>
           <button onClick={e => { e.stopPropagation(); ajustarEstoque(s, 1); }} className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 flex-shrink-0"><Plus size={12} /></button>
         </div>

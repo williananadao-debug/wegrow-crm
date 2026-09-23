@@ -10,6 +10,7 @@ import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
 import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
 import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
+import { calcularSugestoesCompra, MovimentoSaida } from '@/lib/estoqueGestao';
 
 type Movimentacao = {
   id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
@@ -94,6 +95,9 @@ export default function PulseEstoquePage() {
   // Consumo dos últimos 30 dias, só pra calcular o ritmo de reposição — não é o Kardex
   // completo (esse já tem tela própria em /pulse/estoque/movimentacoes).
   const [consumoRecente, setConsumoRecente] = useState<{ servico_id: number; quantidade: number; created_at: string }[]>([]);
+  // Janela maior (60 dias), separada da de cima (30 dias) — mesma janela que /pulse/estoque/compras
+  // usa em calcularSugestoesCompra, pro card "A comprar" bater com o que aparece lá.
+  const [consumo60d, setConsumo60d] = useState<MovimentoSaida[]>([]);
 
   // Última NF associada a cada produto — mesma resolução em 3 caminhos usada no modal de
   // detalhe (item→nota, nota→movimentação direto, ou chave de acesso), só que calculada
@@ -119,6 +123,9 @@ export default function PulseEstoquePage() {
     const desde = new Date(Date.now() - 30 * 86400000).toISOString();
     supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at').lt('quantidade', 0).gte('created_at', desde)
       .then(({ data }) => { if (data) setConsumoRecente(data); });
+    const desde60 = new Date(Date.now() - 60 * 86400000).toISOString();
+    supabase.from('estoque_movimentacoes').select('servico_id, quantidade, tipo, created_at').lt('quantidade', 0).gte('created_at', desde60)
+      .then(({ data }) => { if (data) setConsumo60d(data as MovimentoSaida[]); });
   }, []);
 
   useEffect(() => {
@@ -165,6 +172,8 @@ export default function PulseEstoquePage() {
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
   const alertasReposicao = calcularAlertasReposicao(servicos, consumoRecente);
+  const sugestoesCompra = calcularSugestoesCompra({ servicos: produtosComEstoque, movimentosSaida: consumo60d });
+  const precisamComprar = sugestoesCompra.filter(s => s.motivo !== 'ok').length;
 
   const combina = (s: ServicoConfig) => {
     if (soBaixo && (s.estoque as number) > (s.estoque_minimo ?? 5)) return false;
@@ -433,7 +442,7 @@ export default function PulseEstoquePage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Package size={10} /> Produtos</p>
           <p className="text-2xl font-black text-white mt-1">{produtosComEstoque.length}</p>
@@ -446,6 +455,10 @@ export default function PulseEstoquePage() {
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Estoque baixo {soBaixo && '· filtrando'}</p>
           <p className={`text-2xl font-black mt-1 ${produtosBaixo.length > 0 ? 'text-red-400' : 'text-white'}`}>{produtosBaixo.length}</p>
         </button>
+        <Link href="/pulse/estoque/compras" className={`block text-left bg-[#0F172A] border rounded-2xl p-4 transition-all hover:border-emerald-500/40 ${precisamComprar > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10'}`}>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><ShoppingCart size={10} /> A comprar</p>
+          <p className={`text-2xl font-black mt-1 ${precisamComprar > 0 ? 'text-emerald-400' : 'text-white'}`}>{precisamComprar}</p>
+        </Link>
       </div>
 
       {alertasReposicao.length > 0 && (

@@ -225,7 +225,14 @@ const LeadCard = React.memo(({
           </div>
 
           <div className="mb-1 flex items-center gap-2 flex-wrap">
-            <h4 className="font-black text-sm uppercase leading-tight transition-colors max-w-full text-white group-hover:text-slate-200 flex items-center gap-2">
+            {/* Nome é o alvo de clique principal do card — antes só o lapisinho de 10px lá em
+            cima abria a edição, então dava a impressão de "venda travada" (sem opção de
+            editar/ver cliente/contrato) fora do fluxo de arrastar entre colunas. */}
+            <h4
+              onClick={() => abrirModal(lead)}
+              title="Ver/editar venda"
+              className="font-black text-sm uppercase leading-tight transition-colors max-w-full text-white group-hover:text-slate-200 flex items-center gap-2 cursor-pointer hover:underline"
+            >
               {lead.client_id && (
                 <div title={`Análise de Risco: ${risco.toUpperCase()}`} className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${corRisco}`}></div>
               )}

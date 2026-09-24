@@ -25,6 +25,7 @@ type Despesa = {
   recorrente: boolean;
   nf_numero: string | null;
   nf_chave_acesso: string | null;
+  lead_id?: number | null;
 };
 
 const CATEGORIAS_DESPESA = ['Fornecedor', 'Aluguel', 'Salário', 'Imposto', 'Marketing', 'Software', 'Outro'];
@@ -186,7 +187,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setLoadingEntradas(true);
     const { data } = await supabase
       .from('lancamentos')
-      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente, nf_numero, nf_chave_acesso')
+      .select('id, titulo, valor, categoria, status, data_vencimento, data_pagamento, unidade, recorrente, nf_numero, nf_chave_acesso, lead_id')
       .eq('empresa_id', perfil?.empresa_id)
       .eq('tipo', 'entrada')
       .order('data_vencimento', { ascending: true });
@@ -216,6 +217,41 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     await supabase.from('lancamentos').update({ status: 'pendente', data_pagamento: null }).eq('id', id);
     setEntradas(prev => prev.map(d => d.id === id ? { ...d, status: 'pendente', data_pagamento: null } : d));
     setSalvando(null);
+  };
+
+  // Detalhe de pagamento da venda (clicar num lançamento de "Contas a Receber") — mostra,
+  // quando o lançamento tem uma venda ligada (lead_id, ou "LD-XXXX" no título pros
+  // lançamentos antigos sem essa coluna), as parcelas/boletos reais gerados via Pulse
+  // (leads.cobrancas_manuais) com o status de cada um: pago, atrasado ou no prazo — não só
+  // o status único e genérico do lançamento inteiro.
+  const [detalhePagamento, setDetalhePagamento] = useState<Despesa | null>(null);
+  const [detalheLeadPagamento, setDetalheLeadPagamento] = useState<any>(null);
+  const [carregandoDetalhePagamento, setCarregandoDetalhePagamento] = useState(false);
+
+  const abrirDetalhePagamento = async (d: Despesa) => {
+    setDetalhePagamento(d);
+    setDetalheLeadPagamento(null);
+    setCarregandoDetalhePagamento(true);
+    const leadId = d.lead_id || Number(d.titulo.match(/LD-(\d+)/)?.[1]) || null;
+    if (leadId) {
+      const { data } = await supabase.from('leads')
+        .select('id, empresa, telefone, cnpj, valor_total, cobrancas_manuais, parcelas_detalhe, valor_entrada, forma_pagamento_entrada, parcelas, vencimento, forma_pagamento')
+        .eq('id', leadId).single();
+      setDetalheLeadPagamento(data || null);
+    }
+    setCarregandoDetalhePagamento(false);
+  };
+
+  const statusCobrancaInfo = (c: any) => {
+    if (c.cancelada) return { label: 'Cancelada', cls: 'text-slate-500 bg-slate-500/10' };
+    if (c.pago) return { label: 'Pago', cls: 'text-emerald-400 bg-emerald-500/10' };
+    if (c.vencimento && c.vencimento < hoje) return { label: 'Atrasada', cls: 'text-red-400 bg-red-500/10' };
+    return { label: 'No prazo', cls: 'text-amber-400 bg-amber-500/10' };
+  };
+  const statusLancamentoInfo = (d: Despesa) => {
+    if (d.status === 'pago') return { label: 'Pago', cls: 'text-emerald-400 bg-emerald-500/10' };
+    if (d.data_vencimento < hoje) return { label: 'Atrasado', cls: 'text-red-400 bg-red-500/10' };
+    return { label: 'No prazo', cls: 'text-amber-400 bg-amber-500/10' };
   };
 
   const excluirDespesa = async (id: number) => {
@@ -990,7 +1026,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 {entradasDoMes.map(d => (
                   <div key={d.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
                     <div className="min-w-0">
-                      <p className="font-black text-white uppercase truncate">{d.titulo}</p>
+                      <p className="font-black text-white uppercase truncate hover:underline cursor-pointer inline-block max-w-full align-top" onClick={() => abrirDetalhePagamento(d)} title="Ver detalhe de pagamento">{d.titulo}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {d.unidade && <span className="text-[9px] text-slate-500">{d.unidade}</span>}
                         <span className="text-[9px] text-slate-600">Vence: {new Date(d.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
@@ -1337,6 +1373,83 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal de Detalhe de Pagamento — clicar num lançamento de Contas a Receber */}
+      {detalhePagamento && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetalhePagamento(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#0F172A] z-10">
+              <div className="min-w-0">
+                <h3 className="font-black text-white uppercase italic text-lg truncate">{detalhePagamento.titulo}</h3>
+                {detalheLeadPagamento?.telefone && <p className="text-slate-500 text-xs">{detalheLeadPagamento.telefone}</p>}
+              </div>
+              <button onClick={() => setDetalhePagamento(null)} className="text-slate-500 hover:text-white p-1 shrink-0"><X size={18}/></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {carregandoDetalhePagamento ? (
+                <div className="p-10 text-center"><Loader2 className="animate-spin text-slate-600 mx-auto" size={28}/></div>
+              ) : (
+                <>
+                  {(() => {
+                    const cobrancas = Array.isArray(detalheLeadPagamento?.cobrancas_manuais) ? detalheLeadPagamento.cobrancas_manuais : [];
+                    const carne = Array.isArray(detalheLeadPagamento?.parcelas_detalhe) ? detalheLeadPagamento.parcelas_detalhe : [];
+
+                    if (cobrancas.length > 0) {
+                      return (
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Parcelas / boletos gerados</p>
+                          <div className="space-y-1.5">
+                            {[...cobrancas].reverse().map((c: any, i: number) => {
+                              const st = statusCobrancaInfo(c);
+                              return (
+                                <div key={i} className="bg-black/30 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-white text-xs font-bold truncate">{c.tipo}{c.parcela ? ` · parcela ${c.parcela}` : ''} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-slate-500 text-[10px]">{c.pago ? `Pago em ${new Date(c.dataPagamento + 'T00:00:00').toLocaleDateString('pt-BR')}` : `Vence ${c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}`}</p>
+                                  </div>
+                                  <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full ${st.cls}`}>{st.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (carne.length > 0) {
+                      return (
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Carnê combinado (sem boleto gerado ainda)</p>
+                          <div className="space-y-1.5">
+                            {carne.map((p: any, i: number) => (
+                              <div key={i} className="bg-black/30 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-2">
+                                <p className="text-white text-xs">Parcela {i + 1}/{carne.length} — {p.data ? new Date(p.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}: <span className="font-bold">R$ {Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+                                <span className="shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full text-slate-500 bg-slate-500/10">Sem boleto</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-slate-600 text-[9px] mt-2">Essas datas são o combinado com o cliente — só viram "pago/atrasado" de verdade quando um boleto/Pix é gerado pra elas em Pulse.</p>
+                        </div>
+                      );
+                    }
+                    // Sem lead vinculado (lançamento antigo/manual) ou lead sem carnê/cobranças —
+                    // só o status único do lançamento em si.
+                    const st = statusLancamentoInfo(detalhePagamento);
+                    return (
+                      <div className="bg-black/30 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-white text-sm font-bold">R$ {detalhePagamento.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-slate-500 text-xs">Vencimento {new Date(detalhePagamento.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${st.cls}`}>{st.label}</span>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

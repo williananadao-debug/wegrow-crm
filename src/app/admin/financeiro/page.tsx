@@ -53,6 +53,9 @@ export default function FinanceiroPage() {
   useEffect(() => { try { const v = localStorage.getItem('wegrow_saldo_inicial'); if (v) setSaldoInicial(parseFloat(v) || 0); } catch {} }, []);
   const salvarSaldoInicial = (v: number) => { setSaldoInicial(v); try { localStorage.setItem('wegrow_saldo_inicial', String(v)); } catch {} };
 
+  // Quantos meses simular no caixa projetado — antes fixo em 6, agora escolhível.
+  const [mesesProjecao, setMesesProjecao] = useState(6);
+
   const [editando, setEditando] = useState<Partial<Lancamento> | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -129,7 +132,6 @@ export default function FinanceiroPage() {
 
   const {
     recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado,
-    receitaMesTotal, impostoMesReal, lucroLiquidoMes, parteCaixa, parteSocios, parteWillian, parteHeitor,
   } = useMemo(() => {
     const recorrentes = lancamentos.filter(l => l.recorrente);
     const avulsos = lancamentos.filter(l => !l.recorrente).sort((a, b) => b.data.localeCompare(a.data));
@@ -141,24 +143,12 @@ export default function FinanceiroPage() {
     const mesAtualEntradas = avulsos.filter(l => l.tipo === 'entrada' && l.data.startsWith(mesAtual)).reduce((s, l) => s + l.valor, 0);
     const mesAtualSaidas = avulsos.filter(l => l.tipo === 'saida' && l.data.startsWith(mesAtual)).reduce((s, l) => s + l.valor, 0);
 
-    const impostoEstimado = mrr * 0.06; // Anexo III, mesma estimativa usada no admin principal
+    // impostoEstimado aqui já cobre a RECEITA TODA do mês (MRR + fixos + avulsos), não só o
+    // MRR como antes — unificado assim porque agora é a mesma base usada pra distribuição de
+    // lucro na tabela de caixa projetado logo abaixo (não fazia sentido ter duas bases de
+    // imposto diferentes pro mesmo negócio).
+    const impostoEstimado = (mrr + entradaFixaMensal + mesAtualEntradas) * 0.06;
     const resultadoMes = mrr + entradaFixaMensal + mesAtualEntradas - despesaFixaMensal - mesAtualSaidas - impostoEstimado;
-
-    // Distribuição de lucro do mês — imposto aqui cobre a RECEITA TODA (MRR + fixos +
-    // avulsos), não só o MRR como o "impostoEstimado" acima (esse é usado no caixa projetado
-    // de 6 meses, que já simplifica pra um valor fixo por mês — não mexi nele pra não mudar
-    // uma projeção que já está no ar; esse cálculo aqui é só pro resultado real do mês).
-    // Regra: 2/3 do lucro líquido fica em caixa (reserva da empresa), 1/3 é distribuído entre
-    // os sócios, 60/40 (Willian/Heitor — ajusta os nomes se a proporção for entre outras pessoas).
-    const receitaMesTotal = mrr + entradaFixaMensal + mesAtualEntradas;
-    const impostoMesReal = receitaMesTotal * 0.06;
-    const despesasMesTotal = despesaFixaMensal + mesAtualSaidas;
-    const lucroLiquidoMes = receitaMesTotal - despesasMesTotal - impostoMesReal;
-    const lucroDistribuivel = Math.max(0, lucroLiquidoMes);
-    const parteCaixa = lucroDistribuivel * (2 / 3);
-    const parteSocios = lucroDistribuivel * (1 / 3);
-    const parteWillian = parteSocios * 0.6;
-    const parteHeitor = parteSocios * 0.4;
 
     const serie6meses = Array.from({ length: 6 }).map((_, i) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
@@ -168,24 +158,35 @@ export default function FinanceiroPage() {
       return { label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, entradas: entradasMes, saidas: saidasMes };
     });
 
-    // Caixa projetado — mês atual + 5 à frente: MRR dos clientes + entradas fixas + avulsos
-    // datados no mês, menos despesas fixas, avulsos e imposto estimado sobre o MRR.
+    // Caixa projetado + distribuição de lucro, mês a mês — quantidade de meses escolhida pelo
+    // usuário (mesesProjecao), não mais fixa em 6. Cada linha: MRR + fixos + avulsos datados
+    // naquele mês, menos despesas fixas/avulsas e imposto (6% sobre a receita do mês), e do
+    // lucro líquido resultante: 2/3 fica em caixa (reserva), 1/3 é dividido 60/40 entre os
+    // sócios (Willian/Heitor — ajusta se a proporção for entre outras pessoas). Mês com
+    // resultado negativo não distribui nada (fica tudo zerado nessas colunas).
     let acumulado = saldoInicial;
-    const caixaProjetado = Array.from({ length: 6 }).map((_, i) => {
+    const caixaProjetado = Array.from({ length: mesesProjecao }).map((_, i) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
       const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const entradas = mrr + entradaFixaMensal + avulsos.filter(l => l.tipo === 'entrada' && l.data.startsWith(chave)).reduce((s, l) => s + l.valor, 0);
-      const saidas = despesaFixaMensal + impostoEstimado + avulsos.filter(l => l.tipo === 'saida' && l.data.startsWith(chave)).reduce((s, l) => s + l.valor, 0);
+      const imposto = entradas * 0.06;
+      const despesasOperacionais = despesaFixaMensal + avulsos.filter(l => l.tipo === 'saida' && l.data.startsWith(chave)).reduce((s, l) => s + l.valor, 0);
+      const saidas = despesasOperacionais + imposto;
       const saldo = entradas - saidas;
       acumulado += saldo;
-      return { chave, label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, entradas, saidas, saldo, acumulado };
+      const lucroDistribuivel = Math.max(0, saldo);
+      const caixaSocios = lucroDistribuivel * (2 / 3);
+      const parteSocios = lucroDistribuivel * (1 / 3);
+      const parteWillian = parteSocios * 0.6;
+      const parteHeitor = parteSocios * 0.4;
+      return {
+        chave, label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`,
+        entradas, saidas, saldo, acumulado, imposto, lucroLiquido: saldo, caixaSocios, parteSocios, parteWillian, parteHeitor,
+      };
     });
 
-    return {
-      recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado,
-      receitaMesTotal, impostoMesReal, lucroLiquidoMes, parteCaixa, parteSocios, parteWillian, parteHeitor,
-    };
-  }, [lancamentos, mrr, saldoInicial]);
+    return { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado };
+  }, [lancamentos, mrr, saldoInicial, mesesProjecao]);
 
   if (authLoading) return null;
   if (!isAdmin) return (
@@ -256,18 +257,27 @@ export default function FinanceiroPage() {
               </div>
             </div>
 
-            {/* Caixa projetado */}
+            {/* Caixa projetado + distribuição de lucro */}
             <div className="bg-[#0F172A] border border-white/5 rounded-2xl overflow-hidden mb-6">
               <div className="p-5 border-b border-white/5 flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Caixa projetado — próximos 6 meses</p>
-                  <p className="text-[10px] text-slate-600 mt-1">MRR dos {empresasAtivas} clientes + fixos + avulsos datados − imposto estimado (6% do MRR)</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Caixa projetado & distribuição de lucro</p>
+                  <p className="text-[10px] text-slate-600 mt-1">MRR dos {empresasAtivas} clientes + fixos + avulsos datados − imposto (6% da receita) → lucro: 2/3 caixa, 1/3 dividido 60/40 entre os sócios</p>
                 </div>
-                <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Saldo em caixa hoje
-                  <input type="number" step="0.01" value={saldoInicial || ''} placeholder="0,00" onChange={e => salvarSaldoInicial(parseFloat(e.target.value) || 0)}
-                    className="w-32 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs font-bold outline-none focus:border-[#22C55E]/50 text-right"/>
-                </label>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-1">
+                    {[3, 6, 12, 24].map(n => (
+                      <button key={n} onClick={() => setMesesProjecao(n)} className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${mesesProjecao === n ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-500 hover:text-white'}`}>
+                        {n}m
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Saldo em caixa hoje
+                    <input type="number" step="0.01" value={saldoInicial || ''} placeholder="0,00" onChange={e => salvarSaldoInicial(parseFloat(e.target.value) || 0)}
+                      className="w-32 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs font-bold outline-none focus:border-[#22C55E]/50 text-right"/>
+                  </label>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -275,8 +285,12 @@ export default function FinanceiroPage() {
                     <tr className="border-b border-white/5">
                       <th className="text-left p-3 text-slate-500 font-black uppercase text-[9px]">Mês</th>
                       <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Entradas</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Imposto (6%)</th>
                       <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saídas</th>
-                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Saldo do mês</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Lucro líquido</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Caixa (2/3)</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Willian (60% · 1/3)</th>
+                      <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Heitor (40% · 1/3)</th>
                       <th className="text-right p-3 text-slate-500 font-black uppercase text-[9px]">Caixa acumulado</th>
                     </tr>
                   </thead>
@@ -285,8 +299,12 @@ export default function FinanceiroPage() {
                       <tr key={m.chave}>
                         <td className="p-3 font-black text-white uppercase">{m.label}</td>
                         <td className="p-3 text-right text-[#22C55E] font-bold">R$ {fmtBRL(m.entradas)}</td>
+                        <td className="p-3 text-right text-orange-400 font-bold">R$ {fmtBRL(m.imposto)}</td>
                         <td className="p-3 text-right text-red-400 font-bold">R$ {fmtBRL(m.saidas)}</td>
-                        <td className={`p-3 text-right font-black ${m.saldo >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {fmtBRL(m.saldo)}</td>
+                        <td className={`p-3 text-right font-black ${m.lucroLiquido >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {fmtBRL(m.lucroLiquido)}</td>
+                        <td className="p-3 text-right font-bold text-slate-300">R$ {fmtBRL(m.caixaSocios)}</td>
+                        <td className="p-3 text-right font-bold text-[#22C55E]">R$ {fmtBRL(m.parteWillian)}</td>
+                        <td className="p-3 text-right font-bold text-[#22C55E]">R$ {fmtBRL(m.parteHeitor)}</td>
                         <td className={`p-3 text-right font-black ${m.acumulado >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {fmtBRL(m.acumulado)}</td>
                       </tr>
                     ))}
@@ -297,48 +315,6 @@ export default function FinanceiroPage() {
                 <p className="px-5 py-3 text-[10px] text-slate-500 border-t border-white/5">
                   {empresasEmTeste} empresa(s) em teste não entram na projeção.{mrrEmTeste > 0 && <> Se todas converterem: <span className="text-yellow-400 font-black">+R$ {fmtBRL(mrrEmTeste)}/mês</span>.</>}
                 </p>
-              )}
-            </div>
-
-            {/* Distribuição de lucro do mês */}
-            <div className="bg-[#0F172A] border border-white/5 rounded-2xl overflow-hidden mb-6">
-              <div className="p-5 border-b border-white/5">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Distribuição de lucro — mês atual</p>
-                <p className="text-[10px] text-slate-600 mt-1">Receita (MRR + fixos + avulsos) − despesas − imposto (6%) = lucro líquido → 2/3 fica em caixa, 1/3 é dividido 60/40 entre os sócios</p>
-              </div>
-              <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Receita do mês</p>
-                  <p className="text-white font-black text-lg">R$ {fmtBRL(receitaMesTotal)}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Imposto (6%)</p>
-                  <p className="text-red-400 font-black text-lg">R$ {fmtBRL(impostoMesReal)}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Lucro líquido</p>
-                  <p className={`font-black text-lg ${lucroLiquidoMes >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {fmtBRL(lucroLiquidoMes)}</p>
-                </div>
-              </div>
-              {lucroLiquidoMes <= 0 ? (
-                <p className="px-5 pb-5 text-[10px] text-slate-500">Sem lucro pra distribuir esse mês (resultado zero ou negativo).</p>
-              ) : (
-                <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Caixa (2/3)</p>
-                    <p className="text-white font-black text-xl">R$ {fmtBRL(parteCaixa)}</p>
-                    <p className="text-[9px] text-slate-600 mt-1">Fica retido na empresa</p>
-                  </div>
-                  <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Willian — 60% de 1/3</p>
-                    <p className="text-[#22C55E] font-black text-xl">R$ {fmtBRL(parteWillian)}</p>
-                  </div>
-                  <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Heitor — 40% de 1/3</p>
-                    <p className="text-[#22C55E] font-black text-xl">R$ {fmtBRL(parteHeitor)}</p>
-                  </div>
-                  <p className="col-span-full text-[9px] text-slate-600">A distribuir entre os sócios (1/3 do lucro): R$ {fmtBRL(parteSocios)}</p>
-                </div>
               )}
             </div>
 

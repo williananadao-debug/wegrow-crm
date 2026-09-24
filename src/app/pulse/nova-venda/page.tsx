@@ -730,8 +730,10 @@ function PulseNovaVendaContent() {
     setHistorico(hs => hs.map(h => h.id === leadId ? { ...h, cobrancas_manuais: transformar(h.cobrancas_manuais || []) } : h));
   };
 
-  const cancelarCobranca = async (asaasPaymentId: string) => {
-    if (!vendaAlvo) return;
+  // venda é opcional (default vendaAlvo) pra funcionar também na tela de detalhes da venda,
+  // que não passa pelo modal de cobrança (onde vendaAlvo é sempre setado) antes de cancelar.
+  const cancelarCobranca = async (asaasPaymentId: string, venda: any = vendaAlvo) => {
+    if (!venda) return;
     if (!confirm('Cancelar esta cobrança? Essa ação não pode ser desfeita na Asaas.')) return;
     setCancelandoCobranca(asaasPaymentId);
     try {
@@ -740,11 +742,11 @@ function PulseNovaVendaContent() {
       const res = await fetch('/api/financeiro/cobranca', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: vendaAlvo.id, asaasPaymentId }),
+        body: JSON.stringify({ leadId: venda.id, asaasPaymentId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.erro || 'Erro ao cancelar cobrança.');
-      atualizarCobrancasLocal(vendaAlvo.id, lista => lista.map((c: any) =>
+      atualizarCobrancasLocal(venda.id, lista => lista.map((c: any) =>
         c.asaasPaymentId === asaasPaymentId ? { ...c, cancelada: true, canceladoEm: new Date().toISOString() } : c
       ));
     } catch (err: any) {
@@ -1111,8 +1113,19 @@ function PulseNovaVendaContent() {
                       </div>
                       {c.cancelada ? (
                         <span className="flex-shrink-0 text-slate-500 text-[10px] font-black uppercase">Cancelada</span>
-                      ) : (c.bankSlipUrl || c.invoiceUrl) && (
-                        <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
+                      ) : (
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          {(c.bankSlipUrl || c.invoiceUrl) && (
+                            <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
+                          )}
+                          <button
+                            onClick={() => cancelarCobranca(c.asaasPaymentId, v)}
+                            disabled={cancelandoCobranca === c.asaasPaymentId}
+                            className="text-red-400 hover:text-red-300 disabled:opacity-50 text-[10px] font-black uppercase"
+                          >
+                            {cancelandoCobranca === c.asaasPaymentId ? '...' : 'Cancelar'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}

@@ -76,6 +76,82 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     if (perfil?.empresa_id) carregarLeads();
   }, [perfil?.empresa_id]);
 
+  // Boletos/Pix vencidos (Pulse) — separado do "Inadimplência" baseado em contrato_fim
+  // (modelo de veiculação recorrente da rádio) porque é outro modelo de negócio: vendas
+  // avulsas com parcelas cobradas via Asaas (leads.cobrancas_manuais), sem contrato_fim
+  // nenhum. Sem isso, uma empresa Pulse nunca tinha nenhum boleto vencido aparecendo aqui,
+  // mesmo com cobrança de verdade vencida e não paga — a aba simplesmente não olhava pra
+  // esse dado. Consulta própria (não mistura com "leads" acima) pra não mudar a conta de
+  // taxaInadimplencia/totalContratos, que hoje é só sobre contrato de rádio.
+  const [leadsComCobranca, setLeadsComCobranca] = useState<any[]>([]);
+  const [loadingBoletosVencidos, setLoadingBoletosVencidos] = useState(true);
+  const [verificandoBoleto, setVerificandoBoleto] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (perfil?.empresa_id) carregarLeadsComCobranca();
+  }, [perfil?.empresa_id]);
+
+  const carregarLeadsComCobranca = async () => {
+    setLoadingBoletosVencidos(true);
+    const { data } = await supabase
+      .from('leads')
+      .select('id, empresa, telefone, unidade, cobrancas_manuais')
+      .eq('empresa_id', perfil?.empresa_id)
+      .eq('status', 'ganho')
+      .not('cobrancas_manuais', 'is', null)
+      .limit(500);
+    setLeadsComCobranca(data || []);
+    setLoadingBoletosVencidos(false);
+  };
+
+  const boletosVencidos = useMemo(() => {
+    const linhas: any[] = [];
+    for (const lead of leadsComCobranca) {
+      const cobrancas = Array.isArray(lead.cobrancas_manuais) ? lead.cobrancas_manuais : [];
+      for (const c of cobrancas) {
+        if (c.cancelada || c.pago || !c.vencimento || c.vencimento >= hoje) continue;
+        linhas.push({
+          ...c,
+          leadId: lead.id, empresa: lead.empresa, telefone: lead.telefone, unidade: lead.unidade,
+          diasVencido: Math.floor((Date.now() - new Date(c.vencimento + 'T00:00:00').getTime()) / 86400000),
+        });
+      }
+    }
+    return linhas
+      .filter(l => !filtroUnidade || l.unidade === filtroUnidade)
+      .sort((a, b) => b.diasVencido - a.diasVencido);
+  }, [leadsComCobranca, hoje, filtroUnidade]);
+  const totalBoletosVencidos = boletosVencidos.reduce((s, l) => s + (Number(l.valor) || 0), 0);
+
+  const verificarStatusBoleto = async (leadId: number, asaasPaymentId: string) => {
+    setVerificandoBoleto(asaasPaymentId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/cobranca', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId, asaasPaymentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao verificar status.');
+      if (json.pago) {
+        setLeadsComCobranca(prev => prev.map(l => l.id !== leadId ? l : {
+          ...l,
+          cobrancas_manuais: (l.cobrancas_manuais || []).map((c: any) =>
+            c.asaasPaymentId === asaasPaymentId ? { ...c, pago: true, dataPagamento: json.dataPagamento } : c
+          ),
+        }));
+      } else {
+        alert(`Status na Asaas: ${json.status}. Ainda não está pago.`);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao verificar status.');
+    } finally {
+      setVerificandoBoleto(null);
+    }
+  };
+
   // --- Contas a Pagar ---
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [loadingDespesas, setLoadingDespesas] = useState(true);
@@ -195,11 +271,13 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setLoadingEntradas(false);
   };
 
+  const [buscaEntrada, setBuscaEntrada] = useState('');
   const entradasDoMes = useMemo(
     () => entradas
       .filter(d => d.data_vencimento?.substring(0, 7) === mesEntradas)
-      .filter(d => !filtroUnidade || d.unidade === filtroUnidade),
-    [entradas, mesEntradas, filtroUnidade]
+      .filter(d => !filtroUnidade || d.unidade === filtroUnidade)
+      .filter(d => !buscaEntrada.trim() || d.titulo.toLowerCase().includes(buscaEntrada.trim().toLowerCase())),
+    [entradas, mesEntradas, filtroUnidade, buscaEntrada]
   );
   const totalEntradasMes = entradasDoMes.reduce((s, d) => s + (Number(d.valor) || 0), 0);
   const totalEntradasRecebidas = entradasDoMes.filter(d => d.status === 'pago').reduce((s, d) => s + (Number(d.valor) || 0), 0);
@@ -567,7 +645,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
       <div className="flex gap-2 mb-6 border-b border-white/5 pb-4 flex-wrap">
         {([
           ['alertas', isCDL ? `Vencendo em Breve (${vencendoBreve.length})` : 'Vencendo em Breve', Bell],
-          ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : 'Inadimplência', AlertTriangle],
+          ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : `Inadimplência (${inadimplentes.length + boletosVencidos.length})`, AlertTriangle],
           ['conciliacao', 'Conciliação', CheckCircle2],
           ['contas_pagar', 'Contas a Pagar', Wallet],
           ['contas_receber', 'Contas a Receber', DollarSign],
@@ -749,6 +827,54 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                         </div>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Boletos/Pix vencidos (Pulse) — vendas avulsas cobradas via Asaas, sem
+          contrato_fim, então nunca apareciam no bloco de contratos vencidos acima. */}
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mt-6">
+            <div className="p-5 border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="font-black uppercase text-sm text-slate-300">Boletos/Pix Vencidos ({boletosVencidos.length})</h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Cobranças geradas em vendas (Pulse) vencidas e ainda não pagas</p>
+              </div>
+              {totalBoletosVencidos > 0 && <span className="font-black text-red-400 text-lg">R$ {totalBoletosVencidos.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>}
+            </div>
+            {loadingBoletosVencidos ? (
+              <div className="p-10 text-center"><Loader2 className="animate-spin text-slate-600 mx-auto" size={28}/></div>
+            ) : boletosVencidos.length === 0 ? (
+              <div className="p-10 text-center">
+                <CheckCircle2 size={32} className="text-[var(--cor-primaria)] mx-auto mb-2"/>
+                <p className="text-slate-500 text-sm font-bold">Nenhum boleto/Pix vencido no momento.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {boletosVencidos.map((l, i) => (
+                  <div key={i} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-black text-white uppercase truncate">{l.empresa}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {l.unidade && <span className="text-[9px] text-slate-500">{l.unidade}</span>}
+                        <span className="text-[9px] text-slate-600">{l.tipo}{l.parcela ? ` · parcela ${l.parcela}` : ''} · Venceu {new Date(l.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-500/20 text-red-400">{l.diasVencido}d atraso</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <span className="font-black text-white">R$ {(l.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                      <a href={`/pulse/nova-venda?editarOrcamento=${l.leadId}`} target="_blank" rel="noopener noreferrer" className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
+                        <ExternalLink size={10}/> Ver venda
+                      </a>
+                      <button
+                        onClick={() => verificarStatusBoleto(l.leadId, l.asaasPaymentId)}
+                        disabled={verificandoBoleto === l.asaasPaymentId}
+                        className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1"
+                      >
+                        {verificandoBoleto === l.asaasPaymentId ? <Loader2 size={10} className="animate-spin"/> : <RefreshCw size={10}/>} Verificar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -993,6 +1119,16 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                 className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none"
               />
             </div>
+            <div className="flex items-center gap-2 bg-[#0F172A] border border-white/10 rounded-2xl px-4 py-3.5 flex-1 min-w-[200px] max-w-sm">
+              <Filter size={14} className="text-slate-500 shrink-0"/>
+              <input
+                type="text"
+                value={buscaEntrada}
+                onChange={e => setBuscaEntrada(e.target.value)}
+                placeholder="Buscar por cliente..."
+                className="bg-transparent text-white text-xs font-bold outline-none w-full placeholder:text-slate-600"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1047,6 +1183,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
+                      {(() => { const st = statusLancamentoInfo(d); return <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${st.cls}`}>{st.label}</span>; })()}
                       <span className="font-black text-white">R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                       {d.status === 'pago' ? (
                         <button onClick={() => estornarEntradaPaga(d.id)} disabled={salvando === String(d.id)} className="bg-white/5 hover:bg-white/10 text-slate-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">

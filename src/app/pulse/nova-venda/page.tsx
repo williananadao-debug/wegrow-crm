@@ -548,8 +548,6 @@ function PulseNovaVendaContent() {
   // a telinha de sucesso desaparece assim que sai dela.
   const abrirContrato = async (venda: any = vendaConcluida) => {
     setVendaAlvo(venda);
-    setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
-    setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
     // Sincroniza o pagamento com o que está salvo NESSA venda — importante quando "Gerar
     // contrato" é aberto direto pelo ícone do histórico (sem passar por "Editar" antes),
     // pra não mostrar entrada/parcelas/carnê deixados na tela por outra venda editada antes.
@@ -558,14 +556,19 @@ function PulseNovaVendaContent() {
     setParcelasSaldo(venda?.parcelas || '1');
     setVencimentoSaldo(venda?.vencimento || '');
     setParcelasDetalhe(Array.isArray(venda?.parcelas_detalhe) ? venda.parcelas_detalhe : []);
-    // Endereço completo (rua/número/bairro/CEP/cidade) só existe no cadastro do cliente, não
-    // na venda — se "Gerar contrato" é aberto direto pelo histórico (sem passar por "Editar"
-    // antes), clienteSelecionado podia estar vazio ou ser de outra venda, e o contrato saía
-    // com endereço incompleto/errado. Busca de novo sempre que não bater com o client_id desta venda.
+    // Cliente completo (email/telefone/endereço) só existe no cadastro, não na venda — se
+    // "Gerar contrato" é aberto direto pelo histórico (sem passar por "Editar" antes),
+    // clienteSelecionado podia estar vazio ou ser de outra venda, e o e-mail/telefone/endereço
+    // saíam em branco mesmo o cliente já estando cadastrado. Busca de novo sempre que não
+    // bater com o client_id desta venda, e usa o resultado direto (não o state, que só
+    // atualiza no próximo render) pra preencher e-mail/telefone já nesta mesma chamada.
+    let cliente = clienteSelecionado;
     if (venda?.client_id && clienteSelecionado?.id !== venda.client_id) {
-      const { data: cliente } = await supabase.from('clientes').select('*').eq('id', venda.client_id).single();
-      if (cliente) setClienteSelecionado(cliente as ClienteOpcao);
+      const { data } = await supabase.from('clientes').select('*').eq('id', venda.client_id).single();
+      if (data) { cliente = data as ClienteOpcao; setClienteSelecionado(cliente); }
     }
+    setContratoEmail(cliente?.email || '');
+    setContratoTelefone(cliente?.telefone || venda?.telefone || '');
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);

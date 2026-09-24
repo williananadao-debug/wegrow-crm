@@ -4,6 +4,7 @@ import { Loader2, Camera, FileUp, FileCode2, PenLine, X, CheckCircle2, Trash2, A
 import { supabase } from '@/lib/supabase';
 import { ServicoConfig, formatId } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
+import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
 import { extrairCabecalhoXmlNfe, extrairItensXmlNfe } from '@/lib/nfeXmlParser';
 import { uploadArquivoNotaFiscal } from '@/lib/notaFiscalArquivo';
 
@@ -276,13 +277,14 @@ export default function LancarNotaFiscalModal({
         let servicoId: number;
         let ehSobEncomenda = false;
         if (item.servicoId === 'novo') {
+          const nomeUpper = item.descricao.toLocaleUpperCase('pt-BR');
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
             // unidade aqui é FILIAL/unidade de negócio (ver Configurações → Produtos), não
             // unidade de medida — '' = "Geral", visível pra empresa inteira. 'un' quebrava
             // o produto: ficava invisível em Nova Venda pra quem não tivesse uma filial
             // chamada literalmente "un".
-            nome: item.descricao, preco: item.valorUnitario, tipo: 'Nota Fiscal', unidade: '',
-            estoque: item.quantidade, empresa_id: empresaId,
+            nome: nomeUpper, preco: item.valorUnitario, tipo: 'Nota Fiscal', unidade: '',
+            estoque: item.quantidade, empresa_id: empresaId, sku: gerarSkuAutomatico(nomeUpper),
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
           servicoId = criado.id;

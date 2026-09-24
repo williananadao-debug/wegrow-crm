@@ -4,6 +4,7 @@ import { Loader2, Camera, ScanLine, X, CheckCircle2, Trash2, Search } from 'luci
 import { supabase } from '@/lib/supabase';
 import { ServicoConfig, formatId } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
+import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
 import { uploadArquivoNotaFiscal, base64ParaBlob } from '@/lib/notaFiscalArquivo';
 
 type ItemNota = {
@@ -167,12 +168,13 @@ export default function NotaFiscalModal({
         let servicoId: number;
         let ehSobEncomenda = false;
         if (item.servicoId === 'novo') {
+          const nomeUpper = item.descricao.toLocaleUpperCase('pt-BR');
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
             // unidade aqui é FILIAL/unidade de negócio, não unidade de medida — '' =
             // "Geral", visível pra empresa inteira (evita produto invisível em Nova
             // Venda pra quem não tem filial chamada literalmente "un").
-            nome: item.descricao, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: '',
-            estoque: item.quantidade, empresa_id: empresaId,
+            nome: nomeUpper, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: '',
+            estoque: item.quantidade, empresa_id: empresaId, sku: gerarSkuAutomatico(nomeUpper),
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || 'Erro ao criar produto novo.');
           servicoId = criado.id;

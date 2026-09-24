@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
 import { ETAPAS_FABRICACAO_PADRAO, ehMateriaPrima } from '../pulse/shared';
+import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
 
 type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
 
@@ -155,17 +156,6 @@ export default function SettingsPage() {
     setLoading(false);
   };
 
-  // Gera um código curto e único o bastante sem precisar consultar o banco antes (o save
-  // é em lote — checar "próximo número livre" um por um criaria corrida entre itens do
-  // mesmo lote). Prefixo pelas 3 primeiras letras do nome (ou "PRD" sem nome ainda) +
-  // sufixo aleatório en base36 — legível o bastante pra reconhecer de relance, único o
-  // bastante pra nunca colidir num catálogo de centenas de itens.
-  const gerarSkuAutomatico = (nome: string) => {
-    const prefixo = (nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'PRD';
-    const sufixo = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `${prefixo}-${sufixo}`;
-  };
 
   const salvarConfiguracoes = async () => {
     // Sem empresa_id carregado, o insert cai fora da policy de RLS (empresa_id teria que
@@ -182,8 +172,16 @@ export default function SettingsPage() {
     // em vez de travar o salvamento pedindo pra digitar um por um, gera sozinho pra quem
     // deixou vazio. Quem quiser o próprio código (ex: já tem SKU/EAN do fornecedor) edita
     // o campo normalmente antes de salvar.
-    const servicosComSku = servicos.map(s => s.sku?.trim() ? s : { ...s, sku: gerarSkuAutomatico(s.nome) });
-    if (servicosComSku.some((s, i) => s.sku !== servicos[i].sku)) setServicos(servicosComSku);
+    // Nome sempre maiúsculo — mesmo padrão já aplicado em clientes/leads (nome de
+    // empresa/cliente), pra não depender de quem digitou lembrar de segurar Caps Lock nem de
+    // CSS (text-transform só muda a exibição, o dado salvo continuava como foi digitado).
+    const servicosComSku = servicos.map(s => {
+        const nomeUpper = s.nome.toLocaleUpperCase('pt-BR');
+        const varianteUpper = s.variante_nome?.trim() ? s.variante_nome.toLocaleUpperCase('pt-BR') : s.variante_nome;
+        const skuOk = s.sku?.trim() ? s.sku : gerarSkuAutomatico(nomeUpper);
+        return { ...s, nome: nomeUpper, variante_nome: varianteUpper, sku: skuOk };
+    });
+    if (servicosComSku.some((s, i) => s.sku !== servicos[i].sku || s.nome !== servicos[i].nome || s.variante_nome !== servicos[i].variante_nome)) setServicos(servicosComSku);
 
     setSaving(true);
     setFeedback(null);

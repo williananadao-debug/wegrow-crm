@@ -11,6 +11,7 @@ import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
 import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 import { calcularSugestoesCompra, MovimentoSaida } from '@/lib/estoqueGestao';
+import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
 
 type Movimentacao = {
   id: number; quantidade: number; valor_unitario: number | null; fornecedor: string | null;
@@ -211,16 +212,6 @@ export default function PulseEstoquePage() {
   const atualizarMinimo = async (s: ServicoConfig, valor: number) => {
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque_minimo: valor } : x));
     await supabase.from('servicos').update({ estoque_minimo: valor }).eq('id', s.id);
-  };
-
-  // Mesma lógica de Configurações → Produtos (settings/page.tsx) — SKU editável e
-  // gerável direto por aqui também, porque é no Estoque que o time realmente mexe no
-  // catálogo no dia a dia, não em Configurações.
-  const gerarSkuAutomatico = (nome: string) => {
-    const prefixo = (nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'PRD';
-    const sufixo = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `${prefixo}-${sufixo}`;
   };
 
   const atualizarSku = async (s: ServicoConfig, valor: string) => {

@@ -43,6 +43,9 @@ function PulseNovaVendaContent() {
   const [formaPagamentoEntrada, setFormaPagamentoEntrada] = useState('');
   const [parcelasSaldo, setParcelasSaldo] = useState('1');
   const [vencimentoSaldo, setVencimentoSaldo] = useState('');
+  // Carnê — cada parcela com data/valor próprios (ex: entrada + 5 iguais + 1 final maior).
+  // Editado aqui, na tela principal, junto com o resto do pagamento — "Gerar contrato" só lê.
+  const [parcelasDetalhe, setParcelasDetalhe] = useState<{ data: string; valor: number }[]>([]);
   // Não-nulo = reabriu um orçamento salvo pra editar; "salvar" vira update dessa linha em
   // vez de criar venda nova (ver finalizarVenda).
   const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<number | null>(null);
@@ -82,13 +85,9 @@ function PulseNovaVendaContent() {
   const [contratoAberto, setContratoAberto] = useState(false);
   const [contratoEmail, setContratoEmail] = useState('');
   const [contratoTelefone, setContratoTelefone] = useState('');
-  // Entrada opcional (ex: 30% via boleto no fechamento, saldo parcelado no forma_pagamento
-  // da venda) — só pro texto do contrato, não mexe em financeiro/estoque da venda em si.
-  // Carnê — cada parcela com valor e data próprios (entrada + parcelas desiguais + parcela
-  // final maior, ex: Trailer Travel). Vazio = mantém o comportamento antigo (parcelas iguais
-  // calculadas a partir de entrada/parcelas/vencimento, que agora só existem na tela
-  // principal da venda — este modal só lê de vendaAlvo, não edita mais esses 5 campos.
-  const [contratoParcelasDetalhe, setContratoParcelasDetalhe] = useState<{ data: string; valor: number }[]>([]);
+  // Entrada/forma de pagamento/parcelas/carnê são todos editados na tela principal da venda
+  // (valorEntrada, formaPagamentoEntrada, parcelasSaldo, vencimentoSaldo, parcelasDetalhe,
+  // lá em cima) — este modal só lê de vendaAlvo, não edita nenhum desses campos.
   const [enviandoContrato, setEnviandoContrato] = useState(false);
   const [contratoErro, setContratoErro] = useState<string | null>(null);
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
@@ -327,7 +326,7 @@ function PulseNovaVendaContent() {
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
     setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
-    setValorEntrada(''); setFormaPagamentoEntrada(''); setParcelasSaldo('1'); setVencimentoSaldo('');
+    setValorEntrada(''); setFormaPagamentoEntrada(''); setParcelasSaldo('1'); setVencimentoSaldo(''); setParcelasDetalhe([]);
     setProducoesIniciadas([]); setOrcamentoEditandoId(null);
   };
 
@@ -359,6 +358,7 @@ function PulseNovaVendaContent() {
     setFormaPagamentoEntrada(h.forma_pagamento_entrada || '');
     setParcelasSaldo(h.parcelas || '1');
     setVencimentoSaldo(h.vencimento || '');
+    setParcelasDetalhe(Array.isArray(h.parcelas_detalhe) ? h.parcelas_detalhe : []);
     if (h.client_id) {
       const { data: cliente } = await supabase.from('clientes').select('*').eq('id', h.client_id).single();
       if (cliente) setClienteSelecionado(cliente as ClienteOpcao);
@@ -427,6 +427,7 @@ function PulseNovaVendaContent() {
           parcelas: parcelasSaldo || '1', vencimento: vencimentoSaldo || null,
           valor_entrada: valorEntrada ? Number(valorEntrada) : null,
           forma_pagamento_entrada: formaPagamentoEntrada || null,
+          parcelas_detalhe: parcelasDetalhe.length > 0 ? parcelasDetalhe : null,
         }).eq('id', orcamentoEditandoId).select().single();
         if (erroUpdate) throw erroUpdate;
         setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload });
@@ -452,6 +453,7 @@ function PulseNovaVendaContent() {
         vencimento: vencimentoSaldo || null,
         valor_entrada: valorEntrada ? Number(valorEntrada) : null,
         forma_pagamento_entrada: formaPagamentoEntrada || null,
+        parcelas_detalhe: parcelasDetalhe.length > 0 ? parcelasDetalhe : null,
         client_id: clientId,
         empresa_id: perfil?.empresa_id,
         user_id: vendedorId || user?.id,
@@ -548,7 +550,14 @@ function PulseNovaVendaContent() {
     setVendaAlvo(venda);
     setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
     setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
-    setContratoParcelasDetalhe(Array.isArray(venda?.parcelas_detalhe) ? venda.parcelas_detalhe : []);
+    // Sincroniza o pagamento com o que está salvo NESSA venda — importante quando "Gerar
+    // contrato" é aberto direto pelo ícone do histórico (sem passar por "Editar" antes),
+    // pra não mostrar entrada/parcelas/carnê deixados na tela por outra venda editada antes.
+    setValorEntrada(venda?.valor_entrada ? String(venda.valor_entrada) : '');
+    setFormaPagamentoEntrada(venda?.forma_pagamento_entrada || '');
+    setParcelasSaldo(venda?.parcelas || '1');
+    setVencimentoSaldo(venda?.vencimento || '');
+    setParcelasDetalhe(Array.isArray(venda?.parcelas_detalhe) ? venda.parcelas_detalhe : []);
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);
@@ -559,12 +568,6 @@ function PulseNovaVendaContent() {
     if (!vendaAlvo) return;
     setEnviandoContrato(true); setContratoErro(null);
     try {
-      // Forma de pagamento/parcelas/entrada já são editadas e salvas na tela principal da
-      // venda — aqui só persiste o carnê, que é exclusivo deste modal. Coluna separada, com
-      // sua própria migration — falha aqui não pode derrubar o resto do pagamento.
-      await supabase.from('leads').update({
-        parcelas_detalhe: contratoParcelasDetalhe.length > 0 ? contratoParcelasDetalhe : null,
-      }).eq('id', vendaAlvo.id).then(({ error }) => { if (error) console.error('[parcelas_detalhe]', error.message); });
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/docuseal/pulse', {
@@ -581,7 +584,7 @@ function PulseNovaVendaContent() {
             forma_pagamento: vendaAlvo.forma_pagamento || undefined,
             valor_entrada: Number(vendaAlvo.valor_entrada) > 0 ? Number(vendaAlvo.valor_entrada) : undefined,
             forma_pagamento_entrada: vendaAlvo.forma_pagamento_entrada || undefined,
-            parcelas_detalhe: contratoParcelasDetalhe.length > 0 ? contratoParcelasDetalhe : undefined,
+            parcelas_detalhe: Array.isArray(vendaAlvo.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 ? vendaAlvo.parcelas_detalhe : undefined,
             prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaAlvo.unidade || unidadeSel,
           },
           signers: [{ name: vendaAlvo.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
@@ -766,20 +769,21 @@ function PulseNovaVendaContent() {
   // tanto na telinha de sucesso quanto na tela principal (acionados pelo histórico).
   // Preenche o carnê com N parcelas de valor igual (mesma matemática de arredondamento do
   // gerador de boleto/Pix — última parcela absorve os centavos) a partir do saldo (total −
-  // entrada). Ponto de partida editável: dá pra ajustar valor/data de cada linha depois
-  // (ex: deixar a última maior, tipo balão).
-  const gerarParcelasIguaisContrato = () => {
-    const totalVenda = Number(vendaAlvo?.valor_total) || 0;
-    const saldo = Math.max(0, totalVenda - (Number(vendaAlvo?.valor_entrada) || 0));
-    const qtd = Math.max(1, parseInt(vendaAlvo?.parcelas || '1', 10) || 1);
-    if (!vendaAlvo?.vencimento) { setContratoErro('Informe o 1º vencimento na tela da venda antes de gerar as parcelas.'); return; }
-    const geradas = calcularParcelas(saldo, qtd, vendaAlvo.vencimento);
-    setContratoParcelasDetalhe(geradas.map(p => ({ data: p.vencimento, valor: p.valor })));
+  // entrada) e das parcelas/vencimento já preenchidos ali em cima. Ponto de partida editável:
+  // dá pra ajustar valor/data de cada linha depois (ex: deixar a última maior, tipo balão).
+  const [erroParcelasDetalhe, setErroParcelasDetalhe] = useState<string | null>(null);
+  const gerarParcelasIguais = () => {
+    setErroParcelasDetalhe(null);
+    const saldo = Math.max(0, total - (Number(valorEntrada) || 0));
+    const qtd = Math.max(1, parseInt(parcelasSaldo || '1', 10) || 1);
+    if (!vencimentoSaldo) { setErroParcelasDetalhe('Informe o 1º vencimento antes de gerar as parcelas.'); return; }
+    const geradas = calcularParcelas(saldo, qtd, vencimentoSaldo);
+    setParcelasDetalhe(geradas.map(p => ({ data: p.vencimento, valor: p.valor })));
   };
   const atualizarParcelaDetalhe = (idx: number, patch: Partial<{ data: string; valor: number }>) =>
-    setContratoParcelasDetalhe(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p));
-  const removerParcelaDetalhe = (idx: number) => setContratoParcelasDetalhe(prev => prev.filter((_, i) => i !== idx));
-  const adicionarParcelaDetalhe = () => setContratoParcelasDetalhe(prev => [...prev, { data: '', valor: 0 }]);
+    setParcelasDetalhe(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p));
+  const removerParcelaDetalhe = (idx: number) => setParcelasDetalhe(prev => prev.filter((_, i) => i !== idx));
+  const adicionarParcelaDetalhe = () => setParcelasDetalhe(prev => [...prev, { data: '', valor: 0 }]);
 
   const renderModalContrato = () => contratoAberto && (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !enviandoContrato && setContratoAberto(false)}>
@@ -809,34 +813,17 @@ function PulseNovaVendaContent() {
               <input value={contratoTelefone} onChange={e => setContratoTelefone(e.target.value)} placeholder="(00) 00000-0000" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
             </div>
             <div className="border-t border-white/5 pt-3">
-              <p className="text-[10px] text-slate-500 mb-2">Entrada, forma de pagamento e parcelas já ficam na tela da venda — se algo estiver diferente do combinado, feche este contrato e ajuste lá antes de gerar.</p>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Carnê — cada parcela com seu valor (opcional)</label>
-                  <button type="button" onClick={gerarParcelasIguaisContrato} className="text-[9px] font-black uppercase text-purple-300 hover:text-purple-200">Gerar {vendaAlvo?.parcelas || 1}x iguais</button>
-                </div>
-                {contratoParcelasDetalhe.length === 0 ? (
-                  <p className="text-slate-600 text-[10px] text-center py-2">Sem carnê — o contrato usa "Parcelas (saldo)" acima, todas do mesmo valor. Clique em "Gerar Nx iguais" pra começar a personalizar.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {contratoParcelasDetalhe.map((p, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <span className="text-[9px] text-slate-500 font-bold w-5 shrink-0">{i + 1}ª</span>
-                        <input type="date" value={p.data} onChange={e => atualizarParcelaDetalhe(i, { data: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
-                        <input type="number" min="0" step="0.01" value={p.valor || ''} onChange={e => atualizarParcelaDetalhe(i, { valor: Number(e.target.value) || 0 })} placeholder="R$" className="w-28 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
-                        <button type="button" onClick={() => removerParcelaDetalhe(i)} className="text-slate-500 hover:text-red-400 p-1 shrink-0"><X size={13} /></button>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between pt-1">
-                      <button type="button" onClick={adicionarParcelaDetalhe} className="text-[9px] font-black uppercase text-slate-400 hover:text-white">+ Adicionar parcela avulsa</button>
-                      <p className="text-[10px] text-slate-500 font-bold">Soma: R$ {contratoParcelasDetalhe.reduce((s, p) => s + (Number(p.valor) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <button type="button" onClick={() => setContratoParcelasDetalhe([])} className="text-[9px] font-black uppercase text-slate-600 hover:text-red-400">Limpar carnê (volta pra parcelas iguais)</button>
-                  </div>
-                )}
-              </div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Pagamento (editado na tela da venda)</p>
+              {Number(vendaAlvo?.valor_entrada) > 0 && (
+                <p className="text-slate-400 text-xs">Entrada: <span className="text-white font-bold">R$ {Number(vendaAlvo.valor_entrada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>{vendaAlvo?.forma_pagamento_entrada ? ` — ${vendaAlvo.forma_pagamento_entrada}` : ''}</p>
+              )}
+              {Array.isArray(vendaAlvo?.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 ? (
+                <p className="text-slate-400 text-xs">Carnê: <span className="text-white font-bold">{vendaAlvo.parcelas_detalhe.length} parcelas</span>, soma R$ {vendaAlvo.parcelas_detalhe.reduce((s: number, p: any) => s + (Number(p.valor) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              ) : (
+                <p className="text-slate-400 text-xs">{vendaAlvo?.parcelas || 1}x{vendaAlvo?.vencimento ? `, a partir de ${new Date(vendaAlvo.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''} — {vendaAlvo?.forma_pagamento || 'forma de pagamento não definida'}</p>
+              )}
+              <p className="text-slate-600 text-[9px] mt-1.5">Diferente do combinado? Feche este contrato, ajuste na tela da venda (Editar) e abra de novo.</p>
             </div>
-            <p className="text-slate-600 text-[9px] -mt-1">Esses campos são salvos na venda ao gerar o contrato — não é só pro texto, muda o cadastro dela também.</p>
             {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
             <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">
               {enviandoContrato ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
@@ -1503,7 +1490,28 @@ function PulseNovaVendaContent() {
                   <input type="date" value={vencimentoSaldo} onChange={e => setVencimentoSaldo(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
                 </div>
               </div>
-              <p className="text-slate-600 text-[9px] mt-1.5">Salvo junto com a venda. Pra parcelas com valores diferentes entre si (carnê), use "Gerar contrato".</p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-slate-600 text-[9px]">Clique pra abrir uma linha editável por parcela (carnê) — dá pra deixar valores diferentes entre si.</p>
+                <button type="button" onClick={gerarParcelasIguais} className="text-[9px] font-black uppercase text-[var(--cor-primaria)] hover:brightness-110 shrink-0 ml-2">Gerar {parcelasSaldo || 1}x iguais</button>
+              </div>
+              {erroParcelasDetalhe && <p className="text-red-400 text-[10px] font-bold mt-1">{erroParcelasDetalhe}</p>}
+              {parcelasDetalhe.length > 0 && (
+                <div className="space-y-1.5 mt-2 border-t border-white/5 pt-2">
+                  {parcelasDetalhe.map((p, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-slate-500 font-bold w-5 shrink-0">{i + 1}ª</span>
+                      <input type="date" value={p.data} onChange={e => atualizarParcelaDetalhe(i, { data: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
+                      <input type="number" min="0" step="0.01" value={p.valor || ''} onChange={e => atualizarParcelaDetalhe(i, { valor: Number(e.target.value) || 0 })} placeholder="R$" className="w-28 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
+                      <button type="button" onClick={() => removerParcelaDetalhe(i)} className="text-slate-500 hover:text-red-400 p-1 shrink-0"><X size={13} /></button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-1">
+                    <button type="button" onClick={adicionarParcelaDetalhe} className="text-[9px] font-black uppercase text-slate-400 hover:text-white">+ Adicionar parcela avulsa</button>
+                    <p className="text-[10px] text-slate-500 font-bold">Soma: R$ {parcelasDetalhe.reduce((s, p) => s + (Number(p.valor) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <button type="button" onClick={() => setParcelasDetalhe([])} className="text-[9px] font-black uppercase text-slate-600 hover:text-red-400">Limpar carnê (volta pra parcelas iguais)</button>
+                </div>
+              )}
             </div>
           </div>
 

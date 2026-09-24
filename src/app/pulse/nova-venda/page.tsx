@@ -36,6 +36,13 @@ function PulseNovaVendaContent() {
   const [desconto, setDesconto] = useState(0);
   const [acrescimo, setAcrescimo] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState('pix');
+  // Entrada + parcelas do saldo — editáveis já na tela principal (não só dentro de "Gerar
+  // contrato"), pra dar pra ajustar o esquema de pagamento inteiro sem precisar abrir outra
+  // tela. "Gerar contrato" continua existindo e usa/edita os mesmos campos da venda.
+  const [valorEntrada, setValorEntrada] = useState('');
+  const [formaPagamentoEntrada, setFormaPagamentoEntrada] = useState('');
+  const [parcelasSaldo, setParcelasSaldo] = useState('1');
+  const [vencimentoSaldo, setVencimentoSaldo] = useState('');
   // Não-nulo = reabriu um orçamento salvo pra editar; "salvar" vira update dessa linha em
   // vez de criar venda nova (ver finalizarVenda).
   const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<number | null>(null);
@@ -121,7 +128,7 @@ function PulseNovaVendaContent() {
     if (!perfil?.empresa_id) return;
     setCarregandoHistorico(true);
     const { data } = await supabase.from('leads')
-      .select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto, cobrancas_manuais')
+      .select('*') // '*' de propósito (não lista de colunas) — evita quebrar essa tela toda vez que um campo novo (ex: valor_entrada) é adicionado no leads antes da migration rodar em produção
       .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
       .order('created_at', { ascending: false }).limit(30);
     setHistorico(data || []);
@@ -323,6 +330,7 @@ function PulseNovaVendaContent() {
   const resetar = () => {
     setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
     setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
+    setValorEntrada(''); setFormaPagamentoEntrada(''); setParcelasSaldo('1'); setVencimentoSaldo('');
     setProducoesIniciadas([]); setOrcamentoEditandoId(null);
   };
 
@@ -350,6 +358,10 @@ function PulseNovaVendaContent() {
     const subtotalReconstruido = itens.reduce((s: number, it: any) => s + (Number(it.precoUnitario) || 0) * (Number(it.quantidade) || 1), 0);
     setAcrescimo(Math.max(0, (Number(h.valor_total) || 0) - subtotalReconstruido + descontoOriginal));
     if (h.forma_pagamento) setFormaPagamento(h.forma_pagamento);
+    setValorEntrada(h.valor_entrada ? String(h.valor_entrada) : '');
+    setFormaPagamentoEntrada(h.forma_pagamento_entrada || '');
+    setParcelasSaldo(h.parcelas || '1');
+    setVencimentoSaldo(h.vencimento || '');
     if (h.client_id) {
       const { data: cliente } = await supabase.from('clientes').select('*').eq('id', h.client_id).single();
       if (cliente) setClienteSelecionado(cliente as ClienteOpcao);
@@ -373,7 +385,7 @@ function PulseNovaVendaContent() {
   const editarOrcamentoParam = searchParams.get('editarOrcamento');
   useEffect(() => {
     if (!editarOrcamentoParam || !perfil?.empresa_id) return;
-    supabase.from('leads').select('id, empresa, valor_total, status, itens, created_at, forma_pagamento, cnpj, client_id, desconto')
+    supabase.from('leads').select('*')
       .eq('id', Number(editarOrcamentoParam)).single()
       .then(({ data }) => { if (data) editarOrcamento(data); });
     window.history.replaceState({}, '', '/pulse/nova-venda');
@@ -415,6 +427,9 @@ function PulseNovaVendaContent() {
           empresa: nomeCliente, telefone: clienteSelecionado.telefone || null, cnpj: clienteSelecionado.cnpj || null,
           valor_total: total, desconto, itens: itensPayload,
           unidade: unidadeSel || null, forma_pagamento: formaPagamento, client_id: clientId,
+          parcelas: parcelasSaldo || '1', vencimento: vencimentoSaldo || null,
+          valor_entrada: valorEntrada ? Number(valorEntrada) : null,
+          forma_pagamento_entrada: formaPagamentoEntrada || null,
         }).eq('id', orcamentoEditandoId).select().single();
         if (erroUpdate) throw erroUpdate;
         setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload });
@@ -436,7 +451,10 @@ function PulseNovaVendaContent() {
         tipo: 'Pulse',
         unidade: unidadeSel || null,
         forma_pagamento: formaPagamento,
-        parcelas: '1',
+        parcelas: parcelasSaldo || '1',
+        vencimento: vencimentoSaldo || null,
+        valor_entrada: valorEntrada ? Number(valorEntrada) : null,
+        forma_pagamento_entrada: formaPagamentoEntrada || null,
         client_id: clientId,
         empresa_id: perfil?.empresa_id,
         user_id: vendedorId || user?.id,
@@ -1337,12 +1355,42 @@ function PulseNovaVendaContent() {
               </div>
             )}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Pagamento</label>
+              <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Pagamento{Number(valorEntrada) > 0 ? ' (saldo)' : ''}</label>
               <div className="grid grid-cols-3 gap-1.5">
-                {Object.entries(FORMAS_PAGAMENTO).map(([valor, label]) => (
-                  <button key={valor} onClick={() => setFormaPagamento(valor)} className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${formaPagamento === valor ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{label}</button>
+                {Object.entries(FORMAS_PAGAMENTO).map(([valorPg, labelPg]) => (
+                  <button key={valorPg} onClick={() => setFormaPagamento(valorPg)} className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all ${formaPagamento === valorPg ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>{labelPg}</button>
                 ))}
               </div>
+            </div>
+
+            {/* Entrada + parcelas do saldo — mesmos campos que "Gerar contrato" edita depois;
+            ajustáveis já aqui, na criação ou na edição da venda, sem precisar abrir outra tela. */}
+            <div className="border-t border-white/5 pt-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Entrada e parcelas (opcional)</p>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Entrada — R$</label>
+                  <input type="number" min="0" step="0.01" value={valorEntrada} onChange={e => setValorEntrada(e.target.value)} placeholder="Ex: 56970" className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Pagamento da entrada</label>
+                  <select value={formaPagamentoEntrada} onChange={e => setFormaPagamentoEntrada(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]">
+                    <option value="" className="bg-[#0B1120]">—</option>
+                    {Object.entries(FORMAS_PAGAMENTO).map(([valorPg, labelPg]) => <option key={valorPg} value={valorPg} className="bg-[#0B1120]">{labelPg}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Parcelas (saldo)</label>
+                  <input type="number" min="1" value={parcelasSaldo} onChange={e => setParcelasSaldo(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">1º vencimento</label>
+                  <input type="date" value={vencimentoSaldo} onChange={e => setVencimentoSaldo(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                </div>
+              </div>
+              <p className="text-slate-600 text-[9px] mt-1.5">Salvo junto com a venda. Pra parcelas com valores diferentes entre si (carnê), use "Gerar contrato".</p>
             </div>
           </div>
 

@@ -1,0 +1,8 @@
+# Sem isso, o Git no Windows (core.autocrlf=true) converte LF -> CRLF ao fazer checkout de
+# QUALQUER arquivo de texto — inclusive dentro de blocos de texto multi-linha (ex: $$...$$
+# do Postgres) em arquivos .sql. Isso já causou um bug real: uma migration com uma descrição
+# de produto de várias linhas foi convertida pra CRLF, o "\r" foi parar dentro do texto
+# gravado no banco, e apareceu como caractere quebrado ("Ð") no PDF do contrato gerado a
+# partir desse texto (ver contract-trailer-pdf.ts, normalizarTexto). Migrations SQL sempre
+# em LF, não importa a configuração local de quem clona o repo.
+*.sql text eol=lf

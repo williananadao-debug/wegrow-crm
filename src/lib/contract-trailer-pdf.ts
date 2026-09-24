@@ -56,6 +56,16 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
   financiamento: 'Financiamento bancário', consorcio: 'Consórcio', cheque: 'Cheque', permuta: 'Permuta/Troca',
 };
 
+// Texto vindo do banco (descrição de produto, observação) pode ter "\r\n" em vez de só "\n"
+// — aconteceu de verdade numa migration desta empresa: o Git no Windows (core.autocrlf=true)
+// converteu as quebras de linha do arquivo .sql pra CRLF, e o "\r" foi parar dentro do texto
+// gravado no banco. O pdfkit não tem glyph pra "\r" nas fontes padrão (Helvetica/WinAnsi) e
+// renderiza um caractere de substituição (aparecia como "Ð" no PDF) em vez de simplesmente
+// pular a linha. Normaliza antes de imprimir qualquer texto livre, não só o que veio dessa
+// migration específica — protege contra qualquer fonte futura do mesmo problema.
+function normalizarTexto(t: string) {
+  return t.replace(/\r\n?/g, '\n');
+}
 function fmt(v: number) {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
@@ -196,7 +206,7 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.moveDown(0.3);
       for (const item of data.itens) {
         if (item.descricao) {
-          doc.font('Helvetica').fontSize(7.5).fillColor('#333').text(item.descricao, { align: 'left' });
+          doc.font('Helvetica').fontSize(7.5).fillColor('#333').text(normalizarTexto(item.descricao), { align: 'left' });
           doc.fillColor('#000').fontSize(8);
           doc.moveDown(0.3);
         }
@@ -265,7 +275,7 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
 
       if (data.observacao) {
         clausula('6ª', 'OBSERVAÇÕES');
-        doc.font('Helvetica').fontSize(8).fillColor('#000').text(data.observacao, { align: 'justify' });
+        doc.font('Helvetica').fontSize(8).fillColor('#000').text(normalizarTexto(data.observacao), { align: 'justify' });
         doc.moveDown(0.6);
       }
       const nClausula = (base: number) => data.observacao ? base + 1 : base;

@@ -29,6 +29,17 @@ async function asaas(apiKey: string, ambiente: string, method: string, path: str
     return data;
 }
 
+// https://docs.asaas.com/reference/payment-status-list — só os que fazem sentido aparecer
+// pra quem usa o CRM (não é uma tradução técnica completa, é o texto que ajuda a decidir).
+const STATUS_ASAAS_PT: Record<string, string> = {
+    PENDING: 'Pendente', OVERDUE: 'Vencida', RECEIVED: 'Recebida', CONFIRMED: 'Confirmada',
+    RECEIVED_IN_CASH: 'Recebida em dinheiro', REFUNDED: 'Estornada', REFUND_REQUESTED: 'Estorno solicitado',
+    CHARGEBACK_REQUESTED: 'Chargeback solicitado', CHARGEBACK_DISPUTE: 'Em disputa de chargeback',
+    AWAITING_CHARGEBACK_REVERSAL: 'Aguardando reversão de chargeback',
+    DUNNING_REQUESTED: 'Em cobrança extrajudicial', DUNNING_RECEIVED: 'Recuperada via cobrança extrajudicial',
+    AWAITING_RISK_ANALYSIS: 'Em análise de risco',
+};
+
 export async function POST(request: Request) {
     const accessToken = request.headers.get('authorization')?.replace('Bearer ', '');
     if (!accessToken) return NextResponse.json({ erro: 'Não autenticado.' }, { status: 401 });
@@ -217,7 +228,24 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ erro: 'Venda não encontrada.' }, { status: 404 });
         }
 
-        await asaas(integracao.asaas_api_key, integracao.ambiente, 'DELETE', `/payments/${asaasPaymentId}`);
+        try {
+            await asaas(integracao.asaas_api_key, integracao.ambiente, 'DELETE', `/payments/${asaasPaymentId}`);
+        } catch (erroDelete: any) {
+            // A Asaas só deixa REMOVER (DELETE de verdade) cobrança PENDING/OVERDUE — pra
+            // qualquer outro status ela recusa com uma mensagem genérica ("só é possível
+            // remover pendentes ou vencidas") sem dizer qual é o status real. Busca o status
+            // de verdade pra dar um erro que realmente ajuda a decidir o que fazer, em vez de
+            // só repassar a mensagem genérica da Asaas.
+            let statusReal = '';
+            try {
+                const pagamento = await asaas(integracao.asaas_api_key, integracao.ambiente, 'GET', `/payments/${asaasPaymentId}`);
+                statusReal = STATUS_ASAAS_PT[pagamento.status] || pagamento.status;
+            } catch { /* se nem o GET funcionar, segue só com a mensagem original */ }
+            const msg = statusReal
+                ? `Essa cobrança está com status "${statusReal}" na Asaas — só é possível remover cobranças pendentes ou vencidas. ${statusReal.toLowerCase().includes('receb') || statusReal.toLowerCase().includes('confirmad') ? 'Se foi paga por engano, cancelar aqui não desfaz o pagamento — isso precisa de estorno, que não é feito por essa tela.' : ''}`.trim()
+                : erroDelete.message;
+            throw new Error(msg);
+        }
 
         const cobrancasAtuais = Array.isArray(lead.cobrancas_manuais) ? lead.cobrancas_manuais : [];
         const cobrancasAtualizadas = cobrancasAtuais.map((c: any) =>

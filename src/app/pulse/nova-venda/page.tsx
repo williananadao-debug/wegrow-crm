@@ -607,6 +607,34 @@ function PulseNovaVendaContent() {
     else console.error('[abrirArquivoAssinado]', error);
   };
 
+  const [cancelandoContrato, setCancelandoContrato] = useState(false);
+  // Cancela o contrato ativo (arquiva a submissão no Docuseal e limpa os campos docuseal_*
+  // da venda) sem precisar gerar um novo em seguida — útil pra tirar do ar um link de
+  // assinatura de um contrato que saiu com dado errado.
+  const cancelarContrato = async (venda: any) => {
+    if (!venda?.id) return;
+    if (!confirm('Cancelar este contrato? O link de assinatura atual para de funcionar. Isso não apaga um contrato já assinado, só invalida a submissão ativa.')) return;
+    setCancelandoContrato(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/docuseal/cancelar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ lead_id: venda.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao cancelar contrato.');
+      const limpo = { docuseal_submission_id: null, docuseal_sign_url: null, docuseal_consultor_sign_url: null, docuseal_consultor_assinado: false, docuseal_assinado: false };
+      setHistorico(hs => hs.map(h => h.id === venda.id ? { ...h, ...limpo } : h));
+      setDetalheVenda((v: any) => v && v.id === venda.id ? { ...v, ...limpo } : v);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao cancelar contrato.');
+    } finally {
+      setCancelandoContrato(false);
+    }
+  };
+
   const emitirNf1 = async (venda: any = vendaConcluida) => {
     if (!venda) return;
     setEmitindoNf(true); setNfErro(null); setNfEmitida(false);
@@ -1003,16 +1031,18 @@ function PulseNovaVendaContent() {
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
                   <p className="text-emerald-400 text-xs font-black uppercase mb-1.5 flex items-center gap-1.5"><CheckCircle2 size={13} /> Assinado</p>
                   {arquivos.length > 0 ? (
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-3 mb-2">
                       {arquivos.map((a: any, i: number) => (
                         <button key={i} onClick={() => abrirArquivoAssinado(a.path)} className="text-emerald-400 hover:text-emerald-300 text-xs font-bold underline">{a.nome}</button>
                       ))}
                     </div>
-                  ) : <p className="text-slate-500 text-[10px]">Assinado, mas o arquivo ainda não foi arquivado.</p>}
+                  ) : <p className="text-slate-500 text-[10px] mb-2">Assinado, mas o arquivo ainda não foi arquivado.</p>}
+                  <button onClick={() => cancelarContrato(v)} disabled={cancelandoContrato} className="text-red-400 hover:text-red-300 disabled:opacity-50 text-[10px] font-black uppercase">Cancelar contrato</button>
                 </div>
               ) : v.docuseal_submission_id ? (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-2">
                   <p className="text-amber-400 text-xs font-black uppercase">Aguardando assinatura</p>
+                  <button onClick={() => cancelarContrato(v)} disabled={cancelandoContrato} className="text-red-400 hover:text-red-300 disabled:opacity-50 text-[10px] font-black uppercase">Cancelar contrato</button>
                 </div>
               ) : (
                 <p className="text-slate-500 text-xs">Nenhum contrato gerado ainda.</p>

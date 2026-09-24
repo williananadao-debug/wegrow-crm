@@ -756,6 +756,39 @@ function PulseNovaVendaContent() {
     }
   };
 
+  // Consulta o status de verdade na Asaas e sincroniza — pro caso do webhook de confirmação
+  // nunca ter chegado (empresa configurou a URL do webhook na Asaas depois de já ter gerado
+  // cobrança, falha de rede pontual, etc.). Também é como se descobre que uma cobrança que a
+  // Asaas recusou cancelar (por já estar paga) foi de fato paga, sem precisar abrir o painel
+  // da Asaas por fora.
+  const [verificandoCobranca, setVerificandoCobranca] = useState<string | null>(null);
+  const verificarStatusCobranca = async (asaasPaymentId: string, venda: any = vendaAlvo) => {
+    if (!venda) return;
+    setVerificandoCobranca(asaasPaymentId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/financeiro/cobranca', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId: venda.id, asaasPaymentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.erro || 'Erro ao verificar status.');
+      if (json.pago) {
+        atualizarCobrancasLocal(venda.id, lista => lista.map((c: any) =>
+          c.asaasPaymentId === asaasPaymentId ? { ...c, pago: true, dataPagamento: json.dataPagamento } : c
+        ));
+      } else {
+        alert(`Status na Asaas: ${json.status}. Ainda não está pago.`);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao verificar status.');
+    } finally {
+      setVerificandoCobranca(null);
+    }
+  };
+
   // Divide o valor total em N parcelas mensais iguais (a última absorve a
   // diferença de centavos do arredondamento) a partir do 1º vencimento informado.
   const calcularParcelas = (valorTotal: number, qtd: number, primeiroVencimento: string) => {
@@ -911,6 +944,14 @@ function PulseNovaVendaContent() {
                     {(c.bankSlipUrl || c.invoiceUrl) && (
                       <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
                     )}
+                    <button
+                      onClick={() => verificarStatusCobranca(c.asaasPaymentId)}
+                      disabled={verificandoCobranca === c.asaasPaymentId}
+                      title="Consultar status direto na Asaas"
+                      className="text-slate-400 hover:text-white disabled:opacity-50 text-[10px] font-black uppercase"
+                    >
+                      {verificandoCobranca === c.asaasPaymentId ? '...' : 'Verificar'}
+                    </button>
                     <button
                       onClick={() => cancelarCobranca(c.asaasPaymentId)}
                       disabled={cancelandoCobranca === c.asaasPaymentId}
@@ -1122,6 +1163,14 @@ function PulseNovaVendaContent() {
                           {(c.bankSlipUrl || c.invoiceUrl) && (
                             <a href={c.bankSlipUrl || c.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase">Abrir ↗</a>
                           )}
+                          <button
+                            onClick={() => verificarStatusCobranca(c.asaasPaymentId, v)}
+                            disabled={verificandoCobranca === c.asaasPaymentId}
+                            title="Consultar status direto na Asaas"
+                            className="text-slate-400 hover:text-white disabled:opacity-50 text-[10px] font-black uppercase"
+                          >
+                            {verificandoCobranca === c.asaasPaymentId ? '...' : 'Verificar'}
+                          </button>
                           <button
                             onClick={() => cancelarCobranca(c.asaasPaymentId, v)}
                             disabled={cancelandoCobranca === c.asaasPaymentId}

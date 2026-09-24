@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { confirmarPagamentoCobranca } from '@/lib/financeiro-pagamento';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,5 +258,63 @@ export async function DELETE(request: Request) {
     } catch (error: any) {
         console.error('[financeiro/cobranca DELETE]', error.message);
         return NextResponse.json({ erro: error.message || 'Erro ao cancelar cobrança.' }, { status: 500 });
+    }
+}
+
+// Verifica o status de uma cobrança DIRETO na Asaas e sincroniza — pro caso do webhook nunca
+// ter chegado (empresa configurou a URL do webhook na Asaas depois de gerar a cobrança,
+// falha de rede pontual, etc.). Mesmo botão "Verificar status" que aparece do lado de uma
+// cobrança pendente/vencida na tela da venda; usa a MESMA lógica de "marcar como pago" do
+// webhook (confirmarPagamentoCobranca), pra não ter dois caminhos que podem divergir.
+export async function PATCH(request: Request) {
+    const accessToken = request.headers.get('authorization')?.replace('Bearer ', '');
+    if (!accessToken) return NextResponse.json({ erro: 'Não autenticado.' }, { status: 401 });
+
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false } }
+    );
+
+    const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
+    if (!user) return NextResponse.json({ erro: 'Token inválido.' }, { status: 401 });
+
+    const { data: perfil } = await supabaseAdmin.from('profiles').select('empresa_id').eq('id', user.id).single();
+    if (!perfil?.empresa_id) return NextResponse.json({ erro: 'Empresa não identificada.' }, { status: 400 });
+
+    const { data: integracao } = await supabaseAdmin.from('financeiro_integracoes')
+        .select('asaas_api_key, ambiente').eq('empresa_id', perfil.empresa_id).maybeSingle();
+    if (!integracao?.asaas_api_key) {
+        return NextResponse.json({ erro: 'Sua empresa ainda não conectou uma conta Asaas própria.' }, { status: 400 });
+    }
+
+    let body: any;
+    try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
+    const { leadId, asaasPaymentId } = body;
+    if (!leadId || !asaasPaymentId) {
+        return NextResponse.json({ erro: 'Campo(s) obrigatório(s) faltando: leadId, asaasPaymentId.' }, { status: 422 });
+    }
+
+    try {
+        const { data: lead } = await supabaseAdmin.from('leads').select('empresa_id').eq('id', leadId).single();
+        if (!lead || lead.empresa_id !== perfil.empresa_id) {
+            return NextResponse.json({ erro: 'Venda não encontrada.' }, { status: 404 });
+        }
+
+        const pagamento = await asaas(integracao.asaas_api_key, integracao.ambiente, 'GET', `/payments/${asaasPaymentId}`);
+        const statusReal = STATUS_ASAAS_PT[pagamento.status] || pagamento.status;
+        const pago = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(pagamento.status);
+
+        if (pago) {
+            const dataPagamento = pagamento.paymentDate || pagamento.confirmedDate || new Date().toISOString().substring(0, 10);
+            const resultado = await confirmarPagamentoCobranca(supabaseAdmin, leadId, asaasPaymentId, dataPagamento);
+            if (!resultado.ok) return NextResponse.json({ erro: resultado.erro }, { status: 404 });
+            return NextResponse.json({ ok: true, pago: true, status: statusReal, dataPagamento });
+        }
+
+        return NextResponse.json({ ok: true, pago: false, status: statusReal });
+    } catch (error: any) {
+        console.error('[financeiro/cobranca PATCH]', error.message);
+        return NextResponse.json({ erro: error.message || 'Erro ao verificar status.' }, { status: 500 });
     }
 }

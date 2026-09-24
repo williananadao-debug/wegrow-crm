@@ -46,8 +46,17 @@ export default function RelatorioEstoquePage() {
   const dentroDoPeriodo = useMemo(() => {
     const dias = PERIODOS.find(p => p.id === periodo)!.dias;
     const corte = agora - dias * 86400000;
-    return movimentos.filter(m => new Date(m.created_at).getTime() >= corte);
-  }, [movimentos, periodo, agora]);
+    return movimentos
+      .filter(m => new Date(m.created_at).getTime() >= corte)
+      // Esse relatório é só sobre estoque físico de verdade (matéria-prima/produto com
+      // controle de quantidade) — "servicos" acima já vem filtrado por .not('estoque', 'is',
+      // null). Sem esse mesmo filtro aqui, uma movimentação antiga de produto SOB ENCOMENDA
+      // (ex: venda de trailer que teve NF vinculada por engano — bug corrigido em 7a842f2)
+      // continuava contando como "vendido/consumido" nesse relatório pra sempre, mesmo depois
+      // do produto voltar a ser sob encomenda (estoque=null) — inflava "Vendido" com valor de
+      // venda avulsa (ex: R$ 229.900 de um trailer) que não é giro de estoque nenhum.
+      .filter(m => servicoPorId.has(m.servico_id));
+  }, [movimentos, periodo, agora, servicoPorId]);
 
   // custo médio das entradas quando existe; senão o custo cadastrado; senão o preço
   const custoDe = (s: ServicoConfig) => custosMedios[s.id] ?? s.preco_custo ?? s.preco ?? 0;

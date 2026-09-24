@@ -546,7 +546,7 @@ function PulseNovaVendaContent() {
   // venda-alvo das 3 ações (contrato/NF/cobrança) — normalmente a que acabou de fechar
   // (vendaConcluida), mas também pode ser uma linha antiga clicada no histórico, já que
   // a telinha de sucesso desaparece assim que sai dela.
-  const abrirContrato = (venda: any = vendaConcluida) => {
+  const abrirContrato = async (venda: any = vendaConcluida) => {
     setVendaAlvo(venda);
     setContratoEmail(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.email || '') : '');
     setContratoTelefone(venda?.id === vendaConcluida?.id ? (clienteSelecionado?.telefone || '') : '');
@@ -558,6 +558,14 @@ function PulseNovaVendaContent() {
     setParcelasSaldo(venda?.parcelas || '1');
     setVencimentoSaldo(venda?.vencimento || '');
     setParcelasDetalhe(Array.isArray(venda?.parcelas_detalhe) ? venda.parcelas_detalhe : []);
+    // Endereço completo (rua/número/bairro/CEP/cidade) só existe no cadastro do cliente, não
+    // na venda — se "Gerar contrato" é aberto direto pelo histórico (sem passar por "Editar"
+    // antes), clienteSelecionado podia estar vazio ou ser de outra venda, e o contrato saía
+    // com endereço incompleto/errado. Busca de novo sempre que não bater com o client_id desta venda.
+    if (venda?.client_id && clienteSelecionado?.id !== venda.client_id) {
+      const { data: cliente } = await supabase.from('clientes').select('*').eq('id', venda.client_id).single();
+      if (cliente) setClienteSelecionado(cliente as ClienteOpcao);
+    }
     setContratoErro(null);
     setContratoLinks(null);
     setContratoAberto(true);
@@ -568,6 +576,16 @@ function PulseNovaVendaContent() {
     if (!vendaAlvo) return;
     setEnviandoContrato(true); setContratoErro(null);
     try {
+      // Endereço completo do cliente (rua + número + bairro + CEP + cidade/UF) — só existe
+      // no cadastro (clienteSelecionado), a venda em si nunca guardou isso. Sem número/bairro/
+      // CEP o contrato saía só com o nome da rua, incompleto mesmo com o cadastro certo.
+      const enderecoCompleto = [
+        clienteSelecionado?.endereco,
+        clienteSelecionado?.numero ? `nº ${clienteSelecionado.numero}` : null,
+        clienteSelecionado?.bairro ? `Bairro ${clienteSelecionado.bairro}` : null,
+        clienteSelecionado?.cep ? `CEP ${clienteSelecionado.cep}` : null,
+        clienteSelecionado?.cidade ? `${clienteSelecionado.cidade}${clienteSelecionado?.estado ? '/' + clienteSelecionado.estado : ''}` : null,
+      ].filter(Boolean).join(', ');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/docuseal/pulse', {
@@ -578,7 +596,7 @@ function PulseNovaVendaContent() {
           venda: {
             id: vendaAlvo.id, empresa: vendaAlvo.empresa, cnpj: vendaAlvo.cnpj,
             telefone: contratoTelefone || vendaAlvo.telefone,
-            endereco: clienteSelecionado?.endereco, cidade: clienteSelecionado?.cidade,
+            endereco: enderecoCompleto || undefined, cidade: clienteSelecionado?.cidade,
             itens: vendaAlvo.itens, desconto: vendaAlvo.desconto || 0, valor_total: vendaAlvo.valor_total,
             parcelas: vendaAlvo.parcelas || '1', vencimento: vendaAlvo.vencimento || undefined,
             forma_pagamento: vendaAlvo.forma_pagamento || undefined,

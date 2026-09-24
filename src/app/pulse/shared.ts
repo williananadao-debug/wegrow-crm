@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 export type ClienteOpcao = {
   id: number; nome_empresa: string; telefone: string; cnpj?: string;
   inscricao_estadual?: string; email?: string; cidade?: string; endereco?: string;
+  numero?: string; bairro?: string; cep?: string; estado?: string;
 };
 
 // Gravado em Configurações → Produtos toda vez que o preço de venda muda (compara com

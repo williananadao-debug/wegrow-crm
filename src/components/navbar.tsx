@@ -17,7 +17,7 @@ function MarcaEmpresa({ logoUrl, inicial, size }: { logoUrl?: string | null; ini
   if (logoUrl) {
     return (
       <div className="bg-white rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0" style={{ width: size, height: size }}>
-        <img src={logoUrl} alt="" className="w-full h-full object-contain p-1" />
+        <img src={logoUrl} alt="" className="w-full h-full object-contain" />
       </div>
     );
   }

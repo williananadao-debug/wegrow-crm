@@ -39,9 +39,13 @@ export async function POST(req: Request) {
 
     const supabase = db();
 
-    const [{ data: empresa, error: empErr }, { data: unidades }] = await Promise.all([
+    const [{ data: empresa, error: empErr }, { data: unidades }, { data: leadAtual }] = await Promise.all([
       supabase.from('empresas').select('modulos, logo_url').eq('id', empresa_id).single(),
       supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade, estado').eq('empresa_id', empresa_id),
+      // Submissão anterior desta venda (se já tinha contrato gerado antes) — arquivada no
+      // Docuseal depois que a nova for criada com sucesso, pra ninguém assinar o link velho
+      // (ex: contrato com dado errado que precisou ser refeito) por engano.
+      venda.id ? supabase.from('leads').select('docuseal_submission_id').eq('id', venda.id).single() : Promise.resolve({ data: null } as any),
     ]);
     if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr!.message }, { status: 500 });
     if (!empresa?.modulos?.assinatura) {
@@ -148,6 +152,24 @@ export async function POST(req: Request) {
         docuseal_consultor_sign_url: `${DOCUSEAL_SIGN_BASE}/s/${vendedorSubmitter.slug}`,
         docuseal_sign_url: compradorSubmitter ? `${DOCUSEAL_SIGN_BASE}/s/${compradorSubmitter.slug}` : null,
       }).eq('id', venda.id);
+    }
+
+    // Só agora, com a submissão nova já criada e salva, arquiva a antiga (se existia e é
+    // diferente da nova) — arquivar no Docuseal invalida o(s) link(s) de assinatura antigo(s),
+    // sem apagar o PDF já assinado que porventura tenha sido arquivado no Storage pelo webhook.
+    // Não pode ser feito antes: se a criação da nova submissão falhar em qualquer passo acima,
+    // a antiga tem que continuar válida.
+    const submissionAntigaId = leadAtual?.docuseal_submission_id;
+    if (submissionAntigaId && submissionAntigaId !== String(vendedorSubmitter.submission_id)) {
+      try {
+        const arquivarRes = await fetch(`${DOCUSEAL_URL}/submissions/${submissionAntigaId}`, {
+          method: 'DELETE',
+          headers: { 'X-Auth-Token': DOCUSEAL_TOKEN },
+        });
+        if (!arquivarRes.ok) console.error('[docuseal/pulse/arquivar-antiga]', arquivarRes.status, await arquivarRes.text());
+      } catch (err: any) {
+        console.error('[docuseal/pulse/arquivar-antiga]', err.message);
+      }
     }
 
     return NextResponse.json({

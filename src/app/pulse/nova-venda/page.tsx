@@ -589,6 +589,18 @@ function PulseNovaVendaContent() {
         clienteSelecionado?.cep ? `CEP ${clienteSelecionado.cep}` : null,
         clienteSelecionado?.cidade ? `${clienteSelecionado.cidade}${clienteSelecionado?.estado ? '/' + clienteSelecionado.estado : ''}` : null,
       ].filter(Boolean).join(', ');
+      // Prazo de fabricação: mesmo problema do e-mail/telefone/endereço — prazoEstimado é
+      // calculado em cima do CARRINHO ATUAL da tela, não dos itens de fato salvos nessa
+      // venda. Abrindo "Gerar contrato" direto pelo histórico (sem passar por "Editar"
+      // antes), o carrinho podia estar vazio ou ser de outra venda, e a cláusula de prazo
+      // saía errada ou sem prazo nenhum. Recalcula aqui a partir de vendaAlvo.itens (o maior
+      // prazo entre os itens da venda, casando pelo nome com o catálogo — itens salvos não
+      // guardam o id do serviço, só o nome/preço/qtd como snapshot).
+      const itensVenda = Array.isArray(vendaAlvo.itens) ? vendaAlvo.itens : [];
+      const prazosVenda = itensVenda
+        .map((it: any) => servicos.find(s => s.nome === it.servico)?.prazo_fabricacao_dias)
+        .filter((d: any): d is number => typeof d === 'number' && d > 0);
+      const prazoFabricacaoDiasVenda = prazosVenda.length > 0 ? Math.max(...prazosVenda) : null;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/docuseal/pulse', {
@@ -606,7 +618,7 @@ function PulseNovaVendaContent() {
             valor_entrada: Number(vendaAlvo.valor_entrada) > 0 ? Number(vendaAlvo.valor_entrada) : undefined,
             forma_pagamento_entrada: vendaAlvo.forma_pagamento_entrada || undefined,
             parcelas_detalhe: Array.isArray(vendaAlvo.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 ? vendaAlvo.parcelas_detalhe : undefined,
-            prazoFabricacaoDias: prazoEstimado?.dias ?? null, unidade: vendaAlvo.unidade || unidadeSel,
+            prazoFabricacaoDias: prazoFabricacaoDiasVenda, unidade: vendaAlvo.unidade || unidadeSel,
           },
           signers: [{ name: vendaAlvo.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
           consultor: { nome: perfil?.nome || 'Vendedor', email: user?.email },

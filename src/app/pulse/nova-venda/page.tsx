@@ -1080,6 +1080,17 @@ function PulseNovaVendaContent() {
               ) : v.docuseal_submission_id ? (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-2">
                   <p className="text-amber-400 text-xs font-black uppercase">Aguardando assinatura</p>
+                  {(v.docuseal_consultor_sign_url || v.docuseal_sign_url) && (
+                    <div className="space-y-1">
+                      {v.docuseal_consultor_sign_url && (
+                        <a href={v.docuseal_consultor_sign_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-300 hover:text-amber-200 text-[11px] font-bold underline"><PenTool size={11} /> Link de assinatura — vendedor</a>
+                      )}
+                      {v.docuseal_sign_url && (
+                        <a href={v.docuseal_sign_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-300 hover:text-amber-200 text-[11px] font-bold underline"><PenTool size={11} /> Link de assinatura — cliente</a>
+                      )}
+                      <p className="text-slate-500 text-[9px]">O Docuseal só libera o link do cliente pra ele depois que o vendedor assinar primeiro.</p>
+                    </div>
+                  )}
                   <button onClick={() => cancelarContrato(v)} disabled={cancelandoContrato} className="text-red-400 hover:text-red-300 disabled:opacity-50 text-[10px] font-black uppercase">Cancelar contrato</button>
                 </div>
               ) : (

@@ -134,6 +134,11 @@ ${listaClientes}`;
       temperature: 0.2,
       reasoning_effort: 'low',
       include_reasoning: false,
+      // JSON mode: o modelo é forçado pela própria Groq a fechar um JSON válido, em vez de
+      // só receber a instrução em texto ("responda só com JSON") e às vezes devolver
+      // markdown/texto em volta — era a causa mais comum do "erro ao interpretar resposta
+      // da IA" (regex de extração não achava match, ou achava um JSON truncado/quebrado).
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -144,10 +149,16 @@ ${listaClientes}`;
 
     let relatorio: any;
     try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      relatorio = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      relatorio = JSON.parse(rawText);
     } catch {
-      relatorio = null;
+      // Fallback pro comportamento antigo, caso a API não tenha respeitado o json_object
+      // (não deveria acontecer, mas mais barato que travar um relatório inteiro por causa disso).
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        relatorio = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      } catch {
+        relatorio = null;
+      }
     }
 
     if (!relatorio) {

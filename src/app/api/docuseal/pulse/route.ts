@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     const supabase = db();
 
     const [{ data: empresa, error: empErr }, { data: unidades }] = await Promise.all([
-      supabase.from('empresas').select('modulos').eq('id', empresa_id).single(),
+      supabase.from('empresas').select('modulos, logo_url').eq('id', empresa_id).single(),
       supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade, estado').eq('empresa_id', empresa_id),
     ]);
     if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr!.message }, { status: 500 });
@@ -53,6 +53,17 @@ export async function POST(req: Request) {
       razao: unidadeMatch?.razao_social || '', cnpj: unidadeMatch?.cnpj || '', endereco: unidadeMatch?.endereco || '',
       nome: unidadeMatch?.nome || '', cidade: unidadeMatch?.cidade || '', estado: unidadeMatch?.estado || '',
     };
+
+    // pdfkit precisa dos bytes da imagem (Buffer), não aceita URL direto — baixa aqui, uma vez.
+    // Falha de download (logo removida, URL fora do ar, etc.) não pode derrubar a geração do
+    // contrato: fica sem logo/marca d'água, mas o resto do PDF sai normal.
+    let logoBuffer: Buffer | undefined;
+    if (empresa?.logo_url) {
+      try {
+        const logoRes = await fetch(empresa.logo_url);
+        if (logoRes.ok) logoBuffer = Buffer.from(await logoRes.arrayBuffer());
+      } catch { /* segue sem logo */ }
+    }
 
     let pdfBuffer: Buffer, sigPage: number, sigYFrac: number;
     try {
@@ -73,6 +84,7 @@ export async function POST(req: Request) {
         parcelas_detalhe: Array.isArray(venda.parcelas_detalhe) && venda.parcelas_detalhe.length > 0 ? venda.parcelas_detalhe : undefined,
         prazoFabricacaoDias: venda.prazoFabricacaoDias ?? null,
         observacao: venda.observacao || '',
+        logoBuffer,
       });
       pdfBuffer = resultado.buffer; sigPage = resultado.sigPage; sigYFrac = resultado.sigYFrac;
     } catch (err: any) {

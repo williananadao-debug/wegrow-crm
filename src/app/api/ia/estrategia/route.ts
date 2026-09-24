@@ -6,8 +6,8 @@ const SYSTEM_PROMPT = `Você é um especialista em vendas de mídia/rádio local
 Analise os candidatos e sugira um pacote de produtos específico para cada um.
 
 REGRAS:
-- Retorne APENAS um array JSON válido
-- Cada item deve ter:
+- Retorne APENAS um objeto JSON válido, no formato exato: { "candidatos": [ ... ] }
+- Cada item de "candidatos" deve ter:
   - id: o mesmo id do candidato
   - nome: nome da empresa
   - score_ia: 0 a 100 (prioridade)
@@ -19,13 +19,13 @@ REGRAS:
     - precoUnitario: preço do produto (use o preço da lista)
     - tempo: duração se aplicável (ex: "30\"", "60\"") ou omita
     - programa: programa de veiculação se aplicável ou omita
-- Ordene do maior para o menor score
+- Ordene "candidatos" do maior para o menor score
 - Selecione apenas os melhores dentro do limite informado
 - Para resgate: sugira os mesmos produtos que o cliente comprou antes, com upgrade se possível
 - Para churn: sugira renovação do pacote atual com algum benefício adicional
 - Para mix: sugira o pacote de entrada mais adequado ao perfil do cliente
 
-Responda SOMENTE com o array JSON, sem markdown, sem texto adicional.`;
+Responda SOMENTE com o objeto JSON, sem markdown, sem texto adicional.`;
 
 export async function POST(req: NextRequest) {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -194,6 +194,12 @@ Selecione os ${limite} melhores candidatos e para cada um monte um pacote de pro
       temperature: 0.2,
       reasoning_effort: 'low',
       include_reasoning: false,
+      // JSON mode: força a Groq a fechar um JSON válido em vez de confiar só na instrução em
+      // texto — era a causa mais comum do "erro ao interpretar resposta da IA" (a resposta
+      // vinha com markdown/texto em volta, ou truncada, e a regex de extração não achava
+      // um array bem formado). Exige objeto no topo, por isso o array foi embrulhado em
+      // {"candidatos": [...]} — json_object não aceita array como raiz.
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
@@ -204,10 +210,16 @@ Selecione os ${limite} melhores candidatos e para cada um monte um pacote de pro
 
     let selecionados: any[] = [];
     try {
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      selecionados = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      const parsed = JSON.parse(rawText);
+      selecionados = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.candidatos) ? parsed.candidatos : [];
     } catch {
-      return NextResponse.json({ error: 'Erro ao interpretar resposta da IA.', raw: rawText }, { status: 500 });
+      // Fallback pro comportamento antigo, caso a API não respeite o json_object.
+      try {
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        selecionados = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      } catch {
+        return NextResponse.json({ error: 'Erro ao interpretar resposta da IA.', raw: rawText }, { status: 500 });
+      }
     }
 
     if (selecionados.length === 0) {

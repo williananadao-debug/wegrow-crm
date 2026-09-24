@@ -165,6 +165,7 @@ export default function NotaFiscalModal({
 
       for (const item of itensValidos) {
         let servicoId: number;
+        let ehSobEncomenda = false;
         if (item.servicoId === 'novo') {
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
             // unidade aqui é FILIAL/unidade de negócio, não unidade de medida — '' =
@@ -175,27 +176,39 @@ export default function NotaFiscalModal({
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || 'Erro ao criar produto novo.');
           servicoId = criado.id;
+          // Produto novo criado por essa NF sempre nasce com estoque numérico (linha acima)
+          // — nunca é sob encomenda, então ehSobEncomenda continua false aqui.
         } else if (typeof item.servicoId === 'number') {
           servicoId = item.servicoId;
           const atual = servicos.find(s => s.id === item.servicoId);
-          const novoEstoque = isSaida
-            ? Math.max(0, (atual?.estoque || 0) - item.quantidade)
-            : (atual?.estoque || 0) + item.quantidade;
-          await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', item.servicoId);
+          // Produto sob encomenda (estoque null/undefined, ex: trailer fabricado por venda —
+          // nunca tem unidade "em estoque" de verdade) não tem estoque físico pra dar
+          // entrada/saída. Sem essa checagem, o "|| 0" abaixo tratava null como zero e
+          // GRAVAVA estoque=0 no produto — transformando ele em "produto de estoque" com 0
+          // unidades, disparando alerta de estoque mínimo numa venda sob encomenda normal.
+          ehSobEncomenda = atual?.estoque === null || atual?.estoque === undefined;
+          if (!ehSobEncomenda) {
+            const novoEstoque = isSaida
+              ? Math.max(0, (atual?.estoque || 0) - item.quantidade)
+              : (atual?.estoque || 0) + item.quantidade;
+            await supabase.from('servicos').update({ estoque: novoEstoque }).eq('id', item.servicoId);
+          }
         } else {
           continue;
         }
 
-        const { data: movimento } = await supabase.from('estoque_movimentacoes').insert([{
-          empresa_id: empresaId, servico_id: servicoId,
-          quantidade: isSaida ? -item.quantidade : item.quantidade,
-          valor_unitario: item.valor_unitario,
-          fornecedor: fornecedor || null, cnpj_participante: cnpjFornecedor || null,
-          nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
-          user_id: userId, tipo: isSaida ? 'saida_nf' : 'entrada_nf', motivo: isSaida ? motivoSaida : 'compra',
-          lead_id: isSaida && motivoSaida === 'venda' ? pedidoSelecionado?.id ?? null : null,
-        }]).select('id').single();
-        if (movimento) ultimoMovimentoId = movimento.id;
+        if (!ehSobEncomenda) {
+          const { data: movimento } = await supabase.from('estoque_movimentacoes').insert([{
+            empresa_id: empresaId, servico_id: servicoId,
+            quantidade: isSaida ? -item.quantidade : item.quantidade,
+            valor_unitario: item.valor_unitario,
+            fornecedor: fornecedor || null, cnpj_participante: cnpjFornecedor || null,
+            nf_numero: numero || null, nf_serie: serie || null, nf_chave_acesso: chaveAcesso || null,
+            user_id: userId, tipo: isSaida ? 'saida_nf' : 'entrada_nf', motivo: isSaida ? motivoSaida : 'compra',
+            lead_id: isSaida && motivoSaida === 'venda' ? pedidoSelecionado?.id ?? null : null,
+          }]).select('id').single();
+          if (movimento) ultimoMovimentoId = movimento.id;
+        }
       }
 
       const { error: erroLancamento } = await supabase.from('lancamentos').insert([{

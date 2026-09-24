@@ -108,13 +108,23 @@ export async function POST(request: Request) {
         const cpfCnpjClean = String(cpfCnpj).replace(/\D/g, '');
 
         // Busca ou cria cliente no Asaas — uma vez só, reaproveitado pra todas as parcelas
+        const nomeUpper = String(nome || '').toLocaleUpperCase('pt-BR');
         let customerId: string;
         const search = await asaas(apiKey, ambiente, 'GET', `/customers?cpfCnpj=${cpfCnpjClean}`);
         if (search.data?.length > 0) {
             customerId = search.data[0].id;
+            // Cliente já existia no Asaas (ex: de uma cobrança anterior com nome errado) —
+            // normaliza o nome dele agora, senão o boleto continua saindo com o texto antigo
+            // pra sempre, mesmo corrigindo o cadastro no CRM depois.
+            if (search.data[0].name !== nomeUpper) {
+                await asaas(apiKey, ambiente, 'POST', `/customers/${customerId}`, { name: nomeUpper }).catch(() => {});
+            }
         } else {
+            // Nome vai maiúsculo pro Asaas independente de como foi digitado no cadastro do
+            // cliente — sem isso, um cliente cadastrado em minúsculo/misto saía errado no
+            // boleto/Pix, mesmo aparecendo certo nas telas que forçam uppercase por CSS.
             const cliente = await asaas(apiKey, ambiente, 'POST', '/customers', {
-                name: nome,
+                name: nomeUpper,
                 cpfCnpj: cpfCnpjClean,
                 ...(email ? { email } : {}),
             });

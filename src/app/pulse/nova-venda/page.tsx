@@ -1079,7 +1079,7 @@ function PulseNovaVendaContent() {
             {clienteSelecionado ? (
               <div className="flex items-center justify-between bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] rounded-xl px-4 py-3">
                 <div>
-                  <p className="text-white font-bold text-sm">{clienteSelecionado.nome_empresa}</p>
+                  <p className="text-white font-bold text-sm uppercase">{clienteSelecionado.nome_empresa}</p>
                   {clienteSelecionado.telefone && <p className="text-slate-400 text-xs">{clienteSelecionado.telefone}</p>}
                 </div>
                 <button onClick={() => { setClienteSelecionado(null); setClienteQuery(''); }} className="text-slate-500 hover:text-white p-1"><X size={16} /></button>

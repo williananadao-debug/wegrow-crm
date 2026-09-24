@@ -619,6 +619,11 @@ export default function CustomersPage() {
 
     const payload = {
       ...formData,
+      // O input já é "uppercase" na tela, mas isso é só CSS (text-transform) — não muda o
+      // texto de verdade, só a aparência enquanto digita. Sem normalizar aqui, o nome salvo
+      // no banco preservava a caixa real digitada (ex: "maiko..."), o que saía errado em
+      // documentos que não têm esse mesmo CSS — boleto/Pix (Asaas) e outras telas do CRM.
+      nome_empresa: formData.nome_empresa.toLocaleUpperCase('pt-BR'),
       segmento: formData.segmento === 'Outro' ? segmentoCustom.trim() : formData.segmento,
       empresa_id: perfil?.empresa_id, tags
     };

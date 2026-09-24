@@ -127,7 +127,10 @@ export default function FinanceiroPage() {
     });
   };
 
-  const { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado } = useMemo(() => {
+  const {
+    recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado,
+    receitaMesTotal, impostoMesReal, lucroLiquidoMes, parteCaixa, parteSocios, parteWillian, parteHeitor,
+  } = useMemo(() => {
     const recorrentes = lancamentos.filter(l => l.recorrente);
     const avulsos = lancamentos.filter(l => !l.recorrente).sort((a, b) => b.data.localeCompare(a.data));
     const despesaFixaMensal = recorrentes.filter(l => l.tipo === 'saida').reduce((s, l) => s + l.valor, 0);
@@ -140,6 +143,22 @@ export default function FinanceiroPage() {
 
     const impostoEstimado = mrr * 0.06; // Anexo III, mesma estimativa usada no admin principal
     const resultadoMes = mrr + entradaFixaMensal + mesAtualEntradas - despesaFixaMensal - mesAtualSaidas - impostoEstimado;
+
+    // Distribuição de lucro do mês — imposto aqui cobre a RECEITA TODA (MRR + fixos +
+    // avulsos), não só o MRR como o "impostoEstimado" acima (esse é usado no caixa projetado
+    // de 6 meses, que já simplifica pra um valor fixo por mês — não mexi nele pra não mudar
+    // uma projeção que já está no ar; esse cálculo aqui é só pro resultado real do mês).
+    // Regra: 2/3 do lucro líquido fica em caixa (reserva da empresa), 1/3 é distribuído entre
+    // os sócios, 60/40 (Willian/Heitor — ajusta os nomes se a proporção for entre outras pessoas).
+    const receitaMesTotal = mrr + entradaFixaMensal + mesAtualEntradas;
+    const impostoMesReal = receitaMesTotal * 0.06;
+    const despesasMesTotal = despesaFixaMensal + mesAtualSaidas;
+    const lucroLiquidoMes = receitaMesTotal - despesasMesTotal - impostoMesReal;
+    const lucroDistribuivel = Math.max(0, lucroLiquidoMes);
+    const parteCaixa = lucroDistribuivel * (2 / 3);
+    const parteSocios = lucroDistribuivel * (1 / 3);
+    const parteWillian = parteSocios * 0.6;
+    const parteHeitor = parteSocios * 0.4;
 
     const serie6meses = Array.from({ length: 6 }).map((_, i) => {
       const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
@@ -162,7 +181,10 @@ export default function FinanceiroPage() {
       return { chave, label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`, entradas, saidas, saldo, acumulado };
     });
 
-    return { recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado };
+    return {
+      recorrentes, avulsos, despesaFixaMensal, entradaFixaMensal, mesAtualEntradas, mesAtualSaidas, resultadoMes, serie6meses, caixaProjetado,
+      receitaMesTotal, impostoMesReal, lucroLiquidoMes, parteCaixa, parteSocios, parteWillian, parteHeitor,
+    };
   }, [lancamentos, mrr, saldoInicial]);
 
   if (authLoading) return null;
@@ -275,6 +297,48 @@ export default function FinanceiroPage() {
                 <p className="px-5 py-3 text-[10px] text-slate-500 border-t border-white/5">
                   {empresasEmTeste} empresa(s) em teste não entram na projeção.{mrrEmTeste > 0 && <> Se todas converterem: <span className="text-yellow-400 font-black">+R$ {fmtBRL(mrrEmTeste)}/mês</span>.</>}
                 </p>
+              )}
+            </div>
+
+            {/* Distribuição de lucro do mês */}
+            <div className="bg-[#0F172A] border border-white/5 rounded-2xl overflow-hidden mb-6">
+              <div className="p-5 border-b border-white/5">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Distribuição de lucro — mês atual</p>
+                <p className="text-[10px] text-slate-600 mt-1">Receita (MRR + fixos + avulsos) − despesas − imposto (6%) = lucro líquido → 2/3 fica em caixa, 1/3 é dividido 60/40 entre os sócios</p>
+              </div>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Receita do mês</p>
+                  <p className="text-white font-black text-lg">R$ {fmtBRL(receitaMesTotal)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Imposto (6%)</p>
+                  <p className="text-red-400 font-black text-lg">R$ {fmtBRL(impostoMesReal)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Lucro líquido</p>
+                  <p className={`font-black text-lg ${lucroLiquidoMes >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {fmtBRL(lucroLiquidoMes)}</p>
+                </div>
+              </div>
+              {lucroLiquidoMes <= 0 ? (
+                <p className="px-5 pb-5 text-[10px] text-slate-500">Sem lucro pra distribuir esse mês (resultado zero ou negativo).</p>
+              ) : (
+                <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Caixa (2/3)</p>
+                    <p className="text-white font-black text-xl">R$ {fmtBRL(parteCaixa)}</p>
+                    <p className="text-[9px] text-slate-600 mt-1">Fica retido na empresa</p>
+                  </div>
+                  <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-4">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Willian — 60% de 1/3</p>
+                    <p className="text-[#22C55E] font-black text-xl">R$ {fmtBRL(parteWillian)}</p>
+                  </div>
+                  <div className="bg-[#22C55E]/5 border border-[#22C55E]/20 rounded-xl p-4">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Heitor — 40% de 1/3</p>
+                    <p className="text-[#22C55E] font-black text-xl">R$ {fmtBRL(parteHeitor)}</p>
+                  </div>
+                  <p className="col-span-full text-[9px] text-slate-600">A distribuir entre os sócios (1/3 do lucro): R$ {fmtBRL(parteSocios)}</p>
+                </div>
               )}
             </div>
 

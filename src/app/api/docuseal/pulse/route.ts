@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     const supabase = db();
 
     const [{ data: empresa, error: empErr }, { data: unidades }, { data: leadAtual }] = await Promise.all([
-      supabase.from('empresas').select('modulos, logo_url').eq('id', empresa_id).single(),
+      supabase.from('empresas').select('modulos, logo_url, cor_primaria').eq('id', empresa_id).single(),
       supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade, estado').eq('empresa_id', empresa_id),
       // Submissão anterior desta venda (se já tinha contrato gerado antes) — arquivada no
       // Docuseal depois que a nova for criada com sucesso, pra ninguém assinar o link velho
@@ -89,6 +89,7 @@ export async function POST(req: Request) {
         prazoFabricacaoDias: venda.prazoFabricacaoDias ?? null,
         observacao: venda.observacao || '',
         logoBuffer,
+        corPrimaria: empresa?.cor_primaria || undefined,
       });
       pdfBuffer = resultado.buffer; sigPage = resultado.sigPage; sigYFrac = resultado.sigYFrac;
     } catch (err: any) {

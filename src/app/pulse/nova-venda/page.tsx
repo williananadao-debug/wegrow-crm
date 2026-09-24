@@ -673,6 +673,21 @@ function PulseNovaVendaContent() {
     setCobrancaAberto(true);
   };
 
+  // Mesma coisa que abrirCobranca, mas pré-preenchida com o valor/vencimento de UMA
+  // parcela específica do carnê — usado no botão "Gerar boleto/Pix" de cada linha na tela
+  // de detalhes da venda, pra não precisar digitar de novo um valor que já está definido ali.
+  const abrirCobrancaParcela = (venda: any, parcela: { data: string; valor: number }) => {
+    if (!venda) return;
+    setVendaAlvo(venda);
+    setCobrancaTipo('BOLETO');
+    setCobrancaValor(String(parcela.valor || ''));
+    setCobrancaVencimento(parcela.data || new Date().toISOString().split('T')[0]);
+    setCobrancaParcelas('1');
+    setCobrancaErro(null);
+    setCobrancaResultado(null);
+    setCobrancaAberto(true);
+  };
+
   // Espelha uma mudança em cobrancas_manuais nos três lugares que podem estar
   // mostrando a mesma venda na tela (modal aberto, tela pós-venda, linha do histórico)
   // sem precisar recarregar do banco.
@@ -999,9 +1014,12 @@ function PulseNovaVendaContent() {
                   <p className="text-slate-300">Entrada: <span className="text-white font-bold">R$ {Number(v.valor_entrada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>{v.forma_pagamento_entrada ? ` — ${v.forma_pagamento_entrada}` : ''}</p>
                 )}
                 {temCarne ? (
-                  <div className="space-y-1 pt-1">
+                  <div className="space-y-1.5 pt-1">
                     {v.parcelas_detalhe.map((p: any, i: number) => (
-                      <p key={i} className="text-slate-300">Parcela {i + 1}/{v.parcelas_detalhe.length} — {p.data ? new Date(p.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}: <span className="text-white font-bold">R$ {Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+                      <div key={i} className="flex items-center justify-between gap-2">
+                        <p className="text-slate-300">Parcela {i + 1}/{v.parcelas_detalhe.length} — {p.data ? new Date(p.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}: <span className="text-white font-bold">R$ {Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+                        <button onClick={() => { setDetalheVenda(null); abrirCobrancaParcela(v, p); }} title="Gerar boleto/Pix dessa parcela" className="shrink-0 text-emerald-400 hover:text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1"><Zap size={11} /> Boleto/Pix</button>
+                      </div>
                     ))}
                   </div>
                 ) : (

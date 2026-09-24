@@ -46,6 +46,9 @@ export type ContratoTrailerData = {
   // URL direto em doc.image, só Buffer/path local) — opcional; sem ela, contrato sai sem
   // timbrado, como sempre saiu (não é regressão, é a mesma ausência de recurso de antes).
   logoBuffer?: Buffer;
+  // Cor de marca da empresa (empresas.cor_primaria, mesma usada no resto do app) — pinta a
+  // faixa/onda do rodapé. Sem valor, cai no verde padrão do sistema (AuthContext usa o mesmo fallback).
+  corPrimaria?: string;
 };
 
 const FORMAS_PAGAMENTO: Record<string, string> = {
@@ -88,28 +91,38 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.on('error', reject);
 
       const corTitulo = '#111111';
+      const corMarca = /^#[0-9a-fA-F]{6}$/.test(data.corPrimaria || '') ? data.corPrimaria! : '#22C55E';
 
-      // ── MARCA D'ÁGUA (logo da empresa, centralizada e translúcida, em toda página) ──
-      // Mesma ideia do timbrado do contrato de rádio (contract-radio-pdf.ts), mas genérica:
-      // usa a logo que a própria empresa já cadastra em Admin (empresas.logo_url), em vez de
-      // um PNG fixo por unidade — funciona pra qualquer empresa do Pulse, não só Trailer Travel.
-      const desenharMarcaDagua = () => {
+      // ── TIMBRADO (logo no topo + onda colorida no rodapé, em toda página) ──────────────
+      // Mesma ideia do timbrado do contrato de rádio (contract-radio-pdf.ts, PNG pronto por
+      // emissora), mas montado na hora com o que a própria empresa já cadastra em Admin
+      // (logo + cor de marca) — funciona pra qualquer empresa do Pulse, não só uma unidade.
+      // Primeira versão colocava a logo grande e translúcida no MEIO da página — sobrepondo
+      // o corpo do texto e deixando ilegível quando havia bastante conteúdo (relatado pelo
+      // usuário). Trocado por um cabeçalho com a logo centralizada no topo (fora da área de
+      // texto) + uma onda na cor de marca no rodapé, do jeito que o timbrado da rádio já faz.
+      const desenharCabecalho = () => {
         if (!data.logoBuffer) return;
         try {
-          const tam = 320;
-          doc.opacity(0.06);
-          doc.image(data.logoBuffer, (doc.page.width - tam) / 2, (doc.page.height - tam) / 2, { fit: [tam, tam], align: 'center', valign: 'center' });
-          doc.opacity(1);
-        } catch { doc.opacity(1); /* segue sem marca d'água se o buffer não for uma imagem válida */ }
+          doc.image(data.logoBuffer, (doc.page.width - 160) / 2, 22, { fit: [160, 50], align: 'center', valign: 'center' });
+        } catch { /* segue sem logo se o buffer não for uma imagem válida */ }
       };
-      desenharMarcaDagua();
+      const desenharRodape = () => {
+        const H = doc.page.height, W = doc.page.width;
+        doc.save();
+        doc.moveTo(0, H - 18)
+          .bezierCurveTo(W * 0.25, H - 42, W * 0.45, H - 4, W * 0.7, H - 24)
+          .bezierCurveTo(W * 0.85, H - 34, W * 0.95, H - 8, W, H - 20)
+          .lineTo(W, H).lineTo(0, H).closePath()
+          .fillColor(corMarca).fill();
+        doc.restore();
+      };
+      desenharCabecalho();
       let paginaAtual = 1;
-      doc.on('pageAdded', () => { paginaAtual++; desenharMarcaDagua(); });
+      doc.on('pageAdded', () => { paginaAtual++; desenharCabecalho(); });
+      if (data.logoBuffer) doc.y = 85; // desce o início do texto pra não sobrepor a logo do cabeçalho
 
       // ── HEADER ──────────────────────────────────────────────────
-      if (data.logoBuffer) {
-        try { doc.image(data.logoBuffer, doc.page.width - 50 - 60, 45, { fit: [60, 40], align: 'right' }); } catch { /* segue sem logo */ }
-      }
       doc.fontSize(16).font('Helvetica-Bold').fillColor(corTitulo)
         .text('CONTRATO PARTICULAR DE COMPRA E FABRICAÇÃO DE TRAILER SOB ENCOMENDA', { align: 'center' });
       doc.fontSize(8).font('Helvetica').fillColor('#555')
@@ -334,6 +347,7 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
         doc.page.margins.bottom = 0;
+        desenharRodape();
         doc.fontSize(7).font('Helvetica').fillColor('#999')
           .text(`${data.vendedora_razao}  ·  CNPJ ${data.vendedora_cnpj}  ·  Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 50, doc.page.height - 65, { align: 'center', width: W });
       }

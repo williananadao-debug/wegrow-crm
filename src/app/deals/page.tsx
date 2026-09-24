@@ -675,7 +675,8 @@ export default function DealsPage() {
           status: 'pendente',
           data_vencimento: lead.vencimento ? lead.vencimento : new Date().toISOString().split('T')[0],
           user_id: user?.id,
-          empresa_id: perfil?.empresa_id 
+          empresa_id: perfil?.empresa_id,
+          lead_id: lead.id,
       }]);
   }, [user?.id, perfil?.empresa_id]);
 

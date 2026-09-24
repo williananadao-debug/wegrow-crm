@@ -468,7 +468,7 @@ function PulseNovaVendaContent() {
             titulo: `VENDA RÁPIDA: ${nomeCliente} (${unidadeSel || 'Geral'}) - OS: ${formatId(leadData.id)}`,
             valor: total, tipo: 'entrada', categoria: 'vendas', status: 'pendente',
             data_vencimento: new Date().toISOString().split('T')[0],
-            user_id: user?.id, empresa_id: perfil?.empresa_id,
+            user_id: user?.id, empresa_id: perfil?.empresa_id, lead_id: leadData.id,
           }]),
           // Venda fechada direto no Pulse não passa pelo check-in manual de /visitas — sem isso,
           // ranking e relatórios de visita zeravam pra quem vende só por aqui.
@@ -900,10 +900,12 @@ function PulseNovaVendaContent() {
               <div key={idx} className="bg-black/30 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className={`text-xs font-bold truncate ${c.cancelada ? 'text-slate-500 line-through' : 'text-white'}`}>{c.tipo}{c.parcela ? ` · parcela ${c.parcela}` : ''} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <p className="text-slate-500 text-[10px]">Vence {c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                  <p className="text-slate-500 text-[10px]">{c.pago ? `Pago em ${new Date(c.dataPagamento + 'T00:00:00').toLocaleDateString('pt-BR')}` : `Vence ${c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}`}</p>
                 </div>
                 {c.cancelada ? (
                   <span className="flex-shrink-0 text-slate-500 text-[10px] font-black uppercase">Cancelada</span>
+                ) : c.pago ? (
+                  <span className="flex-shrink-0 text-emerald-400 text-[10px] font-black uppercase flex items-center gap-1"><CheckCircle2 size={11} /> Pago</span>
                 ) : (
                   <div className="flex-shrink-0 flex items-center gap-2">
                     {(c.bankSlipUrl || c.invoiceUrl) && (
@@ -1109,10 +1111,12 @@ function PulseNovaVendaContent() {
                     <div key={i} className="bg-black/30 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className={`text-xs font-bold truncate ${c.cancelada ? 'text-slate-500 line-through' : 'text-white'}`}>{c.tipo}{c.parcela ? ` · parcela ${c.parcela}` : ''} · R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        <p className="text-slate-500 text-[10px]">Vence {c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                        <p className="text-slate-500 text-[10px]">{c.pago ? `Pago em ${new Date(c.dataPagamento + 'T00:00:00').toLocaleDateString('pt-BR')}` : `Vence ${c.vencimento ? new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}`}</p>
                       </div>
                       {c.cancelada ? (
                         <span className="flex-shrink-0 text-slate-500 text-[10px] font-black uppercase">Cancelada</span>
+                      ) : c.pago ? (
+                        <span className="flex-shrink-0 text-emerald-400 text-[10px] font-black uppercase flex items-center gap-1"><CheckCircle2 size={11} /> Pago</span>
                       ) : (
                         <div className="flex-shrink-0 flex items-center gap-2">
                           {(c.bankSlipUrl || c.invoiceUrl) && (

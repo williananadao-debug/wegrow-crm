@@ -30,6 +30,9 @@ export type ContratoData = {
   // saldo em 8x). Sem valor_entrada, o contrato imprime só a seção de parcelas de sempre.
   valor_entrada?: number;
   forma_pagamento_entrada?: string;
+  // Carnê com valor/data próprios por parcela — quando presente, substitui o cálculo de
+  // "parcelas iguais" abaixo.
+  parcelas_detalhe?: { data: string; valor: number }[];
   observacao?: string;
 };
 
@@ -316,13 +319,20 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
         linha('Entrada: ', fmt(data.valor_entrada) + (data.forma_pagamento_entrada ? ` — ${FORMAS_PAGAMENTO[data.forma_pagamento_entrada] || data.forma_pagamento_entrada}` : ''));
         linha('Saldo: ', fmt(Math.max(0, data.valor_total - data.valor_entrada)));
       }
-      linha('Parcela(s): ', data.parcelas || '1');
-      linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
-      doc.moveDown(0.6);
-      if (data.valor_total > 0) {
-        const qtdParcelas = Math.max(1, parseInt(data.parcelas, 10) || 1);
-        const saldoParcelado = Math.max(0, data.valor_total - (data.valor_entrada || 0));
-        linha('Valor da Parcela: ', fmt(saldoParcelado / qtdParcelas));
+      if (Array.isArray(data.parcelas_detalhe) && data.parcelas_detalhe.length > 0) {
+        data.parcelas_detalhe.forEach((p, i) => {
+          linha(`Parcela ${i + 1}/${data.parcelas_detalhe!.length} — ${fmtData(p.data)}: `, fmt(p.valor));
+        });
+        doc.moveDown(0.6);
+      } else {
+        linha('Parcela(s): ', data.parcelas || '1');
+        linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
+        doc.moveDown(0.6);
+        if (data.valor_total > 0) {
+          const qtdParcelas = Math.max(1, parseInt(data.parcelas, 10) || 1);
+          const saldoParcelado = Math.max(0, data.valor_total - (data.valor_entrada || 0));
+          linha('Valor da Parcela: ', fmt(saldoParcelado / qtdParcelas));
+        }
       }
       if (data.forma_pagamento) {
         linha('Forma de Pagamento (saldo): ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);

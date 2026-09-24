@@ -89,6 +89,7 @@ export async function POST(req: Request) {
         forma_pagamento: deal.forma_pagamento || undefined,
         valor_entrada: Number(deal.valor_entrada) > 0 ? Number(deal.valor_entrada) : undefined,
         forma_pagamento_entrada: deal.forma_pagamento_entrada || undefined,
+        parcelas_detalhe: Array.isArray(deal.parcelas_detalhe) && deal.parcelas_detalhe.length > 0 ? deal.parcelas_detalhe : undefined,
         observacao: deal.observacao || '',
       });
       pdfBuffer = resultado.buffer;

@@ -37,6 +37,9 @@ export type ContratoTrailerData = {
   // saldo em 8x). Sem valor_entrada, o contrato imprime só a seção de parcelas de sempre.
   valor_entrada?: number;
   forma_pagamento_entrada?: string;
+  // Carnê com valor/data próprios por parcela (ex: entrada + 5 parcelas iguais + 1 parcela
+  // final maior) — quando presente, substitui o cálculo de "parcelas iguais" abaixo.
+  parcelas_detalhe?: { data: string; valor: number }[];
   prazoFabricacaoDias: number | null;
   observacao?: string;
 };
@@ -185,12 +188,19 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
         linha('Entrada: ', fmt(data.valor_entrada) + (data.forma_pagamento_entrada ? ` — ${FORMAS_PAGAMENTO[data.forma_pagamento_entrada] || data.forma_pagamento_entrada}` : ''));
         linha('Saldo: ', fmt(Math.max(0, data.valor_total - data.valor_entrada)));
       }
-      linha('Parcela(s): ', data.parcelas || '1');
-      linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
-      if (data.valor_total > 0) {
-        const qtdParcelasPagamento = Math.max(1, parseInt(data.parcelas || '1', 10) || 1);
-        const saldoParcelado = Math.max(0, data.valor_total - (data.valor_entrada || 0));
-        linha('Valor da Parcela: ', fmt(saldoParcelado / qtdParcelasPagamento));
+      if (Array.isArray(data.parcelas_detalhe) && data.parcelas_detalhe.length > 0) {
+        // Carnê — cada parcela com seu valor e vencimento (não necessariamente iguais).
+        data.parcelas_detalhe.forEach((p, i) => {
+          linha(`Parcela ${i + 1}/${data.parcelas_detalhe!.length} — ${fmtData(p.data)}: `, fmt(p.valor));
+        });
+      } else {
+        linha('Parcela(s): ', data.parcelas || '1');
+        linha('Vencimento(s): ', fmtVencimentos(data.vencimento, data.parcelas || '1', data.vencimentos_datas));
+        if (data.valor_total > 0) {
+          const qtdParcelasPagamento = Math.max(1, parseInt(data.parcelas || '1', 10) || 1);
+          const saldoParcelado = Math.max(0, data.valor_total - (data.valor_entrada || 0));
+          linha('Valor da Parcela: ', fmt(saldoParcelado / qtdParcelasPagamento));
+        }
       }
       if (data.forma_pagamento) linha('Forma de Pagamento (saldo): ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
       doc.moveDown(0.3);

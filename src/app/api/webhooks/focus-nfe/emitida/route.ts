@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   // primeiro (cobre inclusive erro/rejeição — sem isso a linha ficava "processando" pra
   // sempre, escondendo do usuário que a emissão falhou de verdade).
   const existentePorRef = ref
-    ? (await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('ref_focus_nfe', ref).maybeSingle()).data
+    ? (await db.from('fiscal_notas').select('id, lead_id').eq('empresa_id', integracao.empresa_id).eq('ref_focus_nfe', ref).maybeSingle()).data
     : null;
 
   if (existentePorRef && !autorizada) {
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   const detalhes = ref && token ? await buscarDetalhesCompletos(ref, token, ambiente) : null;
 
   const existentePorChave = !existentePorRef && chaveAcesso
-    ? (await db.from('fiscal_notas').select('id').eq('empresa_id', integracao.empresa_id).eq('chave_acesso', chaveAcesso).maybeSingle()).data
+    ? (await db.from('fiscal_notas').select('id, lead_id').eq('empresa_id', integracao.empresa_id).eq('chave_acesso', chaveAcesso).maybeSingle()).data
     : null;
   const existente = existentePorRef || existentePorChave;
   if (existente) {
@@ -117,6 +117,17 @@ export async function POST(request: Request) {
       ...(detalhes?.nomeDestinatario ? { nome_participante: detalhes.nomeDestinatario, cnpj_participante: detalhes.cnpjDestinatario } : {}),
       ...(detalhes?.dataEmissao ? { data_emissao: detalhes.dataEmissao } : {}),
     }).eq('id', existente.id);
+
+    // Nota emitida pelo Pulse (emitir-nf1/nf2) tem lead_id — a venda já tinha criado a
+    // movimentação de baixa de estoque (tipo 'venda') na hora do fechamento, sem NF nenhuma
+    // vinculada ainda (nascer sem NF é normal: a NF só fica pronta depois, aqui). Sem esse
+    // backfill, a coluna de NF na tela de Estoque ficava pra sempre em branco pra quem emite
+    // pelo Focus NFe (só "Lançar Nota Fiscal" manual gravava nf_numero na movimentação).
+    if (existente.lead_id && (numero || chaveAcesso)) {
+      await db.from('estoque_movimentacoes')
+        .update({ nf_numero: numero, nf_serie: serie, nf_chave_acesso: chaveAcesso })
+        .eq('lead_id', existente.lead_id).eq('tipo', 'venda').is('nf_numero', null);
+    }
     return NextResponse.json({ ok: true, atualizado: true });
   }
 

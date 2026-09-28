@@ -14,11 +14,14 @@ type ItemPendente = {
   servico_id: number | null; // sugestão de casamento automático, já vem preenchida se achou parecido
 };
 
-type ItemRevisao = ItemPendente & { escolha: number | 'novo' | 'ignorar' };
+// categoria só importa quando escolha === 'novo' — mesma ideia do LancarNotaFiscalModal
+// (entrada manual/foto/XML): sem isso, produto novo criado por aqui nascia sempre tipo
+// 'Nota Fiscal' (cai em matéria-prima), sem chance de já entrar como Uso e Consumo.
+type ItemRevisao = ItemPendente & { escolha: number | 'novo' | 'ignorar'; categoria: 'materia_prima' | 'uso_consumo' };
 
 // Linha digitada na mão — mesma estrutura de ItemRevisao, só que sem id do banco ainda
 // (nasce direto em fiscal_notas_itens no momento de confirmar, não antes).
-type ItemManual = { chave: string; descricao: string; quantidade: string; valorUnitario: string; escolha: number | 'novo' | 'ignorar' };
+type ItemManual = { chave: string; descricao: string; quantidade: string; valorUnitario: string; escolha: number | 'novo' | 'ignorar'; categoria: 'materia_prima' | 'uso_consumo' };
 const novaChaveManual = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
 // Itens que o Focus NFe capturou automaticamente do XML da nota (webhook ou backfill de
@@ -50,7 +53,7 @@ export default function RevisarItensNotaModal({
     supabase.from('fiscal_notas_itens').select('id, descricao, ncm, quantidade, valor_unitario, servico_id')
       .eq('nota_id', notaId).eq('status', 'pendente').order('id')
       .then(({ data }) => {
-        setItens((data || []).map((i: ItemPendente) => ({ ...i, escolha: i.servico_id ?? 'novo' })));
+        setItens((data || []).map((i: ItemPendente) => ({ ...i, escolha: i.servico_id ?? 'novo', categoria: 'materia_prima' })));
         setCarregando(false);
       });
   }, [aberto, notaId]);
@@ -58,9 +61,12 @@ export default function RevisarItensNotaModal({
   const atualizarEscolha = (id: number, escolha: number | 'novo' | 'ignorar') => {
     setItens(prev => prev.map(i => i.id === id ? { ...i, escolha } : i));
   };
+  const atualizarCategoria = (id: number, categoria: 'materia_prima' | 'uso_consumo') => {
+    setItens(prev => prev.map(i => i.id === id ? { ...i, categoria } : i));
+  };
 
   const adicionarLinhaManual = () => {
-    setItensManuais(prev => [...prev, { chave: novaChaveManual(), descricao: '', quantidade: '1', valorUnitario: '', escolha: 'novo' }]);
+    setItensManuais(prev => [...prev, { chave: novaChaveManual(), descricao: '', quantidade: '1', valorUnitario: '', escolha: 'novo', categoria: 'materia_prima' }]);
   };
   const atualizarLinhaManual = (chave: string, patch: Partial<ItemManual>) => {
     setItensManuais(prev => prev.map(i => {
@@ -111,7 +117,7 @@ export default function RevisarItensNotaModal({
           // unidade aqui é FILIAL/unidade de negócio, não unidade de medida — '' =
           // "Geral", visível pra empresa inteira.
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
-            nome: item.descricao, preco: item.valor_unitario, tipo: 'Nota Fiscal', unidade: '',
+            nome: item.descricao, preco: item.valor_unitario, tipo: item.categoria === 'uso_consumo' ? 'Uso e Consumo' : 'Nota Fiscal', unidade: '',
             estoque: item.quantidade, empresa_id: empresaId,
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
@@ -151,7 +157,7 @@ export default function RevisarItensNotaModal({
         let servicoId: number;
         if (item.escolha === 'novo') {
           const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
-            nome: item.descricao.trim(), preco: valorUnitario, tipo: 'Nota Fiscal', unidade: '',
+            nome: item.descricao.trim(), preco: valorUnitario, tipo: item.categoria === 'uso_consumo' ? 'Uso e Consumo' : 'Nota Fiscal', unidade: '',
             estoque: quantidade, empresa_id: empresaId,
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
@@ -227,6 +233,16 @@ export default function RevisarItensNotaModal({
                   <option value="ignorar" className="bg-[#0B1120]">Ignorar (não afeta estoque)</option>
                   {servicos.map(s => <option key={s.id} value={s.id} className="bg-[#0B1120]">{s.id === item.servico_id ? '✓ ' : ''}{s.nome}</option>)}
                 </select>
+                {item.escolha === 'novo' && (
+                  <div className="flex gap-1 bg-black/40 border border-white/10 rounded-lg p-1 mt-2">
+                    <button type="button" onClick={() => atualizarCategoria(item.id, 'materia_prima')} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'materia_prima' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                      Matéria-prima
+                    </button>
+                    <button type="button" onClick={() => atualizarCategoria(item.id, 'uso_consumo')} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'uso_consumo' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                      Uso e consumo
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -272,6 +288,16 @@ export default function RevisarItensNotaModal({
                     <option value="ignorar" className="bg-[#0B1120]">Ignorar (não afeta estoque)</option>
                     {servicos.map(s => <option key={s.id} value={s.id} className="bg-[#0B1120]">{s.nome}</option>)}
                   </select>
+                )}
+                {item.escolha === 'novo' && (
+                  <div className="flex gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
+                    <button type="button" onClick={() => atualizarLinhaManual(item.chave, { categoria: 'materia_prima' })} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'materia_prima' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                      Matéria-prima
+                    </button>
+                    <button type="button" onClick={() => atualizarLinhaManual(item.chave, { categoria: 'uso_consumo' })} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'uso_consumo' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                      Uso e consumo
+                    </button>
+                  </div>
                 )}
               </div>
             ))}

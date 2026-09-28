@@ -1,45 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { confirmarPagamentoCobranca } from '@/lib/financeiro-pagamento';
+import { asaas, STATUS_ASAAS_PT, STATUS_ASAAS_PAGOS } from '@/lib/asaas';
 
 export const dynamic = 'force-dynamic';
-
-function asaasBase(ambiente: string) {
-    return ambiente === 'sandbox' ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3';
-}
-
-// Antes usava uma ASAAS_API_KEY global (a da própria WeGrow) — fazia boleto/Pix de
-// QUALQUER empresa cair na conta Asaas da WeGrow em vez da conta da empresa dona da
-// venda. Agora exige a chave própria de cada empresa (financeiro_integracoes), igual ao
-// fiscal_integracoes do Focus NFe.
-async function asaas(apiKey: string, ambiente: string, method: string, path: string, body?: any) {
-    const res = await fetch(`${asaasBase(ambiente)}${path}`, {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-            'access_token': apiKey,
-            'User-Agent': 'WeGrow-CRM/1.0',
-        },
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json();
-    if (!res.ok) {
-        const msg = data.errors?.[0]?.description || JSON.stringify(data);
-        throw new Error(msg);
-    }
-    return data;
-}
-
-// https://docs.asaas.com/reference/payment-status-list — só os que fazem sentido aparecer
-// pra quem usa o CRM (não é uma tradução técnica completa, é o texto que ajuda a decidir).
-const STATUS_ASAAS_PT: Record<string, string> = {
-    PENDING: 'Pendente', OVERDUE: 'Vencida', RECEIVED: 'Recebida', CONFIRMED: 'Confirmada',
-    RECEIVED_IN_CASH: 'Recebida em dinheiro', REFUNDED: 'Estornada', REFUND_REQUESTED: 'Estorno solicitado',
-    CHARGEBACK_REQUESTED: 'Chargeback solicitado', CHARGEBACK_DISPUTE: 'Em disputa de chargeback',
-    AWAITING_CHARGEBACK_REVERSAL: 'Aguardando reversão de chargeback',
-    DUNNING_REQUESTED: 'Em cobrança extrajudicial', DUNNING_RECEIVED: 'Recuperada via cobrança extrajudicial',
-    AWAITING_RISK_ANALYSIS: 'Em análise de risco',
-};
 
 export async function POST(request: Request) {
     const accessToken = request.headers.get('authorization')?.replace('Bearer ', '');
@@ -303,7 +267,7 @@ export async function PATCH(request: Request) {
 
         const pagamento = await asaas(integracao.asaas_api_key, integracao.ambiente, 'GET', `/payments/${asaasPaymentId}`);
         const statusReal = STATUS_ASAAS_PT[pagamento.status] || pagamento.status;
-        const pago = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(pagamento.status);
+        const pago = STATUS_ASAAS_PAGOS.includes(pagamento.status);
 
         if (pago) {
             const dataPagamento = pagamento.paymentDate || pagamento.confirmedDate || new Date().toISOString().substring(0, 10);

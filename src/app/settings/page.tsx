@@ -6,7 +6,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
-import { ETAPAS_FABRICACAO_PADRAO, ehMateriaPrima } from '../pulse/shared';
+import { ETAPAS_FABRICACAO_PADRAO, ehMateriaPrima, ehUsoConsumo } from '../pulse/shared';
 import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
 
 type HistoricoPreco = { preco_anterior: number; preco_novo: number; data: string };
@@ -76,10 +76,12 @@ export default function SettingsPage() {
   const { unidades } = useUnidades(perfil?.empresa_id);
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  // Catálogo (o que o cliente compra) e matéria-prima/insumo (consumido na ficha
-  // técnica, nunca vendido direto) viviam misturados na mesma lista — confuso pra
-  // quem só quer configurar preço/foto do produto e esbarra em "Chapa de Aço 2mm".
-  const [abaCategoria, setAbaCategoria] = useState<'venda' | 'materia_prima'>('venda');
+  // Catálogo (o que o cliente compra), matéria-prima/insumo (consumido na ficha
+  // técnica, nunca vendido direto) e uso e consumo (EPI, limpeza, ferramenta de bancada —
+  // controlado em quantidade, mas nem vendável nem parte de ficha técnica) viviam
+  // misturados na mesma lista — confuso pra quem só quer configurar preço/foto do produto
+  // e esbarra em "Chapa de Aço 2mm" ou "Luva de raspa".
+  const [abaCategoria, setAbaCategoria] = useState<'venda' | 'materia_prima' | 'uso_consumo'>('venda');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [histModalId, setHistModalId] = useState<string | null>(null);
@@ -269,13 +271,15 @@ export default function SettingsPage() {
   };
 
   const adicionarServico = () => {
+    const nomePadrao = abaCategoria === 'materia_prima' ? 'Nova Matéria-Prima' : abaCategoria === 'uso_consumo' ? 'Novo Item de Uso e Consumo' : 'Novo Serviço';
+    const tipoPadrao = abaCategoria === 'materia_prima' ? 'Matéria-prima' : abaCategoria === 'uso_consumo' ? 'Uso e Consumo' : 'Comercial Gravado';
     const novo: ServicoConfig = {
       id: `temp-${Date.now()}`,
-      nome: abaCategoria === 'materia_prima' ? 'Nova Matéria-Prima' : 'Novo Serviço',
+      nome: nomePadrao,
       preco: 0,
-      tipo: abaCategoria === 'materia_prima' ? 'Matéria-prima' : 'Comercial Gravado',
+      tipo: tipoPadrao,
       unidade: '',
-      estoque: abaCategoria === 'materia_prima' ? 0 : null,
+      estoque: abaCategoria === 'venda' ? null : 0,
     };
     setServicos([...servicos, novo]);
   };
@@ -310,10 +314,13 @@ export default function SettingsPage() {
     setServicos(prev => prev.map(s => s.id === servico.id ? { ...s, variante_nome: valor, nome: valor ? `${nomeBase} - ${valor}` : nomeBase } : s));
   };
 
+  const categoriaDoServico = (s: ServicoConfig): 'venda' | 'materia_prima' | 'uso_consumo' =>
+    ehUsoConsumo(s) ? 'uso_consumo' : ehMateriaPrima(s) ? 'materia_prima' : 'venda';
+
   // Grupos = produto (pai ou avulso) + suas variantes. O arraste reordena grupos inteiros
   // — variante nunca se solta do pai, ela só acompanha a posição dele na lista.
   const gruposProdutos = (() => {
-    const paisEAvulsos = servicos.filter(s => !s.produto_pai_id && ehMateriaPrima(s) === (abaCategoria === 'materia_prima'));
+    const paisEAvulsos = servicos.filter(s => !s.produto_pai_id && categoriaDoServico(s) === abaCategoria);
     const porPai: Record<string, ServicoConfig[]> = {};
     servicos.filter(s => s.produto_pai_id).forEach(s => {
       const chave = String(s.produto_pai_id);
@@ -322,8 +329,9 @@ export default function SettingsPage() {
     return paisEAvulsos.map(pai => ({ pai, variantes: porPai[pai.id] || [] }));
   })();
 
-  const qtdMateriaPrima = servicos.filter(s => !s.produto_pai_id && ehMateriaPrima(s)).length;
-  const qtdVenda = servicos.filter(s => !s.produto_pai_id && !ehMateriaPrima(s)).length;
+  const qtdMateriaPrima = servicos.filter(s => !s.produto_pai_id && categoriaDoServico(s) === 'materia_prima').length;
+  const qtdUsoConsumo = servicos.filter(s => !s.produto_pai_id && categoriaDoServico(s) === 'uso_consumo').length;
+  const qtdVenda = servicos.filter(s => !s.produto_pai_id && categoriaDoServico(s) === 'venda').length;
 
   const onDragEndProdutos = async (result: DropResult) => {
     const { destination, source } = result;
@@ -765,6 +773,9 @@ export default function SettingsPage() {
             <button onClick={() => setAbaCategoria('materia_prima')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaCategoria === 'materia_prima' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
               Matéria-Prima / Insumos ({qtdMateriaPrima})
             </button>
+            <button onClick={() => setAbaCategoria('uso_consumo')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaCategoria === 'uso_consumo' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+              Uso e Consumo ({qtdUsoConsumo})
+            </button>
           </div>
         )}
 
@@ -780,7 +791,7 @@ export default function SettingsPage() {
                 <div ref={providedDrop.innerRef} {...providedDrop.droppableProps} className="space-y-3">
                 {gruposProdutos.length === 0 && (
                     <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
-                        <p className="text-slate-500 text-sm font-medium">{abaCategoria === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : 'Nenhum serviço cadastrado.'}</p>
+                        <p className="text-slate-500 text-sm font-medium">{abaCategoria === 'materia_prima' ? 'Nenhuma matéria-prima cadastrada.' : abaCategoria === 'uso_consumo' ? 'Nenhum item de uso e consumo cadastrado.' : 'Nenhum serviço cadastrado.'}</p>
                     </div>
                 )}
 

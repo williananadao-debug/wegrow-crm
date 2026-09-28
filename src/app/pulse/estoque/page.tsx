@@ -6,7 +6,7 @@ import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, Sc
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../shared';
+import { ServicoConfig, alertarEstoqueBaixoSeCruzou, ehUsoConsumo } from '../shared';
 import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
 import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
@@ -92,6 +92,11 @@ export default function PulseEstoquePage() {
 
   const [busca, setBusca] = useState('');
   const [soBaixo, setSoBaixo] = useState(false);
+  // Uso e consumo (EPI, limpeza, ferramenta de bancada) é controlado em quantidade igual
+  // matéria-prima, mas não é insumo de ficha técnica nem produto de venda — separado numa
+  // aba própria pra não poluir a lista principal de estoque (mesmo raciocínio que já tirou
+  // "produto acabado" da lista antes, ver comentário mais abaixo em itensFiltrados).
+  const [abaEstoque, setAbaEstoque] = useState<'geral' | 'uso_consumo'>('geral');
 
   // Consumo dos últimos 30 dias, só pra calcular o ritmo de reposição — não é o Kardex
   // completo (esse já tem tela própria em /pulse/estoque/movimentacoes).
@@ -169,7 +174,13 @@ export default function PulseEstoquePage() {
   }, [servicos]);
 
 
-  const produtosComEstoque = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
+  const produtosComEstoqueTodos = servicos.filter(s => s.estoque !== null && s.estoque !== undefined);
+  const qtdUsoConsumo = produtosComEstoqueTodos.filter(ehUsoConsumo).length;
+  // Aba separada pro que é uso e consumo (EPI, limpeza, ferramenta de bancada) — resto
+  // ("geral") é matéria-prima/insumo de produção, que é o que as métricas de reposição/giro
+  // fazem sentido pra calcular. Todo o resto da tela (KPIs, lista, sugestão de compra) já
+  // opera em cima dessa lista filtrada, então troca de aba junto com tudo.
+  const produtosComEstoque = produtosComEstoqueTodos.filter(s => abaEstoque === 'uso_consumo' ? ehUsoConsumo(s) : !ehUsoConsumo(s));
   const valorTotalEstoque = produtosComEstoque.reduce((acc, s) => acc + (s.preco || 0) * (s.estoque || 0), 0);
   const produtosBaixo = produtosComEstoque.filter(s => (s.estoque as number) <= (s.estoque_minimo ?? 5));
   const alertasReposicao = calcularAlertasReposicao(servicos, consumoRecente);
@@ -433,9 +444,18 @@ export default function PulseEstoquePage() {
         </div>
       </header>
 
+      <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-4 w-fit">
+        <button onClick={() => setAbaEstoque('geral')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaEstoque === 'geral' ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
+          Estoque ({produtosComEstoqueTodos.length - qtdUsoConsumo})
+        </button>
+        <button onClick={() => setAbaEstoque('uso_consumo')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaEstoque === 'uso_consumo' ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
+          Uso e Consumo ({qtdUsoConsumo})
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Package size={10} /> Produtos</p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Package size={10} /> {abaEstoque === 'uso_consumo' ? 'Itens' : 'Produtos'}</p>
           <p className="text-2xl font-black text-white mt-1">{produtosComEstoque.length}</p>
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">

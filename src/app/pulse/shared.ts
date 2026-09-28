@@ -28,6 +28,13 @@ export type ServicoConfig = {
 // aparecia misturado com produto acabado pronto pra vender.
 export const ehMateriaPrima = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Matéria-prima' || s.tipo === 'Nota Fiscal';
 
+// Uso e consumo: item que a empresa controla quantidade (entra/sai do estoque normalmente),
+// mas não é matéria-prima de uma ficha técnica nem produto pra vender — ex: EPI, material de
+// limpeza, parafuso/fita genérica, ferramenta de bancada. Categoria própria (não cai em
+// ehMateriaPrima) pra não poluir a ficha técnica de produção nem o catálogo de venda, mas
+// ainda aparecer separado na tela de Estoque com o mesmo controle de quantidade/mínimo.
+export const ehUsoConsumo = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Uso e Consumo';
+
 // Sequência fixa de sub-etapas dentro de "Em produção" — não é configurável por produto
 // (ficaria MRP completo, fora do escopo do Pulse hoje). Cobre o caso real de fábrica
 // (corte → estrutura → pintura → acabamento) sem virar um quadro Kanban por si só.

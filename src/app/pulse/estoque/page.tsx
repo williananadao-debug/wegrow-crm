@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import JsBarcode from 'jsbarcode';
-import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, Percent, FileText, Wand2, Tag } from 'lucide-react';
+import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
@@ -97,6 +97,7 @@ export default function PulseEstoquePage() {
   // aba própria pra não poluir a lista principal de estoque (mesmo raciocínio que já tirou
   // "produto acabado" da lista antes, ver comentário mais abaixo em itensFiltrados).
   const [abaEstoque, setAbaEstoque] = useState<'geral' | 'uso_consumo'>('geral');
+  const [menuMaisAberto, setMenuMaisAberto] = useState(false);
 
   // Consumo dos últimos 30 dias, só pra calcular o ritmo de reposição — não é o Kardex
   // completo (esse já tem tela própria em /pulse/estoque/movimentacoes).
@@ -410,27 +411,9 @@ export default function PulseEstoquePage() {
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
         </div>
-        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+        <div className="flex flex-wrap gap-2 self-start md:self-auto relative">
           <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Saída Rápida
-          </Link>
-          <Link href="/pulse/estoque/compras" className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <ShoppingCart size={14} /> Compras
-          </Link>
-          <Link href="/pulse/estoque/fornecedores" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <Truck size={14} /> Fornecedores
-          </Link>
-          <Link href="/pulse/estoque/movimentacoes" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <ListTree size={14} /> Kardex
-          </Link>
-          <Link href="/pulse/estoque/relatorio" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <BarChart3 size={14} /> Relatório
-          </Link>
-          <Link href="/pulse/estoque/contagem" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <ClipboardCheck size={14} /> Contagem
-          </Link>
-          <Link href="/pulse/fiscal" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <Receipt size={14} /> Notas Fiscais
           </Link>
           <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Dar entrada por Nota Fiscal
@@ -441,6 +424,25 @@ export default function PulseEstoquePage() {
           <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Dar saída por Nota Fiscal
           </button>
+
+          {/* Ações menos frequentes (relatório/kardex/cadastro) agrupadas — a barra tinha 9
+          botões soltos, virando ruído visual pra achar as 3 ações do dia a dia acima. */}
+          <button onClick={() => setMenuMaisAberto(v => !v)} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <MoreHorizontal size={14} /> Mais <ChevronDown size={12} className={`transition-transform ${menuMaisAberto ? 'rotate-180' : ''}`} />
+          </button>
+          {menuMaisAberto && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setMenuMaisAberto(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden py-1.5">
+                <Link href="/pulse/estoque/compras" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><ShoppingCart size={14} /> Compras</Link>
+                <Link href="/pulse/estoque/fornecedores" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><Truck size={14} /> Fornecedores</Link>
+                <Link href="/pulse/estoque/movimentacoes" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><ListTree size={14} /> Kardex</Link>
+                <Link href="/pulse/estoque/relatorio" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><BarChart3 size={14} /> Relatório</Link>
+                <Link href="/pulse/estoque/contagem" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><ClipboardCheck size={14} /> Contagem</Link>
+                <Link href="/pulse/fiscal" className="flex items-center gap-2.5 px-4 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white text-xs font-bold uppercase tracking-wide"><Receipt size={14} /> Notas Fiscais</Link>
+              </div>
+            </>
+          )}
         </div>
       </header>
 

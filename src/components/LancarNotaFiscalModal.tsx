@@ -14,6 +14,11 @@ type ItemNota = {
   quantidade: number;
   valorUnitario: number;
   servicoId: number | 'novo' | 'ignorar';
+  // Só importa quando servicoId === 'novo' — categoria do produto que vai nascer. Sem essa
+  // escolha aqui, todo produto novo criado via NF nascia com tipo 'Nota Fiscal' (tratado como
+  // matéria-prima) sem chance de já entrar como "Uso e Consumo" — precisava ir depois em
+  // Configurações → Produtos só pra reclassificar.
+  categoria: 'materia_prima' | 'uso_consumo';
 };
 
 type PedidoOpcao = { id: number; empresa: string; valor_total: number };
@@ -145,6 +150,7 @@ export default function LancarNotaFiscalModal({
     itensLidos.map(i => ({
       chave: novaChave(), descricao: i.descricao, quantidade: i.quantidade, valorUnitario: i.valor_unitario,
       servicoId: acharServicoParecido(i.descricao, servicos) ?? (tipo === 'saida' ? 'ignorar' : 'novo'),
+      categoria: 'materia_prima',
     }));
 
   const lerComIA = async (imagemBase64: string) => {
@@ -231,7 +237,7 @@ export default function LancarNotaFiscalModal({
     fileInputRef.current?.click();
   };
 
-  const adicionarItem = () => setItens(prev => [...prev, { chave: novaChave(), descricao: '', quantidade: 1, valorUnitario: 0, servicoId: 'novo' }]);
+  const adicionarItem = () => setItens(prev => [...prev, { chave: novaChave(), descricao: '', quantidade: 1, valorUnitario: 0, servicoId: 'novo', categoria: 'materia_prima' }]);
   const atualizarItem = (chave: string, patch: Partial<ItemNota>) => {
     setItens(prev => prev.map(it => {
       if (it.chave !== chave) return it;
@@ -283,7 +289,7 @@ export default function LancarNotaFiscalModal({
             // unidade de medida — '' = "Geral", visível pra empresa inteira. 'un' quebrava
             // o produto: ficava invisível em Nova Venda pra quem não tivesse uma filial
             // chamada literalmente "un".
-            nome: nomeUpper, preco: item.valorUnitario, tipo: 'Nota Fiscal', unidade: '',
+            nome: nomeUpper, preco: item.valorUnitario, tipo: item.categoria === 'uso_consumo' ? 'Uso e Consumo' : 'Nota Fiscal', unidade: '',
             estoque: item.quantidade, empresa_id: empresaId, sku: gerarSkuAutomatico(nomeUpper),
           }]).select('id').single();
           if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
@@ -513,6 +519,16 @@ export default function LancarNotaFiscalModal({
                       <option value="ignorar" className="bg-[#0B1120]">Ignorar (não afeta estoque)</option>
                       {servicos.map(s => <option key={s.id} value={s.id} className="bg-[#0B1120]">{s.nome}</option>)}
                     </select>
+                  )}
+                  {item.servicoId === 'novo' && (
+                    <div className="flex gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
+                      <button type="button" onClick={() => atualizarItem(item.chave, { categoria: 'materia_prima' })} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'materia_prima' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                        Matéria-prima
+                      </button>
+                      <button type="button" onClick={() => atualizarItem(item.chave, { categoria: 'uso_consumo' })} className={`flex-1 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${item.categoria === 'uso_consumo' ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+                        Uso e consumo
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

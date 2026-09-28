@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, ArrowLeft, ScanLine, CheckCircle2, XCircle, PackageMinus, Minus, Plus, Trash2, Printer, Undo2, Zap, ClipboardList, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Activity, ArrowLeft, ScanLine, CheckCircle2, XCircle, PackageMinus, Minus, Plus, Trash2, Printer, Undo2, Zap, ClipboardList, Volume2, VolumeX, Camera, X } from 'lucide-react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import type { IScannerControls } from '@zxing/browser';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
@@ -51,6 +53,45 @@ export default function SaidaRapidaPage() {
   const [comprovante, setComprovante] = useState<Comprovante | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Leitura por câmera do celular — alternativa ao leitor USB/Bluetooth físico, pra quem
+  // não tem o leitor em mãos. Usa @zxing/browser (funciona em Chrome/Android e Safari/iOS
+  // recentes, ao contrário da BarcodeDetector nativa que só existe no Chrome).
+  const [scannerAberto, setScannerAberto] = useState(false);
+  const [scannerErro, setScannerErro] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const ultimaLeituraRef = useRef<{ texto: string; hora: number }>({ texto: '', hora: 0 });
+
+  useEffect(() => {
+    if (!scannerAberto) return;
+    let cancelado = false;
+    const reader = new BrowserMultiFormatReader();
+    setScannerErro(null);
+    reader.decodeFromConstraints(
+      { video: { facingMode: 'environment' } },
+      videoRef.current!,
+      (resultado) => {
+        if (cancelado || !resultado) return;
+        const texto = resultado.getText();
+        const agora = Date.now();
+        // Debounce: enquanto a câmera fica apontada pro mesmo código, cada frame decodifica
+        // de novo — sem isso, um bip/leitura era registrado várias vezes por segundo.
+        if (texto === ultimaLeituraRef.current.texto && agora - ultimaLeituraRef.current.hora < 3000) return;
+        ultimaLeituraRef.current = { texto, hora: agora };
+        setCodigo(texto);
+        processarCodigo(texto);
+      },
+    ).then(controls => { if (!cancelado) scannerControlsRef.current = controls; else controls.stop(); })
+      .catch(err => setScannerErro(err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
+        ? 'Permissão de câmera negada — habilite o acesso à câmera nas configurações do navegador.'
+        : 'Não foi possível acessar a câmera neste dispositivo/navegador.'));
+    return () => {
+      cancelado = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [scannerAberto]);
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;
@@ -206,6 +247,9 @@ export default function SaidaRapidaPage() {
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Bipe o código ou digite o nome — motivo e destino ficam registrados</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setScannerAberto(true)} className="flex items-center gap-2 bg-[var(--cor-primaria)] hover:brightness-110 text-[#0B1120] px-3.5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all">
+            <Camera size={14} /> Ler pela câmera
+          </button>
           <button onClick={() => setSom(s => !s)} title={som ? 'Som ligado' : 'Som desligado'} className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-400">{som ? <Volume2 size={15} /> : <VolumeX size={15} />}</button>
           <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1">
             <button onClick={() => setModo('requisicao')} className={`px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest flex items-center gap-1.5 ${modo === 'requisicao' ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}><ClipboardList size={12} /> Requisição</button>
@@ -301,6 +345,39 @@ export default function SaidaRapidaPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {scannerAberto && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setScannerAberto(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <p className="font-black text-white uppercase italic text-sm flex items-center gap-2"><Camera size={16} className="text-[var(--cor-primaria)]" /> Ler pela câmera</p>
+              <button onClick={() => setScannerAberto(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="relative bg-black aspect-square">
+              <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+              {/* Moldura só visual — o zxing decodifica o frame inteiro, não só essa área */}
+              <div className="absolute inset-8 border-2 border-[var(--cor-primaria)]/70 rounded-2xl pointer-events-none" />
+            </div>
+            <div className="p-4 space-y-2">
+              {scannerErro ? (
+                <p className="text-red-400 text-xs font-bold text-center">{scannerErro}</p>
+              ) : (
+                <p className="text-slate-400 text-xs text-center">Aponte a câmera pro código de barras do item.</p>
+              )}
+              {erro && <p className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{erro}</p>}
+              {leituras[0] && (
+                <div className={`text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-2 ${leituras[0].ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-400'}`}>
+                  {leituras[0].ok ? <CheckCircle2 size={13} className="shrink-0" /> : <XCircle size={13} className="shrink-0" />}
+                  <span className="truncate">{leituras[0].nome} — {leituras[0].mensagem}</span>
+                </div>
+              )}
+              <button onClick={() => setScannerAberto(false)} className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-xs tracking-widest">
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

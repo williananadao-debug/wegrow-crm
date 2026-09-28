@@ -93,6 +93,17 @@ export default function SaidaRapidaPage() {
     };
   }, [scannerAberto]);
 
+  // Celular: abre a câmera direto ao entrar na tela, sem precisar clicar em "Ler pela
+  // câmera" — quem tá no celular não tem leitor USB/Bluetooth plugado nele, então a câmera
+  // já É a forma de leitura esperada. No desktop (sem coincidir o padrão de mobile) mantém
+  // o comportamento de antes (input pra leitor físico/digitação em foco).
+  useEffect(() => {
+    if (loading) return;
+    if (typeof navigator === 'undefined') return;
+    const ehCelular = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    if (ehCelular) setScannerAberto(true);
+  }, [loading]);
+
   useEffect(() => {
     if (!perfil?.empresa_id) return;
     Promise.all([

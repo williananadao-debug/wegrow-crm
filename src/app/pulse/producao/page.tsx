@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima, ehUsoConsumo } from '../shared';
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -135,7 +135,7 @@ function PulseProducaoContent() {
     return m;
   }, [fichas]);
 
-  const produtosFinaisDisponiveis = servicos.filter(s => !ehMateriaPrima(s));
+  const produtosFinaisDisponiveis = servicos.filter(s => !ehMateriaPrima(s) && !ehUsoConsumo(s));
   const materiaPrimaDisponivel = servicos.filter(s => ehMateriaPrima(s));
 
   // Contadores acima do quadro — só quantidade, sem nenhum valor (mesma regra do resto

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima } from '../shared';
+import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo } from '../shared';
 
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
@@ -183,7 +183,7 @@ function PulseNovaVendaContent() {
   // Sob encomenda = não guarda produto pronto parado (ex: trailer) — precisa de ficha
   // técnica cadastrada em Produção antes de poder ser vendido, porque é ela que dispara a
   // produção automaticamente ao fechar o pedido.
-  const ehSobEncomenda = (s: ServicoConfig) => !ehMateriaPrima(s) && (s.estoque === null || s.estoque === undefined);
+  const ehSobEncomenda = (s: ServicoConfig) => !ehMateriaPrima(s) && !ehUsoConsumo(s) && (s.estoque === null || s.estoque === undefined);
 
   // Abre a tela cheia de Clientes (CNPJ automático, documento/Nexus, tudo) em vez do
   // mini-formulário de antes — navega na mesma aba, a pedido do usuário.
@@ -213,7 +213,7 @@ function PulseNovaVendaContent() {
   // Catálogo pequeno (poucos produtos) não precisa de busca — todo mundo já cabe na
   // tela, o campo só ocupava espaço. Com catálogo grande (ex: pacotes de mídia da rádio),
   // a busca volta sozinha.
-  const servicosVenda = servicos.filter(s => !ehMateriaPrima(s) && (!s.unidade || s.unidade === unidadeSel));
+  const servicosVenda = servicos.filter(s => !ehMateriaPrima(s) && !ehUsoConsumo(s) && (!s.unidade || s.unidade === unidadeSel));
   const catalogoGrande = servicosVenda.length > 6;
   const servicosFiltrados = servicosVenda.filter(s => {
     if (!catalogoGrande || !busca.trim()) return true;

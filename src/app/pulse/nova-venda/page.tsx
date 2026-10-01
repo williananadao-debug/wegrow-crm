@@ -6,6 +6,7 @@ import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, Shoppin
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo } from '../shared';
+import CampoMoeda from '@/components/CampoMoeda';
 
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
@@ -1012,7 +1013,7 @@ function PulseNovaVendaContent() {
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{Number(cobrancaParcelas) > 1 ? 'Valor total (R$)' : 'Valor (R$)'}</label>
-              <input type="number" step="0.01" value={cobrancaValor} onChange={e => setCobrancaValor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
+              <CampoMoeda value={Number(cobrancaValor) || 0} onChange={v => setCobrancaValor(v ? String(v) : '')} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-emerald-500" />
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{Number(cobrancaParcelas) > 1 ? '1º vencimento' : 'Vencimento'}</label>
@@ -1550,11 +1551,11 @@ function PulseNovaVendaContent() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400 font-bold text-xs">Desconto R$</span>
-                <input type="number" value={desconto || ''} onChange={e => setDesconto(Math.max(0, Number(e.target.value) || 0))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
+                <CampoMoeda value={desconto} onChange={v => setDesconto(Math.max(0, v))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400 font-bold text-xs">Acréscimo R$</span>
-                <input type="number" value={acrescimo || ''} onChange={e => setAcrescimo(Math.max(0, Number(e.target.value) || 0))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
+                <CampoMoeda value={acrescimo} onChange={v => setAcrescimo(Math.max(0, v))} className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-white text-xs text-right outline-none focus:border-[var(--cor-primaria)]" placeholder="0" />
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-white/5">
                 <span className="text-white font-black uppercase text-sm">Total</span>
@@ -1602,7 +1603,7 @@ function PulseNovaVendaContent() {
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
                   <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Entrada — R$</label>
-                  <input type="number" min="0" step="0.01" value={valorEntrada} onChange={e => setValorEntrada(e.target.value)} placeholder="Ex: 56970" className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                  <CampoMoeda value={Number(valorEntrada) || 0} onChange={v => setValorEntrada(v ? String(v) : '')} placeholder="Ex: 56.970,00" className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
                 </div>
                 <div>
                   <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block">Pagamento da entrada</label>
@@ -1633,7 +1634,7 @@ function PulseNovaVendaContent() {
                     <div key={i} className="flex items-center gap-1.5">
                       <span className="text-[9px] text-slate-500 font-bold w-5 shrink-0">{i + 1}ª</span>
                       <input type="date" value={p.data} onChange={e => atualizarParcelaDetalhe(i, { data: e.target.value })} className="flex-1 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
-                      <input type="number" min="0" step="0.01" value={p.valor || ''} onChange={e => atualizarParcelaDetalhe(i, { valor: Number(e.target.value) || 0 })} placeholder="R$" className="w-28 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
+                      <CampoMoeda value={p.valor || 0} onChange={v => atualizarParcelaDetalhe(i, { valor: v })} placeholder="R$" className="w-28 bg-black/40 border border-white/10 rounded-lg py-2 px-2 text-white text-xs outline-none focus:border-[var(--cor-primaria)]" />
                       <button type="button" onClick={() => removerParcelaDetalhe(i)} className="text-slate-500 hover:text-red-400 p-1 shrink-0"><X size={13} /></button>
                     </div>
                   ))}
@@ -1709,7 +1710,7 @@ function PulseNovaVendaContent() {
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <div>
                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Valor base (R$)</label>
-                        <input type="number" step="0.01" value={produtoDetalhe.preco || ''} onChange={e => setProdutoDetalhe(prev => prev && { ...prev, preco: Number(e.target.value) || 0 })} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+                        <CampoMoeda value={produtoDetalhe.preco || 0} onChange={v => setProdutoDetalhe(prev => prev && { ...prev, preco: v })} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
                       </div>
                       <div>
                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Prazo (dias, opcional)</label>
@@ -1732,9 +1733,9 @@ function PulseNovaVendaContent() {
                       <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Valor (só nesta venda — não altera o cadastro do produto)</label>
                       <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 focus-within:border-[var(--cor-primaria)]">
                         <span className="text-[var(--cor-primaria)] font-black text-lg shrink-0">R$</span>
-                        <input
-                          type="number" step="0.01" min="0" value={produtoDetalhe.preco || ''}
-                          onChange={e => setProdutoDetalhe(prev => prev && { ...prev, preco: Number(e.target.value) || 0 })}
+                        <CampoMoeda
+                          value={produtoDetalhe.preco || 0}
+                          onChange={v => setProdutoDetalhe(prev => prev && { ...prev, preco: v })}
                           className="w-full bg-transparent text-[var(--cor-primaria)] font-black text-xl py-2.5 outline-none"
                         />
                       </div>

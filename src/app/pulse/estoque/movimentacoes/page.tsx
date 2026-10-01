@@ -74,6 +74,12 @@ export default function KardexPage() {
   const filtradas = useMemo(() => {
     const limite = filtroPeriodo === 'tudo' ? null : Date.now() - { '7d': 7, '30d': 30, '90d': 90 }[filtroPeriodo] * 86400000;
     return movimentacoes.filter(m => {
+      // Produto sob encomenda (estoque null, ex: trailer) não tem estoque físico — qualquer
+      // movimentação ligada a ele é sobra de um bug já corrigido (NF de saída gravando
+      // estoque=0 nele), não giro de estoque de verdade. Kardex é só sobre item controlado
+      // em quantidade de verdade (mesma fronteira já usada no relatório de estoque).
+      const servico = servicoPorId[m.servico_id];
+      if (servico && (servico.estoque === null || servico.estoque === undefined)) return false;
       if (limite && new Date(m.created_at).getTime() < limite) return false;
       if (filtroProduto !== 'todos' && m.servico_id !== filtroProduto) return false;
       if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;

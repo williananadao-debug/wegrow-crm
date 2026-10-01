@@ -1503,7 +1503,11 @@ function PulseNovaVendaContent() {
                       setNovoExtraDescricao(''); setNovoExtraValor('');
                       setEditandoServicoId(i.servicoId);
                     } else if (servicoOriginal) {
-                      abrirConfigurador(servicoOriginal, i.configuracoes || [], true);
+                      // Preço (e descrição) já podem ter sido customizados só nesta venda — reabrir
+                      // pra editar outra coisa (ex: um extra) não pode voltar pro valor do
+                      // catálogo e perder isso; mescla o que já estava salvo na linha do carrinho
+                      // por cima do cadastro original.
+                      abrirConfigurador({ ...servicoOriginal, preco: i.precoUnitario, descricao: i.descricao ?? servicoOriginal.descricao, prazo_fabricacao_dias: i.prazoFabricacaoDias ?? servicoOriginal.prazo_fabricacao_dias }, i.configuracoes || [], true);
                     }
                   };
                   return (
@@ -1724,7 +1728,17 @@ function PulseNovaVendaContent() {
                 ) : (
                   <>
                     <h3 className="text-white font-black text-lg uppercase italic">{produtoDetalhe.nome}</h3>
-                    <p className="text-[var(--cor-primaria)] font-black text-xl mt-1">R$ {produtoDetalhe.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <div className="mt-2">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Valor (só nesta venda — não altera o cadastro do produto)</label>
+                      <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 focus-within:border-[var(--cor-primaria)]">
+                        <span className="text-[var(--cor-primaria)] font-black text-lg shrink-0">R$</span>
+                        <input
+                          type="number" step="0.01" min="0" value={produtoDetalhe.preco || ''}
+                          onChange={e => setProdutoDetalhe(prev => prev && { ...prev, preco: Number(e.target.value) || 0 })}
+                          className="w-full bg-transparent text-[var(--cor-primaria)] font-black text-xl py-2.5 outline-none"
+                        />
+                      </div>
+                    </div>
                     {produtoDetalhe.prazo_fabricacao_dias && (
                       <p className="inline-flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-2">
                         <Factory size={11} /> Prazo de fabricação: ~{produtoDetalhe.prazo_fabricacao_dias} dias

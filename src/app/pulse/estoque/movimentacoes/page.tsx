@@ -107,7 +107,8 @@ export default function KardexPage() {
   // busca), só que somando por dia, mês, usuário ou produto em vez de mostrar linha a linha.
   const resumoSaidas = useMemo(() => {
     const saidas = filtradas.filter(m => m.quantidade < 0);
-    const grupos = new Map<string, { chave: string; label: string; quantidade: number; valor: number }>();
+    type Grupo = { chave: string; label: string; quantidade: number; valor: number; ultimaData: string; usuarios: Set<string>; produtos: Set<string> };
+    const grupos = new Map<string, Grupo>();
     for (const m of saidas) {
       let chave: string; let label: string;
       if (agrupamento === 'usuario') {
@@ -124,9 +125,12 @@ export default function KardexPage() {
         const [ano, mes] = chave.split('-');
         label = new Date(Number(ano), Number(mes) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       }
-      const atual = grupos.get(chave) || { chave, label, quantidade: 0, valor: 0 };
+      const atual = grupos.get(chave) || { chave, label, quantidade: 0, valor: 0, ultimaData: m.created_at, usuarios: new Set<string>(), produtos: new Set<string>() };
       atual.quantidade += Math.abs(m.quantidade);
       atual.valor += Math.abs(m.quantidade) * (m.valor_unitario || 0);
+      if (m.created_at > atual.ultimaData) atual.ultimaData = m.created_at;
+      atual.usuarios.add(m.user_id ? (nomePorUsuario[m.user_id] || 'Usuário removido') : 'Sem usuário');
+      atual.produtos.add(servicoPorId[m.servico_id]?.nome || `Produto #${m.servico_id}`);
       grupos.set(chave, atual);
     }
     const valores = Array.from(grupos.values());
@@ -230,15 +234,26 @@ export default function KardexPage() {
           <p className="text-slate-600 text-xs text-center py-6">Nenhuma saída nesse filtro.</p>
         ) : (
           <div className="divide-y divide-white/5 max-h-72 overflow-y-auto">
-            {resumoSaidas.map(g => (
-              <div key={g.chave} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                <p className="text-white font-bold text-sm truncate capitalize">{g.label}</p>
-                <div className="flex items-center gap-4 shrink-0">
-                  <span className="text-red-400 font-black text-sm">{g.quantidade} un.</span>
-                  {g.valor > 0 && <span className="text-slate-400 text-xs font-bold w-24 text-right">R$ {g.valor.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>}
+            {resumoSaidas.map(g => {
+              const listar = (s: Set<string>) => { const arr = Array.from(s); return arr.length > 3 ? `${arr.slice(0, 3).join(', ')} +${arr.length - 3}` : arr.join(', '); };
+              const data = new Date(g.ultimaData);
+              return (
+                <div key={g.chave} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-white font-bold text-sm truncate capitalize">{g.label}</p>
+                    <p className="text-slate-500 text-[10px] mt-0.5 truncate">
+                      Última: {data.toLocaleDateString('pt-BR')} às {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {agrupamento !== 'usuario' && ` · ${listar(g.usuarios)}`}
+                      {agrupamento !== 'produto' && ` · ${listar(g.produtos)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="text-red-400 font-black text-sm">{g.quantidade} un.</span>
+                    {g.valor > 0 && <span className="text-slate-400 text-xs font-bold w-24 text-right">R$ {g.valor.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

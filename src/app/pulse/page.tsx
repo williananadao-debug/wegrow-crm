@@ -22,6 +22,14 @@ export default function PulsePainelPage() {
   const [loadingVendas, setLoadingVendas] = useState(true);
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
 
+  // Dia x Mês no gráfico — negócio de ticket alto/baixo volume (ex: Trailer Travel, poucas
+  // vendas por mês) fica melhor em mês; negócio de volume diário (rádio) fica melhor em dia.
+  // Lembra a escolha por navegador (cada empresa/pessoa vê o que faz sentido pra ela).
+  const [visaoVendas, setVisaoVendas] = useState<'dia' | 'mes'>('dia');
+  useEffect(() => { try { const v = localStorage.getItem('pulse_visao_vendas'); if (v === 'dia' || v === 'mes') setVisaoVendas(v); } catch {} }, []);
+  const mudarVisaoVendas = (v: 'dia' | 'mes') => { setVisaoVendas(v); try { localStorage.setItem('pulse_visao_vendas', v); } catch {} };
+  const [vendas12Meses, setVendas12Meses] = useState<{ created_at: string; valor_total: number }[]>([]);
+
   // --- Aba Gerencial (vendas + produção + estoque, só liderança) ---
   const [abaPainel, setAbaPainel] = useState<'vendas' | 'gerencial'>('vendas');
   const [faturamentoMesAnterior, setFaturamentoMesAnterior] = useState(0);
@@ -95,6 +103,18 @@ export default function PulsePainelPage() {
 
   useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id, mesVendas]);
 
+  // Série independente do mês selecionado na lista — alimenta só o gráfico "Vendas por Mês"
+  // (visão alternativa à de dia), últimos 12 meses fechados.
+  useEffect(() => {
+    if (!perfil?.empresa_id) return;
+    const desde12m = new Date(); desde12m.setMonth(desde12m.getMonth() - 11); desde12m.setDate(1); desde12m.setHours(0, 0, 0, 0);
+    let q = supabase.from('leads').select('created_at, valor_total')
+      .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
+      .gte('created_at', desde12m.toISOString());
+    if (!temCRM) q = q.eq('tipo', 'Pulse');
+    q.then(({ data }) => { if (data) setVendas12Meses(data); });
+  }, [perfil?.empresa_id, temCRM]);
+
   // Dados extras só pra aba Gerencial — carrega junto (não é pesado), mas só se a pessoa
   // é liderança, já que ninguém mais vai ver essa aba.
   useEffect(() => {
@@ -144,10 +164,18 @@ export default function PulsePainelPage() {
   const faturamentoMes = pedidosFechados.reduce((acc, v) => acc + (v.valor_total || 0), 0);
 
   const vendasPorDia = (() => {
-    const inicio = new Date(); inicio.setDate(1); inicio.setHours(0, 0, 0, 0);
+    // Mesmo mês selecionado no filtro da lista (mesVendas) — antes esse template usava
+    // sempre o mês corrente, então trocar o filtro pra um mês passado fazia o gráfico ficar
+    // todo zerado (pedidosFechados já filtrado por mesVendas não batia com nenhum dia do
+    // template, que continuava sendo do mês atual).
+    const [anoSel, mesSel] = mesVendas.split('-').map(Number);
+    const inicio = new Date(anoSel, mesSel - 1, 1);
     const hoje = new Date();
+    const ultimoDia = (anoSel === hoje.getFullYear() && mesSel === hoje.getMonth() + 1)
+      ? hoje
+      : new Date(anoSel, mesSel, 0);
     const dias: { dia: string; valor: number; dataIso: string }[] = [];
-    for (let d = new Date(inicio); d <= hoje; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(inicio); d <= ultimoDia; d.setDate(d.getDate() + 1)) {
       dias.push({ dia: String(d.getDate()).padStart(2, '0'), valor: 0, dataIso: getLocalYYYYMMDD(d) });
     }
     pedidosFechados.forEach(v => {
@@ -156,6 +184,22 @@ export default function PulsePainelPage() {
       if (slot) slot.valor += (Number(v.valor_total) || 0);
     });
     return dias;
+  })();
+
+  const MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const vendasPorMes = (() => {
+    const hoje = new Date();
+    const meses: { mes: string; valor: number; chave: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      meses.push({ chave: chaveMes(d), mes: MESES_CURTO[d.getMonth()], valor: 0 });
+    }
+    vendas12Meses.forEach(v => {
+      const chave = v.created_at.substring(0, 7);
+      const slot = meses.find(m => m.chave === chave);
+      if (slot) slot.valor += (Number(v.valor_total) || 0);
+    });
+    return meses;
   })();
 
   const ranking: RankingItem[] = (() => {
@@ -408,11 +452,20 @@ export default function PulsePainelPage() {
 
       <div className={`grid grid-cols-1 ${ranking.length > 1 ? 'lg:grid-cols-3' : ''} gap-4 mb-6`}>
         <div className={`bg-[#0F172A] border border-white/10 rounded-2xl p-4 ${ranking.length > 1 ? 'lg:col-span-2' : ''}`}>
-          <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
-            <BarChart3 size={14} className="text-amber-500" /> Vendas por Dia
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2">
+              <BarChart3 size={14} className="text-amber-500" /> Vendas por {visaoVendas === 'dia' ? 'Dia' : 'Mês'}
+            </h3>
+            <div className="flex gap-1 bg-black/30 border border-white/10 rounded-lg p-1">
+              {(['dia', 'mes'] as const).map(v => (
+                <button key={v} onClick={() => mudarVisaoVendas(v)} className={`px-2.5 py-1 rounded text-[10px] font-black uppercase transition-all ${visaoVendas === v ? 'bg-amber-500 text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
+                  {v === 'dia' ? 'Dia' : 'Mês'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-end h-36 gap-1 overflow-x-auto pb-1 w-full pt-4">
-            {(() => {
+            {visaoVendas === 'dia' ? (() => {
               const hojeIso = getLocalYYYYMMDD(new Date());
               const maxVal = Math.max(...vendasPorDia.map(v => v.valor), 1);
               return vendasPorDia.map((d, i) => {
@@ -431,6 +484,28 @@ export default function PulsePainelPage() {
                       )}
                     </div>
                     <span className={`text-[8px] text-center font-bold mt-1 ${isHoje ? 'text-[var(--cor-primaria)]' : d.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{d.dia}</span>
+                  </div>
+                );
+              });
+            })() : (() => {
+              const mesAtualChave = chaveMes(new Date());
+              const maxVal = Math.max(...vendasPorMes.map(v => v.valor), 1);
+              return vendasPorMes.map((m, i) => {
+                const height = m.valor > 0 ? Math.max((m.valor / maxVal) * 100, 5) : 0;
+                const isMesAtual = m.chave === mesAtualChave;
+                return (
+                  <div key={i} className="flex-1 min-w-[36px] group flex flex-col justify-end h-full relative hover:bg-white/5 rounded-lg transition-colors p-0.5">
+                    <div
+                      className={`w-full rounded-t-sm relative ${isMesAtual ? 'bg-[var(--cor-primaria)] shadow-[0_0_15px_rgb(var(--cor-primaria-rgb)/40%)]' : m.valor > 0 ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white/5'}`}
+                      style={{ height: m.valor > 0 ? `${height}%` : '4px' }}
+                    >
+                      {m.valor > 0 && (
+                        <span className={`absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-black tracking-tighter whitespace-nowrap z-10 ${isMesAtual ? 'text-[var(--cor-primaria)]' : 'text-amber-500'}`}>
+                          {formatCompact(m.valor)}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-[8px] text-center font-bold mt-1 uppercase ${isMesAtual ? 'text-[var(--cor-primaria)]' : m.valor > 0 ? 'text-white' : 'text-slate-600'}`}>{m.mes}</span>
                   </div>
                 );
               });

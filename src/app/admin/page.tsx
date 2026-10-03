@@ -8,7 +8,7 @@ import {
   ShieldAlert, ChevronRight, Search,
   BarChart2, TrendingUp, Clock, Activity, Target, Printer, LogIn,
   DollarSign, Globe, PenLine, Edit2, AlertTriangle, XCircle, MessageCircle,
-  CheckCircle2, KeyRound, Trash2, Sparkles, Radio,
+  CheckCircle2, KeyRound, Trash2, Sparkles, Radio, RefreshCw,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 import { Empresa, Estagio, estagioEmpresa, ESTAGIO_CFG, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
@@ -69,6 +69,7 @@ export default function AdminPage() {
   const [token, setToken] = useState('');
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Empresa | null>(null);
   const [abaAtiva, setAbaAtiva] = useState<Aba>('geral');
   const [atividade, setAtividade] = useState<{
@@ -135,22 +136,35 @@ export default function AdminPage() {
   // passa true de propósito.
   const carregarEmpresas = async (mostrarLoading = false) => {
     if (mostrarLoading) setLoading(true);
-    const [resEmpresas, resAtividade, resBillings] = await Promise.all([
-      fetch('/api/admin/empresas', { headers: headers() }),
-      fetch('/api/admin/atividade', { headers: headers() }),
-      supabase.from('clientes_wegrow').select('*'),
-    ]);
-    const empresasData = resEmpresas.ok ? await resEmpresas.json() : [];
-    const billingMap = Object.fromEntries((resBillings.data || []).map((b: any) => [b.empresa_id, b]));
-    setEmpresas(empresasData.map((e: any) => ({ ...e, billing: billingMap[e.id] ?? null })));
-    if (resAtividade.ok) setAtividade(await resAtividade.json());
-    setLoading(false);
-    // mantém a empresa selecionada em sincronia com os dados recarregados
-    setEmpresaSelecionada(prev => {
-      if (!prev) return prev;
-      const atualizada = empresasData.find((e: any) => e.id === prev.id);
-      return atualizada ? { ...atualizada, billing: billingMap[atualizada.id] ?? null } : prev;
-    });
+    setErroCarregamento(null);
+    try {
+      const [resEmpresas, resAtividade, resBillings] = await Promise.all([
+        fetch('/api/admin/empresas', { headers: headers() }),
+        fetch('/api/admin/atividade', { headers: headers() }),
+        supabase.from('clientes_wegrow').select('*'),
+      ]);
+      const empresasData = resEmpresas.ok ? await resEmpresas.json() : [];
+      const billingMap = Object.fromEntries((resBillings.data || []).map((b: any) => [b.empresa_id, b]));
+      setEmpresas(empresasData.map((e: any) => ({ ...e, billing: billingMap[e.id] ?? null })));
+      if (resAtividade.ok) setAtividade(await resAtividade.json());
+      // mantém a empresa selecionada em sincronia com os dados recarregados
+      setEmpresaSelecionada(prev => {
+        if (!prev) return prev;
+        const atualizada = empresasData.find((e: any) => e.id === prev.id);
+        return atualizada ? { ...atualizada, billing: billingMap[atualizada.id] ?? null } : prev;
+      });
+    } catch (err: any) {
+      // "Failed to fetch" acontece por qualquer instabilidade de rede de quem tá acessando
+      // (não é bug de lógica) — sem esse catch, a tela ficava carregando pra sempre em
+      // silêncio (setLoading(false) nunca rodava) e o erro só aparecia pro Sentry, sem
+      // feedback nenhum nem jeito de tentar de novo sem dar F5.
+      console.error('[admin/carregarEmpresas]', err);
+      setErroCarregamento(err?.message === 'Failed to fetch'
+        ? 'Não consegui carregar — confira sua conexão e tente de novo.'
+        : (err?.message || 'Erro ao carregar os dados.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Teste virou contrato fechado: só troca status pra 'ativa' (vira Cliente, entra no MRR).
@@ -554,6 +568,15 @@ export default function AdminPage() {
                   <p className="text-slate-500 text-[10px] px-1">{semDados.map(c => c.nome).join(', ')} — sem dados de faturamento.</p>
                 )}
               </>
+            )}
+
+            {erroCarregamento && !loading && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-3 flex items-center justify-between gap-3">
+                <p className="text-red-300 text-xs font-bold flex items-center gap-2"><AlertTriangle size={14} className="shrink-0"/> {erroCarregamento}</p>
+                <button onClick={() => carregarEmpresas(true)} className="shrink-0 flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                  <RefreshCw size={11}/> Tentar de novo
+                </button>
+              </div>
             )}
 
             {loading ? (

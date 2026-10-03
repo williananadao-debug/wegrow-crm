@@ -119,7 +119,15 @@ export const getLocalYYYYMMDD = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
-export const formatCompact = (num: number) => num >= 1000 ? (num / 1000).toFixed(1).replace('.0', '') + 'k' : (num % 1 === 0 ? num.toString() : num.toFixed(2));
+// Só tinha a casa de "milhar" (k) — valor de milhão pra cima (ex: 240.000.000) virava
+// "240000k" em vez de "240M" (dividia por 1000 mas nunca trocava o sufixo). Agora tem
+// milhão (M) e bilhão (B) também, mesma ideia em cada degrau.
+export const formatCompact = (num: number) => {
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1).replace('.0', '') + 'B';
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace('.0', '') + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+  return num % 1 === 0 ? num.toString() : num.toFixed(2);
+};
 
 export type EmpresaImpressao = { nome?: string | null; logo_url?: string | null; cor_primaria?: string | null };
 

@@ -26,7 +26,17 @@ export default function PulsePainelPage() {
   // vendas por mês) fica melhor em mês; negócio de volume diário (rádio) fica melhor em dia.
   // Lembra a escolha por navegador (cada empresa/pessoa vê o que faz sentido pra ela).
   const [visaoVendas, setVisaoVendas] = useState<'dia' | 'mes'>('dia');
-  useEffect(() => { try { const v = localStorage.getItem('pulse_visao_vendas'); if (v === 'dia' || v === 'mes') setVisaoVendas(v); } catch {} }, []);
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem('pulse_visao_vendas');
+      if (salvo === 'dia' || salvo === 'mes') { setVisaoVendas(salvo); return; }
+    } catch {}
+    // Sem preferência salva ainda: empresa só-Pulse (sem CRM/funil, ex: Trailer Travel —
+    // poucas vendas de ticket alto por mês) parte em "Mês" por padrão, porque "Dia" nesse
+    // perfil é quase sempre um gráfico vazio com um pico isolado. Quem usa CRM (rádio, maior
+    // volume diário) continua partindo em "Dia", que já fazia sentido antes.
+    if (!temCRM) setVisaoVendas('mes');
+  }, [temCRM]);
   const mudarVisaoVendas = (v: 'dia' | 'mes') => { setVisaoVendas(v); try { localStorage.setItem('pulse_visao_vendas', v); } catch {} };
   const [vendas12Meses, setVendas12Meses] = useState<{ created_at: string; valor_total: number }[]>([]);
 

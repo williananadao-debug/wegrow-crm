@@ -67,7 +67,7 @@ function normalizarTexto(t: string) {
   return t.replace(/\r\n?/g, '\n');
 }
 function fmt(v: number) {
-  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtData(d: string) {
   if (!d) return '___/___/______';
@@ -179,6 +179,8 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.moveDown(0.8);
 
       const clausula = (n: string, titulo: string) => {
+        // Não deixa o título da cláusula órfão no pé da página (texto indo pra próxima).
+        if (doc.y > doc.page.height - doc.page.margins.bottom - 70) doc.addPage();
         doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`CLÁUSULA ${n} – ${titulo}`);
         doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
         doc.moveDown(0.4);
@@ -250,6 +252,7 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       if (data.forma_pagamento) linha('Forma de Pagamento (saldo): ', FORMAS_PAGAMENTO[data.forma_pagamento] || data.forma_pagamento);
       doc.moveDown(0.3);
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Havendo pagamento parcelado ou saldo a pagar, a última parcela será obrigatoriamente quitada no ato da entrega do trailer, independentemente da data de vencimento indicada acima, sendo sua quitação condição para a retirada do bem. ' +
         'A entrega definitiva e liberação do trailer ficam condicionadas à quitação integral do valor contratado, bem como de eventuais itens adicionais solicitados e previamente aprovados pelo CONTRATANTE. O atraso no pagamento de qualquer parcela poderá acarretar incidência de multa de 2% sobre o valor em atraso, acrescida de juros de 1% ao mês, calculados proporcionalmente ao período de atraso.',
         { align: 'justify' }
       );
@@ -273,12 +276,23 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       );
       doc.moveDown(0.6);
 
+      // ── 6ª – ACOMPANHAMENTO DA FABRICAÇÃO (FOTOS E VISITAS) ───────────
+      // Pedido da Trailer Travel: cliente pedindo foto a toda hora e aparecendo na fábrica
+      // sem avisar — atrapalha a produção e é risco de segurança no chão de fábrica.
+      clausula('6ª', 'DO ACOMPANHAMENTO DA FABRICAÇÃO, FOTOS E VISITAS');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'Por razões de segurança e para não comprometer o andamento da produção, o acompanhamento da fabricação pelo CONTRATANTE observará as seguintes condições: (i) a CONTRATADA enviará fotos e informações sobre o andamento da fabricação nas principais etapas do processo produtivo, a seu critério, não havendo obrigação de envio de registros fora dessas etapas ou a qualquer tempo mediante solicitação; (ii) pedidos adicionais de fotos ou atualizações deverão ser feitos com antecedência e serão atendidos conforme a disponibilidade da equipe, sem prejuízo da rotina de produção; (iii) visitas à fábrica deverão ser previamente comunicadas e agendadas com a CONTRATADA com antecedência mínima de 48 (quarenta e oito) horas, ocorrendo somente em dia e horário confirmados, em horário comercial, com o acompanhamento de um responsável da CONTRATADA e mediante observância das normas internas de segurança; (iv) a CONTRATADA poderá recusar ou remarcar visitas não agendadas ou que coincidam com etapas de produção que envolvam risco à segurança dos visitantes ou da equipe.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
       if (data.observacao) {
-        clausula('6ª', 'OBSERVAÇÕES');
+        clausula('7ª', 'OBSERVAÇÕES');
         doc.font('Helvetica').fontSize(8).fillColor('#000').text(normalizarTexto(data.observacao), { align: 'justify' });
         doc.moveDown(0.6);
       }
-      const nClausula = (base: number) => data.observacao ? base + 1 : base;
+      // +1 pela cláusula de acompanhamento (6ª) e +1 se houver Observações (7ª).
+      const nClausula = (base: number) => (data.observacao ? base + 2 : base + 1);
 
       // ── DOCUMENTAÇÃO E EMPLACAMENTO ───────────────────────────────────
       clausula(`${nClausula(6)}ª`, 'DA DOCUMENTAÇÃO E EMPLACAMENTO');

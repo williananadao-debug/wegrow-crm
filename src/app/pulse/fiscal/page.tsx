@@ -4,9 +4,17 @@ import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Cop
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
-import RevisarItensNotaModal from '@/components/RevisarItensNotaModal';
-import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
-import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
+import dynamic from 'next/dynamic';
+
+// Modais só carregam quando abertos — o LancarNotaFiscalModal puxa parser de XML, matching
+// de produto etc., e estava tudo no bundle inicial da página (pior rota no Speed Insights).
+const RevisarItensNotaModal = dynamic(() => import('@/components/RevisarItensNotaModal'), { ssr: false });
+const LancarNotaFiscalModal = dynamic(() => import('@/components/LancarNotaFiscalModal'), { ssr: false });
+const VerNotaFiscalModal = dynamic(() => import('@/components/VerNotaFiscalModal'), { ssr: false });
+
+const NOTAS_COLUNAS = 'id, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
+// Renderizar 1000 linhas de uma vez travava a pintura e a interação; mostra em lotes.
+const LOTE_RENDER = 60;
 
 type NotaFiscal = {
   id: number; tipo: 'entrada' | 'saida'; chave_acesso: string | null;
@@ -108,12 +116,13 @@ export default function FiscalPage() {
   // impura no render é proibido pela regra de pureza do React. A tela não fica aberta
   // por dias, então fixar na montagem é suficiente pro corte de período.
   const [agora] = useState(() => Date.now());
+  const [qtdVisivel, setQtdVisivel] = useState(LOTE_RENDER);
 
   const carregar = useCallback(() => {
     if (!perfil?.empresa_id) return;
     setLoading(true);
     Promise.all([
-      supabase.from('fiscal_notas').select('*').eq('empresa_id', perfil.empresa_id)
+      supabase.from('fiscal_notas').select(NOTAS_COLUNAS).eq('empresa_id', perfil.empresa_id)
         .order('data_emissao', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .limit(1000),
@@ -204,6 +213,13 @@ export default function FiscalPage() {
       return true;
     });
   }, [notas, filtroTipo, filtroStatus, filtroPeriodo, busca, agora]);
+
+  // Filtro mudou → volta pro primeiro lote (ajuste durante o render, sem useEffect).
+  const [filtradasAnterior, setFiltradasAnterior] = useState(filtradas);
+  if (filtradasAnterior !== filtradas) {
+    setFiltradasAnterior(filtradas);
+    setQtdVisivel(LOTE_RENDER);
+  }
 
   const totais = useMemo(() => {
     const validas = filtradas.filter(n => n.status !== 'cancelada' && n.status !== 'rejeitada');
@@ -349,7 +365,7 @@ export default function FiscalPage() {
         </div>
       </div>
 
-      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+      <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden min-h-[240px]">
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
         ) : filtradas.length === 0 ? (
@@ -360,7 +376,7 @@ export default function FiscalPage() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {filtradas.map(n => {
+            {filtradas.slice(0, qtdVisivel).map(n => {
               const status = STATUS_LABEL[n.status] || { label: n.status, cor: 'text-slate-400 bg-white/5 border-white/10' };
               const entrada = n.tipo === 'entrada';
               return (
@@ -434,6 +450,11 @@ export default function FiscalPage() {
                 </div>
               );
             })}
+            {filtradas.length > qtdVisivel && (
+              <button onClick={() => setQtdVisivel(q => q + LOTE_RENDER * 2)} className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors">
+                Mostrar mais ({filtradas.length - qtdVisivel} restantes)
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -464,7 +485,7 @@ export default function FiscalPage() {
         </div>
       )}
 
-      <RevisarItensNotaModal
+      {notaEmRevisao && <RevisarItensNotaModal
         aberto={!!notaEmRevisao}
         onFechar={() => setNotaEmRevisao(null)}
         notaId={notaEmRevisao?.id ?? null}
@@ -473,9 +494,9 @@ export default function FiscalPage() {
         empresaId={perfil?.empresa_id}
         userId={user?.id}
         onConcluido={carregar}
-      />
+      />}
 
-      <LancarNotaFiscalModal
+      {lancarNotaAberto && <LancarNotaFiscalModal
         aberto={lancarNotaAberto}
         onFechar={() => setLancarNotaAberto(false)}
         servicos={servicos}
@@ -483,9 +504,9 @@ export default function FiscalPage() {
         userId={user?.id}
         temCRM={temCRM}
         onConcluido={carregar}
-      />
+      />}
 
-      <VerNotaFiscalModal aberto={verNotaId != null} onFechar={() => setVerNotaId(null)} notaId={verNotaId} />
+      {verNotaId != null && <VerNotaFiscalModal aberto onFechar={() => setVerNotaId(null)} notaId={verNotaId} />}
     </div>
   );
 }

@@ -119,7 +119,16 @@ export async function POST(req: NextRequest) {
     const clientesIncluidos = blocosClientes.length;
     const listaClientes = blocosClientes.join('\n\n');
 
-    const userPrompt = `TOTAL DE CLIENTES COM OBSERVAÇÃO A ANALISAR: ${clientesIncluidos} (${visitasIncluidas} visitas no total)
+    // Palavras-chave usadas no filtro da tela — direcionam a análise pro tema que o time
+    // está investigando (ex: "concorrente", "preço"). Sanitiza: só strings curtas.
+    const palavrasChave: string[] = Array.isArray(body.palavrasChave)
+      ? body.palavrasChave.filter((p: unknown): p is string => typeof p === 'string').map((p: string) => p.trim().slice(0, 40)).filter(Boolean).slice(0, 10)
+      : [];
+    const focoPalavras = palavrasChave.length > 0
+      ? `FOCO DA ANÁLISE: o time filtrou as visitas pelas palavras-chave ${palavrasChave.map(p => `"${p}"`).join(', ')}. Priorize sinais, objeções e riscos ligados a esses temas, e no resumo_executivo diga o que as visitas revelam sobre eles.\n\n`
+      : '';
+
+    const userPrompt = `${focoPalavras}TOTAL DE CLIENTES COM OBSERVAÇÃO A ANALISAR: ${clientesIncluidos} (${visitasIncluidas} visitas no total)
 
 ${listaClientes}`;
 

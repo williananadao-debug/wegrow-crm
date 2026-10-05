@@ -6,7 +6,7 @@ import {
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Image as ImageIcon,
   Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2,
-  SkipForward, Route
+  SkipForward, Route, Tags, Download
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -47,6 +47,48 @@ function getLocalYYYYMMDD(date: Date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+// Busca por palavra-chave ignora acento e caixa ("negociação" acha "negociacao").
+function normalizarTexto(t: string) {
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function parsePalavrasChave(entrada: string) {
+  return Array.from(new Set(entrada.split(/[,;\n]/).map(p => p.trim()).filter(p => p.length >= 2)));
+}
+
+function textoBuscavel(v: { observacao?: string; empresa: string; cidade?: string }) {
+  return normalizarTexto(`${v.observacao || ''} ${v.empresa} ${v.cidade || ''}`);
+}
+
+function escaparRegex(t: string) {
+  return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Destaca as palavras-chave na observação. Casa no texto sem acento e recorta o original
+// pelos mesmos índices — só vale quando tirar acento não muda o tamanho (texto em NFC
+// normal, que é o caso de quase tudo digitado); senão mostra sem destaque.
+function destacar(texto: string, palavras: string[]) {
+  if (palavras.length === 0) return texto;
+  const norm = normalizarTexto(texto);
+  if (norm.length !== texto.length) return texto;
+  const re = new RegExp(palavras.map(p => escaparRegex(normalizarTexto(p))).join('|'), 'g');
+  const partes: React.ReactNode[] = [];
+  let ultimo = 0;
+  for (const m of norm.matchAll(re)) {
+    const i = m.index ?? 0;
+    if (i > ultimo) partes.push(texto.slice(ultimo, i));
+    partes.push(<mark key={i} className="bg-amber-400/25 text-amber-200 rounded px-0.5">{texto.slice(i, i + m[0].length)}</mark>);
+    ultimo = i + m[0].length;
+  }
+  if (ultimo < texto.length) partes.push(texto.slice(ultimo));
+  return partes;
+}
+
+function csvCelula(v: string | number | null | undefined) {
+  const t = String(v ?? '');
+  return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
 function formatDate(iso: string) {
@@ -91,6 +133,10 @@ export default function VisitasPage() {
   const [busca, setBusca] = useState('');
   const [filtroVendedor, setFiltroVendedor] = useState('todos');
   const [filtroLead, setFiltroLead] = useState<'todos' | 'com_lead' | 'sem_lead'>('todos');
+  // Relatório por palavra-chave (pedido da Demais FM): filtra visitas cujo comentário/empresa/
+  // cidade cite os termos, mostra contagem por termo e exporta pra planilha.
+  const [palavrasChaveTexto, setPalavrasChaveTexto] = useState('');
+  const [modoPalavras, setModoPalavras] = useState<'qualquer' | 'todas'>('qualquer');
   const [dataInicio, setDataInicio] = useState(() => {
     const hoje = new Date();
     return getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
@@ -643,13 +689,60 @@ export default function VisitasPage() {
     }
   }
 
+  const palavrasChave = parsePalavrasChave(palavrasChaveTexto);
+  const palavrasChaveNorm = palavrasChave.map(normalizarTexto);
+  const palavrasDaVisita = (v: Visita) => {
+    const alvo = textoBuscavel(v);
+    return palavrasChave.filter((_, i) => alvo.includes(palavrasChaveNorm[i]));
+  };
+
   const visitasFiltradas = visitas.filter(v => {
     if (filtroVendedor !== 'todos' && v.user_id !== filtroVendedor) return false;
     if (filtroLead === 'com_lead' && !v.lead_id) return false;
     if (filtroLead === 'sem_lead' && v.lead_id) return false;
     if (busca && !v.empresa.toLowerCase().includes(busca.toLowerCase()) && !v.telefone?.includes(busca)) return false;
+    if (palavrasChave.length > 0) {
+      const achadas = palavrasDaVisita(v).length;
+      if (modoPalavras === 'todas' ? achadas < palavrasChave.length : achadas === 0) return false;
+    }
     return true;
   });
+
+  const resumoPalavras = palavrasChave.map((p, i) => {
+    const comTermo = visitasFiltradas.filter(v => textoBuscavel(v).includes(palavrasChaveNorm[i]));
+    return { palavra: p, visitas: comTermo.length, clientes: new Set(comTermo.map(v => v.empresa.trim().toLowerCase())).size };
+  });
+
+  function exportarRelatorioCSV() {
+    if (visitasFiltradas.length === 0) { toast('Nenhuma visita no filtro atual pra exportar.'); return; }
+    const blocos: (string | number)[][] = [];
+    if (palavrasChave.length > 0) {
+      blocos.push(['Relatório de visitas por palavra-chave']);
+      blocos.push(['Período', `${dataInicio || '—'} a ${dataFim || '—'}`]);
+      blocos.push(['Palavras-chave', palavrasChave.join(', '), modoPalavras === 'todas' ? '(todas as palavras)' : '(qualquer palavra)']);
+      blocos.push([]);
+      blocos.push(['Palavra-chave', 'Visitas', 'Clientes']);
+      resumoPalavras.forEach(r => blocos.push([r.palavra, r.visitas, r.clientes]));
+      blocos.push([]);
+    }
+    blocos.push(['Data', 'Hora', 'Vendedor', 'Empresa', 'Cidade', 'Unidade', 'Telefone', 'Lead no pipeline', 'Palavras-chave encontradas', 'Observação']);
+    visitasFiltradas.forEach(v => blocos.push([
+      formatDate(v.created_at), formatTime(v.created_at),
+      (v.user_id && nomesMap[v.user_id]) || '', v.empresa, v.cidade || '', v.unidade || '', v.telefone || '',
+      v.lead_id ? 'Sim' : 'Não', palavrasDaVisita(v).join(', '), (v.observacao || '').replace(/\s+/g, ' ').trim(),
+    ]));
+    // ";" + BOM: o Excel em pt-BR abre direto com colunas e acentos certos.
+    const csv = '\uFEFF' + blocos.map(l => l.map(csvCelula).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const sufixo = palavrasChave.length > 0
+      ? '-' + palavrasChave.map(p => normalizarTexto(p).replace(/[^a-z0-9]+/g, '-')).join('_').slice(0, 40)
+      : '';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-visitas-${dataInicio || 'inicio'}-a-${dataFim || 'hoje'}${sufixo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function gerarRelatorioIA() {
     if (visitasFiltradas.length === 0) {
@@ -666,7 +759,7 @@ export default function VisitasPage() {
       const res = await fetch('/api/ia/relatorio-visitas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ visitaIds: visitasFiltradas.map(v => v.id) }),
+        body: JSON.stringify({ visitaIds: visitasFiltradas.map(v => v.id), palavrasChave }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || 'Erro ao gerar relatório.');
@@ -715,6 +808,14 @@ export default function VisitasPage() {
               <Navigation size={14} /> Rota do Dia {paradasRota.length > 0 ? `(${paradasRota.length})` : ''}
             </button>
           )}
+          <button
+            onClick={exportarRelatorioCSV}
+            disabled={visitasFiltradas.length === 0}
+            title="Baixa as visitas do filtro atual (com as palavras-chave encontradas) numa planilha"
+            className="flex items-center gap-2 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+          >
+            <Download size={14} /> Exportar
+          </button>
           <button
             onClick={gerarRelatorioIA}
             disabled={visitasFiltradas.length === 0}
@@ -807,6 +908,49 @@ export default function VisitasPage() {
         </div>
       </div>
 
+      {/* PALAVRAS-CHAVE */}
+      <div className="px-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center bg-[#0B1120] border border-white/10 focus-within:border-amber-400/40 rounded-xl px-3 h-9 gap-2 flex-1 min-w-[220px]">
+            <Tags size={12} className="text-amber-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Palavras-chave nos comentários (separe por vírgula): preço, concorrente, renovação..."
+              value={palavrasChaveTexto}
+              onChange={e => setPalavrasChaveTexto(e.target.value)}
+              className="bg-transparent text-white text-xs outline-none w-full placeholder:text-slate-600"
+            />
+            {palavrasChaveTexto && (
+              <button onClick={() => setPalavrasChaveTexto('')} className="text-slate-500 hover:text-white"><X size={12} /></button>
+            )}
+          </div>
+          {palavrasChave.length > 1 && (
+            <div className="flex items-center gap-1 bg-[#0B1120] border border-white/10 rounded-xl h-9 overflow-hidden">
+              {(['qualquer', 'todas'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setModoPalavras(m)}
+                  title={m === 'qualquer' ? 'Visita que cite pelo menos uma das palavras' : 'Visita que cite todas as palavras'}
+                  className={`px-3 h-full text-[10px] font-black uppercase tracking-widest transition-colors ${modoPalavras === m ? 'bg-amber-500 text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}
+                >
+                  {m === 'qualquer' ? 'Qualquer' : 'Todas'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {palavrasChave.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{visitasFiltradas.length} visita{visitasFiltradas.length === 1 ? '' : 's'} no período:</span>
+            {resumoPalavras.map(r => (
+              <span key={r.palavra} className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-2 py-1 rounded-lg">
+                {r.palavra} · {r.visitas} visita{r.visitas === 1 ? '' : 's'} · {r.clientes} cliente{r.clientes === 1 ? '' : 's'}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* LISTA DE VISITAS */}
       <div className="flex-1 overflow-y-auto px-2 space-y-2 custom-scrollbar">
         {loading ? (
@@ -892,7 +1036,7 @@ export default function VisitasPage() {
                   </div>
                   {visita.observacao && (
                     <p className="mt-1.5 text-slate-400 text-xs line-clamp-2 italic">
-                      "{visita.observacao}"
+                      "{destacar(visita.observacao, palavrasChave)}"
                     </p>
                   )}
                 </div>

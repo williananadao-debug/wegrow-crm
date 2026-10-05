@@ -64,7 +64,7 @@ export default function DocumentosObraPage() {
 
   if (!temObras) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <HardHat size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Obras não está ativo pra sua empresa ainda.</p>
@@ -74,15 +74,15 @@ export default function DocumentosObraPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <Link href={`/obras/${obraId}`} className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest mb-6">
         <ArrowLeft size={14} /> Voltar pra {obra?.nome || 'obra'}
       </Link>
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-orange-500 flex items-center gap-3"><FileText size={28} /> Documentos</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Projetos, licenças, ARTs e demais documentos técnicos da obra</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-orange-500 flex items-center gap-3"><FileText size={28} /> Documentos</h1>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Projetos, licenças, ARTs e demais documentos técnicos da obra</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={categoria} onChange={e => setCategoria(e.target.value as ObraDocumento['categoria'])}

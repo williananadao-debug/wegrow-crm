@@ -258,7 +258,7 @@ function MidiaConfiguracoesContent() {
 
   if (!temMidia || !isDiretor) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
         </div>
@@ -267,12 +267,12 @@ function MidiaConfiguracoesContent() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white max-w-3xl mx-auto">
+    <div className="md:p-8 pb-20 text-white max-w-3xl mx-auto">
       <Link href="/midia" className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-sm font-black uppercase tracking-widest mb-6">
         <ArrowLeft size={14} /> Voltar
       </Link>
 
-      <h1 className="text-3xl font-black uppercase italic tracking-tighter mb-6">Configurações — Demais FM Comercial</h1>
+      <h1 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter mb-6">Configurações — Demais FM Comercial</h1>
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>

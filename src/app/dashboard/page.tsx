@@ -400,7 +400,8 @@ export default function DashboardPage() {
       )}
 
       <div className="flex flex-col xl:flex-row justify-end items-start xl:items-center gap-4 mb-2 px-2">
-        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
+        {/* No celular vira uma faixa rolável de lado (antes o filtro de data/unidade estourava a tela) */}
+        <div className="faixa-scroll lg:flex-nowrap lg:overflow-visible items-center gap-2 w-full -mx-2 px-2 md:mx-0 md:px-0">
             <div className="bg-[#0F172A] border border-white/10 p-1 rounded-xl flex gap-1 h-10 shadow-lg items-center">
                 {/* 👇 INDICADOR DE ATUALIZAÇÃO MODO TV 👇 */}
                 <div className={`px-2 transition-all ${refreshing ? 'opacity-100 scale-110' : 'opacity-30 scale-100'}`}>
@@ -460,7 +461,7 @@ export default function DashboardPage() {
 
       {visao === 'comercial' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1">
                 <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-orange-500/40 transition-colors">
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5 flex justify-between">{isCDL ? 'Receita de Anuidades' : 'Faturamento'} {filtroUnidade !== 'Todas' && <Building2 size={10} className="text-white/20"/>}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">R$ {statsComercial.faturamentoMês.toLocaleString('pt-BR', { notation: "compact", maximumFractionDigits: 1 })}</h3>

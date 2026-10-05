@@ -337,11 +337,11 @@ export default function PremisesPage() {
   if (!isDirector) return <div className="p-10 text-white text-center font-black uppercase">Acesso Restrito</div>;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 text-white animate-in fade-in duration-700">
+    <div className="md:p-8 space-y-8 text-white animate-in fade-in duration-700">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3">
             <Target className="text-[#22C55E]" size={32}/> Central de Estratégia
           </h1>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Inteligência aplicada a dados reais</p>

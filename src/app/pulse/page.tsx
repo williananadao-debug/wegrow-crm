@@ -398,7 +398,7 @@ export default function PulsePainelPage() {
 
   if (!temPulse) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Activity size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p>
@@ -408,13 +408,13 @@ export default function PulsePainelPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
-      <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="md:p-8 pb-20 text-white">
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
-            <LayoutGrid size={32} /> Painel Pulse
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-2 md:gap-3">
+            <LayoutGrid className="w-6 h-6 md:w-8 md:h-8 shrink-0" /> Painel Pulse
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Vendas sem funil — feche na hora, acompanhe aqui</p>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Vendas sem funil — feche na hora, acompanhe aqui</p>
         </div>
         <div className="flex gap-2">
           {vendaDiretaPulse && (

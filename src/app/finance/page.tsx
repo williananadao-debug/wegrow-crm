@@ -629,20 +629,20 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const filtrosAtivos = filtroUnidade || filtroDias !== '0';
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
-      <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="md:p-8 pb-20 text-white">
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
-            <DollarSign size={32}/> Financeiro
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-2 md:gap-3">
+            <DollarSign className="w-6 h-6 md:w-8 md:h-8"/> Financeiro
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
             {isCDL ? 'Anuidades · Inadimplência · Conciliação' : 'Inadimplência e conciliação de contratos'}
           </p>
         </div>
       </header>
 
       {/* Abas */}
-      <div className="flex gap-2 mb-6 border-b border-white/5 pb-4 flex-wrap">
+      <div className="faixa-scroll md:flex-wrap gap-2 mb-4 md:mb-6 border-b border-white/5 pb-3 md:pb-4 -mx-4 px-4 md:mx-0 md:px-0">
         {([
           ['alertas', isCDL ? `Vencendo em Breve (${vencendoBreve.length})` : 'Vencendo em Breve', Bell],
           ['inadimplencia', isCDL ? `Inadimplentes (${inadimplentes.length})` : `Inadimplência (${inadimplentes.length + boletosVencidos.length})`, AlertTriangle],
@@ -654,7 +654,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           <button
             key={key}
             onClick={() => setAba(key)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${aba === key ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+            className={`flex items-center gap-2 px-3.5 md:px-5 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${aba === key ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
           >
             <Icon size={14}/> {label}
           </button>
@@ -662,7 +662,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
       </div>
 
       {/* Filtros comuns */}
-      <div className="flex flex-wrap items-center gap-3 mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+      <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4 md:mb-5 bg-[#0F172A] border border-white/10 rounded-2xl p-2.5 md:p-4">
         <Filter size={14} className="text-slate-500"/>
         <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold outline-none">
           <option value="">Todas as unidades</option>
@@ -685,7 +685,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
         <SkeletonPage />
       ) : aba === 'alertas' ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-6 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-5 rounded-2xl">
               <Bell className="text-yellow-400 mb-2" size={20}/>
               <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest">{isCDL ? 'Anuidades Vencendo' : 'Contratos Vencendo'}</p>
@@ -749,7 +749,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
         </>
       ) : aba === 'inadimplencia' ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-6 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl">
               <AlertTriangle className="text-red-500 mb-2" size={20}/>
               <p className="text-[9px] font-black text-red-400 uppercase tracking-widest">Taxa de Inadimplência</p>
@@ -893,7 +893,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-6 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             {[
               { label: 'Esperado', value: totalEsperado, color: 'text-white', bg: 'bg-[#0F172A]' },
               { label: 'Recebido', value: totalRecebido, color: 'text-[var(--cor-primaria)]', bg: 'bg-[rgb(var(--cor-primaria-rgb)/5%)] border-[rgb(var(--cor-primaria-rgb)/20%)]' },
@@ -983,7 +983,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 mb-4 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             <div className="bg-[#0F172A] border border-white/10 p-4 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total do mês</p>
               <h2 className="text-xl font-black text-white mt-1">R$ {totalDespesasMes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
@@ -1131,7 +1131,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mb-6 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             <div className="bg-[#0F172A] border border-white/10 p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total do mês</p>
               <h2 className="text-2xl font-black text-white mt-1">R$ {totalEntradasMes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>
@@ -1215,7 +1215,7 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6 max-md:[&_h2]:text-lg max-md:[&>*]:p-3.5">
             <div className="bg-[rgb(var(--cor-primaria-rgb)/5%)] border border-[rgb(var(--cor-primaria-rgb)/20%)] p-5 rounded-2xl">
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Receita</p>
               <h2 className="text-2xl font-black text-[var(--cor-primaria)] mt-1">R$ {dreAno.receita.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</h2>

@@ -175,13 +175,13 @@ export default function ComprasPage() {
   if (!temPulse) return <div className="p-8 text-slate-400 font-bold text-sm text-center"><Activity size={28} className="mx-auto mb-2 text-slate-600" />O módulo Pulse não está ativo.</div>;
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       {msg && <div className="fixed top-6 right-6 z-[100] bg-[#0F172A] border border-[var(--cor-primaria)]/40 text-white text-sm font-bold px-4 py-3 rounded-xl shadow-xl">{msg}</div>}
       <header className="mb-6 flex items-center gap-4 flex-wrap">
         <Link href="/pulse/estoque" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"><ArrowLeft size={16} className="text-slate-400" /></Link>
         <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><ShoppingCart size={28} /> Compras</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">O que comprar pelo consumo real e o acompanhamento dos pedidos</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><ShoppingCart size={28} /> Compras</h1>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">O que comprar pelo consumo real e o acompanhamento dos pedidos</p>
         </div>
         <Link href="/pulse/estoque/fornecedores" className="ml-auto text-[11px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl">Fornecedores</Link>
       </header>

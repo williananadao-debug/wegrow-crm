@@ -428,7 +428,7 @@ export default function GoalsPage() {
     if (!user?.email) { setToastMessage('Seu perfil não tem e-mail cadastrado.'); setShowToast(true); return; }
     setEnviandoRelatorio(true);
     try {
-      const escopo = vendedorSelecionado === 'global' ? 'Global Empresa' : `Foco: ${vendedores.find(v => v.id === vendedorSelecionado)?.nome || ''}`;
+      const escopo = vendedorSelecionado === 'global' ? 'Global Empresa' : `Foco: ${vendedores.find(v => v.id === vendedorSelecionado)?.nome || perfil?.nome || ''}`;
       const nomeMes = new Date(0, mesAtual - 1).toLocaleString('pt-BR', { month: 'long' });
       const res = await fetch('/api/email/relatorio-metas', {
         method: 'POST',
@@ -458,7 +458,7 @@ export default function GoalsPage() {
   };
 
   return (
-    <div className="p-6 space-y-8 pb-20 animate-in fade-in duration-500">
+    <div className="md:p-6 space-y-4 md:space-y-8 pb-20 animate-in fade-in duration-500">
       
       {/* SELETORES SUPERIORES */}
       <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -496,13 +496,13 @@ export default function GoalsPage() {
       </div>
 
       {/* HEADER DINÂMICO */}
-      <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-8 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#0B1120] border border-white/10 rounded-3xl md:rounded-[40px] p-5 md:p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[rgb(var(--cor-primaria-rgb)/10%)] rounded-full blur-3xl -mr-20 -mt-20" />
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
           <div>
-            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">
-              {vendedorSelecionado === 'global' ? 'Planejamento Global' : `Foco: ${vendedores.find(v => v.id === vendedorSelecionado)?.nome}`}
+            <h1 className="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tighter">
+              {vendedorSelecionado === 'global' ? 'Planejamento Global' : `Foco: ${vendedores.find(v => v.id === vendedorSelecionado)?.nome || perfil?.nome || 'Minha meta'}`}
             </h1>
             <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Ano Fiscal {anoFiltro}</p>
           </div>
@@ -625,7 +625,7 @@ export default function GoalsPage() {
 
       {/* METAS POR UNIDADE */}
       {unidades.length > 0 && (
-        <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-8 shadow-2xl">
+        <div className="bg-[#0B1120] border border-white/10 rounded-3xl md:rounded-[40px] p-5 md:p-8 shadow-2xl">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
             <div>
               <h2 className="text-lg font-black text-white uppercase italic tracking-tighter flex items-center gap-2">

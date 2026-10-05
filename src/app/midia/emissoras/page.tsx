@@ -48,7 +48,7 @@ export default function MidiaEmissorasPage() {
 
   if (!temMidia || !isDiretor) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
@@ -68,7 +68,7 @@ export default function MidiaEmissorasPage() {
   const facebookPraca = daPracaRedes.find(x => x.periodo === periodoRedesRecente && x.plataforma === 'Facebook');
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <MidiaTabs />
 
       <div className="flex items-center gap-1 bg-[#0F172A] border border-white/10 p-1 rounded-xl mb-6 w-fit flex-wrap">

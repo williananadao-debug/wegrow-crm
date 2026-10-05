@@ -97,10 +97,10 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="p-4 md:p-8 bg-[#0B1120] min-h-screen text-white animate-in fade-in duration-700">
+    <div className="md:p-8 bg-[#0B1120] min-h-screen text-white animate-in fade-in duration-700">
       
       <div className="mb-8">
-        <h1 className="text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+        <h1 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter flex items-center gap-3">
           <ShieldCheck className="text-[#22C55E]" size={32}/> Segurança & Perfil
         </h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Gerencie suas credenciais de acesso</p>

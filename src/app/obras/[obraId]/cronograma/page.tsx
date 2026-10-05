@@ -61,7 +61,7 @@ export default function CronogramaObraPage() {
 
   if (!temObras) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <HardHat size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Obras não está ativo pra sua empresa ainda.</p>
@@ -71,12 +71,12 @@ export default function CronogramaObraPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <Link href={`/obras/${obraId}`} className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest mb-6">
         <ArrowLeft size={14} /> Voltar pra {obra?.nome || 'obra'}
       </Link>
 
-      <h1 className="text-3xl font-black tracking-tighter uppercase italic text-orange-500 mb-1">Cronograma</h1>
+      <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-orange-500 mb-1">Cronograma</h1>
       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-6">% previsto e executado por etapa — atualização manual</p>
 
       <div className="space-y-3 mb-6">

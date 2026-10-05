@@ -1201,7 +1201,7 @@ function PulseNovaVendaContent() {
 
   if (!temPulse) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Activity size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p>
@@ -1212,7 +1212,7 @@ function PulseNovaVendaContent() {
 
   if (!vendaDiretaPulse) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <ShoppingBag size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">Com o CRM ativo, as vendas são feitas pelo funil de Vendas.</p>
@@ -1225,7 +1225,7 @@ function PulseNovaVendaContent() {
   if (vendaConcluida) {
     const ehOrcamento = vendaConcluida.status === 'orcamento';
     return (
-      <div className="p-4 md:p-8 pb-20 text-white flex items-center justify-center min-h-[70vh]">
+      <div className="md:p-8 pb-20 text-white flex items-center justify-center min-h-[70vh]">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center">
           <CheckCircle2 size={40} className={`mx-auto mb-3 ${ehOrcamento ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`} />
           <p className="text-white font-black text-lg uppercase">{ehOrcamento ? 'Orçamento salvo!' : 'Venda registrada!'}</p>
@@ -1293,13 +1293,13 @@ function PulseNovaVendaContent() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
-      <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="md:p-8 pb-20 text-white">
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
-            <ShoppingBag size={32} /> Nova Venda
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-2 md:gap-3">
+            <ShoppingBag className="w-6 h-6 md:w-8 md:h-8 shrink-0" /> Nova Venda
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Monte o pedido e feche na hora — ou salve como orçamento</p>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Monte o pedido e feche na hora — ou salve como orçamento</p>
         </div>
         <button onClick={toggleHistorico} className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all self-start md:self-auto">
           <History size={14} /> Histórico de vendas {mostrarHistorico ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

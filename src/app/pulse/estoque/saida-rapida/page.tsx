@@ -243,19 +243,19 @@ export default function SaidaRapidaPage() {
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
   if (!temPulse) return (
-    <div className="p-4 md:p-8 pb-20 text-white"><div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center"><Activity size={32} className="text-slate-600 mx-auto mb-3" /><p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p></div></div>
+    <div className="md:p-8 pb-20 text-white"><div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center"><Activity size={32} className="text-slate-600 mx-auto mb-3" /><p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p></div></div>
   );
 
   const inp = 'w-full h-10 bg-black/40 border border-white/10 rounded-xl px-3 text-sm text-white outline-none focus:border-[var(--cor-primaria)]';
   const lbl = 'block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1';
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <header className="mb-6 flex items-center gap-4 flex-wrap">
         <Link href="/pulse/estoque" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"><ArrowLeft size={16} className="text-slate-400" /></Link>
         <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><ScanLine size={28} /> Saída de Estoque</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Bipe o código ou digite o nome — motivo e destino ficam registrados</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><ScanLine size={28} /> Saída de Estoque</h1>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Bipe o código ou digite o nome — motivo e destino ficam registrados</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setScannerAberto(true)} className="flex items-center gap-2 bg-[var(--cor-primaria)] hover:brightness-110 text-[#0B1120] px-3.5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all">

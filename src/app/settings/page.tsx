@@ -738,10 +738,10 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="p-4 md:p-8 pb-20 animate-in fade-in duration-500">
+    <div className="md:p-8 pb-20 animate-in fade-in duration-500">
       
       <header className="mb-8">
-        <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
+        <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
             <Package size={32} className="text-[var(--cor-primaria)]"/> Configurações
         </h1>
         <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gerencie seus produtos e tabela de preços por filial</p>

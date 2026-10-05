@@ -755,23 +755,23 @@ export default function CustomersPage() {
     <div className="h-full flex flex-col pb-4 animate-in fade-in duration-500">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6 px-2">
-        <div>
-          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">{isCDL ? 'Quadro de Associados' : 'Carteira de Clientes'}</h1>
+      <div className="flex flex-row justify-between items-center md:items-end gap-3 mb-4 md:mb-6 px-2">
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tighter leading-tight">{isCDL ? 'Quadro de Associados' : 'Carteira de Clientes'}</h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{totalCount} {isCDL ? 'Associados encontrados' : 'Empresas encontradas'}</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 shrink-0">
             <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-            <button onClick={() => csvInputRef.current?.click()} className="bg-white/5 border border-white/10 text-slate-300 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
-                <Upload size={16} /> Importar CSV
+            <button onClick={() => csvInputRef.current?.click()} title="Importar CSV" className="bg-white/5 border border-white/10 text-slate-300 p-3 md:px-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
+                <Upload size={16} /> <span className="hidden md:inline">Importar CSV</span>
             </button>
             {isDirector && (
-              <button onClick={buscarDuplicados} className="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-orange-500/20 transition-all flex items-center gap-2">
-                  <Hash size={16} /> Duplicados
+              <button onClick={buscarDuplicados} title="Duplicados" className="bg-orange-500/10 border border-orange-500/30 text-orange-400 p-3 md:px-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-orange-500/20 transition-all flex items-center gap-2">
+                  <Hash size={16} /> <span className="hidden md:inline">Duplicados</span>
               </button>
             )}
-            <button onClick={() => handleOpenModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgb(var(--cor-primaria-rgb)/20%)]">
-                <Plus size={18} strokeWidth={3} /> {isCDL ? 'Novo Associado' : 'Novo Cliente'}
+            <button onClick={() => handleOpenModal()} title={isCDL ? 'Novo Associado' : 'Novo Cliente'} className="bg-[var(--cor-primaria)] text-[#0F172A] p-3 md:px-6 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-[0_10px_30px_rgb(var(--cor-primaria-rgb)/20%)]">
+                <Plus size={18} strokeWidth={3} /> <span className="hidden sm:inline">{isCDL ? 'Novo Associado' : 'Novo Cliente'}</span>
             </button>
         </div>
       </div>
@@ -788,7 +788,7 @@ export default function CustomersPage() {
               <span className="text-amber-400 font-black text-[11px] uppercase tracking-widest flex-1">
                 {contratosVencendo.length} contrato{contratosVencendo.length > 1 ? 's' : ''} vencendo em 90 dias
               </span>
-              <div className="flex items-center gap-3 mr-2">
+              <div className="hidden sm:flex items-center gap-3 mr-2">
                 {criticos.length > 0 && <span className="text-[10px] font-black text-red-400 bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded-lg">🔴 {criticos.length} crítico{criticos.length > 1 ? 's' : ''}</span>}
                 {atencao.length  > 0 && <span className="text-[10px] font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg">🟡 {atencao.length} atenção</span>}
                 {proximos.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">⚪ {proximos.length} próximo{proximos.length > 1 ? 's' : ''}</span>}

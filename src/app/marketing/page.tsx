@@ -78,7 +78,7 @@ export default function MarketingPage() {
 
   if (!temModulo) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <TrendingUp size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo de Redes Sociais não está ativo pra sua empresa ainda.</p>
@@ -88,8 +88,8 @@ export default function MarketingPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
-      <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3 mb-6">
+    <div className="md:p-8 pb-20 text-white">
+      <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3 mb-6">
         <TrendingUp size={32} /> Redes Sociais
       </h1>
 

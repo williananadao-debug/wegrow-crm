@@ -2009,7 +2009,7 @@ export default function DealsPage() {
       
       {/* Cabeçalho compacto */}
       <div className="flex items-center gap-3 mb-2 px-2">
-          <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic shrink-0">{isCDL ? 'Funil de Associação' : 'Pipeline'}</h1>
+          <h1 className="text-xl md:text-2xl font-black tracking-tighter text-white uppercase italic truncate min-w-0">{isCDL ? 'Funil de Associação' : 'Pipeline'}</h1>
 
           {isOffline ? (
             <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse shrink-0"><WifiOff size={10}/> Offline</span>
@@ -2028,7 +2028,7 @@ export default function DealsPage() {
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
             <button onClick={() => setShowAgenda(true)} className="bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-600/20 hover:border-blue-500/30 hover:text-blue-400 p-2 rounded-xl transition-all" title="Agenda"><CalendarDays size={16} strokeWidth={2.5}/></button>
-            <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5"><MapPin size={14} strokeWidth={3}/> Visitas</button>
+            <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white p-2 sm:px-4 sm:py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5" title="Visitas"><MapPin size={14} strokeWidth={3}/> <span className="hidden sm:inline">Visitas</span></button>
             <button onClick={() => abrirModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgb(var(--cor-primaria-rgb)/20%)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
           </div>
       </div>

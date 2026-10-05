@@ -393,7 +393,7 @@ export default function PulseEstoquePage() {
 
   if (!temPulse) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Activity size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p>
@@ -403,26 +403,26 @@ export default function PulseEstoquePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
-      <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="md:p-8 pb-20 text-white">
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
-            <Boxes size={32} /> Estoque
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-2 md:gap-3">
+            <Boxes className="w-6 h-6 md:w-8 md:h-8 shrink-0" /> Estoque
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Ajuste rápido — salva na hora</p>
         </div>
-        <div className="flex flex-wrap gap-2 self-start md:self-auto relative">
+        <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 w-full md:w-auto md:self-auto relative [&>a]:justify-center [&>button]:justify-center">
           <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Saída Rápida
           </Link>
           <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <ScanLine size={14} /> Dar entrada por Nota Fiscal
+            <ScanLine size={14} /> <span className="md:hidden">Entrada NF</span><span className="hidden md:inline">Dar entrada por Nota Fiscal</span>
           </button>
           {/* Saída manual liberada pro Almoxarifado (mesmo cargo que só enxerga Estoque/Notas
           Fiscais) — antes só existia entrada por aqui; pra dar saída sem passar pelo funil de
           venda (ex: baixa avulsa com NF de venda já emitida em mãos), precisa desse atalho. */}
           <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
-            <ScanLine size={14} /> Dar saída por Nota Fiscal
+            <ScanLine size={14} /> <span className="md:hidden">Saída NF</span><span className="hidden md:inline">Dar saída por Nota Fiscal</span>
           </button>
 
           {/* Ações menos frequentes (relatório/kardex/cadastro) agrupadas — a barra tinha 9

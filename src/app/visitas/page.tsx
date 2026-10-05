@@ -6,7 +6,7 @@ import {
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Image as ImageIcon,
   Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2,
-  SkipForward, Route, Tags, Download
+  SkipForward, Route, Tags, Download, FileText
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -15,6 +15,9 @@ import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 import { geocodificarParadas, type ParadaGeo } from '@/lib/geocode';
+import { normalizarTexto, parsePalavrasChave, textoBuscavel, destacar } from './palavrasChave';
+
+const RelatorioVisitas = dynamic(() => import('./RelatorioVisitas'), { ssr: false });
 
 const RotaMapa = dynamic(() => import('@/components/RotaMapa'), { ssr: false });
 
@@ -47,43 +50,6 @@ function getLocalYYYYMMDD(date: Date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-// Busca por palavra-chave ignora acento e caixa ("negociação" acha "negociacao").
-function normalizarTexto(t: string) {
-  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-function parsePalavrasChave(entrada: string) {
-  return Array.from(new Set(entrada.split(/[,;\n]/).map(p => p.trim()).filter(p => p.length >= 2)));
-}
-
-function textoBuscavel(v: { observacao?: string; empresa: string; cidade?: string }) {
-  return normalizarTexto(`${v.observacao || ''} ${v.empresa} ${v.cidade || ''}`);
-}
-
-function escaparRegex(t: string) {
-  return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Destaca as palavras-chave na observação. Casa no texto sem acento e recorta o original
-// pelos mesmos índices — só vale quando tirar acento não muda o tamanho (texto em NFC
-// normal, que é o caso de quase tudo digitado); senão mostra sem destaque.
-function destacar(texto: string, palavras: string[]) {
-  if (palavras.length === 0) return texto;
-  const norm = normalizarTexto(texto);
-  if (norm.length !== texto.length) return texto;
-  const re = new RegExp(palavras.map(p => escaparRegex(normalizarTexto(p))).join('|'), 'g');
-  const partes: React.ReactNode[] = [];
-  let ultimo = 0;
-  for (const m of norm.matchAll(re)) {
-    const i = m.index ?? 0;
-    if (i > ultimo) partes.push(texto.slice(ultimo, i));
-    partes.push(<mark key={i} className="bg-amber-400/25 text-amber-200 rounded px-0.5">{texto.slice(i, i + m[0].length)}</mark>);
-    ultimo = i + m[0].length;
-  }
-  if (ultimo < texto.length) partes.push(texto.slice(ultimo));
-  return partes;
 }
 
 function csvCelula(v: string | number | null | undefined) {
@@ -137,6 +103,7 @@ export default function VisitasPage() {
   // cidade cite os termos, mostra contagem por termo e exporta pra planilha.
   const [palavrasChaveTexto, setPalavrasChaveTexto] = useState('');
   const [modoPalavras, setModoPalavras] = useState<'qualquer' | 'todas'>('qualquer');
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [dataInicio, setDataInicio] = useState(() => {
     const hoje = new Date();
     return getLocalYYYYMMDD(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
@@ -713,6 +680,8 @@ export default function VisitasPage() {
     return { palavra: p, visitas: comTermo.length, clientes: new Set(comTermo.map(v => v.empresa.trim().toLowerCase())).size };
   });
 
+  const fecharRelatorio = useCallback(() => setRelatorioAberto(false), []);
+
   function exportarRelatorioCSV() {
     if (visitasFiltradas.length === 0) { toast('Nenhuma visita no filtro atual pra exportar.'); return; }
     const blocos: (string | number)[][] = [];
@@ -781,8 +750,8 @@ export default function VisitasPage() {
     <div className="h-full flex flex-col pb-20 md:pb-2 animate-in fade-in duration-500">
 
       {/* TOPO */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 px-2">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 md:gap-4 mb-4 px-2">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => router.back()}
             className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-colors"
@@ -790,50 +759,61 @@ export default function VisitasPage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic flex items-center gap-2">
-              <MapPin size={24} className="text-blue-400" /> Visitas
+            <h1 className="text-xl md:text-2xl font-black tracking-tighter text-white uppercase italic flex items-center gap-2">
+              <MapPin size={22} className="text-blue-400" /> Visitas
             </h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">
+            <p className="text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-widest truncate">
               {perfil?.nome} — histórico de visitas a campo
             </p>
           </div>
         </div>
 
+        {/* No celular: secundários só com ícone e o "Registrar" ocupando o resto da linha */}
         <div className="flex gap-2">
           {temPulse && (
             <button
               onClick={abrirRotaDoDia}
-              className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+              title="Rota do Dia"
+              className="flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
             >
-              <Navigation size={14} /> Rota do Dia {paradasRota.length > 0 ? `(${paradasRota.length})` : ''}
+              <Navigation size={14} /> <span className="hidden md:inline">Rota do Dia</span>{paradasRota.length > 0 ? ` (${paradasRota.length})` : ''}
             </button>
           )}
+          <button
+            onClick={() => setRelatorioAberto(true)}
+            disabled={visitasFiltradas.length === 0}
+            title="Relatório pronto pra imprimir ou salvar em PDF (usa os filtros e palavras-chave atuais)"
+            className="flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500 hover:text-[#0B1120] disabled:opacity-40 disabled:cursor-not-allowed px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+          >
+            <FileText size={14} /> <span className="hidden md:inline">Relatório</span>
+          </button>
           <button
             onClick={exportarRelatorioCSV}
             disabled={visitasFiltradas.length === 0}
             title="Baixa as visitas do filtro atual (com as palavras-chave encontradas) numa planilha"
-            className="flex items-center gap-2 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+            className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
           >
-            <Download size={14} /> Exportar
+            <Download size={14} /> <span className="hidden md:inline">Exportar</span>
           </button>
           <button
             onClick={gerarRelatorioIA}
             disabled={visitasFiltradas.length === 0}
-            className="flex items-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+            title="Relatório Estratégico IA"
+            className="flex items-center justify-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap"
           >
-            <Sparkles size={14} /> Relatório Estratégico IA ({visitasFiltradas.length})
+            <Sparkles size={14} /> <span className="hidden md:inline">Relatório Estratégico</span> IA <span className="hidden md:inline">({visitasFiltradas.length})</span>
           </button>
           <button
             onClick={abrirModalNovaVisita}
-            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(59,130,246,0.3)] flex items-center gap-2"
+            className="flex-1 md:flex-none justify-center bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-[0_5px_20px_rgba(59,130,246,0.3)] flex items-center gap-2 whitespace-nowrap"
           >
-            <Plus size={16} strokeWidth={3} /> Registrar Visita
+            <Plus size={16} strokeWidth={3} /> <span className="md:hidden">Registrar</span><span className="hidden md:inline">Registrar Visita</span>
           </button>
         </div>
       </div>
 
       {/* CARDS RESUMO */}
-      <div className="grid grid-cols-3 gap-2 px-2 mb-4">
+      <div className="grid grid-cols-3 gap-2 px-2 mb-3 md:mb-4 max-md:[&>*]:p-2 max-md:[&_.text-2xl]:text-xl">
         <div className="bg-[#0B1120] border border-white/10 rounded-xl p-3 text-center">
           <div className="text-2xl font-black text-white">{totalVisitas}</div>
           <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</div>
@@ -915,7 +895,7 @@ export default function VisitasPage() {
             <Tags size={12} className="text-amber-400 shrink-0" />
             <input
               type="text"
-              placeholder="Palavras-chave nos comentários (separe por vírgula): preço, concorrente, renovação..."
+              placeholder="Palavras-chave: preço, concorrente..."
               value={palavrasChaveTexto}
               onChange={e => setPalavrasChaveTexto(e.target.value)}
               className="bg-transparent text-white text-xs outline-none w-full placeholder:text-slate-600"
@@ -1064,6 +1044,25 @@ export default function VisitasPage() {
           ))
         )}
       </div>
+
+      {relatorioAberto && (
+        <RelatorioVisitas
+          visitas={visitasFiltradas}
+          palavras={palavrasChave}
+          modo={modoPalavras}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          nomesMap={nomesMap}
+          empresaNome={empresa?.nome}
+          geradoPor={perfil?.nome}
+          filtros={[
+            filtroVendedor !== 'todos' ? `Vendedor: ${nomesMap[filtroVendedor] || '—'}` : '',
+            filtroLead === 'com_lead' ? 'Só com lead' : filtroLead === 'sem_lead' ? 'Só sem lead' : '',
+            busca ? `Busca: "${busca}"` : '',
+          ].filter(Boolean)}
+          onFechar={fecharRelatorio}
+        />
+      )}
 
       {/* MODAL: NOVA VISITA */}
       {isModalOpen && (

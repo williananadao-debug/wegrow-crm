@@ -105,7 +105,7 @@ export default function MidiaClustersPage() {
   if ((auth as any).loading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
   if (!temMidia || !isLideranca) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa.' : 'Só diretor ou gerente pode configurar clusters.'}</p>
@@ -117,7 +117,7 @@ export default function MidiaClustersPage() {
   const vendedores = perfis;
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <MidiaTabs />
 
       {msg && <div className="fixed top-6 right-6 z-[100] bg-[#0F172A] border border-[#22C55E]/40 text-white text-sm font-bold px-4 py-3 rounded-xl shadow-xl">{msg}</div>}

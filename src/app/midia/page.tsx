@@ -231,7 +231,7 @@ export default function MidiaPage() {
 
   if (!temMidia || !isDiretor) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Megaphone size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-base">{!temMidia ? 'O módulo Demais FM Comercial não está ativo pra sua empresa ainda.' : 'Só diretor pode acessar essa área por enquanto (módulo em teste).'}</p>
@@ -247,7 +247,7 @@ export default function MidiaPage() {
   const maxGrafico = Math.max(...graficoMeses.map(m => m.valor), 1);
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <MidiaTabs />
 
       <div className="flex items-end justify-between mb-6 gap-3 flex-wrap">

@@ -69,3 +69,16 @@ body {
      de filtros, outras seções) continua no DOM normal e vaza pro PDF junto. */
   body.modo-exportacao-isolada > :not(.export-overlay-isolada) { display: none !important; }
 }
+/* Faixa horizontal rolável sem barra visível — usada no celular pra filtros/abas/botões
+   que no desktop cabem numa linha, em vez de deixar estourar a tela ou empilhar tudo. */
+@layer utilities {
+  .faixa-scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .faixa-scroll::-webkit-scrollbar { display: none; }
+  .faixa-scroll > * { flex-shrink: 0; }
+}

@@ -86,13 +86,13 @@ export default function FornecedoresPage() {
   const vinculosDoEditando = editando?.id ? vinculos.filter(v => v.fornecedor_id === editando.id) : [];
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <header className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Link href="/pulse/estoque" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"><ArrowLeft size={16} className="text-slate-400" /></Link>
           <div>
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><Truck size={28} /> Fornecedores</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Quem vende cada item, prazo de entrega e último preço</p>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3"><Truck size={28} /> Fornecedores</h1>
+            <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Quem vende cada item, prazo de entrega e último preço</p>
           </div>
         </div>
         {isLideranca && <button onClick={() => { setEditando({ ...VAZIO }); setErro(null); }} className="inline-flex items-center gap-2 bg-[var(--cor-primaria)] text-[#0B1120] px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest"><Plus size={14} /> Novo fornecedor</button>}

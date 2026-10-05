@@ -348,10 +348,10 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6 print:hidden">
           <div>
-            <h1 className="text-3xl font-black uppercase italic flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-black uppercase italic flex items-center gap-3">
               <ShieldAlert className="text-[#22C55E]" size={32}/> God Mode
             </h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Painel de controle do sistema</p>
+            <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Painel de controle do sistema</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">

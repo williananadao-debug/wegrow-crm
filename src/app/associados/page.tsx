@@ -84,17 +84,17 @@ export default function AssociadosPage() {
   }, [ativos, busca]);
 
   if (loading) return (
-    <div className="p-4 md:p-8"><SkeletonPage /></div>
+    <div className="md:p-8"><SkeletonPage /></div>
   );
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white animate-in fade-in duration-500">
-      <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="md:p-8 pb-20 text-white animate-in fade-in duration-500">
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-3">
-            <Users size={32}/> {isCDL ? 'Base de Associados' : 'Base de Clientes'}
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic text-[#22C55E] flex items-center gap-2 md:gap-3">
+            <Users className="w-6 h-6 md:w-8 md:h-8 shrink-0"/> {isCDL ? 'Base de Associados' : 'Base de Clientes'}
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
             Painel de saúde da base · {associados.length} registros totais
           </p>
         </div>

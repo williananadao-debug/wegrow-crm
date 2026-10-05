@@ -137,7 +137,7 @@ export default function ContagemEstoquePage() {
 
   if (!temPulse) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <Activity size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Pulse não está ativo pra sua empresa ainda.</p>
@@ -147,16 +147,16 @@ export default function ContagemEstoquePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <header className="mb-6 flex items-center gap-4">
         <Link href="/pulse/estoque" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
           <ArrowLeft size={16} className="text-slate-400" />
         </Link>
         <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-[var(--cor-primaria)] flex items-center gap-3">
             <ClipboardCheck size={28} /> Contagem de Estoque
           </h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Bate o sistema com o que tem de verdade no galpão</p>
+          <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Bate o sistema com o que tem de verdade no galpão</p>
         </div>
       </header>
 

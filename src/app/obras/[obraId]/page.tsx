@@ -35,7 +35,7 @@ export default function ObraDetalhePage() {
 
   if (!temObras) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <HardHat size={32} className="text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">O módulo Obras não está ativo pra sua empresa ainda.</p>
@@ -46,7 +46,7 @@ export default function ObraDetalhePage() {
 
   if (!obra) {
     return (
-      <div className="p-4 md:p-8 pb-20 text-white">
+      <div className="md:p-8 pb-20 text-white">
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-10 text-center">
           <p className="text-slate-400 font-bold text-sm">Obra não encontrada.</p>
         </div>
@@ -59,7 +59,7 @@ export default function ObraDetalhePage() {
     : 0;
 
   return (
-    <div className="p-4 md:p-8 pb-20 text-white">
+    <div className="md:p-8 pb-20 text-white">
       <Link href="/obras" className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest mb-6">
         <ArrowLeft size={14} /> Voltar
       </Link>
@@ -67,7 +67,7 @@ export default function ObraDetalhePage() {
       <header className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{formatObraId(obra.id)}</p>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3">
             {obra.nome}
           </h1>
           <div className="flex flex-wrap items-center gap-3 mt-2">

@@ -42,7 +42,10 @@ export async function POST(req: Request) {
     await enviarLinkAcesso(db, { empresa, clienteId: cliente.id, nomeCliente: cliente.nome_empresa, email, base: urlBase(req), convite: true });
   } catch (e) {
     console.error('[portal-cliente/convidar]', e);
-    return NextResponse.json({ erro: 'Não foi possível enviar o e-mail agora. Tente de novo em instantes.' }, { status: 502 });
+    // Rota só da equipe (autenticada) — mostra o motivo real (ex: remetente do Resend não
+    // verificado), senão não dá pra saber o que corrigir.
+    const motivo = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ erro: `Não foi possível enviar o e-mail: ${motivo}` }, { status: 502 });
   }
   await db.from('leads').update({ portal_convite_enviado_em: new Date().toISOString() }).eq('id', lead.id);
   return NextResponse.json({ enviado: true, email });

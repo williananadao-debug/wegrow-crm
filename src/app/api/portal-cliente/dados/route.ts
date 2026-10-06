@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { COOKIE_SESSAO, dbAdmin, obterSessao, planoPagamento, portalAtivo } from '@/lib/portal-cliente';
+import { COOKIE_SESSAO, dbAdmin, obterSessao, opcoesCookieSessao, planoPagamento, portalAtivo } from '@/lib/portal-cliente';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,8 @@ const STATUS_PRODUCAO: Record<string, string> = { em_producao: 'Em produção', 
 // da produção ou dado de outro cliente.
 export async function GET() {
   const db = dbAdmin();
-  const sessao = await obterSessao(db, (await cookies()).get(COOKIE_SESSAO)?.value);
+  const valorCookie = (await cookies()).get(COOKIE_SESSAO)?.value;
+  const sessao = await obterSessao(db, valorCookie);
   if (!sessao) return NextResponse.json({ erro: 'Sessão expirada.' }, { status: 401 });
 
   const [{ data: empresa }, { data: cliente }] = await Promise.all([
@@ -84,9 +85,12 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     empresa: { nome: empresa.nome, logo: empresa.logo_url, cor: empresa.cor_primaria || '#22C55E' },
     cliente: { nome: cliente.nome_empresa },
     etapas, pedidos,
   });
+  // Renova o cookie a cada acesso (sessão deslizante de 90 dias — o banco é renovado em obterSessao).
+  if (valorCookie) res.cookies.set(COOKIE_SESSAO, valorCookie, opcoesCookieSessao());
+  return res;
 }

@@ -9,9 +9,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
 export const COOKIE_SESSAO = 'wg_portal_sessao';
-export const SESSAO_DIAS = 30;
+// Sessão "deslizante": cada acesso empurra o vencimento pra +90 dias. Quem acompanha o
+// pedido (produção leva até ~270 dias) nunca é desconectado; aparelho esquecido/perdido
+// perde o acesso sozinho depois de 90 dias sem uso.
+export const SESSAO_DIAS = 90;
 const LOGIN_MINUTOS = 30;          // link pedido na tela de login
-const CONVITE_DIAS = 7;            // link do e-mail de boas-vindas (cliente pode demorar a abrir)
+const CONVITE_DIAS = 30;           // link do e-mail de boas-vindas (cliente pode demorar a abrir) — continua de uso único
 const MAX_LINKS_POR_HORA = 5;
 
 export function dbAdmin(): SupabaseClient {
@@ -37,11 +40,21 @@ export async function obterSessao(db: SupabaseClient, cookieValor: string | unde
     .select('id, empresa_id, cliente_id, email, expira_em, ultimo_acesso')
     .eq('sessao_hash', hashToken(cookieValor)).maybeSingle();
   if (!data || new Date(data.expira_em).getTime() < Date.now()) return null;
-  // Atualiza "último acesso" no máximo 1x por hora — não precisa escrever a cada request.
+  // Renova (último acesso + vencimento +90 dias) no máximo 1x por hora — não precisa
+  // escrever a cada request.
   if (!data.ultimo_acesso || Date.now() - new Date(data.ultimo_acesso).getTime() > 3600_000) {
-    await db.from('portal_cliente_sessoes').update({ ultimo_acesso: new Date().toISOString() }).eq('id', data.id);
+    await db.from('portal_cliente_sessoes').update({
+      ultimo_acesso: new Date().toISOString(),
+      expira_em: new Date(Date.now() + SESSAO_DIAS * 86400_000).toISOString(),
+    }).eq('id', data.id);
   }
   return { id: data.id, empresa_id: data.empresa_id, cliente_id: data.cliente_id, email: data.email };
+}
+
+// Opções do cookie da sessão — usadas no login e na renovação a cada acesso (o cookie
+// também precisa ter o prazo empurrado, senão o navegador o apagaria aos 90 dias).
+export function opcoesCookieSessao() {
+  return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: SESSAO_DIAS * 86400 };
 }
 
 export async function criarSessao(db: SupabaseClient, d: { empresa_id: string; cliente_id: number; email: string }) {

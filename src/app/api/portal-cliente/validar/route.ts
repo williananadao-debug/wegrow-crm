@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { COOKIE_SESSAO, SESSAO_DIAS, criarSessao, dbAdmin, hashToken } from '@/lib/portal-cliente';
+import { COOKIE_SESSAO, criarSessao, dbAdmin, hashToken, opcoesCookieSessao } from '@/lib/portal-cliente';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,8 +26,6 @@ export async function POST(req: Request) {
 
   const { valor } = await criarSessao(db, { empresa_id: t.empresa_id, cliente_id: t.cliente_id, email: t.email });
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE_SESSAO, valor, {
-    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: SESSAO_DIAS * 86400,
-  });
+  res.cookies.set(COOKIE_SESSAO, valor, opcoesCookieSessao());
   return res;
 }

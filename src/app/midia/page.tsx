@@ -217,6 +217,16 @@ export default function MidiaPage() {
       ? { visualizacoes: metricasEfetivas.redes_sociais_visualizacoes, interacoes: metricasEfetivas.redes_sociais_interacoes, visitasPerfil: metricasEfetivas.redes_sociais_visitas_perfil, periodo: `${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`, aoVivo: false }
       : null;
 
+  // Demais News: a API do Leo já manda "Instagram Demais News" por mês (linha escopo rede) —
+  // prefere ela; o valor digitado em Configurações vira só reserva pra mês sem dado na API.
+  const demaisNewsApi = (redesSociaisFm?.dados || []).filter(d => d.plataforma === 'Instagram Demais News').sort((a, b) => a.periodo.localeCompare(b.periodo));
+  const demaisNewsApiMes = demaisNewsApi.find(d => d.periodo === periodoSelecionado) || demaisNewsApi[demaisNewsApi.length - 1] || null;
+  const demaisNews = demaisNewsApiMes
+    ? { visualizacoes: demaisNewsApiMes.visualizacoes, interacoes: demaisNewsApiMes.interacoes, seguidores: demaisNewsApiMes.seguidores, periodo: demaisNewsApiMes.periodo, aoVivo: true }
+    : metricasEfetivas?.instagram_demais_news_visualizacoes != null
+      ? { visualizacoes: metricasEfetivas.instagram_demais_news_visualizacoes, interacoes: metricasEfetivas.instagram_demais_news_interacoes, seguidores: metricasEfetivas.instagram_demais_news_seguidores, periodo: `${metricasEfetivas.ano}-${String(metricasEfetivas.mes).padStart(2, '0')}`, aoVivo: false }
+      : null;
+
   // Nunca soma mensal com acumulado (o acumulado já contém os mensais — aviso do Leo) e
   // nunca soma Apple com Android num único número: a unidade pode divergir entre lojas
   // (ex: Android às vezes vem como "instalações ativas", não "downloads").
@@ -226,6 +236,19 @@ export default function MidiaPage() {
   const monetizacaoOrdenada = [...(monetizacaoFm?.dados || [])].filter(d => d.escopo === 'mensal').sort((a, b) => (b.periodo || '').localeCompare(a.periodo || ''));
   const monetizacaoMesAtual = monetizacaoOrdenada.find(d => d.periodo === periodoSelecionado) || monetizacaoOrdenada[0] || null;
   const monetizacaoAcumulado = monetizacaoFm?.dados.find(d => d.escopo === 'acumulado') || null;
+  // O "acumulado" sem período da API é o bloco ANTERIOR à série mensal (hoje: Jan–Jun/2026 =
+  // R$ 5.400,20), não o total do ano — a própria Demais FM confirmou (o total do ano já
+  // inclui os meses e não deve ser somado de novo). Rotula como "Até <mês anterior ao 1º
+  // mensal>" pra não parecer o acumulado do ano.
+  const primeiroMensalMonetizacao = [...monetizacaoOrdenada].map(d => d.periodo).filter(Boolean).sort()[0] || null;
+  const rotuloAcumuladoMonetizacao = (() => {
+    if (!monetizacaoAcumulado?.periodo && primeiroMensalMonetizacao) {
+      const [a, m] = primeiroMensalMonetizacao.split('-').map(Number);
+      const ant = m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`;
+      return `Até ${fmtPeriodo(ant)}`;
+    }
+    return 'Acumulado';
+  })();
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -369,10 +392,10 @@ export default function MidiaPage() {
               </div>
               <div>
                 <p className="text-[11px] font-black text-slate-500 uppercase tracking-wide mb-1">Instagram Demais News</p>
-                <h3 className="text-4xl font-black text-white">{fmtCompacto(metricasEfetivas?.instagram_demais_news_visualizacoes)}</h3>
+                <h3 className="text-4xl font-black text-white">{fmtCompacto(demaisNews?.visualizacoes)}</h3>
                 <p className="text-[12px] text-slate-500 font-bold mt-0.5">
-                  {fmtNumero(metricasEfetivas?.instagram_demais_news_interacoes)} interações · {fmtNumero(metricasEfetivas?.instagram_demais_news_seguidores)} seguidores
-                  {metricasEhFallback && metricasEfetivas ? ` · ${MESES_LABEL[metricasEfetivas.mes - 1]}/${metricasEfetivas.ano} (mais recente preenchido)` : ''}
+                  {fmtNumero(demaisNews?.interacoes)} interações · {fmtNumero(demaisNews?.seguidores)} seguidores
+                  {demaisNews && demaisNews.periodo !== periodoSelecionado ? ` · ${fmtPeriodo(demaisNews.periodo)} (mais recente disponível)` : ''}
                 </p>
               </div>
             </div>
@@ -521,7 +544,7 @@ export default function MidiaPage() {
                     {monetizacaoAcumulado && (
                       <div>
                         <h4 className="text-xl font-black text-white">{fmtMoeda(Number(monetizacaoAcumulado.valor))}</h4>
-                        <p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">Acumulado</p>
+                        <p className="text-[11px] text-slate-500 font-bold uppercase mt-0.5">{rotuloAcumuladoMonetizacao}</p>
                       </div>
                     )}
                   </div>

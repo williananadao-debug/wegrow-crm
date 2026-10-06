@@ -219,8 +219,8 @@ export async function POST(req: NextRequest) {
         const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
         const inicioMesAnterior = new Date(inicioMes); inicioMesAnterior.setMonth(inicioMesAnterior.getMonth() - 1);
         const [{ data: vendasMes }, { data: vendasMesAnterior }] = await Promise.all([
-          supabaseAdmin.from('leads').select('valor_total, itens').eq('empresa_id', empresaId).eq('tipo', 'Pulse').eq('status', 'ganho').gte('created_at', inicioMes.toISOString()),
-          supabaseAdmin.from('leads').select('valor_total').eq('empresa_id', empresaId).eq('tipo', 'Pulse').eq('status', 'ganho').gte('created_at', inicioMesAnterior.toISOString()).lt('created_at', inicioMes.toISOString()),
+          supabaseAdmin.from('leads').select('valor_total, itens').eq('empresa_id', empresaId).eq('tipo', 'Pulse').eq('status', 'ganho').gte('fechado_em', inicioMes.toISOString()),
+          supabaseAdmin.from('leads').select('valor_total').eq('empresa_id', empresaId).eq('tipo', 'Pulse').eq('status', 'ganho').gte('fechado_em', inicioMesAnterior.toISOString()).lt('fechado_em', inicioMes.toISOString()),
         ]);
         const faturamentoMes = (vendasMes || []).reduce((s: number, v: any) => s + (Number(v.valor_total) || 0), 0);
         const faturamentoMesAnterior = (vendasMesAnterior || []).reduce((s: number, v: any) => s + (Number(v.valor_total) || 0), 0);

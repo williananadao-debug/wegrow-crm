@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     ] = await Promise.all([
         db.from('leads').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId),
         db.from('leads').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).gte('created_at', inicioMes),
-        db.from('leads').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('status', 'ganho').gte('created_at', inicioMes),
+        db.from('leads').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('status', 'ganho').gte('fechado_em', inicioMes),
         db.from('profiles').select('id, nome, cargo, unidade, email').eq('empresa_id', empresaId),
     ]);
 

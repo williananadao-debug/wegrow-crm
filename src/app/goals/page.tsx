@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
+import { dataReferenciaLead, inicioMesIso } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -136,10 +137,11 @@ export default function GoalsPage() {
       setMetasMensais(metasMensaisData);
 
       let vendasQuery = supabase.from('leads')
-        .select('valor_total, created_at')
+        .select('valor_total, fechado_em, created_at')
         .eq('status', 'ganho')
-        .gte('created_at', `${anoFiltro}-01-01`)
-        .lte('created_at', `${anoFiltro}-12-31`);
+        // Venda conta no mês em que foi GANHA (fechado_em), não no que o lead foi criado.
+        .gte('fechado_em', inicioMesIso(anoFiltro, 1))
+        .lt('fechado_em', inicioMesIso(anoFiltro + 1, 1));
 
       // fechado_por é quem realmente fechou (carimbado 1x, nunca muda depois); user_id é
       // "responsável atual" e pode ter sido reatribuído depois do fechamento. Pra leads
@@ -154,7 +156,7 @@ export default function GoalsPage() {
 
       const mensalMap: Record<number, number> = {};
       vendas?.forEach(v => {
-        const mesVenda = new Date(v.created_at).getMonth() + 1;
+        const mesVenda = new Date(dataReferenciaLead({ ...v, status: 'ganho' })).getMonth() + 1;
         mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
       });
       setRealizadoMensalMap(mensalMap);
@@ -174,8 +176,8 @@ export default function GoalsPage() {
     const [{ data: metasData }, { data: vendasData }] = await Promise.all([
       supabase.from('metas').select('user_id, valor_objetivo').eq('ano', ano).eq('mes', mes).eq('empresa_id', perfil.empresa_id),
       supabase.from('leads').select('user_id, fechado_por, valor_total').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
-        .gte('created_at', `${ano}-${String(mes).padStart(2,'0')}-01`)
-        .lte('created_at', `${ano}-${String(mes).padStart(2,'0')}-31`)
+        .gte('fechado_em', inicioMesIso(ano, mes))
+        .lt('fechado_em', inicioMesIso(ano, mes + 1))
         .limit(2000),
     ]);
 
@@ -206,22 +208,19 @@ export default function GoalsPage() {
     const hoje = new Date();
     const ano = hoje.getFullYear();
     const mes = hoje.getMonth() + 1;
-    const mesPad = String(mes).padStart(2, '0');
     const mesAnterior = mes === 1 ? 12 : mes - 1;
     const anoAnterior = mes === 1 ? ano - 1 : ano;
-    const mesAntPad = String(mesAnterior).padStart(2, '0');
-    const anoAntStr = String(anoAnterior);
 
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
 
     let q1 = supabase.from('leads').select('itens, valor_total')
       .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
-      .gte('created_at', `${ano}-${mesPad}-01`).lte('created_at', `${ano}-${mesPad}-31`).limit(2000);
+      .gte('fechado_em', inicioMesIso(ano, mes)).lt('fechado_em', inicioMesIso(ano, mes + 1)).limit(2000);
     if (targetUser) q1 = q1.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
     let q2 = supabase.from('leads').select('itens')
       .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
-      .gte('created_at', `${anoAntStr}-${mesAntPad}-01`).lte('created_at', `${anoAntStr}-${mesAntPad}-31`).limit(2000);
+      .gte('fechado_em', inicioMesIso(anoAnterior, mesAnterior)).lt('fechado_em', inicioMesIso(anoAnterior, mesAnterior + 1)).limit(2000);
     if (targetUser) q2 = q2.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
     const [{ data: mesAtualData }, { data: mesAntData }] = await Promise.all([q1, q2]);
@@ -267,9 +266,9 @@ export default function GoalsPage() {
         supabase.from('metas').select('mes, valor_objetivo')
           .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
           .eq('unidade', unidadeSelecionadaMeta).eq('ano', anoFiltro),
-        supabase.from('leads').select('valor_total, created_at')
+        supabase.from('leads').select('valor_total, fechado_em, created_at')
           .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id).eq('unidade', unidadeSelecionadaMeta)
-          .gte('created_at', `${anoFiltro}-01-01`).lte('created_at', `${anoFiltro}-12-31`),
+          .gte('fechado_em', inicioMesIso(anoFiltro, 1)).lt('fechado_em', inicioMesIso(anoFiltro + 1, 1)),
       ]);
 
       // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
@@ -287,7 +286,7 @@ export default function GoalsPage() {
 
       const mensalMap: Record<number, number> = {};
       vendas?.forEach(v => {
-        const mesVenda = new Date(v.created_at).getMonth() + 1;
+        const mesVenda = new Date(dataReferenciaLead({ ...v, status: 'ganho' })).getMonth() + 1;
         mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
       });
       setRealizadoMensalMapUnidade(mensalMap);

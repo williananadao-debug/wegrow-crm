@@ -68,13 +68,21 @@ export default function TeamPage() {
       let query = supabase.from('profiles').select('id, nome, email, cargo, unidade, empresa_id, cpf').order('nome');
       if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
 
+      // Leads = criados no mês; ganhos/faturamento = fechados no mês (fechado_em), mesmo que
+      // o lead tenha sido criado antes.
       let leadsQuery = supabase
         .from('leads')
-        .select('user_id, status, valor_total')
+        .select('user_id')
         .gte('created_at', inicioMes);
       if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
+      let ganhosQuery = supabase
+        .from('leads')
+        .select('user_id, valor_total')
+        .eq('status', 'ganho')
+        .gte('fechado_em', inicioMes);
+      if (perfil?.empresa_id) ganhosQuery = ganhosQuery.eq('empresa_id', perfil.empresa_id);
 
-      const [{ data: membersData }, { data: leadsData }] = await Promise.all([query, leadsQuery]);
+      const [{ data: membersData }, { data: leadsData }, { data: ganhosData }] = await Promise.all([query, leadsQuery, ganhosQuery]);
 
       setMembers(membersData || []);
 
@@ -83,10 +91,12 @@ export default function TeamPage() {
         if (!lead.user_id) continue;
         if (!stats[lead.user_id]) stats[lead.user_id] = { leads: 0, ganhos: 0, faturamento: 0 };
         stats[lead.user_id].leads++;
-        if (lead.status === 'ganho') {
-          stats[lead.user_id].ganhos++;
-          stats[lead.user_id].faturamento += lead.valor_total || 0;
-        }
+      }
+      for (const lead of ganhosData || []) {
+        if (!lead.user_id) continue;
+        if (!stats[lead.user_id]) stats[lead.user_id] = { leads: 0, ganhos: 0, faturamento: 0 };
+        stats[lead.user_id].ganhos++;
+        stats[lead.user_id].faturamento += lead.valor_total || 0;
       }
       setPerfStats(stats);
     } catch (error) {

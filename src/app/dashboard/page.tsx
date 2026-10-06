@@ -6,6 +6,7 @@ import {
   BarChart3, Calendar, Loader2,
   CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag, Megaphone
 } from 'lucide-react';
+import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { InfoTooltip } from '@/components/InfoTooltip';
@@ -76,7 +77,7 @@ export default function DashboardPage() {
     try {
         let leadsQuery = supabase
           .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
+          .select('id, user_id, vendedor_nome, unidade, status, created_at, fechado_em, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
 
         if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
         if (!isDirector) {
@@ -138,7 +139,7 @@ export default function DashboardPage() {
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {
               if (lead.user_id !== vendedorSelecionado && lead.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
           }
-          const dataLead = lead.created_at.substring(0, 10); 
+          const dataLead = diaReferenciaLead(lead); // ganho/perdido contam no dia do fechamento
           if (dataInicio && dataLead < dataInicio) return false;
           if (dataFim && dataLead > dataFim) return false;
           return true;
@@ -203,7 +204,7 @@ export default function DashboardPage() {
       const iniAntStr = getLocalYYYYMMDD(iniAnt);
       const fimAntStr = getLocalYYYYMMDD(fimAnt);
       const leadsAnt = rawLeads.filter(l => {
-        const d = l.created_at.substring(0, 10);
+        const d = diaReferenciaLead(l);
         if (filtroUnidade !== 'Todas' && l.unidade !== filtroUnidade) return false;
         if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && l.user_id !== vendedorSelecionado && l.vendedor_nome !== nomesMap[vendedorSelecionado]) return false;
         return d >= iniAntStr && d <= fimAntStr;
@@ -228,7 +229,7 @@ export default function DashboardPage() {
         const fim2 = getLocalYYYYMMDD(new Date(d.getFullYear(), d.getMonth() + 1, 0));
         const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
         const valor = rawLeads
-          .filter(l => l.status === 'ganho' && l.created_at.substring(0, 10) >= ini && l.created_at.substring(0, 10) <= fim2)
+          .filter(l => l.status === 'ganho' && diaReferenciaLead(l) >= ini && diaReferenciaLead(l) <= fim2)
           .reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
         return { label, valor, isCurrent: i === refMes.getMonth() };
       });
@@ -268,7 +269,7 @@ export default function DashboardPage() {
             return true;
           })
         : leadsFiltrados;
-      leadsParaVendasPorDia.forEach(l => { if (l.status === 'ganho') { const leadData = l.created_at.substring(0, 10); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
+      leadsParaVendasPorDia.forEach(l => { if (l.status === 'ganho') { const leadData = diaReferenciaLead(l); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
       const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
       rawJobs.forEach((j: any) => { if (j.stage === 'roteiro') prod.roteiro++; if (j.stage === 'gravacao') prod.gravacao++; if (j.stage === 'edicao') prod.edicao++; if (j.stage === 'opec') prod.opec++; });
       const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);

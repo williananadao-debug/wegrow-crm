@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2, BadgeCheck, ArrowRight } from 'lucide-react';
+import { dataReferenciaLead, diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, etapasFabricacaoDe } from './shared';
@@ -38,7 +39,7 @@ export default function PulsePainelPage() {
     if (!temCRM) setVisaoVendas('mes');
   }, [temCRM]);
   const mudarVisaoVendas = (v: 'dia' | 'mes') => { setVisaoVendas(v); try { localStorage.setItem('pulse_visao_vendas', v); } catch {} };
-  const [vendas12Meses, setVendas12Meses] = useState<{ created_at: string; valor_total: number }[]>([]);
+  const [vendas12Meses, setVendas12Meses] = useState<{ created_at: string; fechado_em?: string | null; valor_total: number }[]>([]);
 
   // --- Aba Gerencial (vendas + produção + estoque, só liderança) ---
   const [abaPainel, setAbaPainel] = useState<'vendas' | 'gerencial'>('vendas');
@@ -95,7 +96,7 @@ export default function PulsePainelPage() {
   const fetchOrcamentos = async () => {
     if (!perfil?.empresa_id) return;
     let q = supabase.from('leads')
-      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
+      .select('id, empresa, valor_total, created_at, fechado_em, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
       .eq('empresa_id', perfil.empresa_id).eq('status', 'orcamento')
       .order('created_at', { ascending: false }).limit(200);
     if (!temCRM) q = q.eq('tipo', 'Pulse');
@@ -109,14 +110,23 @@ export default function PulsePainelPage() {
     const [anoSel, mesSel] = mesVendas.split('-').map(Number);
     const inicioMes = new Date(anoSel, mesSel - 1, 1, 0, 0, 0, 0);
     const fimMes = new Date(anoSel, mesSel, 1, 0, 0, 0, 0);
-    let q = supabase.from('leads')
-      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
-      .eq('empresa_id', perfil.empresa_id)
-      .gte('created_at', inicioMes.toISOString()).lt('created_at', fimMes.toISOString())
-      .order('created_at', { ascending: false });
-    if (!temCRM) q = q.eq('tipo', 'Pulse');
-    const { data } = await q;
-    if (data) setVendas(data as VendaPulse[]);
+    // Duas buscas: o que foi CRIADO no mês (orçamentos, vendas na hora) e o que foi FECHADO
+    // no mês (orçamento antigo que virou venda agora conta neste mês, não no da criação).
+    const base = (campo: 'created_at' | 'fechado_em') => {
+      let q = supabase.from('leads')
+        .select('id, empresa, valor_total, created_at, fechado_em, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
+        .eq('empresa_id', perfil.empresa_id)
+        .gte(campo, inicioMes.toISOString()).lt(campo, fimMes.toISOString())
+        .order(campo, { ascending: false });
+      if (!temCRM) q = q.eq('tipo', 'Pulse');
+      return q;
+    };
+    const [criados, fechados] = await Promise.all([base('created_at'), base('fechado_em')]);
+    const porId = new Map<number, VendaPulse>();
+    [...(criados.data || []), ...(fechados.data || [])].forEach(v => porId.set(v.id, v as VendaPulse));
+    if (criados.data || fechados.data) {
+      setVendas(Array.from(porId.values()).sort((a, b) => dataReferenciaLead(b).localeCompare(dataReferenciaLead(a))));
+    }
     setLoadingVendas(false);
   };
 
@@ -133,9 +143,9 @@ export default function PulsePainelPage() {
   useEffect(() => {
     if (!perfil?.empresa_id) return;
     const desde12m = new Date(); desde12m.setMonth(desde12m.getMonth() - 11); desde12m.setDate(1); desde12m.setHours(0, 0, 0, 0);
-    let q = supabase.from('leads').select('created_at, valor_total')
+    let q = supabase.from('leads').select('created_at, fechado_em, valor_total')
       .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
-      .gte('created_at', desde12m.toISOString());
+      .gte('fechado_em', desde12m.toISOString());
     if (!temCRM) q = q.eq('tipo', 'Pulse');
     q.then(({ data }) => { if (data) setVendas12Meses(data); });
   }, [perfil?.empresa_id, temCRM]);
@@ -154,7 +164,7 @@ export default function PulsePainelPage() {
         (() => {
           let qa = supabase.from('leads').select('valor_total')
             .eq('empresa_id', perfil.empresa_id).eq('status', 'ganho')
-            .gte('created_at', inicioMesAnterior.toISOString()).lt('created_at', inicioMes.toISOString());
+            .gte('fechado_em', inicioMesAnterior.toISOString()).lt('fechado_em', inicioMes.toISOString());
           if (!temCRM) qa = qa.eq('tipo', 'Pulse');
           return qa;
         })(),
@@ -179,11 +189,13 @@ export default function PulsePainelPage() {
   }, [perfil?.empresa_id, isLideranca]);
 
   const produtosEstoqueBaixo = servicos.filter(s => s.estoque !== null && s.estoque !== undefined && (s.estoque as number) <= (s.estoque_minimo ?? 5));
-  const pedidosFechados = vendas.filter(v => v.status === 'ganho');
+  // Venda conta no mês em que foi FECHADA; a busca traz também o que foi só criado no mês.
+  const chaveMesSel = mesVendas;
+  const pedidosFechados = vendas.filter(v => v.status === 'ganho' && diaReferenciaLead(v).substring(0, 7) === chaveMesSel);
   const vendasEstornadas = vendas.filter(v => v.estornado_em);
 
   const hojeStr = new Date().toDateString();
-  const vendasHoje = pedidosFechados.filter(v => new Date(v.created_at).toDateString() === hojeStr);
+  const vendasHoje = pedidosFechados.filter(v => new Date(dataReferenciaLead(v)).toDateString() === hojeStr);
   const faturamentoHoje = vendasHoje.reduce((acc, v) => acc + (v.valor_total || 0), 0);
   const faturamentoMes = pedidosFechados.reduce((acc, v) => acc + (v.valor_total || 0), 0);
 
@@ -203,7 +215,7 @@ export default function PulsePainelPage() {
       dias.push({ dia: String(d.getDate()).padStart(2, '0'), valor: 0, dataIso: getLocalYYYYMMDD(d) });
     }
     pedidosFechados.forEach(v => {
-      const iso = v.created_at.substring(0, 10);
+      const iso = diaReferenciaLead(v);
       const slot = dias.find(d => d.dataIso === iso);
       if (slot) slot.valor += (Number(v.valor_total) || 0);
     });
@@ -219,7 +231,7 @@ export default function PulsePainelPage() {
       meses.push({ chave: chaveMes(d), mes: MESES_CURTO[d.getMonth()], valor: 0 });
     }
     vendas12Meses.forEach(v => {
-      const chave = v.created_at.substring(0, 7);
+      const chave = diaReferenciaLead({ ...v, status: 'ganho' }).substring(0, 7);
       const slot = meses.find(m => m.chave === chave);
       if (slot) slot.valor += (Number(v.valor_total) || 0);
     });

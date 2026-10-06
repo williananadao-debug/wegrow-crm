@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { dataReferenciaLead, diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import {
   TrendingUp, BarChart3, PieChart, Users,
@@ -125,20 +126,27 @@ export default function ReportsPage() {
   // Leads e visitas dependem do filtro de data (dataInicio/dataFim) — precisam recarregar
   // toda vez que o período muda.
   function buildLeadsQuery() {
-    const base = () => {
-      let q = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
-        .gte('created_at', dataInicio + 'T00:00:00')
-        .lte('created_at', dataFim + 'T23:59:59')
-        .order('created_at', { ascending: false })
+    // Duas buscas mescladas: leads CRIADOS no período (volume/conversão) e leads FECHADOS
+    // no período (ganho/perdido contam no mês do fechamento — lead de setembro ganho em
+    // outubro é venda de outubro). O recorte final por período é feito no useMemo via
+    // diaReferenciaLead.
+    const ini = new Date(dataInicio + 'T00:00:00').toISOString();
+    const fim = new Date(dataFim + 'T23:59:59.999').toISOString();
+    const base = (campo: 'created_at' | 'fechado_em') => {
+      let q = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, fechado_em, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
+        .gte(campo, ini)
+        .lte(campo, fim)
+        .order(campo, { ascending: false })
         .limit(3000);
       if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
       return q;
     };
+    const ambos = (f: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => [f(base('created_at')), f(base('fechado_em'))];
     // Gerente também precisa ver os próprios leads mesmo quando abertos pra outra
     // unidade, senão eles somem do relatório dele.
-    if (isGerente && perfil?.unidade) return mesclarQueries([base().eq('unidade', perfil.unidade), base().eq('user_id', user?.id), base().eq('criado_por', user?.id)], 3000);
-    if (!isDirector) return base().eq('user_id', user?.id);
-    return base();
+    if (isGerente && perfil?.unidade) return mesclarQueries([...ambos(q => q.eq('unidade', perfil.unidade)), ...ambos(q => q.eq('user_id', user?.id)), ...ambos(q => q.eq('criado_por', user?.id))], 6000);
+    if (!isDirector) return mesclarQueries(ambos(q => q.eq('user_id', user?.id)), 6000);
+    return mesclarQueries(ambos(q => q), 6000);
   }
 
   function buildVisitasQuery() {
@@ -164,9 +172,10 @@ export default function ReportsPage() {
       const inicioAno = getLocalYYYYMMDD(new Date(new Date().getFullYear(), 0, 1));
       const hoje = getLocalYYYYMMDD(new Date());
       const baseGrafico = () => {
-        let q = supabase.from('leads').select('id, valor_total, status, created_at, user_id, vendedor_nome, unidade')
-          .gte('created_at', inicioAno + 'T00:00:00')
-          .lte('created_at', hoje + 'T23:59:59')
+        // Gráfico do ano: venda no mês em que foi ganha (fechado_em).
+        let q = supabase.from('leads').select('id, valor_total, status, created_at, fechado_em, user_id, vendedor_nome, unidade')
+          .gte('fechado_em', new Date(inicioAno + 'T00:00:00').toISOString())
+          .lte('fechado_em', new Date(hoje + 'T23:59:59.999').toISOString())
           .eq('status', 'ganho')
           .limit(5000);
         if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
@@ -226,8 +235,8 @@ export default function ReportsPage() {
       const pastStart = new Date(pastEnd); pastStart.setDate(pastEnd.getDate() - diffDays);
       const strPastStart = getLocalYYYYMMDD(pastStart); const strPastEnd = getLocalYYYYMMDD(pastEnd);
 
-      const currentLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= dataInicio && d <= dataFim; });
-      const pastLeads = baseFiltrada.filter(l => { const d = l.created_at?.substring(0, 10); return d >= strPastStart && d <= strPastEnd; });
+      const currentLeads = baseFiltrada.filter(l => { if (!l.created_at) return false; const d = diaReferenciaLead(l); return d >= dataInicio && d <= dataFim; });
+      const pastLeads = baseFiltrada.filter(l => { if (!l.created_at) return false; const d = diaReferenciaLead(l); return d >= strPastStart && d <= strPastEnd; });
 
       const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
       const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
@@ -256,7 +265,7 @@ export default function ReportsPage() {
 
       const diasSemanaNomes = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
       const diaObj = diasSemanaNomes.reduce((acc: any, nome, idx) => { acc[nome] = { nome, total: 0, count: 0, idx }; return acc; }, {});
-      currentGanhos.forEach((lead: any) => { if (!lead.created_at) return; const diaIdx = new Date(lead.created_at).getDay(); const nomeDia = diasSemanaNomes[diaIdx]; if (diaObj[nomeDia]) { diaObj[nomeDia].total += Number(lead.valor_total || 0); diaObj[nomeDia].count += 1; } });
+      currentGanhos.forEach((lead: any) => { if (!lead.created_at) return; const diaIdx = new Date(dataReferenciaLead(lead)).getDay(); const nomeDia = diasSemanaNomes[diaIdx]; if (diaObj[nomeDia]) { diaObj[nomeDia].total += Number(lead.valor_total || 0); diaObj[nomeDia].count += 1; } });
       const calcDiasSemana = Object.values(diaObj).sort((a: any, b: any) => a.idx - b.idx);
 
       const curve = currentGanhos.reduce((acc: any, curr) => {
@@ -382,7 +391,7 @@ export default function ReportsPage() {
       const d = new Date(anoAtual, i, 1);
       const mesStr = String(i + 1).padStart(2, '0');
       const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
-      const ganhos = filtrado.filter(l => l.created_at?.substring(0, 7) === `${anoAtual}-${mesStr}`);
+      const ganhos = filtrado.filter(l => l.created_at && diaReferenciaLead(l).substring(0, 7) === `${anoAtual}-${mesStr}`);
       return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === hoje.getMonth() };
     });
   }, [rawLeadsGrafico, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);

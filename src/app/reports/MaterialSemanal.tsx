@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ChevronLeft, ChevronRight, Download, X, CalendarDays, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
@@ -39,7 +40,7 @@ function pctVar(atual: number, anterior: number) {
   return ((atual - anterior) / anterior) * 100;
 }
 
-type Registro = { id: number; created_at: string; unidade?: string | null; valor_total?: number; user_id?: string };
+type Registro = { id: number; created_at: string; fechado_em?: string | null; unidade?: string | null; valor_total?: number; user_id?: string };
 
 export function MaterialSemanal() {
   const auth = useAuth() || {};
@@ -91,9 +92,13 @@ export function MaterialSemanal() {
   async function buscarPeriodo(inicio: Date, fim: Date, tabela: 'leads' | 'visitas'): Promise<Registro[]> {
     const iniStr = getLocalYYYYMMDD(inicio);
     const fimStr = getLocalYYYYMMDD(fim);
-    const campos = tabela === 'leads' ? 'id, valor_total, status, unidade, user_id, created_at' : 'id, user_id, unidade, created_at';
+    const campos = tabela === 'leads' ? 'id, valor_total, status, unidade, user_id, created_at, fechado_em' : 'id, user_id, unidade, created_at';
+    // Venda conta no dia em que foi ganha (fechado_em), não no dia em que o lead foi criado.
+    const campoData = tabela === 'leads' ? 'fechado_em' : 'created_at';
     const base = () => {
-      let q = supabase.from(tabela).select(campos).gte('created_at', iniStr + 'T00:00:00').lte('created_at', fimStr + 'T23:59:59').limit(3000);
+      let q = supabase.from(tabela).select(campos)
+        .gte(campoData, new Date(iniStr + 'T00:00:00').toISOString())
+        .lte(campoData, new Date(fimStr + 'T23:59:59.999').toISOString()).limit(3000);
       if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
       if (tabela === 'leads') q = q.eq('status', 'ganho');
       return q;
@@ -133,7 +138,7 @@ export function MaterialSemanal() {
     });
     const porDiaMap = Object.fromEntries(dias.map(d => [d.data, d]));
     vendasAtual.forEach(v => {
-      const dia = v.created_at?.substring(0, 10);
+      const dia = v.created_at ? diaReferenciaLead({ ...v, status: 'ganho' }) : '';
       if (porDiaMap[dia]) { porDiaMap[dia].total += Number(v.valor_total || 0); porDiaMap[dia].count += 1; }
     });
     const totalSemana = vendasAtual.reduce((s, v) => s + Number(v.valor_total || 0), 0);

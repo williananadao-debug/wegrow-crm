@@ -99,6 +99,7 @@ export type VendaPulse = {
   cnpj?: string | null; nfse_invoice_id?: string | null; nfse_pdf_url?: string | null; user_id?: string | null;
   status: string; itens?: { servico: string; quantidade: number; precoUnitario: number }[];
   estornado_em?: string | null; estornado_motivo?: string | null;
+  fechado_em?: string | null;
 };
 
 export type RankingItem = { id: string; nome: string; count: number; total: number };

@@ -8,6 +8,7 @@ import {
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock,
   Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet
 } from 'lucide-react';
+import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
 import ItensFabrica from './ItensFabrica';
@@ -84,6 +85,7 @@ type Lead = {
   forma_pagamento_entrada?: string;
   criado_por?: string;
   atividades?: Atividade[];
+  fechado_em?: string | null;
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
@@ -108,6 +110,14 @@ type ClienteOpcao = {
   razao_social?: string;
   risco?: string;
 };
+
+// Espelha localmente o que o trigger do banco faz com fechado_em, pra o lead recém-ganho
+// não sumir do período atual antes do próximo recarregamento (ele usa created_at de fallback).
+function fechadoEmLocal(l: { status?: string; fechado_em?: string | null }, novoStatus: string) {
+  if (novoStatus === 'aberto') return null;
+  if (novoStatus === l.status && l.fechado_em) return l.fechado_em;
+  return new Date().toISOString();
+}
 
 const STAGES = {
   0: { title: 'Novo Lead', color: 'border-slate-500' },
@@ -419,7 +429,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
     // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
     // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
@@ -442,8 +452,12 @@ export default function DealsPage() {
         return [base().eq('user_id', user?.id)];
     };
 
-    const inicio = dataInicioRef.current + 'T00:00:00';
-    const fim = dataFimRef.current + 'T23:59:59';
+    // Com fuso explícito: fechado_em é timestamptz e sem offset o PostgREST compararia em
+    // UTC, deslocando 3h as bordas do período.
+    const offsetMin = -new Date().getTimezoneOffset();
+    const tz = `${offsetMin >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, '0')}:${String(Math.abs(offsetMin) % 60).padStart(2, '0')}`;
+    const inicioTz = dataInicioRef.current + 'T00:00:00' + tz;
+    const fimTz = dataFimRef.current + 'T23:59:59.999' + tz;
 
     const mesclarResultados = (resultados: { data: any[] | null; error: any }[], limite: number) => {
         const erro = resultados.find(r => r.error)?.error || null;
@@ -457,7 +471,9 @@ export default function DealsPage() {
 
     const [resAbertos, resFechados] = await Promise.all([
         Promise.all(buildQs().map(q => q.lte('etapa', 3).order('created_at', { ascending: false }).limit(500))),
-        Promise.all(buildQs().map(q => q.gte('etapa', 4).gte('created_at', inicio).lte('created_at', fim).order('created_at', { ascending: false }).limit(200))),
+        // Ganho/perdido entram no período em que foram FECHADOS (fechado_em), não no que foram
+        // criados — lead aberto em setembro e ganho em outubro aparece em outubro.
+        Promise.all(buildQs().map(q => q.gte('etapa', 4).gte('fechado_em', inicioTz).lte('fechado_em', fimTz).order('fechado_em', { ascending: false }).limit(200))),
     ]);
     const openRes = mesclarResultados(resAbertos, 500);
     const closedRes = mesclarResultados(resFechados, 200);
@@ -766,7 +782,7 @@ export default function DealsPage() {
     const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `Movido para ${stageName}`, created_at: new Date().toISOString() };
     const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead?.atividades) ? lead.atividades : [])];
 
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas } : l));
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa: etapaFinal, status: novoStatus, atividades: atividadesAtualizadas, fechado_em: fechadoEmLocal(l, novoStatus) } : l));
     if (editingLeadId === id) setAtividades(atividadesAtualizadas);
 
     try {
@@ -814,7 +830,7 @@ export default function DealsPage() {
     const novaNotaObj: Historico = { id: Date.now(), texto: `🔴 MOTIVO DA PERDA: ${motivoPerda}`, created_at: new Date().toISOString() };
     const novasNotas = [novaNotaObj, ...(Array.isArray(lead.notas) ? lead.notas : [])];
 
-    setLeads(prev => prev.map(l => l.id === lostLeadId ? { ...l, etapa: 5, status: 'perdido', notas: novasNotas } : l));
+    setLeads(prev => prev.map(l => l.id === lostLeadId ? { ...l, etapa: 5, status: 'perdido', notas: novasNotas, fechado_em: fechadoEmLocal(l, 'perdido') } : l));
 
     try {
         const { error } = await supabase.from('leads').update({ etapa: 5, status: 'perdido', notas: novasNotas }).eq('id', lostLeadId);
@@ -846,7 +862,7 @@ export default function DealsPage() {
     const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead.atividades) ? lead.atividades : [])];
 
     setLeads(prev => prev.map(l => l.id === leadId ? {
-        ...l, etapa: 4, status: 'ganho', tipo: cdlTipoAssociacao,
+        ...l, etapa: 4, status: 'ganho', tipo: cdlTipoAssociacao, fechado_em: fechadoEmLocal(l, 'ganho'),
         contrato_inicio: cdlDataInicio, contrato_fim: cdlDataFim,
         valor_total: valorFinal, atividades: atividadesAtualizadas,
     } : l));
@@ -875,7 +891,7 @@ export default function DealsPage() {
     const novaAtividade: Atividade = { id: Date.now(), tipo: 'etapa', descricao: `${CDL_STAGES[4].title} — Venda/Serviço`, created_at: new Date().toISOString() };
     const atividadesAtualizadas = [novaAtividade, ...(Array.isArray(lead.atividades) ? lead.atividades : [])];
 
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, etapa: 4, status: 'ganho', atividades: atividadesAtualizadas } : l));
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, etapa: 4, status: 'ganho', atividades: atividadesAtualizadas, fechado_em: fechadoEmLocal(l, 'ganho') } : l));
     await supabase.from('leads').update({
         etapa: 4, status: 'ganho', atividades: atividadesAtualizadas,
         ...(lead.status !== 'ganho' ? { fechado_por: lead.user_id ?? null } : {}),
@@ -1953,7 +1969,7 @@ export default function DealsPage() {
           // mês virava, e o vendedor esquecia dele (relatado pela Demais FM). O filtro de
           // data continua valendo normal pra ganho/perdido, que é reporte de período.
           if (l.status !== 'aberto') {
-            const dataLead = l.created_at?.substring(0, 10);
+            const dataLead = l.created_at ? diaReferenciaLead(l) : undefined;
             if (dataInicio && dataLead && dataLead < dataInicio) return false;
             if (dataFim && dataLead && dataLead > dataFim) return false;
           }

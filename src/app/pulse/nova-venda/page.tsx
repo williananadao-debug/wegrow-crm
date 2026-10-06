@@ -2,10 +2,11 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck, BadgeCheck } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck, BadgeCheck, Globe, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo } from '../shared';
+import { planoPagamento } from '@/lib/planoPagamento';
+import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo, getLocalYYYYMMDD } from '../shared';
 import CampoMoeda from '@/components/CampoMoeda';
 
 const novaChaveExtra = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
@@ -102,6 +103,52 @@ function PulseNovaVendaContent() {
   // Detalhes da venda — clicar numa linha do histórico abre um resumo completo (cliente,
   // itens, pagamento, contrato assinado, cobranças) sem precisar entrar no modo de edição.
   const [detalheVenda, setDetalheVenda] = useState<any>(null);
+  // Portal do Cliente (Admin → Módulos → portal_cliente): aviso do envio automático ao fechar
+  // a venda, e ações manuais no detalhe da venda (reenviar acesso, marcar parcela paga).
+  const portalClienteAtivo = Boolean(empresa?.modulos?.portal_cliente);
+  const [avisoPortal, setAvisoPortal] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [enviandoPortal, setEnviandoPortal] = useState(false);
+  const [salvandoParcela, setSalvandoParcela] = useState<string | null>(null);
+
+  const convidarPortal = async (leadId: number, reenviar = false) => {
+    if (!portalClienteAtivo) return null;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
+      const res = await fetch('/api/portal-cliente/convidar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId, reenviar }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, texto: j.erro || 'Não foi possível enviar o acesso ao portal.' };
+      if (j.enviado) return { ok: true, texto: `Acesso ao Portal do Cliente enviado para ${j.email}.` };
+      return { ok: false, texto: j.motivo || 'Acesso ao portal não enviado.' };
+    } catch {
+      return { ok: false, texto: 'Não foi possível enviar o acesso ao portal.' };
+    }
+  };
+
+  const enviarAcessoPortalManual = async (v: any) => {
+    setEnviandoPortal(true);
+    const r = await convidarPortal(v.id, true);
+    setEnviandoPortal(false);
+    if (r) {
+      alert(r.texto);
+      if (r.ok) setDetalheVenda((prev: any) => prev && prev.id === v.id ? { ...prev, portal_convite_enviado_em: new Date().toISOString() } : prev);
+    }
+  };
+
+  // Venda sem boleto Asaas: equipe marca no portal quais parcelas do plano já foram pagas.
+  const alternarParcelaPaga = async (v: any, chave: string, pagar: boolean) => {
+    setSalvandoParcela(chave);
+    const atual = v.parcelas_pagas && typeof v.parcelas_pagas === 'object' ? { ...v.parcelas_pagas } : {};
+    if (pagar) atual[chave] = getLocalYYYYMMDD(new Date()); else delete atual[chave];
+    const { error } = await supabase.from('leads').update({ parcelas_pagas: atual }).eq('id', v.id);
+    setSalvandoParcela(null);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    setDetalheVenda((prev: any) => prev && prev.id === v.id ? { ...prev, parcelas_pagas: atual } : prev);
+    setHistorico((prev: any[]) => prev.map(h => h.id === v.id ? { ...h, parcelas_pagas: atual } : h));
+  };
 
   // Boleto/Pix (Asaas) — valor e vencimento editáveis porque a venda pode ser cobrada em
   // partes (ex: só a entrada agora), não necessariamente o valor_total de uma vez.
@@ -328,7 +375,7 @@ function PulseNovaVendaContent() {
     setCarrinho([]); setDesconto(0); setAcrescimo(0); setClienteSelecionado(null); setClienteQuery('');
     setFormaPagamento('pix'); setErro(null); setVendaConcluida(null);
     setValorEntrada(''); setFormaPagamentoEntrada(''); setParcelasSaldo('1'); setVencimentoSaldo(''); setParcelasDetalhe([]);
-    setProducoesIniciadas([]); setOrcamentoEditandoId(null);
+    setProducoesIniciadas([]); setOrcamentoEditandoId(null); setAvisoPortal(null);
   };
 
   // Reabre um orçamento salvo pra edição — itens voltam como linha avulsa (não dá pra
@@ -574,6 +621,10 @@ function PulseNovaVendaContent() {
 
       setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload, status: modo === 'pedido' ? 'ganho' : 'orcamento' });
       if (convertendoOrcamento) setOrcamentoEditandoId(null);
+      // Venda fechada → cliente recebe o acesso ao Portal do Cliente por e-mail (se o módulo
+      // estiver ligado). Não trava a tela: o aviso aparece quando o envio terminar.
+      setAvisoPortal(null);
+      if (modo === 'pedido' && portalClienteAtivo) convidarPortal(leadData.id).then(r => { if (r) setAvisoPortal(r); });
       if (mostrarHistorico) carregarHistorico();
     } catch (err: any) {
       setErro(err?.message || 'Erro ao salvar.');
@@ -1182,6 +1233,43 @@ function PulseNovaVendaContent() {
               )}
             </div>
 
+            {/* Portal do Cliente */}
+            {portalClienteAtivo && v.status === 'ganho' && (() => {
+              const plano = planoPagamento(v);
+              const manual = plano.length > 0 && plano[0].origem === 'contrato';
+              return (
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Globe size={11} /> Portal do Cliente</p>
+                  <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-slate-300">
+                        {v.portal_convite_enviado_em
+                          ? <>Acesso enviado em <b className="text-white">{new Date(v.portal_convite_enviado_em).toLocaleDateString('pt-BR')}</b></>
+                          : 'O cliente ainda não recebeu o acesso.'}
+                      </p>
+                      <button onClick={() => enviarAcessoPortalManual(v)} disabled={enviandoPortal} className="shrink-0 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 disabled:opacity-50 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                        {enviandoPortal ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />} {v.portal_convite_enviado_em ? 'Reenviar acesso' : 'Enviar acesso'}
+                      </button>
+                    </div>
+                    {manual && (
+                      <div className="space-y-1.5 border-t border-white/5 pt-2.5">
+                        <p className="text-[10px] text-slate-500">Marque o que o cliente já pagou — aparece pra ele no portal.</p>
+                        {plano.map(x => (
+                          <label key={x.chave} className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="checkbox" checked={x.pago} disabled={salvandoParcela !== null} onChange={e => alternarParcelaPaga(v, x.chave, e.target.checked)} className="accent-emerald-500" />
+                            <span className={x.pago ? 'text-emerald-400' : 'text-slate-300'}>{x.rotulo}{x.vencimento ? ` · ${new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}</span>
+                            <span className="ml-auto text-white font-bold">R$ {x.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            {salvandoParcela === x.chave && <Loader2 size={11} className="animate-spin text-slate-400" />}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {!manual && plano.length > 0 && <p className="text-[10px] text-slate-500 border-t border-white/5 pt-2.5">Parcelas por boleto/Pix: o status de pago vai sozinho pro portal quando o Asaas confirmar.</p>}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Cobranças */}
             {cobrancas.length > 0 && (
               <div>
@@ -1270,6 +1358,11 @@ function PulseNovaVendaContent() {
           <p className="text-slate-400 text-sm mt-1">{formatId(vendaConcluida.id)} · {vendaConcluida.empresa}</p>
           <p className={`text-3xl font-black mt-4 ${ehOrcamento ? 'text-purple-400' : 'text-[var(--cor-primaria)]'}`}>R$ {vendaConcluida.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           {ehOrcamento && <p className="text-slate-500 text-[10px] mt-2">Sem efeito no estoque/financeiro ainda — converte em pedido no Painel quando o cliente aprovar.</p>}
+          {!ehOrcamento && avisoPortal && (
+            <p className={`mt-4 text-[11px] font-bold rounded-xl px-3 py-2 flex items-center justify-center gap-1.5 ${avisoPortal.ok ? 'bg-sky-500/10 border border-sky-500/20 text-sky-300' : 'bg-amber-500/10 border border-amber-500/20 text-amber-300'}`}>
+              <Globe size={12} className="shrink-0" /> {avisoPortal.texto}
+            </p>
+          )}
 
           {!ehOrcamento && producoesIniciadas.length > 0 && (
             <div className="mt-5 pt-5 border-t border-white/5 space-y-2">

@@ -92,6 +92,7 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
       <Toggle label="Redes Sociais" chave="redes_sociais" corAtivo="bg-fuchsia-500/10 border-fuchsia-500/40 text-fuchsia-400" />
       <Toggle label="Nexus" chave="nexus" corAtivo="bg-indigo-500/10 border-indigo-500/40 text-indigo-400" />
       <Toggle label="Pulse" chave="pulse" corAtivo="bg-amber-500/10 border-amber-500/40 text-amber-400" />
+      <Toggle label="Portal do Cliente (acompanhar pedido)" chave="portal_cliente" corAtivo="bg-sky-500/10 border-sky-500/40 text-sky-400" />
       <Toggle label="THOR" chave="thor" corAtivo="bg-purple-500/10 border-purple-500/40 text-purple-400" />
       <Toggle label="Max" chave="max" corAtivo="bg-rose-500/10 border-rose-500/40 text-rose-400" />
       <Toggle label="Obras" chave="obras" corAtivo="bg-orange-500/10 border-orange-500/40 text-orange-400" />

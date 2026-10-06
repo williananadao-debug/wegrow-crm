@@ -1,5 +1,6 @@
 const PUBLIC_EXACT = ['/', '/login', '/portal', '/reset-password'];
-const PUBLIC_PREFIXES = ['/solicitar', '/portal-cdl', '/proposta-cdl', '/carteirinha', '/p/'];
+// /acompanhar = Portal do Cliente (login próprio por link no e-mail, não usa a sessão da equipe).
+const PUBLIC_PREFIXES = ['/solicitar', '/portal-cdl', '/proposta-cdl', '/carteirinha', '/p/', '/acompanhar'];
 
 export function isPublicPage(pathname: string): boolean {
   return PUBLIC_EXACT.includes(pathname) || PUBLIC_PREFIXES.some(p => pathname.startsWith(p));

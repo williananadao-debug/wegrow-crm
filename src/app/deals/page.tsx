@@ -810,6 +810,21 @@ export default function DealsPage() {
             await Promise.all(acoes);
             setToastMessage(isCDL ? "🎉 Novo Associado Confirmado!" : "🎉 Venda Confirmada!");
             setShowToast(true);
+            // Portal do Cliente (módulo portal_cliente): cliente recebe o acesso por e-mail ao
+            // fechar a venda. Em segundo plano — só avisa se der certo ou se faltar o e-mail.
+            if (empresa?.modulos?.portal_cliente && lead.status !== 'ganho') {
+                (async () => {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) return;
+                    const res = await fetch('/api/portal-cliente/convidar', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                        body: JSON.stringify({ leadId: lead.id }),
+                    });
+                    const j = await res.json().catch(() => ({}));
+                    if (j.enviado) { setToastMessage(`📩 Acesso ao portal enviado para ${j.email}`); setShowToast(true); }
+                    else if (j.motivo && !j.jaEnviado) { setToastMessage(`Portal do Cliente: ${j.motivo}`); setShowToast(true); }
+                })().catch(() => {});
+            }
         }
     } catch (error: any) {
         if (error.message === 'Failed to fetch' || !navigator.onLine) {
@@ -818,7 +833,7 @@ export default function DealsPage() {
             setShowToast(true);
         }
     }
-  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira, empresa?.modulos?.pulse, perfil?.empresa_id, user?.id]);
+  }, [leads, editingLeadId, fazerCheckin, criarJobDeProducao, gerarCobrancaFinanceira, empresa?.modulos?.pulse, empresa?.modulos?.portal_cliente, perfil?.empresa_id, user?.id]);
 
   const confirmarPerda = useCallback(async () => {
     if (!motivoPerda.trim() || motivoPerda.length < 5) return alert("Por favor, detalhe o motivo da perda. Precisamos dessa informação para melhorar as vendas.");

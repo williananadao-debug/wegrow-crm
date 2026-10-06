@@ -2028,8 +2028,8 @@ export default function DealsPage() {
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
             <button onClick={() => setShowAgenda(true)} className="bg-white/5 border border-white/10 text-slate-400 hover:bg-blue-600/20 hover:border-blue-500/30 hover:text-blue-400 p-2 rounded-xl transition-all" title="Agenda"><CalendarDays size={16} strokeWidth={2.5}/></button>
-            <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white p-2 sm:px-4 sm:py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-1.5" title="Visitas"><MapPin size={14} strokeWidth={3}/> <span className="hidden sm:inline">Visitas</span></button>
-            <button onClick={() => abrirModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_5px_20px_rgb(var(--cor-primaria-rgb)/20%)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
+            <button onClick={() => router.push('/visitas')} className="bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-2.5 py-2 sm:px-4 rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-widest transition-all flex items-center gap-1.5" title="Visitas"><MapPin size={14} strokeWidth={3}/> Visitas</button>
+            <button onClick={() => abrirModal()} className="bg-[var(--cor-primaria)] text-[#0F172A] px-2.5 sm:px-4 py-2 rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-widest transition-all shadow-[0_5px_20px_rgb(var(--cor-primaria-rgb)/20%)] flex items-center gap-1.5"><Plus size={14} strokeWidth={3}/> Gerar</button>
           </div>
       </div>
 

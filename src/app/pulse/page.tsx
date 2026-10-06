@@ -1,10 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2, BadgeCheck, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
-import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, etapasFabricacaoDe } from './shared';
+import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, etapasFabricacaoDe } from './shared';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
 type ProducaoGerencial = {
@@ -79,7 +79,7 @@ export default function PulsePainelPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.erro || `Erro ${res.status}`);
       setExcluirAlvo(null); setExcluirTexto('');
-      fetchVendas(); fetchServicos();
+      fetchVendas(); fetchServicos(); fetchOrcamentos();
     } catch (e: any) { setExcluirErro(e?.message || 'Erro ao excluir.'); }
     finally { setExcluindo(false); }
   };
@@ -88,6 +88,20 @@ export default function PulsePainelPage() {
   const chaveMes = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const mesAtualStr = chaveMes(new Date());
   const [mesVendas, setMesVendas] = useState(mesAtualStr);
+
+  // Orçamentos em aberto de qualquer mês — antes a lista só mostrava os criados no mês
+  // selecionado, então orçamento de setembro sumia do painel em outubro e ninguém convertia.
+  const [orcamentosAbertos, setOrcamentosAbertos] = useState<VendaPulse[]>([]);
+  const fetchOrcamentos = async () => {
+    if (!perfil?.empresa_id) return;
+    let q = supabase.from('leads')
+      .select('id, empresa, valor_total, created_at, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
+      .eq('empresa_id', perfil.empresa_id).eq('status', 'orcamento')
+      .order('created_at', { ascending: false }).limit(200);
+    if (!temCRM) q = q.eq('tipo', 'Pulse');
+    const { data } = await q;
+    if (data) setOrcamentosAbertos(data as VendaPulse[]);
+  };
 
   const fetchVendas = async () => {
     if (!perfil?.empresa_id) return;
@@ -112,6 +126,7 @@ export default function PulsePainelPage() {
   };
 
   useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id, mesVendas]);
+  useEffect(() => { if (perfil?.empresa_id) fetchOrcamentos(); }, [perfil?.empresa_id, temCRM]);
 
   // Série independente do mês selecionado na lista — alimenta só o gráfico "Vendas por Mês"
   // (visão alternativa à de dia), últimos 12 meses fechados.
@@ -165,7 +180,6 @@ export default function PulsePainelPage() {
 
   const produtosEstoqueBaixo = servicos.filter(s => s.estoque !== null && s.estoque !== undefined && (s.estoque as number) <= (s.estoque_minimo ?? 5));
   const pedidosFechados = vendas.filter(v => v.status === 'ganho');
-  const orcamentosAbertos = vendas.filter(v => v.status === 'orcamento');
   const vendasEstornadas = vendas.filter(v => v.estornado_em);
 
   const hojeStr = new Date().toDateString();
@@ -269,43 +283,6 @@ export default function PulsePainelPage() {
   const alertasReposicaoGerencial = calcularAlertasReposicao(servicos, consumoRecenteGerencial);
   const comprasMesValorGerencial = comprasMesGerencial.reduce((s, m) => s + Math.abs(m.quantidade) * (m.valor_unitario || 0), 0);
 
-  const converterEmPedido = async (orc: VendaPulse) => {
-    // fechado_por carimba quem fica com o crédito da venda em /goals — orc.user_id é o
-    // dono do orçamento; cai pro usuário logado só se por algum motivo vier sem dono.
-    const { error } = await supabase.from('leads').update({ status: 'ganho', etapa: 4, fechado_por: orc.user_id || user?.id || null }).eq('id', orc.id);
-    if (error) { alert('Erro ao converter: ' + error.message); return; }
-    const itens = orc.itens || [];
-    await Promise.all([
-      supabase.from('lancamentos').insert([{
-        titulo: `VENDA RÁPIDA: ${orc.empresa} - OS: ${formatId(orc.id)}`,
-        valor: orc.valor_total, tipo: 'entrada', categoria: 'vendas', status: 'pendente',
-        data_vencimento: new Date().toISOString().split('T')[0],
-        user_id: user?.id, empresa_id: perfil?.empresa_id,
-      }]),
-      // Mesmo motivo do nova-venda: orçamento virando pedido é venda fechada, mas nunca passou
-      // por /visitas — sem isso o lead ganho fica sem visita associada.
-      supabase.from('visitas').insert([{
-        empresa: orc.empresa, observacao: `Venda Pulse — OS ${formatId(orc.id)}`,
-        user_id: orc.user_id || user?.id, empresa_id: perfil?.empresa_id, unidade: perfil?.unidade || null,
-        lead_id: orc.id,
-      }]),
-      ...itens.flatMap(item => {
-        const s = servicos.find(x => x.nome === item.servico);
-        if (!s || s.estoque === null || s.estoque === undefined) return [];
-        const novo = Math.max(0, s.estoque - item.quantidade);
-        const deltaReal = novo - s.estoque;
-        alertarEstoqueBaixoSeCruzou(s.id, s.estoque, novo, s.estoque_minimo ?? 5);
-        return [
-          supabase.from('servicos').update({ estoque: novo }).eq('id', s.id),
-          supabase.from('estoque_movimentacoes').insert([{
-            empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: deltaReal,
-            tipo: 'venda', observacao: `Venda Pulse — OS ${formatId(orc.id)}`, user_id: user?.id,
-          }]),
-        ];
-      }),
-    ]);
-    fetchVendas(); fetchServicos();
-  };
 
   const abrirEstorno = (venda: VendaPulse) => { setEstornoVenda(venda); setEstornoMotivo(''); setEstornoErro(null); };
 
@@ -428,6 +405,17 @@ export default function PulsePainelPage() {
         </div>
       </header>
 
+      {orcamentosAbertos.length > 0 && (
+        <a href="#orcamentos" className="mb-4 flex items-center gap-3 bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/15 rounded-2xl px-4 py-3 transition-colors">
+          <FileText size={18} className="text-purple-300 shrink-0" />
+          <span className="flex-1 text-sm text-purple-200 font-bold">
+            {orcamentosAbertos.length} orçamento{orcamentosAbertos.length === 1 ? '' : 's'} em aberto · R$ {orcamentosAbertos.reduce((a, o) => a + (o.valor_total || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+            <span className="hidden sm:inline text-purple-300/70 font-normal"> — converta em venda quando o cliente fechar</span>
+          </span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-purple-300 flex items-center gap-1 shrink-0">Ver <ArrowRight size={12} /></span>
+        </a>
+      )}
+
       {isLideranca && (
         <div className="flex gap-1 bg-black/30 border border-white/10 rounded-xl p-1 mb-6 w-fit">
           <button onClick={() => setAbaPainel('vendas')} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${abaPainel === 'vendas' ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>
@@ -544,9 +532,10 @@ export default function PulsePainelPage() {
       </div>
 
       {orcamentosAbertos.length > 0 && (
-        <div className="bg-[#0F172A] border border-purple-500/20 rounded-3xl overflow-hidden mb-6">
+        <div id="orcamentos" className="bg-[#0F172A] border-2 border-purple-500/40 rounded-3xl overflow-hidden mb-6 scroll-mt-24">
           <div className="p-5 border-b border-white/5">
-            <h3 className="font-black uppercase text-sm text-purple-400 flex items-center gap-2"><FileText size={14} /> Orçamentos em aberto ({orcamentosAbertos.length})</h3>
+            <h3 className="font-black uppercase text-sm text-purple-300 flex items-center gap-2"><FileText size={14} /> Orçamentos em aberto ({orcamentosAbertos.length})</h3>
+            <p className="text-slate-500 text-[11px] mt-1">Cliente fechou? Clique em <span className="text-[var(--cor-primaria)] font-bold">Converter em venda</span>, confira o pagamento e confirme.</p>
           </div>
           <div className="divide-y divide-white/5">
             {orcamentosAbertos.map(v => (
@@ -571,9 +560,12 @@ export default function PulsePainelPage() {
                   <a href={`/pulse/nova-venda?editarOrcamento=${v.id}`} className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                     <Pencil size={10} /> Editar
                   </a>
-                  <button onClick={() => converterEmPedido(v)} className="bg-[rgb(var(--cor-primaria-rgb)/10%)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
-                    <CheckCircle2 size={10} /> Converter em Pedido
-                  </button>
+                  {/* Mesmo fluxo de "Fechar venda" (financeiro, estoque, produção do trailer) —
+                  abre o orçamento na Nova Venda pra revisar pagamento e confirmar. <a> pelo
+                  mesmo motivo do Editar acima (recarregar pra processar o parâmetro). */}
+                  <a href={`/pulse/nova-venda?editarOrcamento=${v.id}`} className="bg-[var(--cor-primaria)] hover:brightness-110 text-[#0B1120] px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 shadow-[0_4px_16px_rgb(var(--cor-primaria-rgb)/25%)]">
+                    <BadgeCheck size={13} /> Converter em venda
+                  </a>
                   {isDiretor && (
                     <button onClick={() => { setExcluirAlvo(v); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir orçamento" className="bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-slate-400 hover:text-red-400 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1">
                       <Trash2 size={10} /> Excluir

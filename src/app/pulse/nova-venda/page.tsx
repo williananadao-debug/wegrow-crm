@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck, BadgeCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo } from '../shared';
@@ -420,8 +420,17 @@ function PulseNovaVendaContent() {
       // nova, e não dispara nenhum dos efeitos de "pedido" (lançamento, produção, baixa de
       // estoque) porque orçamento em edição continua sendo só orçamento, nunca vira pedido
       // por aqui — conversão pra pedido é outro fluxo (Painel), fora do escopo dessa edição.
+      // Converter orçamento em venda (modo 'pedido' editando um orçamento) passa pelo MESMO
+      // caminho de "Fechar venda" logo abaixo — lançamento, visita, baixa de estoque e
+      // produção automática. O antigo "Converter em Pedido" do Painel fazia só parte disso
+      // (não iniciava a produção do trailer, lançamento sem lead_id).
+      const convertendoOrcamento = Boolean(orcamentoEditandoId) && modo === 'pedido' && editandoLabel === 'orçamento';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let leadData: any = null;
+      let vendedorDaVenda = vendedorId || user?.id;
+
       if (orcamentoEditandoId) {
-        const { data: leadAtualizado, error: erroUpdate } = await supabase.from('leads').update({
+        let upd = supabase.from('leads').update({
           empresa: nomeCliente, telefone: clienteSelecionado.telefone || null, cnpj: clienteSelecionado.cnpj || null,
           valor_total: total, desconto, itens: itensPayload,
           unidade: unidadeSel || null, forma_pagamento: formaPagamento, client_id: clientId,
@@ -429,16 +438,30 @@ function PulseNovaVendaContent() {
           valor_entrada: valorEntrada ? Number(valorEntrada) : null,
           forma_pagamento_entrada: formaPagamentoEntrada || null,
           parcelas_detalhe: parcelasDetalhe.length > 0 ? parcelasDetalhe : null,
-        }).eq('id', orcamentoEditandoId).select().single();
+          ...(convertendoOrcamento ? { status: 'ganho', etapa: 4 } : {}),
+        }).eq('id', orcamentoEditandoId);
+        // Trava contra converter duas vezes (duplo clique / outra aba): só converte se
+        // ainda estiver como orçamento.
+        if (convertendoOrcamento) upd = upd.eq('status', 'orcamento');
+        const { data: leadAtualizado, error: erroUpdate } = await upd.select().maybeSingle();
         if (erroUpdate) throw erroUpdate;
-        setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload });
-        setOrcamentoEditandoId(null);
-        if (mostrarHistorico) carregarHistorico();
-        setSalvando(false);
-        return;
+        if (!leadAtualizado) throw new Error('Esse orçamento já foi convertido em venda ou não existe mais.');
+
+        if (!convertendoOrcamento) {
+          setVendaConcluida({ ...leadAtualizado, empresa: nomeCliente, itens: itensPayload });
+          setOrcamentoEditandoId(null);
+          if (mostrarHistorico) carregarHistorico();
+          setSalvando(false);
+          return;
+        }
+        // Crédito da venda fica com o dono do orçamento (mesma regra do Painel).
+        vendedorDaVenda = leadAtualizado.user_id || vendedorDaVenda;
+        await supabase.from('leads').update({ fechado_por: vendedorDaVenda || null }).eq('id', leadAtualizado.id);
+        leadData = leadAtualizado;
       }
 
-      const { data: leadData, error: erroLead } = await supabase.from('leads').insert([{
+      if (!leadData) {
+      const { data: novoLead, error: erroLead } = await supabase.from('leads').insert([{
         empresa: nomeCliente,
         telefone: clienteSelecionado.telefone || null,
         cnpj: clienteSelecionado.cnpj || null,
@@ -462,6 +485,18 @@ function PulseNovaVendaContent() {
         ordem: 0,
       }]).select().single();
       if (erroLead) throw erroLead;
+      leadData = novoLead;
+      }
+
+      // Item reaberto de orçamento volta "avulso" (sem servicoId do catálogo) — religa pelo
+      // nome pra baixar estoque e iniciar a produção. Nome salvo pode ter os extras de
+      // configuração no fim: "Trailer X (Ar-condicionado, TV)".
+      const servicoDoItem = (i: ItemCarrinho) => {
+        if (i.servicoId > 0) return servicos.find(x => x.id === i.servicoId);
+        return servicos.find(x => x.nome === i.nome)
+          || [...servicos].sort((a, b) => b.nome.length - a.nome.length).find(x => i.nome.startsWith(x.nome + ' ('));
+      };
+      const itensResolvidos = carrinho.map(i => ({ i, s: servicoDoItem(i) }));
 
       if (modo === 'pedido') {
         await Promise.all([
@@ -476,25 +511,27 @@ function PulseNovaVendaContent() {
           supabase.from('visitas').insert([{
             empresa: nomeCliente, telefone: clienteSelecionado.telefone || null,
             observacao: `Venda Pulse — OS ${formatId(leadData.id)}`,
-            user_id: vendedorId || user?.id, empresa_id: perfil?.empresa_id, unidade: unidadeSel || null,
+            user_id: vendedorDaVenda, empresa_id: perfil?.empresa_id, unidade: unidadeSel || null,
             lead_id: leadData.id,
           }]),
-          ...carrinho.filter(i => i.estoqueMax !== null).flatMap(i => {
-            const novo = Math.max(0, (i.estoqueMax as number) - i.quantidade);
-            const deltaReal = novo - (i.estoqueMax as number);
-            const minimo = servicos.find(s => s.id === i.servicoId)?.estoque_minimo ?? 5;
-            alertarEstoqueBaixoSeCruzou(i.servicoId, i.estoqueMax as number, novo, minimo);
+          ...itensResolvidos.flatMap(({ i, s: sv }) => {
+            const estoqueAtual = i.estoqueMax !== null ? i.estoqueMax : (sv?.estoque ?? null);
+            if (estoqueAtual === null || !sv) return [];
+            const novo = Math.max(0, estoqueAtual - i.quantidade);
+            const deltaReal = novo - estoqueAtual;
+            const minimo = sv.estoque_minimo ?? 5;
+            alertarEstoqueBaixoSeCruzou(sv.id, estoqueAtual, novo, minimo);
             return [
-              supabase.from('servicos').update({ estoque: novo }).eq('id', i.servicoId),
+              supabase.from('servicos').update({ estoque: novo }).eq('id', sv.id),
               supabase.from('estoque_movimentacoes').insert([{
-                empresa_id: perfil?.empresa_id, servico_id: i.servicoId, quantidade: deltaReal,
+                empresa_id: perfil?.empresa_id, servico_id: sv.id, quantidade: deltaReal,
                 tipo: 'venda', lead_id: leadData.id, observacao: `Venda Pulse — OS ${formatId(leadData.id)}`, user_id: user?.id,
               }]),
             ];
           }),
         ]);
         setServicos(prev => prev.map(s => {
-          const item = carrinho.find(i => i.servicoId === s.id);
+          const item = itensResolvidos.find(r => r.s?.id === s.id)?.i;
           return item && s.estoque !== null && s.estoque !== undefined ? { ...s, estoque: Math.max(0, s.estoque - item.quantidade) } : s;
         }));
 
@@ -504,22 +541,22 @@ function PulseNovaVendaContent() {
         // compartilhar matéria-prima — sem atualizar o estoque local entre elas, a segunda
         // chamada partiria do estoque de antes da primeira e sobrescreveria o desconto dela.
         const servicoPorId = new Map(servicos.map(s => [s.id, { ...s }]));
-        const itensSobEncomenda = carrinho.filter(i => {
-          const s = servicoPorId.get(i.servicoId);
-          return s && ehSobEncomenda(s);
+        const itensSobEncomenda = itensResolvidos.filter(({ s: sv }) => {
+          const prod = sv ? servicoPorId.get(sv.id) : undefined;
+          return prod && ehSobEncomenda(prod);
         });
         const resultados: { nome: string; ok: boolean }[] = [];
-        for (const item of itensSobEncomenda) {
-          const produtoFinal = servicoPorId.get(item.servicoId)!;
+        for (const { i: item, s: sv } of itensSobEncomenda) {
+          const produtoFinal = servicoPorId.get(sv!.id)!;
           // Sem ficha técnica cadastrada, fichaItens fica vazio — a produção nasce igual,
           // só não consome matéria-prima nenhuma automaticamente (registrarProducaoAutomatica
           // já lida bem com lista vazia).
-          const fichaItens = fichasPorProduto.get(item.servicoId) || [];
+          const fichaItens = fichasPorProduto.get(sv!.id) || [];
           try {
             await registrarProducaoAutomatica({
               empresaId: perfil?.empresa_id, produtoFinal, quantidadeProduzida: item.quantidade,
               fichaItens, materiaPrimaPorId: servicoPorId,
-              userId: user?.id, responsavelId: vendedorId || user?.id, leadId: leadData.id, status: 'em_producao',
+              userId: user?.id, responsavelId: vendedorDaVenda, leadId: leadData.id, status: 'em_producao',
             });
             for (const fi of fichaItens) {
               const mp = servicoPorId.get(fi.servicoId);
@@ -536,6 +573,7 @@ function PulseNovaVendaContent() {
       }
 
       setVendaConcluida({ ...leadData, empresa: nomeCliente, itens: itensPayload, status: modo === 'pedido' ? 'ganho' : 'orcamento' });
+      if (convertendoOrcamento) setOrcamentoEditandoId(null);
       if (mostrarHistorico) carregarHistorico();
     } catch (err: any) {
       setErro(err?.message || 'Erro ao salvar.');
@@ -1352,6 +1390,7 @@ function PulseNovaVendaContent() {
                     )}
                     {ehOrc && (
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => editarOrcamento(h)} title="Abrir pra revisar e converter em venda" className="h-7 px-2 flex items-center gap-1 rounded-lg bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] text-[9px] font-black uppercase"><BadgeCheck size={12} /> Converter</button>
                         <button onClick={() => editarOrcamento(h)} title="Editar orçamento" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-amber-500/10 text-slate-600 hover:text-amber-400"><Pencil size={13} /></button>
                         <button onClick={() => cancelarOrcamento(h.id)} disabled={cancelandoId === h.id} title="Cancelar orçamento" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-400 disabled:opacity-50">
                           {cancelandoId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -1657,6 +1696,16 @@ function PulseNovaVendaContent() {
           {orcamentoEditandoId ? (
             <div className="space-y-2">
               <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"><Pencil size={11} /> Editando {editandoLabel} {formatId(orcamentoEditandoId)}</p>
+              {editandoLabel === 'orçamento' && (
+                <button
+                  onClick={() => { if (window.confirm(`Converter o orçamento ${formatId(orcamentoEditandoId)} em VENDA?\n\nIsso lança no financeiro, baixa o estoque e inicia a produção — igual a "Fechar venda".`)) finalizarVenda('pedido'); }}
+                  disabled={salvando}
+                  className="w-full bg-[var(--cor-primaria)] hover:brightness-110 disabled:opacity-50 text-[#0B1120] font-black uppercase text-sm py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_8px_30px_rgb(var(--cor-primaria-rgb)/30%)] transition-all"
+                >
+                  {salvando ? <Loader2 size={18} className="animate-spin" /> : <BadgeCheck size={18} />}
+                  {salvando ? 'Convertendo...' : 'Converter em venda'}
+                </button>
+              )}
               <div className="flex gap-2">
                 <button onClick={resetar} disabled={salvando} className="bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-black uppercase text-xs py-4 px-4 rounded-xl transition-all">
                   Cancelar

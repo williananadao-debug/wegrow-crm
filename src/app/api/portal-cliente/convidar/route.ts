@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     console.error('[portal-cliente/convidar]', e);
     // Rota só da equipe (autenticada) — mostra o motivo real (ex: remetente do Resend não
     // verificado), senão não dá pra saber o que corrigir.
-    const motivo = e instanceof Error ? e.message : String(e);
+    // Erro do Supabase chega como objeto ({ message, code }), não como Error.
+    const motivo = e instanceof Error ? e.message : (e as { message?: string })?.message || JSON.stringify(e);
     return NextResponse.json({ erro: `Não foi possível enviar o e-mail: ${motivo}` }, { status: 502 });
   }
   await db.from('leads').update({ portal_convite_enviado_em: new Date().toISOString() }).eq('id', lead.id);

@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { planoPagamento } from '@/lib/planoPagamento';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
+import NotasDaVenda, { COLUNAS_NOTA_VENDA, type NotaVenda } from '@/components/NotasDaVenda';
+import { STATUS_NF_FALHA } from '@/lib/fiscalMotivo';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo, getLocalYYYYMMDD } from '../shared';
 import CampoMoeda from '@/components/CampoMoeda';
 
@@ -104,6 +106,17 @@ function PulseNovaVendaContent() {
   // Detalhes da venda — clicar numa linha do histórico abre um resumo completo (cliente,
   // itens, pagamento, contrato assinado, cobranças) sem precisar entrar no modo de edição.
   const [detalheVenda, setDetalheVenda] = useState<any>(null);
+  // NF-e da venda aberta no detalhe (pra ver status/motivo e mandar a nota pro cliente).
+  const [notasDetalhe, setNotasDetalhe] = useState<NotaVenda[]>([]);
+  const carregarNotasDetalhe = async (leadId: number) => {
+    const { data } = await supabase.from('fiscal_notas').select(COLUNAS_NOTA_VENDA)
+      .eq('tipo', 'saida').eq('lead_id', leadId).order('created_at', { ascending: true });
+    setNotasDetalhe((data || []) as NotaVenda[]);
+  };
+  useEffect(() => {
+    if (detalheVenda?.id) carregarNotasDetalhe(detalheVenda.id); else setNotasDetalhe([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalheVenda?.id]);
   // Portal do Cliente (Admin → Módulos → portal_cliente): aviso do envio automático ao fechar
   // a venda, e ações manuais no detalhe da venda (reenviar acesso, marcar parcela paga).
   const portalClienteAtivo = Boolean(empresa?.modulos?.portal_cliente);
@@ -1316,6 +1329,29 @@ function PulseNovaVendaContent() {
                 <p className="text-slate-500 text-xs">Nenhum contrato gerado ainda.</p>
               )}
             </div>
+
+            {/* Nota fiscal (NF-e) */}
+            {v.status === 'ganho' && (() => {
+              const temValida = notasDetalhe.some(n => !STATUS_NF_FALHA.includes(n.status) && n.status !== 'cancelada' && !n.chave_nf_referenciada);
+              return (
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Nota fiscal</p>
+                  {notasDetalhe.length > 0
+                    ? <NotasDaVenda notas={notasDetalhe} telefone={v.telefone} cliente={v.empresa} protocolo={formatId(v.id)} />
+                    : <p className="text-slate-500 text-xs">Nenhuma NF emitida ainda.</p>}
+                  {!temValida && (
+                    <button
+                      onClick={async () => { await emitirNf1(v); setTimeout(() => carregarNotasDetalhe(v.id), 4000); }}
+                      disabled={emitindoNf}
+                      className="mt-2 w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 disabled:opacity-50 text-blue-300 text-[10px] font-black uppercase py-2.5 rounded-xl flex items-center justify-center gap-1.5"
+                    >
+                      {emitindoNf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                      {notasDetalhe.length > 0 ? 'Emitir NF de novo (entrega futura)' : 'Emitir NF (entrega futura)'}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Portal do Cliente */}
             {portalClienteAtivo && v.status === 'ganho' && (() => {

@@ -137,3 +137,18 @@ export async function emitirNota(
   const corpo = await res.json().catch(() => null);
   return { ref, status: res.status, corpo };
 }
+
+// DELETE /v2/nfe/{ref} — cancela uma NF-e autorizada (SEFAZ aceita em até 24h da
+// autorização; depois disso a própria SEFAZ recusa e devolve o motivo). Justificativa
+// obrigatória, 15 a 255 caracteres. Resposta: { status: "cancelado", mensagem_sefaz, ... }.
+export async function cancelarNota(
+  token: string, ambiente: FocusNfeAmbiente, ref: string, justificativa: string
+): Promise<ResultadoEmissao> {
+  const res = await fetch(`${baseUrl(ambiente)}/v2/nfe/${encodeURIComponent(ref)}`, {
+    method: 'DELETE',
+    headers: { ...headerAuth(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ justificativa }),
+  });
+  const corpo = await res.json().catch(() => null);
+  return { ref, status: res.status, corpo };
+}

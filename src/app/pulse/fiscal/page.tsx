@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig } from '../shared';
 import dynamic from 'next/dynamic';
+import { motivoRecusaNf, STATUS_NF_FALHA } from '@/lib/fiscalMotivo';
 
 // Modais só carregam quando abertos — o LancarNotaFiscalModal puxa parser de XML, matching
 // de produto etc., e estava tudo no bundle inicial da página (pior rota no Speed Insights).
@@ -12,7 +13,7 @@ const RevisarItensNotaModal = dynamic(() => import('@/components/RevisarItensNot
 const LancarNotaFiscalModal = dynamic(() => import('@/components/LancarNotaFiscalModal'), { ssr: false });
 const VerNotaFiscalModal = dynamic(() => import('@/components/VerNotaFiscalModal'), { ssr: false });
 
-const NOTAS_COLUNAS = 'id, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
+const NOTAS_COLUNAS = 'id, ref_focus_nfe, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
 // Renderizar 1000 linhas de uma vez travava a pintura e a interação; mostra em lotes.
 const LOTE_RENDER = 60;
 
@@ -25,6 +26,7 @@ type NotaFiscal = {
   data_emissao: string | null; origem: string; observacao: string | null;
   itens_status: 'sem_itens' | 'pendente_revisao' | 'processado';
   created_at: string;
+  ref_focus_nfe?: string | null;
 };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
@@ -32,6 +34,11 @@ const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
   pendente:   { label: 'Pendente',   cor: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   cancelada:  { label: 'Cancelada',  cor: 'text-slate-400 bg-white/5 border-white/10' },
   rejeitada:  { label: 'Rejeitada',  cor: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  // Status gravados pela emissão própria (emitir-nf1/nf2 + webhook do Focus NFe).
+  erro_autorizacao: { label: 'Recusada', cor: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  denegada:   { label: 'Denegada',   cor: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  processando: { label: 'Processando', cor: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  processando_autorizacao: { label: 'Processando', cor: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
 };
 
 // A origem explica pro usuário por que a nota apareceu sozinha na tela — nota capturada
@@ -46,6 +53,7 @@ const ORIGEM_LABEL: Record<string, string> = {
   // nossa própria chamada de API que criou a nota.
   focus_nfe_emitida: 'Emitida (Focus NFe)',
   manual: 'Lançada na mão',
+  emissao_wegrow: 'Emitida pelo sistema',
 };
 
 const PERIODOS = [
@@ -72,6 +80,30 @@ function numeroSerieDaNota(n: { numero: string | null; serie: string | null; cha
 
 export default function FiscalPage() {
   const { authLoading, temPulse, perfil, isLideranca, user, temCRM } = usePulseAccess();
+  const isDiretor = perfil?.cargo === 'diretor';
+
+  // Cancelar NF-e emitida pelo sistema — só diretoria (a rota também confere o cargo).
+  const [cancelarAlvo, setCancelarAlvo] = useState<NotaFiscal | null>(null);
+  const [justificativa, setJustificativa] = useState('');
+  const [cancelando, setCancelando] = useState(false);
+  const [cancelarErro, setCancelarErro] = useState<string | null>(null);
+  const confirmarCancelamentoNf = async () => {
+    if (!cancelarAlvo) return;
+    setCancelando(true); setCancelarErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/cancelar-nf', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ notaId: cancelarAlvo.id, justificativa }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
+      setCancelarAlvo(null); setJustificativa('');
+      carregar();
+    } catch (e) { setCancelarErro(e instanceof Error ? e.message : 'Erro ao cancelar.'); }
+    finally { setCancelando(false); }
+  };
 
   // Excluir nota lançada errada — desfaz estoque/financeiro que ela gerou. Só diretor/gerente.
   const [excluirAlvo, setExcluirAlvo] = useState<NotaFiscal | null>(null);
@@ -222,7 +254,8 @@ export default function FiscalPage() {
   }
 
   const totais = useMemo(() => {
-    const validas = filtradas.filter(n => n.status !== 'cancelada' && n.status !== 'rejeitada');
+    // Nota recusada/denegada não é faturamento (antes entrava no "Valor faturado").
+    const validas = filtradas.filter(n => n.status !== 'cancelada' && !STATUS_NF_FALHA.includes(n.status));
     const entradas = validas.filter(n => n.tipo === 'entrada');
     const saidas = validas.filter(n => n.tipo === 'saida');
     const soma = (lista: NotaFiscal[]) => lista.reduce((s, n) => s + (n.valor_total || 0), 0);
@@ -417,6 +450,12 @@ export default function FiscalPage() {
                         </button>
                       )}
                     </div>
+                    {STATUS_NF_FALHA.includes(n.status) && motivoRecusaNf(n.observacao) && (
+                      <p className="mt-1.5 text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5 leading-snug">
+                        <b>Motivo da recusa:</b> {motivoRecusaNf(n.observacao)}
+                        <span className="block text-red-300/70 mt-0.5">Corrija e emita de novo pela venda (Nova Venda → Histórico → venda → Emitir NF).</span>
+                      </p>
+                    )}
                     {(n.danfe_url || n.xml_url) && (
                       <div className="flex items-center gap-2 mt-1.5">
                         {n.danfe_url && (
@@ -441,6 +480,11 @@ export default function FiscalPage() {
                         {new Date(n.data_emissao || n.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                       </p>
                     </div>
+                    {isDiretor && n.status === 'autorizada' && n.tipo === 'saida' && n.ref_focus_nfe && (
+                      <button onClick={() => { setCancelarAlvo(n); setJustificativa(''); setCancelarErro(null); }} title="Cancelar esta NF na SEFAZ (só diretoria)" className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 rounded-lg px-2 py-1 mt-0.5 whitespace-nowrap">
+                        Cancelar NF
+                      </button>
+                    )}
                     {isLideranca && (
                       <button onClick={() => { setExcluirAlvo(n); setExcluirTexto(''); setExcluirErro(null); }} title="Excluir esta nota (desfaz estoque e financeiro ligados a ela)" className="text-slate-600 hover:text-red-400 p-1 mt-0.5">
                         <Trash2 size={13} />
@@ -460,6 +504,30 @@ export default function FiscalPage() {
       </div>
       {!loading && notas.length >= 1000 && (
         <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 notas mais recentes — refine os filtros pra achar algo mais antigo.</p>
+      )}
+
+      {cancelarAlvo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !cancelando && setCancelarAlvo(null)}>
+          <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="min-w-0">
+                <h3 className="font-black text-white uppercase italic text-lg">Cancelar nota fiscal</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{cancelarAlvo.nome_participante || '—'} · {numeroSerieDaNota(cancelarAlvo)?.numero ? `NF ${numeroSerieDaNota(cancelarAlvo)!.numero}` : `#${cancelarAlvo.id}`} · R$ {(cancelarAlvo.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <button onClick={() => setCancelarAlvo(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed mb-4">
+              O cancelamento é feito na SEFAZ e não pode ser desfeito. A SEFAZ só aceita cancelar até <b>24 horas</b> depois da autorização — fora desse prazo ela recusa e o motivo aparece aqui. Se a nota tiver NF de remessa (NF2) ligada, cancele a NF2 primeiro.
+            </div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Justificativa (mín. 15 caracteres — vai para a SEFAZ)</label>
+            <textarea value={justificativa} onChange={e => setJustificativa(e.target.value.slice(0, 255))} rows={3} placeholder="Ex: Nota emitida com valor incorreto, será reemitida." className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-red-500 resize-none" />
+            <p className={`text-[10px] font-bold mb-3 ${justificativa.trim().length >= 15 ? 'text-slate-500' : 'text-amber-400'}`}>{justificativa.trim().length}/255</p>
+            {cancelarErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{cancelarErro}</div>}
+            <button onClick={confirmarCancelamentoNf} disabled={cancelando || justificativa.trim().length < 15} className="w-full bg-red-500 hover:bg-red-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40">
+              {cancelando ? <Loader2 size={16} className="animate-spin" /> : null} {cancelando ? 'Cancelando na SEFAZ...' : 'Cancelar nota fiscal'}
+            </button>
+          </div>
+        </div>
       )}
 
       {excluirAlvo && (

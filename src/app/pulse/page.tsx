@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2, BadgeCheck, ArrowRight } from 'lucide-react';
 import { dataReferenciaLead, diaReferenciaLead } from '@/lib/dataFechamento';
+import NotasDaVenda, { COLUNAS_NOTA_VENDA, type NotaVenda } from '@/components/NotasDaVenda';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
 import { VendaPulse, ServicoConfig, RankingItem, FORMAS_PAGAMENTO, formatId, getLocalYYYYMMDD, formatCompact, imprimirReciboOuOrcamento, etapasFabricacaoDe } from './shared';
@@ -93,6 +94,7 @@ export default function PulsePainelPage() {
   // Orçamentos em aberto de qualquer mês — antes a lista só mostrava os criados no mês
   // selecionado, então orçamento de setembro sumia do painel em outubro e ninguém convertia.
   const [orcamentosAbertos, setOrcamentosAbertos] = useState<VendaPulse[]>([]);
+  const [notasPorLead, setNotasPorLead] = useState<Record<number, NotaVenda[]>>({});
   const fetchOrcamentos = async () => {
     if (!perfil?.empresa_id) return;
     let q = supabase.from('leads')
@@ -114,7 +116,7 @@ export default function PulsePainelPage() {
     // no mês (orçamento antigo que virou venda agora conta neste mês, não no da criação).
     const base = (campo: 'created_at' | 'fechado_em') => {
       let q = supabase.from('leads')
-        .select('id, empresa, valor_total, created_at, fechado_em, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
+        .select('id, empresa, telefone, valor_total, created_at, fechado_em, forma_pagamento, cnpj, nfse_invoice_id, nfse_pdf_url, user_id, status, itens, estornado_em, estornado_motivo')
         .eq('empresa_id', perfil.empresa_id)
         .gte(campo, inicioMes.toISOString()).lt(campo, fimMes.toISOString())
         .order(campo, { ascending: false });
@@ -127,6 +129,15 @@ export default function PulsePainelPage() {
     if (criados.data || fechados.data) {
       setVendas(Array.from(porId.values()).sort((a, b) => dataReferenciaLead(b).localeCompare(dataReferenciaLead(a))));
     }
+    // NF-e ligadas às vendas do mês — pra achar/mandar a nota direto da venda.
+    const ids = Array.from(porId.keys());
+    if (ids.length) {
+      const { data: notas } = await supabase.from('fiscal_notas').select(COLUNAS_NOTA_VENDA)
+        .eq('empresa_id', perfil.empresa_id).eq('tipo', 'saida').in('lead_id', ids).order('created_at', { ascending: true });
+      const mapa: Record<number, NotaVenda[]> = {};
+      (notas || []).forEach(n => { if (n.lead_id != null) (mapa[n.lead_id] ||= []).push(n as NotaVenda); });
+      setNotasPorLead(mapa);
+    } else setNotasPorLead({});
     setLoadingVendas(false);
   };
 
@@ -618,6 +629,11 @@ export default function PulsePainelPage() {
                     {v.forma_pagamento && <span className="text-[9px] bg-white/5 text-slate-400 px-2 py-0.5 rounded uppercase">{FORMAS_PAGAMENTO[v.forma_pagamento] || v.forma_pagamento}</span>}
                     {v.nfse_invoice_id && <span className="text-[9px] bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)] px-2 py-0.5 rounded uppercase font-black">NF emitida</span>}
                   </div>
+                  {(notasPorLead[v.id] || []).length > 0 && (
+                    <div className="mt-2">
+                      <NotasDaVenda compacto notas={notasPorLead[v.id]} telefone={v.telefone} cliente={v.empresa} protocolo={formatId(v.id)} />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className="font-black text-white">R$ {(v.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>

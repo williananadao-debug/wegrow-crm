@@ -73,6 +73,13 @@ export async function POST(request: Request) {
     ? (await db.from('fiscal_notas').select('id, lead_id').eq('empresa_id', integracao.empresa_id).eq('ref_focus_nfe', ref).maybeSingle()).data
     : null;
 
+  // Aviso de cancelamento (cancelamento feito pelo sistema ou no painel do Focus): é
+  // "cancelada", não erro — antes caía no ramo abaixo e a nota virava "recusada".
+  if (existentePorRef && (status === 'cancelado' || status === 'cancelada')) {
+    await db.from('fiscal_notas').update({ status: 'cancelada' }).eq('id', existentePorRef.id);
+    return NextResponse.json({ ok: true, atualizado: true, cancelada: true });
+  }
+
   if (existentePorRef && !autorizada) {
     await db.from('fiscal_notas').update({
       status: 'erro_autorizacao',

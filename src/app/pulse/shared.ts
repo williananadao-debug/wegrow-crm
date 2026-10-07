@@ -100,6 +100,7 @@ export type VendaPulse = {
   status: string; itens?: { servico: string; quantidade: number; precoUnitario: number }[];
   estornado_em?: string | null; estornado_motivo?: string | null;
   fechado_em?: string | null;
+  telefone?: string | null;
 };
 
 export type RankingItem = { id: string; nome: string; count: number; total: number };

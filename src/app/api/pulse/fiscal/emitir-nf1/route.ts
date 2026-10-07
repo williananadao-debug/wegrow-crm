@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
 import { montarPayloadNF1, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
+import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -42,7 +43,9 @@ export async function POST(req: NextRequest) {
 
   const { data: jaEmitida } = await db.from('fiscal_notas').select('id, status')
     .eq('lead_id', leadId).eq('origem', 'emissao_wegrow').eq('tipo', 'saida').is('chave_nf_referenciada', null)
-    .maybeSingle();
+    // Nota recusada/cancelada não bloqueia: dá pra corrigir o motivo e emitir de novo.
+    .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
+    .limit(1).maybeSingle();
   if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF1 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
 
   const { data: cliente } = lead.client_id
@@ -108,7 +111,7 @@ export async function POST(req: NextRequest) {
     const resultado = await emitirNota(token, ambiente, ref, payload);
     if (resultado.status >= 400) {
       await db.from('fiscal_notas').update({ status: 'erro_autorizacao', observacao: JSON.stringify(resultado.corpo) }).eq('id', notaRascunho.id);
-      return NextResponse.json({ error: 'Focus NFe recusou a emissão.', detalhe: resultado.corpo }, { status: 502 });
+      return NextResponse.json({ error: `Focus NFe recusou a emissão: ${motivoRecusaNf(JSON.stringify(resultado.corpo)) || 'sem detalhe'}`, detalhe: resultado.corpo }, { status: 502 });
     }
     return NextResponse.json({ ok: true, ref, notaId: notaRascunho.id, status: resultado.corpo?.status || 'processando_autorizacao' });
   } catch (err) {

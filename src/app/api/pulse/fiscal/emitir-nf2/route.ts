@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
 import { montarPayloadNF2, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
+import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,16 +38,19 @@ export async function POST(req: NextRequest) {
   const leadId = body?.leadId;
   if (!leadId) return NextResponse.json({ error: 'leadId é obrigatório.' }, { status: 422 });
 
-  const { data: nf1 } = await db.from('fiscal_notas').select('chave_acesso, status')
+  // Pode existir NF1 recusada + NF1 autorizada (reemitida) — usa a válida mais recente.
+  const { data: nf1s } = await db.from('fiscal_notas').select('chave_acesso, status, created_at')
     .eq('lead_id', leadId).eq('empresa_id', perfil.empresa_id).eq('origem', 'emissao_wegrow').eq('tipo', 'saida')
-    .is('chave_nf_referenciada', null).maybeSingle();
+    .is('chave_nf_referenciada', null).not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
+    .order('created_at', { ascending: false });
+  const nf1 = (nf1s || []).find(n => n.status === 'autorizada') || (nf1s || [])[0] || null;
   if (!nf1) return NextResponse.json({ error: 'Essa venda ainda não tem NF1 emitida.' }, { status: 400 });
   if (nf1.status !== 'autorizada') return NextResponse.json({ error: `A NF1 dessa venda ainda não foi autorizada (status: ${nf1.status}). Aguarde antes de emitir a NF2.` }, { status: 409 });
   if (!nf1.chave_acesso) return NextResponse.json({ error: 'NF1 autorizada mas sem chave de acesso registrada — verifique manualmente.' }, { status: 500 });
 
   const { data: jaEmitida } = await db.from('fiscal_notas').select('id, status')
     .eq('lead_id', leadId).eq('origem', 'emissao_wegrow').eq('tipo', 'saida').eq('chave_nf_referenciada', nf1.chave_acesso)
-    .maybeSingle();
+    .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)').limit(1).maybeSingle();
   if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF2 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
 
   const { data: lead } = await db.from('leads').select('id, valor_total, itens, client_id, empresa_id').eq('id', leadId).eq('empresa_id', perfil.empresa_id).single();
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
     const resultado = await emitirNota(token, ambiente, ref, payload);
     if (resultado.status >= 400) {
       await db.from('fiscal_notas').update({ status: 'erro_autorizacao', observacao: JSON.stringify(resultado.corpo) }).eq('id', notaRascunho.id);
-      return NextResponse.json({ error: 'Focus NFe recusou a emissão.', detalhe: resultado.corpo }, { status: 502 });
+      return NextResponse.json({ error: `Focus NFe recusou a emissão: ${motivoRecusaNf(JSON.stringify(resultado.corpo)) || 'sem detalhe'}`, detalhe: resultado.corpo }, { status: 502 });
     }
     return NextResponse.json({ ok: true, ref, notaId: notaRascunho.id, status: resultado.corpo?.status || 'processando_autorizacao' });
   } catch (err) {

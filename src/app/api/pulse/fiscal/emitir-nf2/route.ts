@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
 import { montarPayloadNF2, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
+import { resolverNcmItens } from '@/lib/ncmItens';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -68,15 +69,15 @@ export async function POST(req: NextRequest) {
   if (!empresa?.cnpj) return NextResponse.json({ error: 'Empresa sem CNPJ cadastrado.' }, { status: 400 });
 
   const itensLead = (Array.isArray(lead.itens) ? lead.itens : []) as { servico: string; quantidade: number; precoUnitario: number }[];
-  const nomesServicos = itensLead.map(i => i.servico);
-  const { data: servicos } = await db.from('servicos').select('nome, ncm').eq('empresa_id', perfil.empresa_id).in('nome', nomesServicos);
-  const ncmPorNome = new Map((servicos || []).map(s => [s.nome, s.ncm]));
-  const semNcm = itensLead.filter(i => !ncmPorNome.get(i.servico));
-  if (semNcm.length > 0) {
-    return NextResponse.json({ error: `Produto(s) sem NCM cadastrado: ${semNcm.map(i => i.servico).join(', ')}.` }, { status: 400 });
+  // NCM pelo catálogo, tolerando nome diferente/opcionais no item (ver lib/ncmItens).
+  const { data: servicos } = await db.from('servicos').select('id, nome, ncm').eq('empresa_id', perfil.empresa_id);
+  const { ncms, problemas } = resolverNcmItens(itensLead, servicos || []);
+  if (problemas.length > 0) {
+    return NextResponse.json({ error: `Não foi possível achar o NCM: ${problemas.join(' ')}` }, { status: 400 });
   }
-  const itens: ItemFiscal[] = itensLead.map(i => ({
-    descricao: i.servico, ncm: ncmPorNome.get(i.servico)!, quantidade: i.quantidade, valorUnitario: i.precoUnitario,
+
+  const itens: ItemFiscal[] = itensLead.map((i, idx) => ({
+    descricao: i.servico, ncm: ncms[idx], quantidade: i.quantidade, valorUnitario: i.precoUnitario,
   }));
 
   const emitente: EmitenteFiscal = {

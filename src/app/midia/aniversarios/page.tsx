@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Loader2, Bell, Cake, Megaphone, AlertTriangle, Check, X, Search } from 'lucide-react';
+import { Loader2, Bell, Cake, Megaphone, AlertTriangle, Check, X, Search, BellRing, Send } from 'lucide-react';
+import type { DiagnosticoAlertas } from '@/lib/aniversariosAlertas';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import MidiaTabs from '../MidiaTabs';
@@ -28,6 +29,30 @@ export default function MidiaAniversariosPage() {
 
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
+
+  // Verificar / enviar os alertas de aniversário (sino) na hora — mesmo processo do envio
+  // automático diário, com diagnóstico de quem recebe e por que alguém não recebe.
+  const [alertas, setAlertas] = useState<{ simulacao: boolean; diagnostico: DiagnosticoAlertas } | null>(null);
+  const [rodandoAlertas, setRodandoAlertas] = useState<'simular' | 'enviar' | null>(null);
+  const [erroAlertas, setErroAlertas] = useState<string | null>(null);
+  const rodarAlertas = async (simular: boolean) => {
+    setRodandoAlertas(simular ? 'simular' : 'enviar'); setErroAlertas(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/midia/aniversarios/alertas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ simular }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.erro || `Erro ${res.status}`);
+      setAlertas(j);
+    } catch (e) {
+      setErroAlertas(e instanceof Error ? e.message : 'Erro ao verificar alertas.');
+    } finally {
+      setRodandoAlertas(null);
+    }
+  };
   const [aniversarios, setAniversarios] = useState<MidiaAniversarioMunicipio[]>([]);
   const [resultados, setResultados] = useState<MidiaAniversarioResultado[]>([]);
   const [leadsGanhos, setLeadsGanhos] = useState<LeadCrmResumo[]>([]);
@@ -164,11 +189,65 @@ export default function MidiaAniversariosPage() {
     <div className="md:p-8 pb-20 text-white">
       <MidiaTabs />
 
-      <div className="flex justify-end mb-6">
+      <div className="flex flex-wrap items-center justify-end gap-2 mb-6">
+        {isDiretor && (
+          <>
+            <button onClick={() => rodarAlertas(true)} disabled={rodandoAlertas !== null} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 text-slate-200 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">
+              {rodandoAlertas === 'simular' ? <Loader2 size={14} className="animate-spin" /> : <BellRing size={14} />} Verificar alertas
+            </button>
+            <button onClick={() => { if (window.confirm('Enviar agora os alertas de aniversário no sino dos vendedores? (quem já foi avisado não recebe de novo)')) rodarAlertas(false); }} disabled={rodandoAlertas !== null} className="flex items-center gap-2 bg-[#22C55E]/15 hover:bg-[#22C55E]/25 border border-[#22C55E]/30 disabled:opacity-50 text-[#22C55E] px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">
+              {rodandoAlertas === 'enviar' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar alertas agora
+            </button>
+          </>
+        )}
         <select value={ano} onChange={e => setAno(Number(e.target.value))} className="bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold uppercase text-white outline-none focus:border-[#22C55E]">
           {[hoje.getFullYear() + 1, hoje.getFullYear(), hoje.getFullYear() - 1].map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
+
+      {erroAlertas && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-300 text-sm font-bold rounded-2xl px-4 py-3 flex items-center gap-2"><AlertTriangle size={16} /> {erroAlertas}</div>
+      )}
+      {alertas && (() => {
+        const d = alertas.diagnostico;
+        return (
+          <div className="mb-6 bg-[#0B1120] border border-white/10 rounded-2xl p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-black uppercase tracking-widest text-slate-300 flex items-center gap-2"><BellRing size={14} /> {alertas.simulacao ? 'Verificação dos alertas (nada foi enviado)' : 'Alertas enviados'}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {d.cidadesAtivas} cidade(s) ativa(s) · avisos {d.limites.slice().sort((a, b) => b - a).map(l => l === 0 ? 'no dia' : `${l}d antes`).join(', ')} ·{' '}
+                  {alertas.simulacao ? `${d.notificacoesNovas} aviso(s) novo(s) seriam enviados` : `${d.notificacoesNovas} aviso(s) enviado(s)`}{d.jaAvisadas ? ` · ${d.jaAvisadas} já tinham sido avisados antes` : ''}
+                </p>
+              </div>
+              <button onClick={() => setAlertas(null)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+            </div>
+            {d.erros.length > 0 && (
+              <ul className="space-y-1">{d.erros.map(e => <li key={e} className="text-xs text-red-300 font-bold flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> {e}</li>)}</ul>
+            )}
+            {d.cidadesNoPrazo.length === 0 ? (
+              <p className="text-xs text-slate-400">Nenhuma cidade dentro do prazo de aviso hoje — o próximo aviso sai {d.limites.length ? `quando faltar ${Math.max(...d.limites)} dias` : 'no prazo configurado'} para o próximo aniversário.</p>
+            ) : (
+              <ul className="divide-y divide-white/5">
+                {d.cidadesNoPrazo.map(c => (
+                  <li key={c.municipio + c.data} className="py-2 text-xs flex flex-wrap gap-x-3 gap-y-1">
+                    <span className="font-black text-white">{c.municipio}</span>
+                    <span className="text-slate-400">{c.data} · {c.dias === 0 ? 'hoje' : `faltam ${c.dias} dias`}</span>
+                    <span className={c.destinatarios.length ? 'text-slate-300' : 'text-amber-300 font-bold'}>
+                      {c.destinatarios.length ? `Avisa: ${c.destinatarios.join(', ')}` : 'Ninguém recebe esta cidade (sem diretor/cluster/praça que a cubra)'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {d.semCobertura.length > 0 && (
+              <p className="text-xs text-amber-300 border-t border-white/5 pt-2">
+                <b>Não recebem nenhum alerta</b> (sem cidades no Cluster e sem praça 101.1/104.7/107.9 na unidade): {d.semCobertura.map(p => `${p.nome}${p.unidade ? ` (unidade: ${p.unidade})` : ''}`).join(', ')}. Ajuste em <Link href="/midia/clusters" className="underline">Clusters</Link>.
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {loading ? (
         <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>

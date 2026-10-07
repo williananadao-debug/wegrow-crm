@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { textoParaPdf } from './pdfTexto';
 
 // Texto das cláusulas segue o contrato real que a Trailer Travel já usa e já assinou com
 // clientes (o mesmo modelo enviado pela empresa, usado nas vendas do Alex Simões Franco e
@@ -63,8 +64,10 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
 // renderiza um caractere de substituição (aparecia como "Ð" no PDF) em vez de simplesmente
 // pular a linha. Normaliza antes de imprimir qualquer texto livre, não só o que veio dessa
 // migration específica — protege contra qualquer fonte futura do mesmo problema.
+// Texto livre (descrição/observação/nomes) passa pelo limpador — marcador do Word, emoji
+// etc. embaralhavam o PDF (ver lib/pdfTexto).
 function normalizarTexto(t: string) {
-  return t.replace(/\r\n?/g, '\n');
+  return textoParaPdf(t);
 }
 function fmt(v: number) {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -196,7 +199,7 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       );
       doc.moveDown(0.3);
       for (const item of data.itens) {
-        doc.font('Helvetica-Bold').fontSize(8).text(`Modelo: ${item.servico}${item.quantidade > 1 ? ` (${item.quantidade} unidades)` : ''}`);
+        doc.font('Helvetica-Bold').fontSize(8).text(`Modelo: ${normalizarTexto(item.servico)}${item.quantidade > 1 ? ` (${item.quantidade} unidades)` : ''}`);
       }
       doc.font('Helvetica-Bold').fontSize(8).text(`Valor: ${fmt(data.valor_total)}`);
       doc.moveDown(0.6);

@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { textoParaPdf } from './pdfTexto';
 import path from 'path';
 import fs from 'fs';
 
@@ -239,7 +240,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.font('Helvetica').fontSize(8).fillColor('#000');
       for (const item of data.itens) {
         doc.rect(50, ty, W, rowH).stroke('#000');
-        doc.text(item.servico, colX[0] + 4, ty + 4, { width: 295 });
+        doc.text(textoParaPdf(item.servico), colX[0] + 4, ty + 4, { width: 295 });
         doc.text(String(item.quantidade), colX[1] + 4, ty + 4, { width: 75, align: 'center' });
         const rotulo = rotuloEspecial(item);
         if (rotulo) {
@@ -284,7 +285,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
         doc.font('Helvetica-Bold').fontSize(10).fillColor(corTitulo).text(`${proximaSecao}. OBSERVAÇÕES`);
         doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#999').lineWidth(0.5).stroke();
         doc.moveDown(0.4);
-        doc.font('Helvetica').fontSize(8).fillColor('#000').text(data.observacao, { align: 'justify' });
+        doc.font('Helvetica').fontSize(8).fillColor('#000').text(textoParaPdf(data.observacao), { align: 'justify' });
         doc.moveDown(0.6);
         proximaSecao++;
       }

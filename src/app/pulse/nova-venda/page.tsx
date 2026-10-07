@@ -6,6 +6,7 @@ import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, Shoppin
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { planoPagamento } from '@/lib/planoPagamento';
+import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { ClienteOpcao, ServicoConfig, ItemCarrinho, ConfiguracaoItem, FichaTecnicaItem, FORMAS_PAGAMENTO, formatId, imprimirReciboOuOrcamento, alertarEstoqueBaixoSeCruzou, registrarProducaoAutomatica, ehMateriaPrima, ehUsoConsumo, getLocalYYYYMMDD } from '../shared';
 import CampoMoeda from '@/components/CampoMoeda';
 
@@ -168,27 +169,110 @@ function PulseNovaVendaContent() {
   const [buscaHistorico, setBuscaHistorico] = useState('');
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
 
+  // ── Histórico: período + filtros (antes eram só as 30 últimas, sem filtro) ──────────────
+  // Venda/estorno contam no dia em que foram FECHADOS (fechado_em); orçamento, no dia em que
+  // foi criado — mesma regra do resto do sistema (lib/dataFechamento).
+  type PeriodoHist = 'mes' | 'mes_ant' | '90d' | 'ano' | 'tudo' | 'custom';
+  type TipoHist = 'todos' | 'vendas' | 'orcamentos' | 'estornadas' | 'contrato_pendente';
+  const [periodoHist, setPeriodoHist] = useState<PeriodoHist>('mes');
+  const [dataIniHist, setDataIniHist] = useState(() => getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [dataFimHist, setDataFimHist] = useState(() => getLocalYYYYMMDD(new Date()));
+  const [tipoHist, setTipoHist] = useState<TipoHist>('todos');
+  const [vendedorHist, setVendedorHist] = useState('todos');
+  const [ordemHist, setOrdemHist] = useState<'recentes' | 'valor'>('recentes');
+  const LIMITE_HIST = 300;
+
+  const intervaloHist = (): { ini: string; fim: string } | null => {
+    const h = new Date();
+    const d = (dt: Date) => getLocalYYYYMMDD(dt);
+    if (periodoHist === 'mes') return { ini: d(new Date(h.getFullYear(), h.getMonth(), 1)), fim: d(new Date(h.getFullYear(), h.getMonth() + 1, 0)) };
+    if (periodoHist === 'mes_ant') return { ini: d(new Date(h.getFullYear(), h.getMonth() - 1, 1)), fim: d(new Date(h.getFullYear(), h.getMonth(), 0)) };
+    if (periodoHist === '90d') { const i = new Date(h); i.setDate(i.getDate() - 89); return { ini: d(i), fim: d(h) }; }
+    if (periodoHist === 'ano') return { ini: d(new Date(h.getFullYear(), 0, 1)), fim: d(new Date(h.getFullYear(), 11, 31)) };
+    if (periodoHist === 'custom') return dataIniHist && dataFimHist ? { ini: dataIniHist, fim: dataFimHist } : null;
+    return null;
+  };
+
   const carregarHistorico = async () => {
     if (!perfil?.empresa_id) return;
     setCarregandoHistorico(true);
-    const { data } = await supabase.from('leads')
-      .select('*') // '*' de propósito (não lista de colunas) — evita quebrar essa tela toda vez que um campo novo (ex: valor_entrada) é adicionado no leads antes da migration rodar em produção
-      .eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse')
-      .order('created_at', { ascending: false }).limit(30);
-    setHistorico(data || []);
+    // '*' de propósito (não lista de colunas) — evita quebrar essa tela toda vez que um campo
+    // novo (ex: valor_entrada) é adicionado no leads antes da migration rodar em produção
+    const base = () => supabase.from('leads').select('*').eq('empresa_id', perfil.empresa_id).eq('tipo', 'Pulse');
+    const termo = buscaHistorico.trim();
+    let consultas;
+    if (termo.length >= 2) {
+      // Busca procura em TODO o histórico (não só no período) — nome do cliente ou protocolo.
+      const num = Number(termo.replace(/\D/g, ''));
+      consultas = [base().ilike('empresa', `%${termo.replace(/[%_\\]/g, '')}%`).order('created_at', { ascending: false }).limit(100)];
+      if (num > 0) consultas.push(base().eq('id', num).limit(1));
+    } else {
+      const iv = intervaloHist();
+      if (!iv) {
+        consultas = [base().order('created_at', { ascending: false }).limit(LIMITE_HIST)];
+      } else {
+        const ini = new Date(iv.ini + 'T00:00:00').toISOString();
+        const fim = new Date(iv.fim + 'T23:59:59.999').toISOString();
+        consultas = [
+          base().gte('created_at', ini).lte('created_at', fim).order('created_at', { ascending: false }).limit(LIMITE_HIST),
+          base().gte('fechado_em', ini).lte('fechado_em', fim).order('fechado_em', { ascending: false }).limit(LIMITE_HIST),
+        ];
+      }
+    }
+    const resultados = await Promise.all(consultas);
+    const porId = new Map<number, (typeof historico)[number]>();
+    resultados.forEach(r => (r.data || []).forEach(l => porId.set(l.id, l)));
+    setHistorico(Array.from(porId.values()));
     setCarregandoHistorico(false);
   };
 
-  const toggleHistorico = () => {
-    const abrindo = !mostrarHistorico;
-    setMostrarHistorico(abrindo);
-    if (abrindo && historico.length === 0) carregarHistorico();
-  };
+  // Recarrega ao trocar período ou busca (busca com pequena espera pra não consultar a cada tecla).
+  useEffect(() => {
+    if (!mostrarHistorico) return;
+    const t = setTimeout(() => carregarHistorico(), buscaHistorico.trim() ? 350 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarHistorico, periodoHist, dataIniHist, dataFimHist, buscaHistorico, perfil?.empresa_id]);
 
-  const historicoFiltrado = historico.filter(h =>
-    !buscaHistorico.trim() || h.empresa?.toLowerCase().includes(buscaHistorico.trim().toLowerCase()) || String(h.id).includes(buscaHistorico.trim())
-  );
-  const totalHistoricoFiltrado = historicoFiltrado.filter(h => h.status !== 'orcamento').reduce((s, h) => s + Number(h.valor_total || 0), 0);
+  const toggleHistorico = () => setMostrarHistorico(v => !v);
+
+  // Estorno marca status 'perdido' (+ estornado_em); qualquer 'perdido' sai do faturamento.
+  const ehEstornada = (h: { status?: string }) => h.status === 'perdido';
+  const contratoPendente = (h: { status?: string; docuseal_assinado?: boolean; contrato_manual_url?: string | null; contrato_manual_arquivos?: unknown }) => h.status === 'ganho' && !h.docuseal_assinado && !h.contrato_manual_url
+    && !(Array.isArray(h.contrato_manual_arquivos) && h.contrato_manual_arquivos.length > 0);
+
+  // 1) recorte do período pela data certa de cada registro (a busca ignora o período)
+  const historicoNoPeriodo = (() => {
+    const iv = buscaHistorico.trim().length >= 2 ? null : intervaloHist();
+    return historico.filter(h => {
+      if (vendedorHist !== 'todos' && h.user_id !== vendedorHist) return false;
+      if (!iv) return true;
+      const dia = h.status === 'orcamento' ? getLocalYYYYMMDD(new Date(h.created_at)) : diaReferenciaLead(h);
+      return dia >= iv.ini && dia <= iv.fim;
+    });
+  })();
+  const contagemHist = {
+    todos: historicoNoPeriodo.length,
+    vendas: historicoNoPeriodo.filter(h => h.status === 'ganho').length,
+    orcamentos: historicoNoPeriodo.filter(h => h.status === 'orcamento').length,
+    estornadas: historicoNoPeriodo.filter(ehEstornada).length,
+    contrato_pendente: historicoNoPeriodo.filter(contratoPendente).length,
+  };
+  // 2) tipo + ordenação
+  const historicoFiltrado = historicoNoPeriodo
+    .filter(h => tipoHist === 'todos' ? true
+      : tipoHist === 'vendas' ? h.status === 'ganho'
+      : tipoHist === 'orcamentos' ? h.status === 'orcamento'
+      : tipoHist === 'estornadas' ? ehEstornada(h)
+      : contratoPendente(h))
+    .sort((a, b) => ordemHist === 'valor'
+      ? Number(b.valor_total || 0) - Number(a.valor_total || 0)
+      : (b.status === 'orcamento' ? b.created_at : diaReferenciaLead(b)).localeCompare(a.status === 'orcamento' ? a.created_at : diaReferenciaLead(a)) || b.id - a.id);
+  // Faturado = só vendas ganhas (antes somava também as estornadas).
+  const vendasPeriodo = historicoNoPeriodo.filter(h => h.status === 'ganho');
+  const totalHistoricoFiltrado = vendasPeriodo.reduce((s, h) => s + Number(h.valor_total || 0), 0);
+  const orcamentosPeriodo = historicoNoPeriodo.filter(h => h.status === 'orcamento');
+  const valorOrcamentosPeriodo = orcamentosPeriodo.reduce((s, h) => s + Number(h.valor_total || 0), 0);
 
   const cancelarOrcamento = async (id: number) => {
     if (!confirm('Cancelar este orçamento? Essa ação não pode ser desfeita.')) return;
@@ -1439,38 +1523,99 @@ function PulseNovaVendaContent() {
 
       {mostrarHistorico && (
         <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden mb-5">
-          <div className="p-5 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-black uppercase text-sm text-slate-300">Vendas e orçamentos recentes</h3>
-              <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Faturado no período exibido: <span className="text-[var(--cor-primaria)]">R$ {totalHistoricoFiltrado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+          <div className="p-4 md:p-5 border-b border-white/5 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <h3 className="font-black uppercase text-sm text-slate-300">Vendas e orçamentos</h3>
+              <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 focus-within:border-[var(--cor-primaria)] md:w-72">
+                <Search size={13} className="text-slate-500 flex-shrink-0" />
+                <input value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} placeholder="Buscar cliente ou protocolo (todo o histórico)" className="flex-1 bg-transparent outline-none text-white text-xs min-w-0" />
+                {buscaHistorico && <button onClick={() => setBuscaHistorico('')} className="text-slate-500 hover:text-white"><X size={12} /></button>}
+              </div>
             </div>
-            <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 focus-within:border-[var(--cor-primaria)]">
-              <Search size={13} className="text-slate-500 flex-shrink-0" />
-              <input value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} placeholder="Cliente ou protocolo..." className="flex-1 bg-transparent outline-none text-white text-xs w-40" />
+
+            {/* Período */}
+            <div className={`faixa-scroll md:flex-wrap gap-1.5 items-center ${buscaHistorico.trim().length >= 2 ? 'opacity-40 pointer-events-none' : ''}`}>
+              {([['mes', 'Este mês'], ['mes_ant', 'Mês passado'], ['90d', '90 dias'], ['ano', 'Este ano'], ['tudo', 'Tudo'], ['custom', 'Personalizado']] as [PeriodoHist, string][]).map(([v, l]) => (
+                <button key={v} onClick={() => setPeriodoHist(v)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-colors ${periodoHist === v ? 'bg-[var(--cor-primaria)] text-[#0B1120]' : 'bg-white/5 text-slate-400 hover:text-white'}`}>{l}</button>
+              ))}
+              {periodoHist === 'custom' && (
+                <div className="flex items-center gap-1.5 bg-black/30 border border-white/10 rounded-lg px-2 py-1">
+                  <input type="date" value={dataIniHist} onChange={e => setDataIniHist(e.target.value)} className="bg-transparent text-white text-[10px] font-bold outline-none" />
+                  <span className="text-slate-600 text-[10px]">até</span>
+                  <input type="date" value={dataFimHist} onChange={e => setDataFimHist(e.target.value)} className="bg-transparent text-white text-[10px] font-bold outline-none" />
+                </div>
+              )}
+            </div>
+            {buscaHistorico.trim().length >= 2 && <p className="text-[10px] text-slate-500 -mt-1">Buscando em todo o histórico — o filtro de período fica pausado enquanto houver busca.</p>}
+
+            {/* Resumo do período */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="bg-black/30 border border-white/5 rounded-xl px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faturado</p>
+                <p className="text-base font-black text-[var(--cor-primaria)] truncate">R$ {totalHistoricoFiltrado.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+              </div>
+              <div className="bg-black/30 border border-white/5 rounded-xl px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Vendas · ticket médio</p>
+                <p className="text-base font-black text-white truncate">{vendasPeriodo.length} <span className="text-slate-500 text-xs font-bold">· R$ {(vendasPeriodo.length ? totalHistoricoFiltrado / vendasPeriodo.length : 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span></p>
+              </div>
+              <div className="bg-black/30 border border-white/5 rounded-xl px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Orçamentos em aberto</p>
+                <p className="text-base font-black text-purple-400 truncate">{orcamentosPeriodo.length} <span className="text-slate-500 text-xs font-bold">· R$ {valorOrcamentosPeriodo.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span></p>
+              </div>
+              <div className="bg-black/30 border border-white/5 rounded-xl px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Contrato pendente</p>
+                <p className={`text-base font-black truncate ${contagemHist.contrato_pendente ? 'text-amber-400' : 'text-white'}`}>{contagemHist.contrato_pendente}</p>
+              </div>
+            </div>
+
+            {/* Tipo / vendedor / ordem */}
+            <div className="flex flex-col md:flex-row md:items-center gap-2">
+              <div className="faixa-scroll gap-1.5 flex-1">
+                {([['todos', 'Tudo'], ['vendas', 'Vendas'], ['orcamentos', 'Orçamentos'], ['estornadas', 'Estornadas'], ['contrato_pendente', 'Contrato pendente']] as [TipoHist, string][]).map(([v, l]) => (
+                  <button key={v} onClick={() => setTipoHist(v)} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap border transition-colors ${tipoHist === v ? 'bg-white text-[#0B1120] border-white' : 'border-white/10 text-slate-400 hover:text-white'}`}>
+                    {l} <span className="opacity-60">({contagemHist[v]})</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {isLideranca && Object.keys(usersMap || {}).length > 0 && (
+                  <select value={vendedorHist} onChange={e => setVendedorHist(e.target.value)} className="flex-1 md:flex-none bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase text-slate-300 outline-none">
+                    <option value="todos" className="bg-[#0B1120]">Todos vendedores</option>
+                    {Object.entries(usersMap).map(([id, nome]) => <option key={id} value={id} className="bg-[#0B1120]">{nome}</option>)}
+                  </select>
+                )}
+                <select value={ordemHist} onChange={e => setOrdemHist(e.target.value as 'recentes' | 'valor')} className="flex-1 md:flex-none bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase text-slate-300 outline-none">
+                  <option value="recentes" className="bg-[#0B1120]">Mais recentes</option>
+                  <option value="valor" className="bg-[#0B1120]">Maior valor</option>
+                </select>
+              </div>
             </div>
           </div>
           {carregandoHistorico ? (
             <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
           ) : historicoFiltrado.length === 0 ? (
-            <div className="p-8 text-center"><p className="text-slate-500 text-sm font-bold">{historico.length === 0 ? 'Nenhuma venda registrada ainda por aqui.' : 'Nada encontrado pra essa busca.'}</p></div>
+            <div className="p-8 text-center"><p className="text-slate-500 text-sm font-bold">{buscaHistorico.trim() ? 'Nada encontrado pra essa busca.' : 'Nada nesse período com esse filtro.'}</p></div>
           ) : (
-            <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-white/5 max-h-[34rem] overflow-y-auto">
               {historicoFiltrado.map(h => {
                 const ehOrc = h.status === 'orcamento';
+                const estornada = ehEstornada(h);
                 const itens = Array.isArray(h.itens) ? h.itens : [];
+                const dataRef = ehOrc ? h.created_at : (h.fechado_em || h.created_at);
                 return (
                   <div key={h.id} className="flex items-center gap-3 p-4">
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetalheVenda(h)} title="Ver detalhes da venda">
                       <p className="text-white font-bold text-sm truncate hover:underline">{formatId(h.id)} · {h.empresa}</p>
                       <p className="text-slate-500 text-[10px] truncate">
-                        {itens.map((it: any) => `${it.quantidade}x ${it.servico}`).join(', ')} · {new Date(h.created_at).toLocaleDateString('pt-BR')}
+                        {itens.map((it: any) => `${it.quantidade}x ${it.servico}`).join(', ')} · {ehOrc ? 'criado' : estornada ? 'estornada' : 'fechada'} em {new Date(estornada && h.estornado_em ? h.estornado_em : dataRef).toLocaleDateString('pt-BR')}
+                        {vendedorHist === 'todos' && isLideranca && h.user_id && usersMap?.[h.user_id] ? ` · ${usersMap[h.user_id]}` : ''}
                       </p>
                     </div>
-                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full flex-shrink-0 ${ehOrc ? 'text-purple-400 bg-purple-500/10' : 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]'}`}>
-                      {ehOrc ? 'Orçamento' : 'Venda'}
+                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full flex-shrink-0 ${estornada ? 'text-red-400 bg-red-500/10' : ehOrc ? 'text-purple-400 bg-purple-500/10' : 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]'}`}>
+                      {estornada ? 'Estornada' : ehOrc ? 'Orçamento' : 'Venda'}
                     </span>
-                    <span className="text-white font-black text-sm flex-shrink-0 whitespace-nowrap text-right">R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    {!ehOrc && (
+                    <span className={`font-black text-sm flex-shrink-0 whitespace-nowrap text-right ${estornada ? 'text-slate-500 line-through' : 'text-white'}`}>R$ {Number(h.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    {!ehOrc && !estornada && (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {h.docuseal_assinado && Array.isArray(h.docuseal_arquivos) && h.docuseal_arquivos.length > 0 && (
                           <button onClick={() => abrirArquivoAssinado(h.docuseal_arquivos[0].path)} title="Ver contrato assinado" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-emerald-500/10 text-emerald-500 hover:text-emerald-400"><FileCheck size={13} /></button>

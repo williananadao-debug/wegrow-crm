@@ -19,7 +19,7 @@ export type ContratoData = {
   cidade: string;
   contrato_inicio: string;
   contrato_fim: string;
-  itens: { servico: string; quantidade: number; precoUnitario: number; bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' }[];
+  itens: { servico: string; quantidade: number; precoUnitario: number; bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' | 'permuta' }[];
   desconto: number;
   valor_total: number;
   parcelas: string;
@@ -232,8 +232,10 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       // "bonificacao" era o único tipo (checkbox); agora é lista suspensa com mais
       // opções (ex: doação) — tipoEspecial é o campo novo, bonificacao (boolean)
       // continua lido por compatibilidade com item salvo antes dessa mudança.
-      const rotuloEspecial = (item: { bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' }) =>
-        item.tipoEspecial === 'doacao' ? 'DOAÇÃO' : (item.tipoEspecial === 'bonificacao' || item.bonificacao) ? 'BONIFICAÇÃO' : null;
+      const rotuloEspecial = (item: { bonificacao?: boolean; tipoEspecial?: 'bonificacao' | 'doacao' | 'permuta' }) =>
+        item.tipoEspecial === 'doacao' ? 'DOAÇÃO'
+          : item.tipoEspecial === 'permuta' ? 'PERMUTA'
+          : (item.tipoEspecial === 'bonificacao' || item.bonificacao) ? 'BONIFICAÇÃO' : null;
       doc.font('Helvetica').fontSize(8).fillColor('#000');
       for (const item of data.itens) {
         doc.rect(50, ty, W, rowH).stroke('#000');

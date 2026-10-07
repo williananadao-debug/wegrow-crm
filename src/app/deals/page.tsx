@@ -25,7 +25,7 @@ const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
 
 // --- TIPOS ---
-type TipoEspecialItem = 'bonificacao' | 'doacao';
+type TipoEspecialItem = 'bonificacao' | 'doacao' | 'permuta';
 type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; precoBase?: number; capacidade?: string; observacao?: string; imagemUrl?: string | null; configuracoes?: { chave: string; descricao: string; valor: number }[]; };
 
 // "bonificacao" era um checkbox (só um tipo). Vira lista suspensa com mais opções —
@@ -34,6 +34,9 @@ type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; t
 const TIPOS_ESPECIAIS_ITEM: Record<TipoEspecialItem, string> = {
   bonificacao: 'Bonificação',
   doacao: 'Doação',
+  // Permuta: a rádio veicula em troca de produto/serviço do anunciante — sai no contrato
+  // com o rótulo, sem valor e sem entrar no total (mesmo modelo da bonificação).
+  permuta: 'Permuta',
 };
 function tipoEspecialDoItem(item: Pick<ItemVenda, 'tipoEspecial' | 'bonificacao'>): TipoEspecialItem | null {
   if (item.tipoEspecial) return item.tipoEspecial;

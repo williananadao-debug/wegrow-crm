@@ -82,9 +82,7 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
           const inicio = new Date(lead.contrato_inicio + 'T00:00:00');
           const fim = new Date(lead.contrato_fim + 'T00:00:00');
           const diasTotaisDoContrato = Math.round((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          
-          let spotsRestantes = Number(item.quantidade || 1);
-          
+
           // Agrupa os dias por mês/ano do calendário
           let dataAtual = new Date(inicio);
           let mesesMapa: any = {};
@@ -97,35 +95,31 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
           }
 
           const mesesKeys = Object.keys(mesesMapa);
-          mesesKeys.forEach((mesKey, idx) => {
+          const totalSpots = Number(item.quantidade || 1);
+          // Fatia de cada mês pelo ACUMULADO (arredonda o total corrido, não mês a mês): antes o
+          // erro de arredondamento de todos os meses caía inteiro no último mês, que já é parcial.
+          let diasAcumulados = 0;
+          let spotsAlocadosAteAqui = 0;
+          mesesKeys.forEach((mesKey) => {
               const diasNoMesContrato = mesesMapa[mesKey].diasUteis;
               const [ano, mes] = mesKey.split('-');
               const diasTotaisDesteMesCalendario = new Date(Number(ano), Number(mes), 0).getDate();
-              
-              // Calcula a fatia de spots para este mês
-              let spotsDesteMes = Math.round((diasNoMesContrato.length / diasTotaisDoContrato) * Number(item.quantidade || 1));
-              if (spotsDesteMes > spotsRestantes) spotsDesteMes = spotsRestantes;
-              // O último mês absorve os arredondamentos para não faltar nem sobrar nenhum spot
-              if (idx === mesesKeys.length - 1) spotsDesteMes = spotsRestantes; 
-              
-              spotsRestantes -= spotsDesteMes;
+
+              diasAcumulados += diasNoMesContrato.length;
+              const alvoAcumulado = Math.round((diasAcumulados / diasTotaisDoContrato) * totalSpots);
+              const spotsDesteMes = alvoAcumulado - spotsAlocadosAteAqui;
+              spotsAlocadosAteAqui = alvoAcumulado;
 
               // Preenche a matriz de dias com ZEROS
-              let arrayDiario = Array(diasTotaisDesteMesCalendario).fill(0);
-              
-              // Distribui uniformemente ao longo do mês
+              const arrayDiario = Array(diasTotaisDesteMesCalendario).fill(0);
+
+              // Espalha uniformemente pelos dias do contrato no mês. Com mais spots que dias,
+              // reparte também (ex: 38 spots em 19 dias = 2 por dia) — antes punha 1 por dia e
+              // despejava todo o resto no primeiro dia (ex: "20,1,1,1...", validação 07/10/2026).
               if (spotsDesteMes > 0 && diasNoMesContrato.length > 0) {
-                  const intervalo = Math.floor(diasNoMesContrato.length / spotsDesteMes) || 1;
-                  let spotsAlocados = 0;
-                  for (let i = 0; i < diasNoMesContrato.length && spotsAlocados < spotsDesteMes; i += intervalo) {
-                      const diaDoMes = diasNoMesContrato[i];
-                      arrayDiario[diaDoMes - 1] += 1;
-                      spotsAlocados++;
-                  }
-                  // Sopejar restos no início do contrato
-                  while(spotsAlocados < spotsDesteMes) {
-                      arrayDiario[diasNoMesContrato[0] - 1] += 1;
-                      spotsAlocados++;
+                  for (let k = 0; k < spotsDesteMes; k++) {
+                      const idx = Math.floor((k * diasNoMesContrato.length) / spotsDesteMes);
+                      arrayDiario[diasNoMesContrato[idx] - 1] += 1;
                   }
               }
 

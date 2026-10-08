@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 
@@ -65,7 +65,7 @@ export default function TeamPage() {
       const agora = new Date();
       const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
 
-      let query = supabase.from('profiles').select('id, nome, email, cargo, unidade, empresa_id, cpf').order('nome');
+      let query = supabase.from('profiles').select('*').order('nome');
       if (perfil?.empresa_id) query = query.eq('empresa_id', perfil.empresa_id);
 
       // Leads = criados no mês; ganhos/faturamento = fechados no mês (fechado_em), mesmo que
@@ -84,7 +84,8 @@ export default function TeamPage() {
 
       const [{ data: membersData }, { data: leadsData }, { data: ganhosData }] = await Promise.all([query, leadsQuery, ganhosQuery]);
 
-      setMembers(membersData || []);
+      // Desativados no fim da lista.
+      setMembers((membersData || []).sort((a, b) => Number(!!a.desativado_em) - Number(!!b.desativado_em)));
 
       const stats: Record<string, { leads: number; ganhos: number; faturamento: number }> = {};
       for (const lead of leadsData || []) {
@@ -203,9 +204,36 @@ export default function TeamPage() {
     }
   };
 
+  // Desativar = corta o acesso e mantém o histórico (leads, metas, visitas, relatórios).
+  const alternarAtivo = async () => {
+    if (!editingUser) return;
+    const ativar = !!editingUser.desativado_em;
+    const msg = ativar
+      ? `Reativar ${editingUser.nome}? O acesso volta a funcionar com a mesma senha.`
+      : `Desativar ${editingUser.nome}?\n\nO acesso é cortado (não entra mais no sistema). Leads, metas, visitas e relatórios continuam com o nome dele. Dá pra reativar depois.`;
+    if (!confirm(msg)) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/team/desativar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ userId: editingUser.id, ativo: ativar }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.erro || 'Erro ao alterar o acesso.');
+      setToastMessage(ativar ? `${editingUser.nome} reativado ✅` : `${editingUser.nome} desativado — acesso cortado.`);
+      setShowToast(true);
+      setIsModalOpen(false);
+      carregarEquipe();
+    } catch (error: any) { alert(error.message); }
+    finally { setSaving(false); }
+  };
+
   const excluirUsuario = async () => {
     if (!editingUser) return;
-    if (confirm(`Excluir ${editingUser.nome}? Esta ação não pode ser desfeita.`)) {
+    if (confirm(`Apagar ${editingUser.nome} de vez? Só funciona pra quem não tem histórico (cadastro feito por engano). Quem já trabalhou no sistema deve ser DESATIVADO.`)) {
         setSaving(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -237,7 +265,7 @@ export default function TeamPage() {
               <h1 className="text-2xl md:text-3xl font-black uppercase italic text-white flex items-center gap-2">
                  <ShieldAlert className="text-[#22C55E]" size={28} /> Gestão de Equipe
               </h1>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{loading ? 'Carregando…' : `${members.length} ${members.length === 1 ? 'membro' : 'membros'} · desempenho do mês atual`}</p>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{loading ? 'Carregando…' : (() => { const ativos = members.filter(m => !m.desativado_em).length; const inativos = members.length - ativos; return `${ativos} ${ativos === 1 ? 'membro ativo' : 'membros ativos'}${inativos ? ` · ${inativos} desativado${inativos > 1 ? 's' : ''}` : ''} · desempenho do mês atual`; })()}</p>
           </div>
           {isDirector && (
               <button onClick={abrirModalNovo} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-2">
@@ -260,12 +288,15 @@ export default function TeamPage() {
             const taxa = s && s.leads > 0 ? Math.round((s.ganhos / s.leads) * 100) : 0;
             const cfg = CARGO_CFG[m.cargo] || { label: m.cargo || 'Sem cargo', cor: 'bg-white/5 text-slate-300 border-white/10', vende: false };
             return (
-              <div key={m.id} className="bg-[#0F172A] border border-white/5 hover:border-white/15 rounded-2xl p-4 transition-colors flex flex-col gap-4 min-w-0">
+              <div key={m.id} className={`bg-[#0F172A] border border-white/5 hover:border-white/15 rounded-2xl p-4 transition-colors flex flex-col gap-4 min-w-0 ${m.desativado_em ? 'opacity-50' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className="w-11 h-11 shrink-0 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center font-black text-base">{m.nome?.charAt(0).toUpperCase()}</div>
                   <div className="min-w-0 flex-1">
                     <p className="font-black text-sm uppercase truncate">{m.nome || 'Sem nome'}</p>
                     <span className={`inline-block mt-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${cfg.cor}`}>{cfg.label}</span>
+                    {m.desativado_em && (
+                      <span className="inline-block mt-1 ml-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/30" title={`Desativado em ${new Date(m.desativado_em).toLocaleDateString('pt-BR')}`}>Desativado</span>
+                    )}
                   </div>
                   {isDirector && (
                     <button onClick={() => abrirModalEdit(m)} title="Editar acesso" className="shrink-0 p-2 bg-white/5 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all"><Edit2 size={14} /></button>
@@ -371,7 +402,12 @@ export default function TeamPage() {
                       </button>
                   )}
                   {editingUser && (
-                      <button type="button" onClick={excluirUsuario} className="w-full bg-red-500/10 text-red-500 border border-red-500/20 py-3 rounded-xl font-black uppercase text-xs">Apagar Usuário</button>
+                      <button type="button" onClick={alternarAtivo} disabled={saving} className={`w-full py-3 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 border transition-all disabled:opacity-50 ${editingUser.desativado_em ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/30 hover:bg-[#22C55E]/20' : 'bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20'}`}>
+                        {editingUser.desativado_em ? <><UserCheck size={14}/> Reativar Usuário</> : <><UserX size={14}/> Desativar Usuário</>}
+                      </button>
+                  )}
+                  {editingUser && (
+                      <button type="button" onClick={excluirUsuario} className="w-full text-red-500/70 hover:text-red-400 py-1 font-black uppercase text-[10px] tracking-widest">Apagar de vez (só sem histórico)</button>
                   )}
               </div>
            </div>

@@ -38,7 +38,7 @@ export async function processarAlertasAniversario(db: SupabaseClient, empresa: E
   const [rCidades, rVinculos, rPerfis] = await Promise.all([
     db.from('midia_aniversarios_municipios').select('id, municipio, praca, dia, mes, ano_emancipacao').eq('empresa_id', empresa.id).eq('ativo', true),
     db.from('midia_cluster_vendedor_cidades').select('vendedor_id, aniversario_id').eq('empresa_id', empresa.id),
-    db.from('profiles').select('id, nome, cargo, unidade').eq('empresa_id', empresa.id).in('cargo', ['diretor', 'gerente', 'vendedor']),
+    db.from('profiles').select('*').eq('empresa_id', empresa.id).in('cargo', ['diretor', 'gerente', 'vendedor']),
   ]);
   if (rCidades.error) diag.erros.push(`Erro ao buscar cidades: ${rCidades.error.message}`);
   if (rVinculos.error) diag.erros.push(`Erro ao buscar clusters: ${rVinculos.error.message}`);
@@ -46,7 +46,8 @@ export async function processarAlertasAniversario(db: SupabaseClient, empresa: E
 
   const cidades = (rCidades.data || []) as CidadeAniversario[];
   const vinculos = (rVinculos.data || []) as VinculoCluster[];
-  const perfis = (rPerfis.data || []) as PerfilCluster[];
+  // Usuário desativado não recebe alerta.
+  const perfis = ((rPerfis.data || []) as (PerfilCluster & { desativado_em?: string | null })[]).filter(p => !p.desativado_em);
   diag.cidadesAtivas = cidades.length;
   diag.perfisConsiderados = perfis.length;
   if (cidades.length === 0 && !rCidades.error) diag.erros.push('Nenhuma cidade ativa cadastrada em Aniversários.');

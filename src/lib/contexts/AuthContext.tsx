@@ -39,6 +39,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const { empresa: empData, ...perfil } = profile || {};
 
+        // Desativado com sessão ainda aberta (o ban só barra a renovação do token): sai na hora.
+        if (perfil?.desativado_em) {
+          await supabase.auth.signOut();
+          router.replace('/login');
+          setLoading(false);
+          return;
+        }
+
         setPerfil(perfil);
         setEmpresa(empData ?? null);
       } else if (!isPublicPage(window.location.pathname)) {

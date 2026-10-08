@@ -263,6 +263,8 @@ export default function DealsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+  // Usuário desativado continua no mapa (nome no histórico), mas não recebe lead novo.
+  const [usersDesativados, setUsersDesativados] = useState<Set<string>>(new Set());
   const [usersEmailMap, setUsersEmailMap] = useState<Record<string, string>>({});
   const [clientesOpcoes, setClientesOpcoes] = useState<ClienteOpcao[]>([]);
   const [listaServicos, setListaServicos] = useState<ServicoConfig[]>([]);
@@ -526,7 +528,8 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    let perfisQuery = supabase.from('profiles').select('id, nome, email').order('nome', { ascending: true });
+    // '*' pra trazer desativado_em sem quebrar antes da migration rodar.
+    let perfisQuery = supabase.from('profiles').select('*').order('nome', { ascending: true });
     if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
     const { data: perfisData } = await perfisQuery;
     if (perfisData) {
@@ -534,6 +537,7 @@ export default function DealsPage() {
         setUsersMap(mapa);
         const mapaEmail = perfisData.reduce((acc: any, p: any) => ({...acc, [p.id]: p.email}), {});
         setUsersEmailMap(mapaEmail);
+        setUsersDesativados(new Set(perfisData.filter((p: any) => p.desativado_em).map((p: any) => p.id)));
     }
 
     try {
@@ -2081,7 +2085,7 @@ export default function DealsPage() {
               {isLideranca && (
                   <select value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} className="bg-transparent border-none text-blue-400 text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full shrink-0">
                     <option value="todos" className="bg-[#0F172A]">{isCDL ? 'Todos Consultores' : 'Todos Vendedores'}</option>
-                    {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0F172A]">{nome}</option> ))}
+                    {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0F172A]">{nome}{usersDesativados.has(id) ? ' (desativado)' : ''}</option> ))}
                   </select>
               )}
 
@@ -2397,7 +2401,7 @@ export default function DealsPage() {
                             <label className="text-[10px] font-black uppercase text-yellow-500 ml-2 flex items-center gap-1"><User size={12}/> {isCDL ? 'Consultor Responsável (Distribuição)' : 'Vendedor Responsável (Distribuição)'}</label>
                             <select className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-yellow-500 cursor-pointer appearance-none" value={leadUserId} onChange={e => setLeadUserId(e.target.value)}>
                                 <option value="" className="bg-[#0B1120]">Nenhum (Fila Geral do Diretor)</option>
-                                {Object.entries(usersMap).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0B1120]">{nome}</option> ))}
+                                {Object.entries(usersMap).filter(([id]) => !usersDesativados.has(id) || id === leadUserId).map(([id, nome]) => ( <option key={id} value={id} className="bg-[#0B1120]">{nome}{usersDesativados.has(id) ? ' (desativado)' : ''}</option> ))}
                             </select>
                         </div>
                     )}

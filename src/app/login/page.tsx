@@ -49,7 +49,8 @@ export default function LoginPage() {
         const modulos = (perfil?.empresa as any)?.modulos || {};
         router.push(modulos.argus ? '/argus' : '/dashboard');
     } catch (err: any) {
-      setError('E-mail ou senha incorretos.');
+      // Usuário desativado pelo diretor (ban no Supabase Auth): mensagem própria em vez de "senha errada".
+      setError(/banned/i.test(err?.message || '') ? 'Seu acesso foi desativado. Fale com o diretor da sua empresa.' : 'E-mail ou senha incorretos.');
       console.error(err);
     } finally {
       setLoading(false);

@@ -53,13 +53,27 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ erro: 'Usuário não pertence à sua empresa.' }, { status: 403 });
     }
 
-    await supabaseAdmin.from('profiles').delete().eq('id', userId);
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    // Usuário com histórico não é apagado: metas iriam junto (FK em cascata) e leads/visitas
+    // perderiam o vendedor nos relatórios. Nesse caso o caminho é desativar.
+    const contar = (tabela: string, coluna: string) =>
+        supabaseAdmin.from(tabela).select('id', { count: 'exact', head: true }).eq(coluna, userId).then(r => r.count || 0);
+    const [leadsDono, leadsCriados, visitas, metas] = await Promise.all([
+        contar('leads', 'user_id'), contar('leads', 'criado_por'), contar('visitas', 'user_id'), contar('metas', 'user_id'),
+    ]);
+    if (leadsDono + leadsCriados + visitas + metas > 0) {
+        return NextResponse.json({
+            erro: `Esse usuário tem histórico (${leadsDono + leadsCriados} lead(s), ${visitas} visita(s), ${metas} meta(s)). Apagar faria esse histórico perder o dono — use "Desativar usuário": o acesso é cortado e o histórico fica.`,
+            temHistorico: true,
+        }, { status: 409 });
+    }
 
+    // Login primeiro: se falhar, o perfil continua e nada fica pela metade.
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (deleteError) {
         console.error('[team/delete] Erro ao excluir usuário:', deleteError.message);
-        return NextResponse.json({ erro: 'Erro ao excluir usuário.' }, { status: 500 });
+        return NextResponse.json({ erro: `Erro ao excluir usuário: ${deleteError.message}` }, { status: 500 });
     }
+    await supabaseAdmin.from('profiles').delete().eq('id', userId);
 
     return NextResponse.json({ ok: true });
 }

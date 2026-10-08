@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
   const numeroOrigem = origem.numero || String(parseInt(chaveOrigem.slice(25, 34), 10));
 
   // Destinatário = cliente da nota original: pela venda ligada, senão pelo CNPJ da nota.
-  const colunasCliente = 'nome_empresa, cnpj, endereco, numero, bairro, cep, cidade, estado, telefone, email';
-  let cliente: { nome_empresa: string; cnpj: string; endereco: string; numero: string | null; bairro: string | null; cep: string | null; cidade: string; estado: string; telefone: string | null; email: string | null } | null = null;
+  const colunasCliente = 'nome_empresa, cnpj, inscricao_estadual, endereco, numero, bairro, cep, cidade, estado, telefone, email';
+  let cliente: { nome_empresa: string; cnpj: string; inscricao_estadual: string | null; endereco: string; numero: string | null; bairro: string | null; cep: string | null; cidade: string; estado: string; telefone: string | null; email: string | null } | null = null;
   if (origem.lead_id) {
     const { data: lead } = await db.from('leads').select('client_id').eq('id', origem.lead_id).eq('empresa_id', perfil.empresa_id).maybeSingle();
     if (lead?.client_id) cliente = (await db.from('clientes').select(colunasCliente).eq('id', lead.client_id).maybeSingle()).data;
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   if (emAndamento) return NextResponse.json({ error: 'Já tem uma NF complementar dessa nota sendo processada — aguarde o resultado.' }, { status: 409 });
 
   const { data: integracao } = await db.from('fiscal_integracoes')
-    .select('token_producao, token_homologacao, ambiente_ativo, ie, im, endereco, numero, bairro, cep, municipio, codigo_municipio, uf, telefone, email, regime_tributario')
+    .select('*') // '*' pra trazer aliquota_simples mesmo antes da migration
     .eq('empresa_id', perfil.empresa_id).maybeSingle();
   if (!integracao) return NextResponse.json({ error: 'Integração com o Focus NFe ainda não foi ativada.' }, { status: 400 });
   if (!integracao.ie || !integracao.endereco || !integracao.codigo_municipio) {
@@ -104,11 +104,14 @@ export async function POST(req: NextRequest) {
   const destinatario: DestinatarioFiscal = {
     nome: cliente.nome_empresa, cnpjOuCpf: cliente.cnpj, endereco: cliente.endereco, numero: cliente.numero,
     bairro: cliente.bairro, cep: cliente.cep, municipio: cliente.cidade, uf: cliente.estado,
-    telefone: cliente.telefone, email: cliente.email,
+    telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
+  const aliquotaSimples = integracao.aliquota_simples != null ? Number(integracao.aliquota_simples) : null;
 
   const descricao = `Complemento de valor ref. NF ${numeroOrigem} - ${motivo}`.slice(0, 120);
-  const payload = montarPayloadComplementar({ emitente, destinatario, chaveOrigem, cfop, descricao, ncm, valor });
+  let payload;
+  try { payload = montarPayloadComplementar({ emitente, destinatario, chaveOrigem, cfop, descricao, ncm, valor, aliquotaSimples }); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Falha ao montar a NF.' }, { status: 400 }); }
   const ref = `nf${origem.id}comp${Date.now()}`;
 
   const { data: notaRascunho, error: erroInsert } = await db.from('fiscal_notas').insert([{

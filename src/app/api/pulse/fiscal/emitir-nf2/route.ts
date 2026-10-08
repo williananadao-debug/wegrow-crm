@@ -66,12 +66,12 @@ export async function POST(req: NextRequest) {
   if (!lead) return NextResponse.json({ error: 'Venda não encontrada.' }, { status: 404 });
 
   const { data: cliente } = lead.client_id
-    ? await db.from('clientes').select('nome_empresa, cnpj, endereco, numero, bairro, cep, cidade, estado, telefone, email').eq('id', lead.client_id).single()
+    ? await db.from('clientes').select('nome_empresa, cnpj, inscricao_estadual, endereco, numero, bairro, cep, cidade, estado, telefone, email').eq('id', lead.client_id).single()
     : { data: null };
   if (!cliente) return NextResponse.json({ error: 'Cliente da venda não encontrado.' }, { status: 400 });
 
   const { data: integracao } = await db.from('fiscal_integracoes')
-    .select('token_producao, token_homologacao, ambiente_ativo, ie, im, endereco, numero, bairro, cep, municipio, codigo_municipio, uf, telefone, email, regime_tributario')
+    .select('*') // '*' pra trazer aliquota_simples mesmo antes da migration
     .eq('empresa_id', perfil.empresa_id).maybeSingle();
   if (!integracao) return NextResponse.json({ error: 'Integração com o Focus NFe ainda não foi ativada.' }, { status: 400 });
   const ambiente: FocusNfeAmbiente = integracao.ambiente_ativo === 'producao' ? 'producao' : 'homologacao';
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
   const destinatario: DestinatarioFiscal = {
     nome: cliente.nome_empresa, cnpjOuCpf: cliente.cnpj, endereco: cliente.endereco, numero: cliente.numero,
     bairro: cliente.bairro, cep: cliente.cep, municipio: cliente.cidade, uf: cliente.estado,
-    telefone: cliente.telefone, email: cliente.email,
+    telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
 
   const payload = montarPayloadNF2({ emitente, destinatario, itens, chaveNf1: nf1.chave_acesso, chavesComplementares });

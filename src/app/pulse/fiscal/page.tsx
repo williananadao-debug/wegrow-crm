@@ -141,6 +141,39 @@ export default function FiscalPage() {
     finally { setCompEnviando(false); }
   };
 
+  // Alíquota efetiva do Simples (crédito de ICMS na CSOSN 101) — muda todo mês; diretor atualiza.
+  const [aliquota, setAliquota] = useState<number | null>(null);
+  const [temIntegracao, setTemIntegracao] = useState(false);
+  const [aliquotaAberta, setAliquotaAberta] = useState(false);
+  const [aliquotaTexto, setAliquotaTexto] = useState('');
+  const [aliquotaErro, setAliquotaErro] = useState<string | null>(null);
+  const [salvandoAliquota, setSalvandoAliquota] = useState(false);
+  useEffect(() => {
+    if (!isLideranca) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/pulse/fiscal/aliquota', { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) { setTemIntegracao(!!json.integracao); setAliquota(json.aliquota ?? null); }
+    })();
+  }, [isLideranca]);
+  const salvarAliquota = async () => {
+    setSalvandoAliquota(true); setAliquotaErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/aliquota', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ aliquota: Number(aliquotaTexto.replace(',', '.')) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
+      setAliquota(json.aliquota); setAliquotaAberta(false);
+    } catch (e) { setAliquotaErro(e instanceof Error ? e.message : 'Erro ao salvar.'); }
+    finally { setSalvandoAliquota(false); }
+  };
+
   // Excluir nota lançada errada — desfaz estoque/financeiro que ela gerou. Só diretor/gerente.
   const [excluirAlvo, setExcluirAlvo] = useState<NotaFiscal | null>(null);
   const [excluirTexto, setExcluirTexto] = useState('');
@@ -354,6 +387,11 @@ export default function FiscalPage() {
               {buscandoHistoricoSaida ? 'Buscando...' : <><span className="md:hidden">Hist. saída</span><span className="hidden md:inline">Buscar histórico (saída)</span></>}
             </button>
           )}
+          {isDiretor && temIntegracao && (
+            <button onClick={() => { setAliquotaTexto(aliquota != null ? String(aliquota).replace('.', ',') : ''); setAliquotaErro(null); setAliquotaAberta(true); }} title="Alíquota efetiva do Simples Nacional — usada no crédito de ICMS (CSOSN 101). Atualize todo mês com o valor da contabilidade." className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${aliquota != null ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}`}>
+              % Simples: {aliquota != null ? `${aliquota.toLocaleString('pt-BR')}%` : 'definir'}
+            </button>
+          )}
           <button onClick={() => setLancarNotaAberto(true)} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Plus size={14} /> Lançar Nota Fiscal
           </button>
@@ -548,6 +586,26 @@ export default function FiscalPage() {
       </div>
       {!loading && notas.length >= 1000 && (
         <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 notas mais recentes — refine os filtros pra achar algo mais antigo.</p>
+      )}
+
+      {aliquotaAberta && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !salvandoAliquota && setAliquotaAberta(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-black text-white uppercase italic text-lg">Alíquota do Simples</h3>
+              <button onClick={() => setAliquotaAberta(false)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <p className="text-slate-400 text-xs leading-relaxed mb-4">Alíquota efetiva do mês, informada pela contabilidade. Sai como crédito de ICMS (CSOSN 101) nas notas para clientes com inscrição estadual. Atualize todo mês.</p>
+            <div className="flex items-center gap-2 mb-3">
+              <input value={aliquotaTexto} onChange={e => setAliquotaTexto(e.target.value.replace(/[^\d,.]/g, ''))} inputMode="decimal" placeholder="3,83" className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <span className="text-slate-400 font-black">%</span>
+            </div>
+            {aliquotaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{aliquotaErro}</div>}
+            <button onClick={salvarAliquota} disabled={salvandoAliquota || !aliquotaTexto} className="w-full bg-[var(--cor-primaria)] text-[#0B1120] font-black uppercase text-xs tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40">
+              {salvandoAliquota ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+            </button>
+          </div>
+        </div>
       )}
 
       {complementarAlvo && (

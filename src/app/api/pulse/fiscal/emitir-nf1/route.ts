@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF1 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
 
   const { data: cliente } = lead.client_id
-    ? await db.from('clientes').select('nome_empresa, cnpj, endereco, numero, bairro, cep, cidade, estado, telefone, email').eq('id', lead.client_id).single()
+    ? await db.from('clientes').select('nome_empresa, cnpj, inscricao_estadual, endereco, numero, bairro, cep, cidade, estado, telefone, email').eq('id', lead.client_id).single()
     : { data: null };
   if (!cliente) return NextResponse.json({ error: 'Cliente da venda não tem cadastro completo (endereço/cidade/estado) — complete em Clientes antes de emitir.' }, { status: 400 });
   if (!cliente.endereco || !cliente.cidade || !cliente.estado || !cliente.cnpj) {
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: integracao } = await db.from('fiscal_integracoes')
-    .select('token_producao, token_homologacao, ambiente_ativo, ie, im, endereco, numero, bairro, cep, municipio, codigo_municipio, uf, telefone, email, regime_tributario')
+    .select('*') // '*' pra trazer aliquota_simples mesmo antes da migration
     .eq('empresa_id', perfil.empresa_id).maybeSingle();
   if (!integracao) return NextResponse.json({ error: 'Integração com o Focus NFe ainda não foi ativada.' }, { status: 400 });
   if (!integracao.ie || !integracao.endereco || !integracao.codigo_municipio) {
@@ -94,10 +94,13 @@ export async function POST(req: NextRequest) {
   const destinatario: DestinatarioFiscal = {
     nome: cliente.nome_empresa, cnpjOuCpf: cliente.cnpj, endereco: cliente.endereco, numero: cliente.numero,
     bairro: cliente.bairro, cep: cliente.cep, municipio: cliente.cidade, uf: cliente.estado,
-    telefone: cliente.telefone, email: cliente.email,
+    telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
+  const aliquotaSimples = integracao.aliquota_simples != null ? Number(integracao.aliquota_simples) : null;
 
-  const payload = montarPayloadNF1({ emitente, destinatario, itens });
+  let payload;
+  try { payload = montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples }); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Falha ao montar a NF.' }, { status: 400 }); }
   const ref = `venda${leadId}nf1${Date.now()}`;
 
   const { data: notaRascunho, error: erroInsert } = await db.from('fiscal_notas').insert([{

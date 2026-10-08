@@ -1,4 +1,4 @@
-// Emissão de NF-e de SAÍDA via Focus NFe — "venda para entrega futura": NF1 (CFOP 5922,
+// Emissão de NF-e de SAÍDA via Focus NFe — "venda para entrega futura": NF1 (CFOP 5922/6922,
 // simples faturamento, valor cheio) na hora da venda + NF2 (CFOP 5116/6116, remessa,
 // referenciando a chave da NF1) na hora da entrega. Layout de campos verificado contra um
 // DANFE real já emitido pela Trailer Travel (nota nº 49, 27/08/2026), não é chute.
@@ -23,6 +23,8 @@ export type EmitenteFiscal = {
 export type DestinatarioFiscal = {
   nome: string; cnpjOuCpf: string; endereco: string; numero: string | null; bairro: string | null;
   cep: string | null; municipio: string; uf: string; telefone: string | null; email: string | null;
+  // clientes.inscricao_estadual — número = contribuinte; "ISENTO"/vazio = não contribuinte.
+  ie?: string | null;
 };
 
 export type ItemFiscal = { descricao: string; ncm: string; quantidade: number; valorUnitario: number };
@@ -31,29 +33,72 @@ function digitos(v: string | null | undefined) { return (v || '').replace(/\D/g,
 
 function ehPessoaFisica(doc: string) { return digitos(doc).length === 11; }
 
-function itensPayload(itens: ItemFiscal[], cfop: string) {
-  return itens.map((item, idx) => ({
-    numero_item: idx + 1,
-    codigo_produto: String(idx + 1).padStart(3, '0'),
-    descricao: item.descricao,
-    codigo_ncm: item.ncm,
-    cfop,
-    unidade_comercial: 'UN',
-    quantidade_comercial: item.quantidade,
-    valor_unitario_comercial: item.valorUnitario,
-    unidade_tributavel: 'UN',
-    quantidade_tributavel: item.quantidade,
-    valor_unitario_tributavel: item.valorUnitario,
-    valor_bruto: Number((item.quantidade * item.valorUnitario).toFixed(2)),
-    icms_origem: 0,
-    icms_situacao_tributaria: '400',
-    pis_situacao_tributaria: '08',
-    cofins_situacao_tributaria: '08',
-  }));
+// Contribuinte de ICMS = PJ com inscrição estadual numérica.
+export function ehContribuinte(dest: DestinatarioFiscal) {
+  return !ehPessoaFisica(dest.cnpjOuCpf) && digitos(dest.ie).length >= 2;
+}
+
+// Regras passadas pela contabilidade da Trailer Travel (Simples Nacional, Anexo II, 08/10/2026):
+// - Faturamento/venda (5922/6922, 5101/6101): CSOSN 102; se o cliente for contribuinte (PJ com
+//   IE), CSOSN 101 com crédito de ICMS na alíquota efetiva do Simples (art. 23 LC 123/06).
+// - Remessa da entrega futura (5116/6116): CSOSN 400.
+// - PIS/COFINS CST 08; IPI não destaca; sem ICMS-ST; Simples dispensado de DIFAL.
+export type Tributacao = { csosn: '101' | '102' | '400'; aliquotaCredito: number | null };
+
+export function tributacaoPorCfop(cfop: string, dest: DestinatarioFiscal, aliquotaSimples: number | null): Tributacao {
+  if (cfop.endsWith('116')) return { csosn: '400', aliquotaCredito: null };
+  if (ehContribuinte(dest)) {
+    if (!aliquotaSimples || aliquotaSimples <= 0) {
+      throw new Error('Cliente com inscrição estadual exige CSOSN 101 com a alíquota do Simples — configure a alíquota em Notas Fiscais (botão "Alíquota do Simples").');
+    }
+    return { csosn: '101', aliquotaCredito: aliquotaSimples };
+  }
+  return { csosn: '102', aliquotaCredito: null };
+}
+
+function itensPayload(itens: ItemFiscal[], cfop: string, trib: Tributacao) {
+  return itens.map((item, idx) => {
+    const valorBruto = Number((item.quantidade * item.valorUnitario).toFixed(2));
+    return {
+      numero_item: idx + 1,
+      codigo_produto: String(idx + 1).padStart(3, '0'),
+      descricao: item.descricao,
+      codigo_ncm: item.ncm,
+      cfop,
+      unidade_comercial: 'UN',
+      quantidade_comercial: item.quantidade,
+      valor_unitario_comercial: item.valorUnitario,
+      unidade_tributavel: 'UN',
+      quantidade_tributavel: item.quantidade,
+      valor_unitario_tributavel: item.valorUnitario,
+      valor_bruto: valorBruto,
+      icms_origem: 0,
+      icms_situacao_tributaria: trib.csosn,
+      ...(trib.csosn === '101' && trib.aliquotaCredito ? creditoSimples(valorBruto, trib.aliquotaCredito) : {}),
+      pis_situacao_tributaria: '08',
+      cofins_situacao_tributaria: '08',
+    };
+  });
+}
+
+function creditoSimples(valor: number, aliquota: number) {
+  return {
+    icms_aliquota_credito_simples: aliquota,
+    icms_valor_credito_simples: Number((valor * aliquota / 100).toFixed(2)),
+  };
+}
+
+function textoCredito(valor: number, trib: Tributacao) {
+  if (trib.csosn !== '101' || !trib.aliquotaCredito) return null;
+  const credito = (valor * trib.aliquotaCredito / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `Permite o aproveitamento do crédito de ICMS no valor de R$ ${credito}, correspondente à alíquota de ${trib.aliquotaCredito.toLocaleString('pt-BR')}%, nos termos do art. 23 da LC 123/2006.`;
 }
 
 function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
   const pf = ehPessoaFisica(destinatario.cnpjOuCpf);
+  const ieDest = digitos(destinatario.ie);
+  const contribuinte = ehContribuinte(destinatario);
+  const isento = !pf && !contribuinte && /isent/i.test(destinatario.ie || '');
   return {
     natureza_operacao: '',
     data_emissao: new Date().toISOString(),
@@ -89,7 +134,9 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
     codigo_pais_destinatario: '1058',
     telefone_destinatario: destinatario.telefone ? digitos(destinatario.telefone) : undefined,
     email_destinatario: destinatario.email || undefined,
-    indicador_inscricao_estadual_destinatario: 9, // 9 = não contribuinte
+    // 1 = contribuinte (com IE), 2 = isento de IE, 9 = não contribuinte.
+    indicador_inscricao_estadual_destinatario: contribuinte ? 1 : isento ? 2 : 9,
+    inscricao_estadual_destinatario: contribuinte ? ieDest : undefined,
 
     modalidade_frete: 9, // 9 = sem frete
     // Mesmo texto que sai nas notas da Trailer Travel (NF 49) — obrigatório pro Simples.
@@ -99,20 +146,28 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
 
 const SIMPLES_NACIONAL = 'Empresa optante pelo Simples Nacional LC 123/06.';
 
-// NF1 — simples faturamento, valor cheio, CFOP 5922/6922 (mesmo código nos dois estados).
+function juntarInfo(...partes: (string | null | undefined)[]) {
+  return partes.filter(Boolean).join(' ') || undefined;
+}
+
+// NF1 — simples faturamento, valor cheio, CFOP 5922 (dentro de SC) / 6922 (outro estado).
 export function montarPayloadNF1(params: {
-  emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[];
+  emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; aliquotaSimples: number | null;
 }) {
-  const cfop = '5922';
+  const cfop = params.emitente.uf === params.destinatario.uf ? '5922' : '6922';
+  const trib = tributacaoPorCfop(cfop, params.destinatario, params.aliquotaSimples);
+  const base = baseComum(params.emitente, params.destinatario);
+  const total = params.itens.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
   return {
-    ...baseComum(params.emitente, params.destinatario),
+    ...base,
     natureza_operacao: 'Lançamento efetuado para entrega futura',
-    items: itensPayload(params.itens, cfop),
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib)),
+    items: itensPayload(params.itens, cfop, trib),
   };
 }
 
-// NF2 — remessa na entrega, CFOP 5116 (mesmo estado) ou 6116 (outro estado), referenciando
-// a chave da NF1. Repete o mesmo valor/itens da NF1 (padrão de mercado pra entrega futura).
+// NF2 — remessa na entrega, CFOP 5116 (mesmo estado) ou 6116 (outro estado), CSOSN 400,
+// referenciando a chave da NF1. Repete o mesmo valor/itens da NF1 (padrão de mercado pra entrega futura).
 export function montarPayloadNF2(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; chaveNf1: string;
   chavesComplementares?: string[];
@@ -123,7 +178,7 @@ export function montarPayloadNF2(params: {
     natureza_operacao: 'Remessa de mercadoria em venda para entrega futura',
     // NF complementar de valor da NF1 também é referenciada na remessa.
     notas_referenciadas: [params.chaveNf1, ...(params.chavesComplementares || [])].map(chave_nfe => ({ chave_nfe })),
-    items: itensPayload(params.itens, cfop),
+    items: itensPayload(params.itens, cfop, { csosn: '400', aliquotaCredito: null }),
   };
 }
 
@@ -139,17 +194,19 @@ export function naturezaPorCfop(cfop: string) {
 // (a regra 629 da SEFAZ, vProd = qCom × vUnCom, só vale pra finalidade 1).
 export function montarPayloadComplementar(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; chaveOrigem: string;
-  cfop: string; descricao: string; ncm: string; valor: number;
+  cfop: string; descricao: string; ncm: string; valor: number; aliquotaSimples: number | null;
 }) {
-  const [item] = itensPayload([{ descricao: params.descricao, ncm: params.ncm, quantidade: 0, valorUnitario: 0 }], params.cfop);
+  const trib = tributacaoPorCfop(params.cfop, params.destinatario, params.aliquotaSimples);
+  const valor = Number(params.valor.toFixed(2));
+  const [item] = itensPayload([{ descricao: params.descricao, ncm: params.ncm, quantidade: 0, valorUnitario: 0 }], params.cfop, trib);
   const base = baseComum(params.emitente, params.destinatario);
   return {
     ...base,
-    informacoes_adicionais_contribuinte: [base.informacoes_adicionais_contribuinte, `NF-e complementar de valor referente a NF-e chave ${params.chaveOrigem}.`].filter(Boolean).join(' '),
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(valor, trib), `NF-e complementar de valor referente a NF-e chave ${params.chaveOrigem}.`),
     finalidade_emissao: 2, // 2 = complementar
     natureza_operacao: naturezaPorCfop(params.cfop),
     notas_referenciadas: [{ chave_nfe: params.chaveOrigem }],
-    items: [{ ...item, valor_bruto: Number(params.valor.toFixed(2)) }],
+    items: [{ ...item, valor_bruto: valor, ...(trib.csosn === '101' && trib.aliquotaCredito ? creditoSimples(valor, trib.aliquotaCredito) : {}) }],
   };
 }
 

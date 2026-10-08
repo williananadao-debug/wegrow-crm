@@ -1,6 +1,6 @@
 "use client";
 import { FileText, FileCode2, MessageCircle, AlertTriangle, Loader2 } from 'lucide-react';
-import { motivoRecusaNf, STATUS_NF_FALHA } from '@/lib/fiscalMotivo';
+import { motivoRecusaNf, STATUS_NF_FALHA, ehNfComplementar } from '@/lib/fiscalMotivo';
 
 // NF-e (produto) ligadas a uma venda (fiscal_notas.lead_id) — pra achar e mandar a nota pro
 // cliente direto da venda. Antes a NF-e só aparecia em Notas Fiscais; na venda só existia o
@@ -8,10 +8,10 @@ import { motivoRecusaNf, STATUS_NF_FALHA } from '@/lib/fiscalMotivo';
 export type NotaVenda = {
   id: number; lead_id: number | null; numero: string | null; serie: string | null; chave_acesso: string | null;
   status: string; danfe_url: string | null; xml_url: string | null; observacao: string | null;
-  chave_nf_referenciada: string | null; created_at: string;
+  chave_nf_referenciada: string | null; created_at: string; ref_focus_nfe?: string | null;
 };
 
-export const COLUNAS_NOTA_VENDA = 'id, lead_id, numero, serie, chave_acesso, status, danfe_url, xml_url, observacao, chave_nf_referenciada, created_at';
+export const COLUNAS_NOTA_VENDA = 'id, lead_id, numero, serie, chave_acesso, status, danfe_url, xml_url, observacao, chave_nf_referenciada, created_at, ref_focus_nfe';
 
 function numeroDaNota(n: NotaVenda) {
   if (n.numero) return n.numero;
@@ -30,7 +30,7 @@ export default function NotasDaVenda({ notas, telefone, cliente, protocolo, comp
         const falhou = STATUS_NF_FALHA.includes(n.status);
         const processando = !falhou && n.status !== 'autorizada' && n.status !== 'cancelada';
         const num = numeroDaNota(n);
-        const tipo = n.chave_nf_referenciada ? 'NF de remessa' : 'NF';
+        const tipo = ehNfComplementar(n.ref_focus_nfe) ? 'NF complementar' : n.chave_nf_referenciada ? 'NF de remessa' : 'NF';
         const rotulo = `${tipo}${num ? ` ${num}` : ''}`;
         const msgWpp = n.danfe_url
           ? `Olá${cliente ? `, ${cliente.split(' ')[0]}` : ''}! Segue a nota fiscal${protocolo ? ` do seu pedido ${protocolo}` : ''}: ${n.danfe_url}`

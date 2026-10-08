@@ -19,3 +19,10 @@ export function motivoRecusaNf(observacao: string | null | undefined): string | 
 }
 
 export const STATUS_NF_FALHA = ['erro_autorizacao', 'rejeitada', 'denegada'];
+
+// NF complementar emitida pelo sistema: o ref do Focus NFe tem "comp" (ver
+// api/pulse/fiscal/emitir-complementar). Ela também grava chave_nf_referenciada (a nota
+// original), então sem esse teste seria confundida com a NF2 de remessa.
+export function ehNfComplementar(ref: string | null | undefined) {
+  return !!ref && ref.includes('comp');
+}

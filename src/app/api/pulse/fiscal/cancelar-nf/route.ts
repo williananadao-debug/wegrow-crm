@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (!nota.chave_nf_referenciada && nota.chave_acesso) {
     const { data: nf2 } = await db.from('fiscal_notas').select('id')
       .eq('empresa_id', perfil.empresa_id).eq('chave_nf_referenciada', nota.chave_acesso).eq('status', 'autorizada').limit(1).maybeSingle();
-    if (nf2) return NextResponse.json({ error: 'Essa NF tem uma NF de remessa (NF2) autorizada ligada a ela. Cancele a NF2 primeiro.' }, { status: 409 });
+    if (nf2) return NextResponse.json({ error: 'Essa NF tem uma NF de remessa (NF2) ou complementar autorizada ligada a ela. Cancele essa nota primeiro.' }, { status: 409 });
   }
 
   const { data: integracao } = await db.from('fiscal_integracoes')

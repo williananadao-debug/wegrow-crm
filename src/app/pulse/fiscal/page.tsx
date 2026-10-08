@@ -3,9 +3,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig } from '../shared';
+import { ServicoConfig, ehMateriaPrima } from '../shared';
 import dynamic from 'next/dynamic';
-import { motivoRecusaNf, STATUS_NF_FALHA } from '@/lib/fiscalMotivo';
+import { motivoRecusaNf, STATUS_NF_FALHA, ehNfComplementar } from '@/lib/fiscalMotivo';
 
 // Modais só carregam quando abertos — o LancarNotaFiscalModal puxa parser de XML, matching
 // de produto etc., e estava tudo no bundle inicial da página (pior rota no Speed Insights).
@@ -13,7 +13,7 @@ const RevisarItensNotaModal = dynamic(() => import('@/components/RevisarItensNot
 const LancarNotaFiscalModal = dynamic(() => import('@/components/LancarNotaFiscalModal'), { ssr: false });
 const VerNotaFiscalModal = dynamic(() => import('@/components/VerNotaFiscalModal'), { ssr: false });
 
-const NOTAS_COLUNAS = 'id, ref_focus_nfe, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
+const NOTAS_COLUNAS = 'id, ref_focus_nfe, chave_nf_referenciada, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
 // Renderizar 1000 linhas de uma vez travava a pintura e a interação; mostra em lotes.
 const LOTE_RENDER = 60;
 
@@ -27,6 +27,7 @@ type NotaFiscal = {
   itens_status: 'sem_itens' | 'pendente_revisao' | 'processado';
   created_at: string;
   ref_focus_nfe?: string | null;
+  chave_nf_referenciada?: string | null;
 };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
@@ -103,6 +104,41 @@ export default function FiscalPage() {
       carregar();
     } catch (e) { setCancelarErro(e instanceof Error ? e.message : 'Erro ao cancelar.'); }
     finally { setCancelando(false); }
+  };
+
+  // NF complementar de valor (finalidade 2) — só diretoria (a rota também confere o cargo).
+  // Leva só a diferença e referencia a chave da nota original; mesmo CFOP/NCM dela.
+  const [complementarAlvo, setComplementarAlvo] = useState<NotaFiscal | null>(null);
+  const [compValor, setCompValor] = useState('');
+  const [compMotivo, setCompMotivo] = useState('');
+  const [compCfop, setCompCfop] = useState('');
+  const [compNcm, setCompNcm] = useState('');
+  const [compEnviando, setCompEnviando] = useState(false);
+  const [compErro, setCompErro] = useState<string | null>(null);
+  const abrirComplementar = (n: NotaFiscal) => {
+    // NCM: se os produtos de venda do catálogo tiverem um NCM só (caso da Trailer Travel), já vem preenchido.
+    const ncms = Array.from(new Set(servicos.filter(sv => !ehMateriaPrima(sv)).map(sv => (sv.ncm || '').replace(/\D/g, '')).filter(x => x.length === 8)));
+    setComplementarAlvo(n); setCompValor(''); setCompMotivo(''); setCompErro(null);
+    setCompCfop(n.chave_nf_referenciada ? '5116' : '5922');
+    setCompNcm(ncms.length === 1 ? ncms[0] : '');
+  };
+  const confirmarComplementar = async () => {
+    if (!complementarAlvo) return;
+    setCompEnviando(true); setCompErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/emitir-complementar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ notaId: complementarAlvo.id, valor: Number(compValor.replace(/\./g, '').replace(',', '.')), motivo: compMotivo, cfop: compCfop, ncm: compNcm }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
+      setComplementarAlvo(null);
+      carregar();
+      setTimeout(carregar, 5000); // resultado da SEFAZ chega pelo webhook em alguns segundos
+    } catch (e) { setCompErro(e instanceof Error ? e.message : 'Erro ao emitir.'); }
+    finally { setCompEnviando(false); }
   };
 
   // Excluir nota lançada errada — desfaz estoque/financeiro que ela gerou. Só diretor/gerente.
@@ -425,6 +461,9 @@ export default function FiscalPage() {
                       ) : null; })()}
                       <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${status.cor}`}>{status.label}</span>
                       <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase">{ORIGEM_LABEL[n.origem] || n.origem}</span>
+                      {ehNfComplementar(n.ref_focus_nfe) && (
+                        <span className="text-[8px] font-black bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded uppercase">Complementar</span>
+                      )}
                       {n.itens_status === 'pendente_revisao' && (
                         <button onClick={() => setNotaEmRevisao(n)} className="inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20 transition-colors">
                           <ListChecks size={9} /> Revisar itens
@@ -480,6 +519,11 @@ export default function FiscalPage() {
                         {new Date(n.data_emissao || n.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                       </p>
                     </div>
+                    {isDiretor && n.status === 'autorizada' && n.tipo === 'saida' && n.chave_acesso && !ehNfComplementar(n.ref_focus_nfe) && (
+                      <button onClick={() => abrirComplementar(n)} title="Emitir NF complementar de valor desta nota (só diretoria)" className="text-[9px] font-black uppercase text-sky-300 hover:text-sky-200 border border-sky-500/30 hover:bg-sky-500/10 rounded-lg px-2 py-1 mt-0.5 whitespace-nowrap">
+                        <Plus size={9} className="inline -mt-0.5" /> Complementar
+                      </button>
+                    )}
                     {isDiretor && n.status === 'autorizada' && n.tipo === 'saida' && n.ref_focus_nfe && (
                       <button onClick={() => { setCancelarAlvo(n); setJustificativa(''); setCancelarErro(null); }} title="Cancelar esta NF na SEFAZ (só diretoria)" className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 rounded-lg px-2 py-1 mt-0.5 whitespace-nowrap">
                         Cancelar NF
@@ -506,6 +550,41 @@ export default function FiscalPage() {
         <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 notas mais recentes — refine os filtros pra achar algo mais antigo.</p>
       )}
 
+      {complementarAlvo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !compEnviando && setComplementarAlvo(null)}>
+          <div className="bg-[#0F172A] border border-sky-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="min-w-0">
+                <h3 className="font-black text-white uppercase italic text-lg">NF complementar</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{complementarAlvo.nome_participante || '—'} · {numeroSerieDaNota(complementarAlvo)?.numero ? `NF ${numeroSerieDaNota(complementarAlvo)!.numero}` : `#${complementarAlvo.id}`} · R$ {(complementarAlvo.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <button onClick={() => setComplementarAlvo(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <div className="bg-sky-500/10 border border-sky-500/20 rounded-2xl p-4 text-sky-200 text-xs font-bold leading-relaxed mb-4">
+              Complemento de <b>valor</b>: a nota leva <b>só a diferença</b> e fica ligada à NF original. Use o mesmo CFOP e NCM da nota original. Se o aumento for de itens/opcionais novos, confirme com o contador antes — pode ser caso de nota nova.
+            </div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor da diferença (R$)</label>
+            <input value={compValor} onChange={e => setCompValor(e.target.value.replace(/[^\d.,]/g, ''))} inputMode="decimal" placeholder="Ex: 15.000,00" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-sky-500 mb-3" />
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Motivo (sai na descrição da nota)</label>
+            <input value={compMotivo} onChange={e => setCompMotivo(e.target.value.slice(0, 80))} placeholder="Ex: reajuste do valor do pedido" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-sky-500 mb-3" />
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CFOP (da original)</label>
+                <input value={compCfop} onChange={e => setCompCfop(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-sky-500" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">NCM</label>
+                <input value={compNcm} onChange={e => setCompNcm(e.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-sky-500" />
+              </div>
+            </div>
+            {compErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{compErro}</div>}
+            <button onClick={confirmarComplementar} disabled={compEnviando || !compValor || compMotivo.trim().length < 5 || compCfop.length !== 4 || compNcm.length !== 8} className="w-full bg-sky-500 hover:bg-sky-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40">
+              {compEnviando ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} {compEnviando ? 'Enviando pra SEFAZ...' : 'Emitir NF complementar'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {cancelarAlvo && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !cancelando && setCancelarAlvo(null)}>
           <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -517,7 +596,7 @@ export default function FiscalPage() {
               <button onClick={() => setCancelarAlvo(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
             </div>
             <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-xs font-bold leading-relaxed mb-4">
-              O cancelamento é feito na SEFAZ e não pode ser desfeito. A SEFAZ só aceita cancelar até <b>24 horas</b> depois da autorização — fora desse prazo ela recusa e o motivo aparece aqui. Se a nota tiver NF de remessa (NF2) ligada, cancele a NF2 primeiro.
+              O cancelamento é feito na SEFAZ e não pode ser desfeito. A SEFAZ só aceita cancelar até <b>24 horas</b> depois da autorização — fora desse prazo ela recusa e o motivo aparece aqui. Se a nota tiver NF de remessa (NF2) ou complementar ligada, cancele essa primeiro.
             </div>
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Justificativa (mín. 15 caracteres — vai para a SEFAZ)</label>
             <textarea value={justificativa} onChange={e => setJustificativa(e.target.value.slice(0, 255))} rows={3} placeholder="Ex: Nota emitida com valor incorreto, será reemitida." className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-red-500 resize-none" />

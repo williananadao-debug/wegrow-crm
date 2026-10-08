@@ -18,6 +18,7 @@ export type ServicoConfig = {
   prazo_fabricacao_dias?: number | null; descricao?: string | null;
   estoque_maximo?: number | null; prazo_reposicao_dias?: number | null; localizacao?: string | null; fornecedor_padrao_id?: number | null;
   historico_precos?: HistoricoPreco[] | null;
+  ncm?: string | null;
 };
 
 // "Nota Fiscal" = item que o sistema criou sozinho ao ler uma NF e não reconheceu no

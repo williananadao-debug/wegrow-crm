@@ -39,8 +39,9 @@ export async function POST(req: NextRequest) {
   if (!leadId) return NextResponse.json({ error: 'leadId é obrigatório.' }, { status: 422 });
 
   // Pode existir NF1 recusada + NF1 autorizada (reemitida) — usa a válida mais recente.
+  // Qualquer origem: a NF1 pode ter sido lançada na mão e ligada à venda (ex.: NF 49 da Travel).
   const { data: nf1s } = await db.from('fiscal_notas').select('chave_acesso, status, created_at')
-    .eq('lead_id', leadId).eq('empresa_id', perfil.empresa_id).eq('origem', 'emissao_wegrow').eq('tipo', 'saida')
+    .eq('lead_id', leadId).eq('empresa_id', perfil.empresa_id).eq('tipo', 'saida')
     .is('chave_nf_referenciada', null).not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
     .order('created_at', { ascending: false });
   const nf1 = (nf1s || []).find(n => n.status === 'autorizada') || (nf1s || [])[0] || null;
@@ -50,8 +51,16 @@ export async function POST(req: NextRequest) {
 
   const { data: jaEmitida } = await db.from('fiscal_notas').select('id, status')
     .eq('lead_id', leadId).eq('origem', 'emissao_wegrow').eq('tipo', 'saida').eq('chave_nf_referenciada', nf1.chave_acesso)
-    .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)').limit(1).maybeSingle();
+    .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
+    .not('ref_focus_nfe', 'ilike', '%comp%') // NF complementar também referencia a NF1, mas não é remessa
+    .limit(1).maybeSingle();
   if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF2 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
+
+  // NF complementar de valor autorizada da NF1 também vai referenciada na remessa.
+  const { data: complementares } = await db.from('fiscal_notas').select('chave_acesso')
+    .eq('empresa_id', perfil.empresa_id).eq('chave_nf_referenciada', nf1.chave_acesso).eq('status', 'autorizada')
+    .ilike('ref_focus_nfe', '%comp%');
+  const chavesComplementares = (complementares || []).map(c => c.chave_acesso).filter((c): c is string => !!c);
 
   const { data: lead } = await db.from('leads').select('id, valor_total, itens, client_id, empresa_id').eq('id', leadId).eq('empresa_id', perfil.empresa_id).single();
   if (!lead) return NextResponse.json({ error: 'Venda não encontrada.' }, { status: 404 });
@@ -96,7 +105,7 @@ export async function POST(req: NextRequest) {
     telefone: cliente.telefone, email: cliente.email,
   };
 
-  const payload = montarPayloadNF2({ emitente, destinatario, itens, chaveNf1: nf1.chave_acesso });
+  const payload = montarPayloadNF2({ emitente, destinatario, itens, chaveNf1: nf1.chave_acesso, chavesComplementares });
   const ref = `venda${leadId}nf2${Date.now()}`;
 
   const { data: notaRascunho, error: erroInsert } = await db.from('fiscal_notas').insert([{

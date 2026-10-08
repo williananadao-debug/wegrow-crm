@@ -92,8 +92,12 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
     indicador_inscricao_estadual_destinatario: 9, // 9 = não contribuinte
 
     modalidade_frete: 9, // 9 = sem frete
+    // Mesmo texto que sai nas notas da Trailer Travel (NF 49) — obrigatório pro Simples.
+    informacoes_adicionais_contribuinte: Number(emitente.regimeTributario || '1') === 1 ? SIMPLES_NACIONAL : undefined,
   };
 }
+
+const SIMPLES_NACIONAL = 'Empresa optante pelo Simples Nacional LC 123/06.';
 
 // NF1 — simples faturamento, valor cheio, CFOP 5922/6922 (mesmo código nos dois estados).
 export function montarPayloadNF1(params: {
@@ -111,13 +115,41 @@ export function montarPayloadNF1(params: {
 // a chave da NF1. Repete o mesmo valor/itens da NF1 (padrão de mercado pra entrega futura).
 export function montarPayloadNF2(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; chaveNf1: string;
+  chavesComplementares?: string[];
 }) {
   const cfop = params.emitente.uf === params.destinatario.uf ? '5116' : '6116';
   return {
     ...baseComum(params.emitente, params.destinatario),
     natureza_operacao: 'Remessa de mercadoria em venda para entrega futura',
-    notas_referenciadas: [{ chave_nfe: params.chaveNf1 }],
+    // NF complementar de valor da NF1 também é referenciada na remessa.
+    notas_referenciadas: [params.chaveNf1, ...(params.chavesComplementares || [])].map(chave_nfe => ({ chave_nfe })),
     items: itensPayload(params.itens, cfop),
+  };
+}
+
+// Natureza da operação da complementar = a da nota original (mesmo CFOP).
+export function naturezaPorCfop(cfop: string) {
+  if (cfop === '5922' || cfop === '6922') return 'Lançamento efetuado para entrega futura';
+  if (cfop === '5116' || cfop === '6116') return 'Remessa de mercadoria em venda para entrega futura';
+  return 'Complemento de valor';
+}
+
+// NF-e complementar de VALOR (finalidade 2): referencia a chave da nota original, mesmo CFOP
+// dela, e leva só a diferença. Quantidade 0 — complemento de preço não acrescenta unidade
+// (a regra 629 da SEFAZ, vProd = qCom × vUnCom, só vale pra finalidade 1).
+export function montarPayloadComplementar(params: {
+  emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; chaveOrigem: string;
+  cfop: string; descricao: string; ncm: string; valor: number;
+}) {
+  const [item] = itensPayload([{ descricao: params.descricao, ncm: params.ncm, quantidade: 0, valorUnitario: 0 }], params.cfop);
+  const base = baseComum(params.emitente, params.destinatario);
+  return {
+    ...base,
+    informacoes_adicionais_contribuinte: [base.informacoes_adicionais_contribuinte, `NF-e complementar de valor referente a NF-e chave ${params.chaveOrigem}.`].filter(Boolean).join(' '),
+    finalidade_emissao: 2, // 2 = complementar
+    natureza_operacao: naturezaPorCfop(params.cfop),
+    notas_referenciadas: [{ chave_nfe: params.chaveOrigem }],
+    items: [{ ...item, valor_bruto: Number(params.valor.toFixed(2)) }],
   };
 }
 

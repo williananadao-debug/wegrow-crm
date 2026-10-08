@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
   if (!lead) return NextResponse.json({ error: 'Venda não encontrada.' }, { status: 404 });
 
   const { data: jaEmitida } = await db.from('fiscal_notas').select('id, status')
-    .eq('lead_id', leadId).eq('origem', 'emissao_wegrow').eq('tipo', 'saida').is('chave_nf_referenciada', null)
+    // Qualquer origem: NF1 lançada na mão e ligada à venda também conta (evita faturar 2x).
+    .eq('lead_id', leadId).eq('tipo', 'saida').is('chave_nf_referenciada', null)
     // Nota recusada/cancelada não bloqueia: dá pra corrigir o motivo e emitir de novo.
     .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
     .limit(1).maybeSingle();

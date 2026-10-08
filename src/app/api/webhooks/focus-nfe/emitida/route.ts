@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     // vinculada ainda (nascer sem NF é normal: a NF só fica pronta depois, aqui). Sem esse
     // backfill, a coluna de NF na tela de Estoque ficava pra sempre em branco pra quem emite
     // pelo Focus NFe (só "Lançar Nota Fiscal" manual gravava nf_numero na movimentação).
-    if (existente.lead_id && (numero || chaveAcesso)) {
+    if (existente.lead_id && (numero || chaveAcesso) && !(ref && ref.includes('comp'))) {
       await db.from('estoque_movimentacoes')
         .update({ nf_numero: numero, nf_serie: serie, nf_chave_acesso: chaveAcesso })
         .eq('lead_id', existente.lead_id).eq('tipo', 'venda').is('nf_numero', null);

@@ -25,7 +25,10 @@ type Producao = {
 type EventoProducao = {
   id: number; tipo: 'status' | 'etapa' | 'comentario' | 'anexo'; texto: string | null; foto_url: string | null;
   user_id: string | null; created_at: string;
+  // Foto só vai pro Portal do Cliente quando 'aprovada' pela gestão (null = aguardando).
+  foto_status?: 'pendente' | 'aprovada' | 'recusada' | null;
 };
+type FotoPendente = { id: number; producao_id: number; foto_url: string; created_at: string; texto: string | null };
 
 const COLUNAS: { status: StatusProducao; label: string; icon: any; cor: string }[] = [
   { status: 'em_producao', label: 'Em produção', icon: Hammer, cor: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
@@ -84,6 +87,10 @@ function PulseProducaoContent() {
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   // Cliente dono de cada produção (produção nasce de uma venda; o nome vem do lead)
   const [clientePorLead, setClientePorLead] = useState<Record<number, string>>({});
+  // Fotos aguardando a gestão aprovar pro Portal do Cliente.
+  const [fotosPendentes, setFotosPendentes] = useState<FotoPendente[]>([]);
+  const [filaFotosAberta, setFilaFotosAberta] = useState(false);
+  const [avaliandoFotos, setAvaliandoFotos] = useState<number[]>([]);
 
   const carregar = async () => {
     setLoading(true);
@@ -105,13 +112,18 @@ function PulseProducaoContent() {
 
     const ids = (producoesData || []).map(p => p.id);
     if (ids.length > 0) {
+      // '*' traz foto_status sem quebrar antes da migration.
       const { data: fotos } = await supabase.from('pulse_producao_eventos')
-        .select('producao_id, foto_url, created_at').in('producao_id', ids)
+        .select('*').in('producao_id', ids)
         .not('foto_url', 'is', null).order('created_at', { ascending: true });
       const mapa: Record<number, string> = {};
       // Ordenado crescente — a última sobrescreve as anteriores, então sobra sempre a mais recente.
       (fotos || []).forEach(f => { if (f.foto_url) mapa[f.producao_id] = f.foto_url; });
       setFotosPorProducao(mapa);
+      setFotosPendentes((fotos || [])
+        .filter(f => f.foto_url && (!f.foto_status || f.foto_status === 'pendente'))
+        .map(f => ({ id: f.id, producao_id: f.producao_id, foto_url: f.foto_url, created_at: f.created_at, texto: f.texto }))
+        .reverse());
 
       // Só eventos tipo "etapa" (conclusão de sub-etapa) — não usa o mesmo filtro de foto_url
       // acima porque anexo de comentário também tem foto_url e ia contar como troca de etapa.
@@ -321,7 +333,7 @@ function PulseProducaoContent() {
   // --- Detalhe/linha do tempo ---
   const carregarEventos = async (producaoId: number) => {
     setCarregandoEventos(true);
-    const { data } = await supabase.from('pulse_producao_eventos').select('id, tipo, texto, foto_url, user_id, created_at').eq('producao_id', producaoId).order('created_at', { ascending: true });
+    const { data } = await supabase.from('pulse_producao_eventos').select('*').eq('producao_id', producaoId).order('created_at', { ascending: true });
     setEventos((data as EventoProducao[]) || []);
     setCarregandoEventos(false);
   };
@@ -414,6 +426,29 @@ function PulseProducaoContent() {
     }
   };
 
+  const avaliarFotos = async (eventoIds: number[], status: 'aprovada' | 'recusada' | 'pendente') => {
+    if (eventoIds.length === 0) return;
+    setAvaliandoFotos(eventoIds);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/producao/foto-aprovacao', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventoIds, status }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
+      const ids = new Set(eventoIds);
+      setFotosPendentes(prev => status === 'pendente' ? prev : prev.filter(f => !ids.has(f.id)));
+      setEventos(prev => prev.map(ev => ids.has(ev.id) ? { ...ev, foto_status: status } : ev));
+      if (status === 'pendente') carregar();
+    } catch (err: any) {
+      alert('Erro ao avaliar foto: ' + mensagemErroRede(err));
+    } finally {
+      setAvaliandoFotos([]);
+    }
+  };
+
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;
   const processoProducao = producoes.find(p => p.id === processoId) || null;
 
@@ -441,6 +476,9 @@ function PulseProducaoContent() {
         </div>
         {isLideranca && (
           <div className="flex flex-wrap gap-2 self-start md:self-auto">
+            <button onClick={() => setFilaFotosAberta(true)} title="Fotos aguardando aprovação pra aparecer no Portal do Cliente" className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${fotosPendentes.length ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white'}`}>
+              <Camera size={14} /> Fotos p/ cliente{fotosPendentes.length ? ` (${fotosPendentes.length})` : ''}
+            </button>
             <Link href="/pulse/producao/painel" target="_blank" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
               <Tv size={14} /> Painel de TV
             </Link>
@@ -658,6 +696,53 @@ function PulseProducaoContent() {
         </div>
       )}
 
+      {filaFotosAberta && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setFilaFotosAberta(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
+              <div>
+                <p className="text-white font-black text-sm uppercase">Fotos para o cliente</p>
+                <p className="text-slate-500 text-[10px] font-bold">Só as aprovadas aparecem no Portal do Cliente. {fotosPendentes.length} aguardando.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {fotosPendentes.length > 1 && (
+                  <button onClick={() => avaliarFotos(fotosPendentes.map(f => f.id), 'aprovada')} disabled={avaliandoFotos.length > 0} className="text-[10px] font-black uppercase tracking-widest bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-lg px-3 py-1.5 hover:bg-emerald-500/25 disabled:opacity-50">Aprovar todas</button>
+                )}
+                <button onClick={() => setFilaFotosAberta(false)} className="text-slate-500 hover:text-white"><X size={18} /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {fotosPendentes.length === 0 ? (
+                <p className="text-slate-500 text-xs font-bold text-center py-10">Nenhuma foto aguardando aprovação.</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {fotosPendentes.map(f => {
+                    const prod = producoes.find(x => x.id === f.producao_id);
+                    const cliente = prod?.lead_id ? (clientePorLead[prod.lead_id] || `LD-${String(prod.lead_id).padStart(4, '0')}`) : 'Produção manual';
+                    const ocupado = avaliandoFotos.includes(f.id);
+                    return (
+                      <div key={f.id} className="bg-black/30 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
+                        <a href={f.foto_url} target="_blank" rel="noopener noreferrer"><img src={f.foto_url} alt="" className="w-full h-36 object-cover" /></a>
+                        <div className="p-2.5 flex-1 flex flex-col gap-1">
+                          <p className="text-[10px] font-black uppercase text-[var(--cor-primaria)] truncate">{cliente}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{prod?.produto_final_nome || '—'}</p>
+                          {f.texto && <p className="text-[10px] text-slate-500 truncate" title={f.texto}>{f.texto}</p>}
+                          <p className="text-[9px] text-slate-600">{new Date(f.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                          <div className="grid grid-cols-2 gap-1.5 mt-auto pt-1">
+                            <button onClick={() => avaliarFotos([f.id], 'aprovada')} disabled={ocupado} className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-lg py-1.5 text-[9px] font-black uppercase disabled:opacity-50">{ocupado ? '...' : 'Aprovar'}</button>
+                            <button onClick={() => avaliarFotos([f.id], 'recusada')} disabled={ocupado} className="bg-white/5 text-slate-400 border border-white/10 rounded-lg py-1.5 text-[9px] font-black uppercase hover:text-red-400 disabled:opacity-50">Recusar</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {processoProducao && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setProcessoId(null)}>
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -841,6 +926,19 @@ function PulseProducaoContent() {
                     <div className="flex-1 min-w-0">
                       {ev.texto && <p className="text-slate-300 text-xs">{ev.texto}</p>}
                       {ev.foto_url && <img src={ev.foto_url} alt="" className="mt-1.5 rounded-xl max-h-48 w-full object-cover border border-white/10" />}
+                      {ev.foto_url && (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${ev.foto_status === 'aprovada' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : ev.foto_status === 'recusada' ? 'text-slate-500 border-white/10 bg-white/5' : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}`}>
+                            {ev.foto_status === 'aprovada' ? 'Visível ao cliente' : ev.foto_status === 'recusada' ? 'Não vai pro cliente' : 'Aguardando aprovação'}
+                          </span>
+                          {isLideranca && ev.foto_status !== 'aprovada' && (
+                            <button onClick={() => avaliarFotos([ev.id], 'aprovada')} disabled={avaliandoFotos.includes(ev.id)} className="text-[9px] font-black uppercase text-emerald-400 hover:text-emerald-300 disabled:opacity-50">Aprovar p/ cliente</button>
+                          )}
+                          {isLideranca && ev.foto_status !== 'recusada' && (
+                            <button onClick={() => avaliarFotos([ev.id], 'recusada')} disabled={avaliandoFotos.includes(ev.id)} className="text-[9px] font-black uppercase text-slate-500 hover:text-red-400 disabled:opacity-50">{ev.foto_status === 'aprovada' ? 'Tirar do portal' : 'Recusar'}</button>
+                          )}
+                        </div>
+                      )}
                       <p className="text-slate-600 text-[10px] font-bold mt-0.5">
                         {(ev.user_id && usersMap[ev.user_id]) || 'Sistema'} · {new Date(ev.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </p>

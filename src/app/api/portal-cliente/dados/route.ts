@@ -41,7 +41,8 @@ export async function GET() {
     : { data: [] };
   const prodIds = (producoes || []).map(p => p.id);
   const { data: eventos } = prodIds.length
-    ? await db.from('pulse_producao_eventos').select('producao_id, tipo, texto, foto_url, created_at')
+    // '*' traz foto_status sem quebrar antes da migration (sem a coluna, nenhuma foto passa).
+    ? await db.from('pulse_producao_eventos').select('*')
         .in('producao_id', prodIds).order('created_at', { ascending: false }).limit(500)
     : { data: [] };
 
@@ -50,7 +51,11 @@ export async function GET() {
   const pedidos = (leads || []).map(l => {
     const itens = (Array.isArray(l.itens) ? l.itens : []).map((i: { servico?: string; quantidade?: number }) => ({ nome: i.servico || 'Item', quantidade: Number(i.quantidade) || 1 }));
     const prods = (producoes || []).filter(p => p.lead_id === l.id).map(p => {
-      const evs = (eventos || []).filter(e => e.producao_id === p.id);
+      // Foto só vai pro cliente depois de aprovada pela gestão (diretor/gerente) — as demais
+      // ficam fora; o evento de etapa continua aparecendo, só sem a foto.
+      const evs = (eventos || []).filter(e => e.producao_id === p.id)
+        .map(e => ({ ...e, foto_url: e.foto_url && e.foto_status === 'aprovada' ? e.foto_url : null }))
+        .filter(e => e.tipo !== 'anexo' || e.foto_url);
       return {
         id: p.id, produto: p.produto_final_nome,
         status: p.status, statusLabel: STATUS_PRODUCAO[p.status] || p.status,

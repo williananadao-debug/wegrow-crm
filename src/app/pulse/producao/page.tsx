@@ -449,6 +449,28 @@ function PulseProducaoContent() {
     }
   };
 
+  const apagarFoto = async (eventoId: number) => {
+    if (!confirm('Apagar esta foto? Ela sai do sistema e do Portal do Cliente, sem volta.')) return;
+    setAvaliandoFotos([eventoId]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/producao/foto-excluir', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventoId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
+      setFotosPendentes(prev => prev.filter(f => f.id !== eventoId));
+      if (detalheId) carregarEventos(detalheId);
+      carregar(); // foto de capa do card pode ter mudado
+    } catch (err: any) {
+      alert('Erro ao apagar foto: ' + mensagemErroRede(err));
+    } finally {
+      setAvaliandoFotos([]);
+    }
+  };
+
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;
   const processoProducao = producoes.find(p => p.id === processoId) || null;
 
@@ -732,6 +754,7 @@ function PulseProducaoContent() {
                             <button onClick={() => avaliarFotos([f.id], 'aprovada')} disabled={ocupado} className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-lg py-1.5 text-[9px] font-black uppercase disabled:opacity-50">{ocupado ? '...' : 'Aprovar'}</button>
                             <button onClick={() => avaliarFotos([f.id], 'recusada')} disabled={ocupado} className="bg-white/5 text-slate-400 border border-white/10 rounded-lg py-1.5 text-[9px] font-black uppercase hover:text-red-400 disabled:opacity-50">Recusar</button>
                           </div>
+                          <button onClick={() => apagarFoto(f.id)} disabled={ocupado} className="flex items-center justify-center gap-1 text-[9px] font-black uppercase text-slate-600 hover:text-red-400 disabled:opacity-50 pt-0.5"><Trash2 size={10} /> Apagar</button>
                         </div>
                       </div>
                     );
@@ -936,6 +959,9 @@ function PulseProducaoContent() {
                           )}
                           {isLideranca && ev.foto_status !== 'recusada' && (
                             <button onClick={() => avaliarFotos([ev.id], 'recusada')} disabled={avaliandoFotos.includes(ev.id)} className="text-[9px] font-black uppercase text-slate-500 hover:text-red-400 disabled:opacity-50">{ev.foto_status === 'aprovada' ? 'Tirar do portal' : 'Recusar'}</button>
+                          )}
+                          {(isLideranca || (ev.user_id === user?.id && ev.foto_status !== 'aprovada')) && (
+                            <button onClick={() => apagarFoto(ev.id)} disabled={avaliandoFotos.includes(ev.id)} title="Apagar foto" className="ml-auto text-slate-600 hover:text-red-400 disabled:opacity-50"><Trash2 size={12} /></button>
                           )}
                         </div>
                       )}

@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
 import Topbar from '@/components/topbar';
-import { isPublicPage, hasCustomShell } from '@/lib/publicPages';
+import { isPublicPage, hasCustomShell, ehCargoRestrito } from '@/lib/publicPages';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 const GlobalSearch = dynamic(() => import('@/components/GlobalSearch'), { ssr: false });
@@ -16,6 +17,7 @@ interface LayoutWrapperProps {
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
+  const auth = useAuth() || {};
 
   // isPublicPage = sem login. hasCustomShell = autenticado, mas com layout/tema
   // próprio (ex: Argus) — os dois pulam o Navbar/Topbar padrão, por motivos
@@ -45,7 +47,8 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
           </div>
         </main>
         <OnboardingTour />
-        <GlobalSearch />
+        {/* Busca global mostra leads/clientes — fora do alcance de cargos restritos (fábrica, almoxarifado). */}
+        {!ehCargoRestrito(auth.perfil?.cargo) && <GlobalSearch />}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
-import { isPublicPage, almoxarifadoPodeAcessar } from '@/lib/publicPages';
+import { isPublicPage, cargoPodeAcessar, rotaInicialCargo } from '@/lib/publicPages';
 
 const AuthContext = createContext<any>(null);
 
@@ -116,14 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.style.setProperty('--cor-primaria-rgb', hexParaRgbChannels(hex));
   }, [empresa?.cor_primaria]);
 
-  // Cargo "almoxarifado" só pode ver Estoque/Notas Fiscais — o menu (navbar.tsx) já
+  // Cargos restritos (almoxarifado, producao — ver publicPages.ts) só veem as telas deles — o menu (navbar.tsx) já
   // esconde o resto visualmente, isso aqui é o bloqueio de verdade: roda a cada troca
   // de rota (não só no login), então entrar direto pela URL numa página fora da
   // lista também é barrado, não só clicar num link escondido.
   useEffect(() => {
     if (loading || !perfil || isPublicPage(pathname)) return;
-    if (perfil.cargo === 'almoxarifado' && !almoxarifadoPodeAcessar(pathname)) {
-      router.replace('/pulse/estoque');
+    if (!cargoPodeAcessar(perfil.cargo, pathname)) {
+      router.replace(rotaInicialCargo(perfil.cargo));
     }
   }, [pathname, perfil, loading, router]);
 

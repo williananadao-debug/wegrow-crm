@@ -2,11 +2,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { ehCargoRestrito, cargoPodeAcessar } from '@/lib/publicPages';
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -58,25 +59,26 @@ export default function Navbar() {
   // item nos dois layouts (mobile/desktop) e no rail colapsado, zera aqui os
   // "mostrar*" de todo grupo que não seja Pulse — os três lugares que os consomem
   // ficam automaticamente restritos, sem precisar tocar no JSX de renderização.
-  const isAlmoxarifado = perfil?.cargo === 'almoxarifado';
+  // Almoxarifado e Produção (chão de fábrica) só veem as telas deles — ver publicPages.ts.
+  const isCargoRestrito = ehCargoRestrito(perfil?.cargo);
 
   const isCDL = Boolean(modulos.cdl);
   const mostrarIA = Boolean(modulos.ia);
   const opecHabilitado = Boolean(modulos.opec);
-  const mostrarNexus = Boolean(modulos.nexus) && !isAlmoxarifado;
+  const mostrarNexus = Boolean(modulos.nexus) && !isCargoRestrito;
   const mostrarPulse = Boolean(modulos.pulse);
-  const mostrarThor = Boolean(modulos.thor) && !isAlmoxarifado;
-  const mostrarMax = Boolean(modulos.max) && !isAlmoxarifado;
-  const mostrarObras = Boolean(modulos.obras) && !isAlmoxarifado;
-  const mostrarArgus = Boolean(modulos.argus) && !isAlmoxarifado;
-  const mostrarRedesSociais = Boolean(modulos.redes_sociais) && !isAlmoxarifado;
-  const mostrarFinanceiro = Boolean(modulos.financeiro) && !isAlmoxarifado;
+  const mostrarThor = Boolean(modulos.thor) && !isCargoRestrito;
+  const mostrarMax = Boolean(modulos.max) && !isCargoRestrito;
+  const mostrarObras = Boolean(modulos.obras) && !isCargoRestrito;
+  const mostrarArgus = Boolean(modulos.argus) && !isCargoRestrito;
+  const mostrarRedesSociais = Boolean(modulos.redes_sociais) && !isCargoRestrito;
+  const mostrarFinanceiro = Boolean(modulos.financeiro) && !isCargoRestrito;
   // Temporário — restrito a diretor enquanto o módulo está em teste (18/08).
-  const mostrarMidia = Boolean(modulos.midia) && isDirector && !isAlmoxarifado;
-  const mostrarAdvocacia = Boolean(modulos.advocacia) && !isAlmoxarifado;
+  const mostrarMidia = Boolean(modulos.midia) && isDirector && !isCargoRestrito;
+  const mostrarAdvocacia = Boolean(modulos.advocacia) && !isCargoRestrito;
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
-  const mostrarCRM = modulos.crm !== false && !isAlmoxarifado;
+  const mostrarCRM = modulos.crm !== false && !isCargoRestrito;
 
   // Marca no menu é por tenant, não fixa "WeGrow" — cada empresa vê o próprio nome aqui,
   // WeGrow é só o fornecedor por trás.
@@ -126,6 +128,8 @@ export default function Navbar() {
       { name: 'Estoque', icon: <Boxes size={20} />, href: '/pulse/estoque' },
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
       { name: 'Notas Fiscais', icon: <Receipt size={20} />, href: '/pulse/fiscal' },
+      // Atalho do chão de fábrica (cargo Produção não vê a lista do estoque, só dá baixa).
+      perfil?.cargo === 'producao' ? { name: 'Saída do Estoque', icon: <PackageMinus size={20} />, href: '/pulse/estoque/saida-rapida' } : null,
       // "Minha Equipe" também mora no grupo CRM — empresa só-Pulse (modulos.crm === false,
       // caso da Trailer Travel) nunca via esse grupo, então o cadastro de usuário ficava
       // inacessível pra quem não usa CRM. Duplicado aqui de propósito (empresa com os dois
@@ -135,8 +139,8 @@ export default function Navbar() {
       // ativos ela já está no CRM, e repetir no Pulse deixava o mesmo item duas vezes no menu.
       (isDirector || isManager) && !mostrarCRM ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,
   ].filter(Boolean) as any[];
-  const pulseItems: any[] = isAlmoxarifado
-    ? pulseItemsCompleto.filter(i => i.href === '/pulse/estoque' || i.href === '/pulse/fiscal')
+  const pulseItems: any[] = isCargoRestrito
+    ? pulseItemsCompleto.filter(i => cargoPodeAcessar(perfil?.cargo, i.href))
     : pulseItemsCompleto;
 
   const clientesItem = { name: isCDL ? 'Associados' : 'Clientes', icon: <Users size={20} />, href: '/customers' };
@@ -160,7 +164,7 @@ export default function Navbar() {
       ...(mostrarCRM ? crmItems : []),
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
-      ...(isAlmoxarifado ? [] : [clientesItem]),
+      ...(isCargoRestrito ? [] : [clientesItem]),
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
@@ -275,7 +279,7 @@ export default function Navbar() {
             );
           })()}
 
-          {!isAlmoxarifado && (
+          {!isCargoRestrito && (
             <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {clientesItem.icon} {clientesItem.name}
             </Link>
@@ -435,7 +439,7 @@ export default function Navbar() {
                     );
                   })()}
 
-                  {!isAlmoxarifado && (
+                  {!isCargoRestrito && (
                     <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{clientesItem.icon}</div>
                       <span className="text-sm font-semibold">{clientesItem.name}</span>

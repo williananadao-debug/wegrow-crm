@@ -20,12 +20,29 @@ export function hasCustomShell(pathname: string): boolean {
   return SHELL_EXCLUDED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
-// Cargo "almoxarifado" só cuida de estoque/entrada-saída — só enxerga Estoque
-// (e sub-rotas: movimentações, relatório, contagem, saída rápida) e Notas Fiscais.
-// Aplicado em AuthContext (redireciona quem tentar entrar em qualquer outra rota
-// direto pela URL) — o menu (navbar.tsx) só espelha isso visualmente.
-const ALMOXARIFADO_ALLOWED_PREFIXES = ['/pulse/estoque', '/pulse/fiscal'];
+// Cargos restritos: só enxergam algumas telas do Pulse. Aplicado em AuthContext
+// (redireciona quem tentar entrar em outra rota direto pela URL) — o menu (navbar.tsx) só
+// espelha isso visualmente.
+// - almoxarifado: Estoque (e sub-rotas: movimentações, relatório, contagem, saída rápida) e
+//   Notas Fiscais.
+// - producao (chão de fábrica, ex.: Trailer Travel): Produção (inclui o painel de TV) e a
+//   Saída Rápida do estoque (dar baixa de material) — sem a lista do estoque (preço/custo),
+//   vendas, clientes, financeiro nem notas.
+const ROTAS_CARGO_RESTRITO: Record<string, string[]> = {
+  almoxarifado: ['/pulse/estoque', '/pulse/fiscal'],
+  producao: ['/pulse/producao', '/pulse/estoque/saida-rapida'],
+};
 
-export function almoxarifadoPodeAcessar(pathname: string): boolean {
-  return ALMOXARIFADO_ALLOWED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+export function ehCargoRestrito(cargo: string | null | undefined): boolean {
+  return !!cargo && cargo in ROTAS_CARGO_RESTRITO;
+}
+
+export function cargoPodeAcessar(cargo: string | null | undefined, pathname: string): boolean {
+  if (!ehCargoRestrito(cargo)) return true;
+  return ROTAS_CARGO_RESTRITO[cargo!].some(p => pathname === p || pathname.startsWith(p + '/'));
+}
+
+// Primeira tela do cargo restrito (pra onde vai quem cai numa rota proibida).
+export function rotaInicialCargo(cargo: string): string {
+  return ROTAS_CARGO_RESTRITO[cargo]?.[0] || '/dashboard';
 }

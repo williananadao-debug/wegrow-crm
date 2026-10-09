@@ -474,6 +474,27 @@ export default function DealsPage() {
         return { data: linhas, error: erro };
     };
 
+    // '*' pra trazer desativado_em sem quebrar antes da migration rodar.
+    let perfisQuery = supabase.from('profiles').select('*').order('nome', { ascending: true });
+    if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
+    const anoAtual = new Date().getFullYear();
+    let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano')
+        .eq('ano', anoAtual)
+        .eq('tipo', 'faturamento')
+        .is('produto', null)
+        .is('unidade', null);
+    if (perfil?.empresa_id) metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
+    metaQuery = isDirector ? metaQuery.is('user_id', null) : metaQuery.eq('user_id', user?.id);
+    // Só id + status_risco para os semáforos de risco nos cards (leve)
+    const auxPromise = Promise.all([
+        perfisQuery,
+        metaQuery,
+        perfil?.empresa_id
+            ? supabase.from('clientes').select('id, status_risco').eq('status', 'ativo').eq('empresa_id', perfil.empresa_id)
+            : Promise.resolve(null),
+        supabase.from('servicos').select('*').order('id', { ascending: true }),
+    ]);
+
     const [resAbertos, resFechados] = await Promise.all([
         Promise.all(buildQs().map(q => q.lte('etapa', 3).order('created_at', { ascending: false }).limit(500))),
         // Ganho/perdido entram no período em que foram FECHADOS (fechado_em), não no que foram
@@ -528,10 +549,10 @@ export default function DealsPage() {
         setLeads(leadsFiltrados as Lead[]);
     }
 
-    // '*' pra trazer desativado_em sem quebrar antes da migration rodar.
-    let perfisQuery = supabase.from('profiles').select('*').order('nome', { ascending: true });
-    if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
-    const { data: perfisData } = await perfisQuery;
+    // Perfis, metas, risco de clientes e serviços: buscados em paralelo com os leads (antes era
+    // uma fila de 5 consultas seguidas, e o Kanban só aparecia no fim de todas — pior página no
+    // Speed Insights).
+    const [{ data: perfisData }, { data: metaData }, riscoRes, { data: servicosData }] = await auxPromise;
     if (perfisData) {
         const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
         setUsersMap(mapa);
@@ -539,43 +560,12 @@ export default function DealsPage() {
         setUsersEmailMap(mapaEmail);
         setUsersDesativados(new Set(perfisData.filter((p: any) => p.desativado_em).map((p: any) => p.id)));
     }
-
-    try {
-        const anoAtual = new Date().getFullYear();
-        let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano')
-            .eq('ano', anoAtual)
-            .eq('tipo', 'faturamento')
-            .is('produto', null)
-            .is('unidade', null);
-        if (perfil?.empresa_id) metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
-
-        if (isDirector) {
-            metaQuery = metaQuery.is('user_id', null);
-        } else {
-            metaQuery = metaQuery.eq('user_id', user?.id);
-        }
-
-        const { data: metaData } = await metaQuery;
-        if (metaData) {
-            setMetasBase(metaData);
-        }
-    } catch (err) {}
-
-    // Carrega só id + status_risco para os semáforos de risco nos cards (leve)
-    if (perfil?.empresa_id) {
-        const { data: riscoData } = await supabase
-            .from('clientes')
-            .select('id, status_risco')
-            .eq('status', 'ativo')
-            .eq('empresa_id', perfil.empresa_id);
-        if (riscoData) {
-            const rm: Record<number, string> = {};
-            riscoData.forEach((c: any) => { rm[c.id] = c.status_risco || 'verde'; });
-            setClientesRiscoMap(rm);
-        }
+    if (metaData) setMetasBase(metaData);
+    if (riscoRes?.data) {
+        const rm: Record<number, string> = {};
+        riscoRes.data.forEach((c: any) => { rm[c.id] = c.status_risco || 'verde'; });
+        setClientesRiscoMap(rm);
     }
-
-    const { data: servicosData } = await supabase.from('servicos').select('*').order('id', { ascending: true });
     if (servicosData && servicosData.length > 0) {
         setListaServicos(servicosData);
     } else {
@@ -583,7 +573,7 @@ export default function DealsPage() {
             { id: 1, nome: 'Blitz', preco: 1200, tipo: 'Blitz', unidade: '' }
         ]);
     }
-    
+
     setLoading(false);
   }, [isDirector, isGerente, isOpec, perfil?.unidade, perfil?.empresa_id, user?.id]);
 
@@ -618,8 +608,11 @@ export default function DealsPage() {
     };
   }, [user, fetchData]);
 
-  // Re-fetch closed leads when date range changes
+  // Re-fetch closed leads when date range changes. Pula a 1ª execução: na montagem o efeito
+  // de cima já busca — antes o Pipeline carregava tudo 2x ao abrir.
+  const datasMontadasRef = useRef(false);
   useEffect(() => {
+    if (!datasMontadasRef.current) { datasMontadasRef.current = true; return; }
     if (user) fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicio, dataFim]);

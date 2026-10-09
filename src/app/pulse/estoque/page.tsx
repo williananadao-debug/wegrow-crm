@@ -7,8 +7,14 @@ import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou, ehUsoConsumo } from '../shared';
-import LancarNotaFiscalModal from '@/components/LancarNotaFiscalModal';
-import VerNotaFiscalModal from '@/components/VerNotaFiscalModal';
+import dynamic from 'next/dynamic';
+
+// Modais de NF só carregam quando abertos — o de lançar puxa parser de XML/matching de
+// produto e pesava no carregamento inicial (Estoque estava em 55 no Speed Insights).
+const LancarNotaFiscalModal = dynamic(() => import('@/components/LancarNotaFiscalModal'), { ssr: false });
+const VerNotaFiscalModal = dynamic(() => import('@/components/VerNotaFiscalModal'), { ssr: false });
+// Lista grande (Trailer Travel tem centenas de insumos) renderiza em lotes.
+const LOTE_RENDER = 60;
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 import { calcularSugestoesCompra, MovimentoSaida } from '@/lib/estoqueGestao';
 import { gerarSkuAutomatico } from '@/lib/gerarSkuAutomatico';
@@ -112,6 +118,7 @@ export default function PulseEstoquePage() {
   // custo médio ponderado / último custo por item (view pulse_estoque_custos) + fornecedores ativos
   const [custos, setCustos] = useState<Record<number, { custo_medio: number | null; ultimo_custo: number | null; ultima_entrada: string | null }>>({});
   const [fornecedores, setFornecedores] = useState<{ id: number; nome: string }[]>([]);
+  const [qtdVisivel, setQtdVisivel] = useState(LOTE_RENDER);
   const [nfPorServico, setNfPorServico] = useState<Record<number, { notaId: number | null; numero: string }>>({});
 
   const fetchServicos = async () => {
@@ -528,8 +535,13 @@ export default function PulseEstoquePage() {
                 <span />
               </div>
               <div className="divide-y divide-white/5">
-                {ordenarPorNome(itensFiltrados).map(renderLinhaEstoque)}
+                {ordenarPorNome(itensFiltrados).slice(0, qtdVisivel).map(renderLinhaEstoque)}
               </div>
+              {itensFiltrados.length > qtdVisivel && (
+                <button onClick={() => setQtdVisivel(q => q + LOTE_RENDER * 2)} className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors">
+                  Mostrar mais ({itensFiltrados.length - qtdVisivel} restantes)
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -743,7 +755,7 @@ export default function PulseEstoquePage() {
         </div>
       )}
 
-      <LancarNotaFiscalModal
+      {notaModalAberto && <LancarNotaFiscalModal
         aberto={notaModalAberto}
         onFechar={() => setNotaModalAberto(false)}
         servicos={servicos}
@@ -752,9 +764,9 @@ export default function PulseEstoquePage() {
         tipoInicial={notaTipo}
         temCRM={temCRM}
         onConcluido={() => fetchServicos()}
-      />
+      />}
 
-      <VerNotaFiscalModal aberto={verNotaId != null} onFechar={() => setVerNotaId(null)} notaId={verNotaId} />
+      {verNotaId != null && <VerNotaFiscalModal aberto onFechar={() => setVerNotaId(null)} notaId={verNotaId} />}
     </div>
   );
 }

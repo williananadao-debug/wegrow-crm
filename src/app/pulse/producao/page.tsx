@@ -2,11 +2,11 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
+import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle, ListChecks, Square, CheckSquare } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { comprimirImagem } from '@/lib/comprimirImagem';
 import { usePulseAccess } from '../usePulseAccess';
-import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima, ehUsoConsumo } from '../shared';
+import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, checklistsEtapasFabricacaoDe, type ChecklistFeito, ehMateriaPrima, ehUsoConsumo } from '../shared';
 
 // "Load failed" (Safari) / "Failed to fetch" (Chrome) = a internet caiu no meio do envio.
 function mensagemErroRede(err: any): string {
@@ -20,6 +20,7 @@ type Producao = {
   id: number; produto_final_id: number | null; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
   status: StatusProducao; previsao_entrega: string | null; responsavel_id: string | null; lead_id: number | null;
   etapa_fabricacao_idx: number;
+  checklist_feito?: ChecklistFeito | null;
 };
 type EventoProducao = {
   id: number; tipo: 'status' | 'etapa' | 'comentario' | 'anexo'; texto: string | null; foto_url: string | null;
@@ -40,6 +41,7 @@ const PROXIMA_ETAPA: Record<StatusProducao, StatusProducao | null> = { em_produc
 function PulseProducaoContent() {
   const { authLoading, temPulse, user, perfil, empresa, isLideranca, usersMap } = usePulseAccess();
   const ETAPAS_FABRICACAO = useMemo(() => etapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
+  const CHECKLISTS = useMemo(() => checklistsEtapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const PRAZOS_ETAPA = useMemo(() => prazosEtapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const searchParams = useSearchParams();
 
@@ -87,7 +89,8 @@ function PulseProducaoContent() {
     setLoading(true);
     const [{ data: servicosData }, { data: producoesData }, { data: fichasData }] = await Promise.all([
       supabase.from('servicos').select('*').order('nome', { ascending: true }),
-      supabase.from('pulse_producoes').select('id, produto_final_id, produto_final_nome, quantidade_produzida, custo_total, created_at, status, previsao_entrega, responsavel_id, lead_id, etapa_fabricacao_idx').order('created_at', { ascending: false }).limit(60),
+      // '*' traz checklist_feito sem quebrar antes da migration rodar.
+      supabase.from('pulse_producoes').select('*').order('created_at', { ascending: false }).limit(60),
       supabase.from('pulse_fichas_tecnicas').select('id, produto_final_id, servico_id, quantidade_por_unidade'),
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
@@ -194,6 +197,10 @@ function PulseProducaoContent() {
   const avancarEtapa = async (p: Producao) => {
     const proxima = PROXIMA_ETAPA[p.status];
     if (!proxima) return;
+    if (p.status === 'em_producao' && !etapaAtualCompleta(p)) {
+      alert(`Finalize o checklist da etapa "${ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]}" antes de marcar como concluída.`);
+      return;
+    }
     const proximaInfo = COLUNAS.find(c => c.status === proxima)!;
     setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, status: proxima } : x));
     const { error: errStatus } = await supabase.from('pulse_producoes').update({ status: proxima }).eq('id', p.id);
@@ -225,34 +232,74 @@ function PulseProducaoContent() {
     }
   };
 
-  // Sub-etapa de fabricação (corte/solda/pintura/acabamento) — só faz sentido em "Em
-  // produção"; avançar até o fim não move de coluna sozinho, quem decide isso ainda é o
-  // botão "Marcar Concluída" acima. Exige foto pra concluir — LEAN: cada etapa fecha com
-  // registro visual de verdade, não só um clique; dá pra liderança acompanhar pelo card
-  // sem precisar perguntar pro time como está indo.
-  const concluirEtapaComFoto = async (p: Producao, original: File) => {
+  // --- Processo: checklist por etapa ---
+  // Sub-etapa de fabricação (corte/solda/pintura/acabamento) — só faz sentido em "Em produção";
+  // avançar até o fim não move de coluna sozinho, quem decide isso ainda é o botão "Marcar
+  // Concluída". A etapa só conclui com o checklist dela completo (configurado em Configurações →
+  // Etapas de Produção); a foto virou registro opcional — antes ela sozinha concluía a etapa.
+  const [processoId, setProcessoId] = useState<number | null>(null);
+  const [marcandoItem, setMarcandoItem] = useState<string | null>(null);
+  const itensDaEtapa = (nome: string | undefined) => (nome ? CHECKLISTS[nome] || [] : []);
+  const feitosDaEtapa = (p: Producao, nome: string | undefined) => {
+    const marcados = (nome && p.checklist_feito?.[nome]) || {};
+    return itensDaEtapa(nome).filter(i => marcados[i]).length;
+  };
+  const etapaAtualCompleta = (p: Producao) => {
+    const nome = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+    return feitosDaEtapa(p, nome) >= itensDaEtapa(nome).length;
+  };
+
+  const alternarItem = async (p: Producao, etapa: string, item: string) => {
+    setMarcandoItem(`${p.id}|${etapa}|${item}`);
+    try {
+      // Lê o atual antes de gravar: duas pessoas marcando ao mesmo tempo não apagam o item do outro.
+      const { data: atual, error: errLer } = await supabase.from('pulse_producoes').select('checklist_feito').eq('id', p.id).single();
+      if (errLer) throw errLer;
+      const mapa: ChecklistFeito = { ...((atual?.checklist_feito as ChecklistFeito) || {}) };
+      const daEtapa = { ...(mapa[etapa] || {}) };
+      if (daEtapa[item]) delete daEtapa[item];
+      else daEtapa[item] = { por: user?.id || null, em: new Date().toISOString() };
+      mapa[etapa] = daEtapa;
+      const { error } = await supabase.from('pulse_producoes').update({ checklist_feito: mapa }).eq('id', p.id);
+      if (error) throw error;
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, checklist_feito: mapa } : x));
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      alert(/checklist_feito/.test(msg) ? 'Falta rodar a migration 20261009100000_producao_checklist.sql no Supabase.' : 'Erro ao marcar item: ' + mensagemErroRede(err));
+    } finally {
+      setMarcandoItem(null);
+    }
+  };
+
+  const concluirEtapa = async (p: Producao, original?: File) => {
     if (p.etapa_fabricacao_idx >= ETAPAS_FABRICACAO.length - 1) return;
+    if (!etapaAtualCompleta(p)) { alert('Finalize todos os itens do checklist antes de concluir a etapa.'); return; }
     setConcluindoEtapaId(p.id);
     try {
-      const file = await comprimirImagem(original);
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `${perfil?.empresa_id}/producao-${p.id}-etapa-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('produtos').getPublicUrl(path);
+      let fotoUrl: string | null = null;
+      if (original) {
+        const file = await comprimirImagem(original);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `${perfil?.empresa_id}/producao-${p.id}-etapa-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
+        if (upErr) throw upErr;
+        fotoUrl = supabase.storage.from('produtos').getPublicUrl(path).data.publicUrl;
+      }
       const novoIdx = p.etapa_fabricacao_idx + 1;
       const etapaConcluida = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
-      // Antes o erro dessas duas gravações era ignorado: a tela mostrava a etapa avançada e no
-      // banco nada mudava. Agora só atualiza a tela depois de gravar.
+      const totalItens = itensDaEtapa(etapaConcluida).length;
+      // Só atualiza a tela depois de gravar (antes o erro era ignorado e a tela mentia).
       const { error: errEtapa } = await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
       if (errEtapa) throw errEtapa;
       const { error: errEvento } = await supabase.from('pulse_producao_eventos').insert([{
-        producao_id: p.id, tipo: 'etapa', texto: `Etapa concluída: ${etapaConcluida}.`,
-        foto_url: urlData.publicUrl, user_id: user?.id,
+        producao_id: p.id, tipo: 'etapa',
+        texto: `Etapa concluída: ${etapaConcluida}.${totalItens ? ` Checklist ${totalItens}/${totalItens}.` : ''}`,
+        foto_url: fotoUrl, user_id: user?.id,
       }]);
       if (errEvento) throw errEvento;
       setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
-      setFotosPorProducao(prev => ({ ...prev, [p.id]: urlData.publicUrl }));
+      if (fotoUrl) setFotosPorProducao(prev => ({ ...prev, [p.id]: fotoUrl! }));
+      setEtapaIniciadaEmPorProducao(prev => ({ ...prev, [p.id]: new Date().toISOString() }));
       if (detalheId === p.id) carregarEventos(p.id);
     } catch (err: any) {
       alert('Erro ao concluir etapa: ' + mensagemErroRede(err));
@@ -368,6 +415,7 @@ function PulseProducaoContent() {
   };
 
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;
+  const processoProducao = producoes.find(p => p.id === processoId) || null;
 
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
 
@@ -557,17 +605,16 @@ function PulseProducaoContent() {
                                 {diasNaEtapa}d / {prazoEtapa}d
                               </span>
                             )}
-                            {p.etapa_fabricacao_idx < ETAPAS_FABRICACAO.length - 1 && (
-                              <label className="flex items-center gap-1 text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase flex-shrink-0 cursor-pointer">
-                                {concluindoEtapaId === p.id ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
-                                Concluir c/ foto
-                                <input
-                                  type="file" accept="image/*" capture="environment" className="hidden"
-                                  disabled={concluindoEtapaId === p.id}
-                                  onChange={e => { const f = e.target.files?.[0]; if (f) concluirEtapaComFoto(p, f); e.target.value = ''; }}
-                                />
-                              </label>
-                            )}
+                            {(() => {
+                              const total = itensDaEtapa(nomeEtapaAtual).length;
+                              const feitos = feitosDaEtapa(p, nomeEtapaAtual);
+                              return (
+                                <button onClick={() => setProcessoId(p.id)} title="Processo: checklist da etapa" className={`flex items-center gap-1 text-[9px] font-black uppercase flex-shrink-0 px-1.5 py-0.5 rounded-md border ${total && feitos >= total ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'}`}>
+                                  {concluindoEtapaId === p.id ? <Loader2 size={11} className="animate-spin" /> : <ListChecks size={11} />}
+                                  {total ? `${feitos}/${total}` : 'Processo'}
+                                </button>
+                              );
+                            })()}
                           </div>
                           );
                         })()}
@@ -608,6 +655,76 @@ function PulseProducaoContent() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {processoProducao && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setProcessoId(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
+              <div className="min-w-0">
+                <p className="text-amber-400 font-black text-xs uppercase tracking-wide flex items-center gap-1.5"><ListChecks size={13} /> Processo</p>
+                <p className="text-white font-black text-sm truncate">{processoProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {processoProducao.quantidade_produzida}</span></p>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{processoProducao.lead_id ? (clientePorLead[processoProducao.lead_id] || `Venda LD-${String(processoProducao.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}</p>
+              </div>
+              <button onClick={() => setProcessoId(null)} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {ETAPAS_FABRICACAO.map((etapa, idx) => {
+                const p = processoProducao;
+                const emProducao = p.status === 'em_producao';
+                const concluida = !emProducao || idx < p.etapa_fabricacao_idx;
+                const atual = emProducao && idx === p.etapa_fabricacao_idx;
+                const itens = itensDaEtapa(etapa);
+                const marcados = p.checklist_feito?.[etapa] || {};
+                const completa = itens.every(i => marcados[i]);
+                const ultima = idx === ETAPAS_FABRICACAO.length - 1;
+                return (
+                  <div key={etapa} className={`rounded-2xl border p-3.5 ${atual ? 'border-amber-500/40 bg-amber-500/[0.04]' : concluida ? 'border-emerald-500/20 bg-emerald-500/[0.03]' : 'border-white/5 bg-white/[0.02] opacity-60'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs font-black uppercase tracking-wide flex items-center gap-1.5 ${atual ? 'text-amber-300' : concluida ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {concluida ? <CheckCircle2 size={13} /> : <span className="w-[13px] text-center text-[10px]">{idx + 1}</span>} {etapa}
+                      </p>
+                      {itens.length > 0 && <span className="text-[10px] font-black text-slate-500">{itens.filter(i => marcados[i]).length}/{itens.length}</span>}
+                    </div>
+                    {itens.length > 0 && (
+                      <div className="mt-2.5 space-y-1">
+                        {itens.map(item => {
+                          const feito = !!marcados[item];
+                          const chave = `${p.id}|${etapa}|${item}`;
+                          return (
+                            <button key={item} disabled={!atual || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
+                              className={`w-full flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1.5 ${atual ? 'hover:bg-white/5' : ''} ${feito ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+                              {marcandoItem === chave ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : feito ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />}
+                              <span>{item}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {atual && !ultima && (
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={() => concluirEtapa(p)} disabled={!completa || concluindoEtapaId === p.id}
+                          className="flex-1 bg-amber-500 hover:bg-amber-400 text-[#0B1120] py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center justify-center gap-1.5">
+                          {concluindoEtapaId === p.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Concluir etapa
+                        </button>
+                        <label className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${completa ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10 cursor-pointer' : 'border-white/10 text-slate-600 cursor-not-allowed'}`} title="Concluir anexando uma foto (opcional)">
+                          <Camera size={12} /> + foto
+                          <input type="file" accept="image/*" capture="environment" className="hidden" disabled={!completa || concluindoEtapaId === p.id}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) concluirEtapa(p, f); e.target.value = ''; }} />
+                        </label>
+                      </div>
+                    )}
+                    {atual && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Marque todos os itens para liberar a conclusão da etapa.</p>}
+                    {atual && ultima && completa && <p className="text-[10px] text-emerald-400 font-bold mt-2">Última etapa completa — pode usar &quot;Marcar Concluída&quot; no card.</p>}
+                  </div>
+                );
+              })}
+              {Object.keys(CHECKLISTS).length === 0 && isLideranca && (
+                <p className="text-[11px] text-slate-500 text-center">Nenhum checklist configurado. Configure em <Link href="/settings" className="text-amber-400 hover:underline">Configurações → Etapas de Produção</Link>.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

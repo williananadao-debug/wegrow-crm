@@ -10,7 +10,8 @@ import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 const ETAPAS_FABRICACAO_PADRAO = ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'];
 function etapasFabricacaoDe(modulos: Record<string, any> | null | undefined): string[] {
   const custom = modulos?.pulse_etapas_fabricacao;
-  return Array.isArray(custom) && custom.length > 0 ? custom : ETAPAS_FABRICACAO_PADRAO;
+  // Pode vir como string[] (formato antigo) ou {nome, prazoDias, checklist}[].
+  return Array.isArray(custom) && custom.length > 0 ? custom.map((e: any) => typeof e === 'string' ? e : e.nome) : ETAPAS_FABRICACAO_PADRAO;
 }
 
 const SYSTEM_PROMPT = `Você é a THOR, assistente de IA de gestão dentro do sistema WeGrow.

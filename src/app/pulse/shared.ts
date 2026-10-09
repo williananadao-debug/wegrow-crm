@@ -50,7 +50,7 @@ export const ETAPAS_FABRICACAO_PADRAO = ['Corte', 'Solda/Estrutura', 'Pintura', 
 // pra medir produtividade — configurável em Configurações → Etapas de Produção). As duas
 // formas convivem porque empresa que já tinha etapas configuradas antes dessa mudança salvou
 // só string[].
-export type EtapaFabricacao = string | { nome: string; prazoDias?: number | null };
+export type EtapaFabricacao = string | { nome: string; prazoDias?: number | null; checklist?: string[] | null };
 
 export function etapasFabricacaoDe(modulos: Record<string, any> | null | undefined): string[] {
   const custom = modulos?.pulse_etapas_fabricacao as EtapaFabricacao[] | undefined;
@@ -69,6 +69,21 @@ export function prazosEtapasFabricacaoDe(modulos: Record<string, any> | null | u
   }
   return mapa;
 }
+
+// Checklist configurado pra cada etapa (Configurações → Etapas de Produção). A etapa só pode
+// ser concluída com todos os itens marcados — o que foi marcado fica em
+// pulse_producoes.checklist_feito ({ etapa: { item: { por, em } } }).
+export function checklistsEtapasFabricacaoDe(modulos: Record<string, any> | null | undefined): Record<string, string[]> {
+  const custom = modulos?.pulse_etapas_fabricacao as EtapaFabricacao[] | undefined;
+  const mapa: Record<string, string[]> = {};
+  if (!Array.isArray(custom)) return mapa;
+  for (const e of custom) {
+    if (typeof e !== 'string' && Array.isArray(e.checklist) && e.checklist.length > 0) mapa[e.nome] = e.checklist;
+  }
+  return mapa;
+}
+
+export type ChecklistFeito = Record<string, Record<string, { por?: string | null; em: string }>>;
 
 // avulso=true: item digitado na hora, fora do catálogo (ex: personalização de um projeto
 // sob medida — "teto elétrico extra", "revestimento premium"). servicoId nesse caso é só

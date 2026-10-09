@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes, Factory, ArrowUp, ArrowDown, Wand2 } from 'lucide-react';
+import { Save, Trash2, Plus, Zap, Mic2, Radio, Info, Loader2, Package, CheckCircle2, AlertCircle, Building2, Megaphone, Smartphone, Headphones, Newspaper, Upload, History, X, Settings2, FileText, Copy, GripVertical, Boxes, Factory, ArrowUp, ArrowDown, Wand2, ListChecks } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -92,7 +92,8 @@ export default function SettingsPage() {
   const [savingNfse, setSavingNfse] = useState(false);
   const [feedbackNfse, setFeedbackNfse] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [modulosAtuais, setModulosAtuais] = useState<Record<string, any>>({});
-  const [etapasProducao, setEtapasProducao] = useState<{ nome: string; prazoDias: string }[]>(ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '' })));
+  // checklist = um item por linha (textarea); salvo como string[].
+  const [etapasProducao, setEtapasProducao] = useState<{ nome: string; prazoDias: string; checklist: string }[]>(ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '', checklist: '' })));
   const [savingEtapas, setSavingEtapas] = useState(false);
   const [feedbackEtapas, setFeedbackEtapas] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const histModal = histModalId ? servicos.find(s => s.id === histModalId) ?? null : null;
@@ -123,9 +124,9 @@ export default function SettingsPage() {
     // Compatível com o formato antigo (só string[], sem prazo) e o novo ({nome, prazoDias}[]).
     setEtapasProducao(
       Array.isArray(etapasSalvas) && etapasSalvas.length > 0
-        ? etapasSalvas.map((e: string | { nome: string; prazoDias?: number | null }) =>
-            typeof e === 'string' ? { nome: e, prazoDias: '' } : { nome: e.nome, prazoDias: e.prazoDias ? String(e.prazoDias) : '' })
-        : ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '' }))
+        ? etapasSalvas.map((e: string | { nome: string; prazoDias?: number | null; checklist?: string[] | null }) =>
+            typeof e === 'string' ? { nome: e, prazoDias: '', checklist: '' } : { nome: e.nome, prazoDias: e.prazoDias ? String(e.prazoDias) : '', checklist: (e.checklist || []).join('\n') })
+        : ETAPAS_FABRICACAO_PADRAO.map(nome => ({ nome, prazoDias: '', checklist: '' }))
     );
     const { data, error } = await supabase.from('servicos').select('*').eq('empresa_id', perfil?.empresa_id).order('ordem', { ascending: true, nullsFirst: false }).order('id', { ascending: true });
     
@@ -495,8 +496,10 @@ export default function SettingsPage() {
 
   const atualizarEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? { ...e, nome: valor } : e));
   const atualizarPrazoEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? { ...e, prazoDias: valor } : e));
+  const atualizarChecklistEtapa = (idx: number, valor: string) => setEtapasProducao(prev => prev.map((e, i) => i === idx ? { ...e, checklist: valor } : e));
+  const [checklistAberto, setChecklistAberto] = useState<number | null>(null);
   const removerEtapa = (idx: number) => setEtapasProducao(prev => prev.filter((_, i) => i !== idx));
-  const adicionarEtapa = () => setEtapasProducao(prev => [...prev, { nome: '', prazoDias: '' }]);
+  const adicionarEtapa = () => setEtapasProducao(prev => [...prev, { nome: '', prazoDias: '', checklist: '' }]);
   const moverEtapa = (idx: number, direcao: -1 | 1) => setEtapasProducao(prev => {
     const alvo = idx + direcao;
     if (alvo < 0 || alvo >= prev.length) return prev;
@@ -507,7 +510,10 @@ export default function SettingsPage() {
 
   const salvarEtapas = async () => {
     const etapasValidas = etapasProducao
-      .map(e => ({ nome: e.nome.trim(), prazoDias: e.prazoDias.trim() ? Number(e.prazoDias) : null }))
+      .map(e => {
+        const checklist = Array.from(new Set(e.checklist.split('\n').map(l => l.trim()).filter(Boolean)));
+        return { nome: e.nome.trim(), prazoDias: e.prazoDias.trim() ? Number(e.prazoDias) : null, checklist: checklist.length ? checklist : null };
+      })
       .filter(e => e.nome);
     if (etapasValidas.length === 0) return;
     setSavingEtapas(true);
@@ -517,7 +523,7 @@ export default function SettingsPage() {
       const { error } = await supabase.from('empresas').update({ modulos: novosModulos }).eq('id', perfil?.empresa_id);
       if (error) throw error;
       setModulosAtuais(novosModulos);
-      setEtapasProducao(etapasValidas.map(e => ({ nome: e.nome, prazoDias: e.prazoDias != null ? String(e.prazoDias) : '' })));
+      setEtapasProducao(etapasValidas.map(e => ({ nome: e.nome, prazoDias: e.prazoDias != null ? String(e.prazoDias) : '', checklist: (e.checklist || []).join('\n') })));
       setFeedbackEtapas({ type: 'success', msg: 'Etapas de produção salvas com sucesso!' });
     } catch (err: any) {
       setFeedbackEtapas({ type: 'error', msg: 'Erro: ' + (err.message || 'Verifique o console') });
@@ -930,13 +936,16 @@ export default function SettingsPage() {
             <Factory size={18} className="text-amber-400" />
             <div>
               <h2 className="font-bold text-sm uppercase tracking-wide">Etapas de Produção (Pulse)</h2>
-              <p className="text-slate-500 text-[10px] font-medium mt-0.5">O fluxo que aparece no Kanban de Produção — cada negócio tem o seu (ex: chassi → elétrica → acabamento). Mudar aqui não afeta produções já em andamento. O prazo em dias é opcional e serve pra comparar com o tempo real de cada produção no card (produtividade).</p>
+              <p className="text-slate-500 text-[10px] font-medium mt-0.5">O fluxo que aparece no Kanban de Produção — cada negócio tem o seu (ex: chassi → elétrica → acabamento). Mudar aqui não afeta produções já em andamento. O prazo em dias é opcional e serve pra comparar com o tempo real de cada produção no card (produtividade). O checklist (ícone ao lado) define o que precisa ser feito pra concluir cada etapa.</p>
             </div>
           </div>
 
           <div className="space-y-2 mb-5">
-            {etapasProducao.map((etapa, idx) => (
-              <div key={idx} className="flex items-center gap-2">
+            {etapasProducao.map((etapa, idx) => {
+              const qtdItens = etapa.checklist.split('\n').filter(l => l.trim()).length;
+              return (
+              <div key={idx}>
+              <div className="flex items-center gap-2">
                 <span className="w-6 text-center text-[10px] font-black text-slate-600">{idx + 1}</span>
                 <input
                   value={etapa.nome}
@@ -954,11 +963,27 @@ export default function SettingsPage() {
                   />
                   <span className="text-[9px] font-black text-slate-500 uppercase">dias</span>
                 </div>
+                <button type="button" onClick={() => setChecklistAberto(checklistAberto === idx ? null : idx)} title="Checklist da etapa — a etapa só conclui com todos os itens marcados" className={`h-8 px-2.5 flex items-center gap-1 rounded-lg text-[10px] font-black uppercase ${qtdItens ? 'bg-amber-500/15 text-amber-300' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}><ListChecks size={13} /> {qtdItens || '+'}</button>
                 <button type="button" onClick={() => moverEtapa(idx, -1)} disabled={idx === 0} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowUp size={13} /></button>
                 <button type="button" onClick={() => moverEtapa(idx, 1)} disabled={idx === etapasProducao.length - 1} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-slate-300"><ArrowDown size={13} /></button>
                 <button type="button" onClick={() => removerEtapa(idx)} disabled={etapasProducao.length <= 1} className="w-8 h-8 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 disabled:opacity-30 rounded-lg text-red-400"><Trash2 size={13} /></button>
               </div>
-            ))}
+              {checklistAberto === idx && (
+                <div className="ml-8 mt-2 mb-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Checklist de &quot;{etapa.nome || 'etapa'}&quot; — um item por linha</label>
+                  <textarea
+                    value={etapa.checklist}
+                    onChange={e => atualizarChecklistEtapa(idx, e.target.value)}
+                    rows={5}
+                    placeholder={'Ex.:\nConferir medidas do chassi\nSoldas revisadas\nFoto do chassi pronto'}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-400 resize-y"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Na produção, essa etapa só pode ser concluída com todos os itens marcados. Sem itens = conclui direto.</p>
+                </div>
+              )}
+              </div>
+              );
+            })}
             <button type="button" onClick={adicionarEtapa} className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 mt-2">
               <Plus size={14} /> Adicionar etapa
             </button>

@@ -103,6 +103,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [router]);
 
+  // App instalado no celular (PWA) fica dias aberto em segundo plano rodando o bundle antigo —
+  // o Sentry pegou iPhone em versão de 4 dias antes. Toda vez que o app volta pra frente,
+  // pede pro service worker conferir se há versão nova (ele troca sozinho no próximo carregamento).
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const verificar = () => {
+      if (document.visibilityState !== 'visible') return;
+      navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', verificar);
+    return () => document.removeEventListener('visibilitychange', verificar);
+  }, []);
+
   // Cor de marca por tenant, aplicada globalmente via CSS custom property — qualquer
   // classe Tailwind escrita como `bg-[var(--cor-primaria)]`/`text-[var(--cor-primaria)]`
   // passa a herdar a cor da empresa automaticamente. Fallback pro verde padrão do produto

@@ -4,8 +4,16 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { comprimirImagem } from '@/lib/comprimirImagem';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, ehMateriaPrima, ehUsoConsumo } from '../shared';
+
+// "Load failed" (Safari) / "Failed to fetch" (Chrome) = a internet caiu no meio do envio.
+function mensagemErroRede(err: any): string {
+  const msg = String(err?.message || '');
+  if (/load failed|failed to fetch|network/i.test(msg)) return 'a conexão caiu durante o envio. Confira a internet (Wi-Fi da fábrica) e tente de novo.';
+  return msg || 'tente novamente';
+}
 
 type StatusProducao = 'em_producao' | 'concluida' | 'entregue';
 type Producao = {
@@ -188,7 +196,12 @@ function PulseProducaoContent() {
     if (!proxima) return;
     const proximaInfo = COLUNAS.find(c => c.status === proxima)!;
     setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, status: proxima } : x));
-    await supabase.from('pulse_producoes').update({ status: proxima }).eq('id', p.id);
+    const { error: errStatus } = await supabase.from('pulse_producoes').update({ status: proxima }).eq('id', p.id);
+    if (errStatus) {
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, status: p.status } : x));
+      alert('Não foi possível mudar a etapa: ' + mensagemErroRede(errStatus));
+      return;
+    }
     await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'status', texto: `Movida para "${proximaInfo.label}".`, user_id: user?.id }]);
     if (detalheId === p.id) carregarEventos(p.id);
 
@@ -217,10 +230,11 @@ function PulseProducaoContent() {
   // botão "Marcar Concluída" acima. Exige foto pra concluir — LEAN: cada etapa fecha com
   // registro visual de verdade, não só um clique; dá pra liderança acompanhar pelo card
   // sem precisar perguntar pro time como está indo.
-  const concluirEtapaComFoto = async (p: Producao, file: File) => {
+  const concluirEtapaComFoto = async (p: Producao, original: File) => {
     if (p.etapa_fabricacao_idx >= ETAPAS_FABRICACAO.length - 1) return;
     setConcluindoEtapaId(p.id);
     try {
+      const file = await comprimirImagem(original);
       const ext = file.name.split('.').pop() || 'jpg';
       const path = `${perfil?.empresa_id}/producao-${p.id}-etapa-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
@@ -228,16 +242,20 @@ function PulseProducaoContent() {
       const { data: urlData } = supabase.storage.from('produtos').getPublicUrl(path);
       const novoIdx = p.etapa_fabricacao_idx + 1;
       const etapaConcluida = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
-      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
-      setFotosPorProducao(prev => ({ ...prev, [p.id]: urlData.publicUrl }));
-      await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
-      await supabase.from('pulse_producao_eventos').insert([{
+      // Antes o erro dessas duas gravações era ignorado: a tela mostrava a etapa avançada e no
+      // banco nada mudava. Agora só atualiza a tela depois de gravar.
+      const { error: errEtapa } = await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
+      if (errEtapa) throw errEtapa;
+      const { error: errEvento } = await supabase.from('pulse_producao_eventos').insert([{
         producao_id: p.id, tipo: 'etapa', texto: `Etapa concluída: ${etapaConcluida}.`,
         foto_url: urlData.publicUrl, user_id: user?.id,
       }]);
+      if (errEvento) throw errEvento;
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
+      setFotosPorProducao(prev => ({ ...prev, [p.id]: urlData.publicUrl }));
       if (detalheId === p.id) carregarEventos(p.id);
     } catch (err: any) {
-      alert('Erro ao concluir etapa: ' + (err?.message || 'tente novamente'));
+      alert('Erro ao concluir etapa: ' + mensagemErroRede(err));
     } finally {
       setConcluindoEtapaId(null);
     }
@@ -329,19 +347,21 @@ function PulseProducaoContent() {
     setEnviandoComentario(false);
   };
 
-  const enviarFoto = async (file: File) => {
+  const enviarFoto = async (original: File) => {
     if (!detalheId) return;
     setEnviandoFoto(true);
     try {
+      const file = await comprimirImagem(original);
       const ext = file.name.split('.').pop() || 'jpg';
       const path = `${perfil?.empresa_id}/producao-${detalheId}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from('produtos').getPublicUrl(path);
-      await supabase.from('pulse_producao_eventos').insert([{ producao_id: detalheId, tipo: 'anexo', foto_url: urlData.publicUrl, user_id: user?.id }]);
+      const { error: errAnexo } = await supabase.from('pulse_producao_eventos').insert([{ producao_id: detalheId, tipo: 'anexo', foto_url: urlData.publicUrl, user_id: user?.id }]);
+      if (errAnexo) throw errAnexo;
       carregarEventos(detalheId);
     } catch (err: any) {
-      alert('Erro ao subir foto: ' + (err?.message || 'tente novamente'));
+      alert('Erro ao subir foto: ' + mensagemErroRede(err));
     } finally {
       setEnviandoFoto(false);
     }

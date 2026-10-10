@@ -91,13 +91,14 @@ function PulseProducaoContent() {
   const [fotosPendentes, setFotosPendentes] = useState<FotoPendente[]>([]);
   const [filaFotosAberta, setFilaFotosAberta] = useState(false);
   const [avaliandoFotos, setAvaliandoFotos] = useState<number[]>([]);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
 
   const carregar = async () => {
     setLoading(true);
     // Chão de fábrica não usa ficha técnica nem precisa do catálogo completo — só nome/foto
     // (card) e preço (pedido de aditivo). '*' de centenas de insumos pesava no celular.
     const gestao = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
-    const [{ data: servicosData }, { data: producoesData }, { data: fichasData }] = await Promise.all([
+    const [{ data: servicosData }, { data: producoesData, error: erroProducoes }, { data: fichasData }] = await Promise.all([
       gestao
         ? supabase.from('servicos').select('*').order('nome', { ascending: true })
         : supabase.from('servicos').select('id, nome, preco, tipo, imagem_url, unidade').order('nome', { ascending: true }),
@@ -109,6 +110,8 @@ function PulseProducaoContent() {
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
+    // Antes uma falha (ex.: internet caiu) virava quadro vazio, igual a "não tem produção".
+    setErroCarga(erroProducoes ? mensagemErroRede(erroProducoes) : null);
     if (fichasData) setFichas(fichasData);
 
     const leadIds = [...new Set((producoesData || []).map(p => p.lead_id).filter((x): x is number => !!x))];
@@ -600,15 +603,15 @@ function PulseProducaoContent() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Hammer size={10} /> Em produção</p>
-          <p className="text-2xl font-black text-white mt-1">{emProducaoCount}</p>
+          <p className="text-2xl font-black text-white mt-1">{loading ? '…' : emProducaoCount}</p>
         </div>
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> Aguardando entrega</p>
-          <p className="text-2xl font-black text-white mt-1">{aguardandoEntregaCount}</p>
+          <p className="text-2xl font-black text-white mt-1">{loading ? '…' : aguardandoEntregaCount}</p>
         </div>
         <div className={`bg-[#0F172A] border rounded-2xl p-4 ${atrasadasCount > 0 ? 'border-red-500/40' : 'border-white/10'}`}>
           <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-slate-500'}`}><AlertTriangle size={10} /> Atrasadas</p>
-          <p className={`text-2xl font-black mt-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-white'}`}>{atrasadasCount}</p>
+          <p className={`text-2xl font-black mt-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-white'}`}>{loading ? '…' : atrasadasCount}</p>
         </div>
       </div>
 
@@ -617,6 +620,12 @@ function PulseProducaoContent() {
         <h3 className="font-black uppercase text-sm text-slate-300">Fluxo de produção</h3>
       </div>
 
+      {erroCarga && !loading && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <p className="text-red-300 text-xs font-bold">Não foi possível carregar as produções: {erroCarga}</p>
+          <button onClick={() => carregar()} className="text-[10px] font-black uppercase tracking-widest text-red-300 border border-red-500/30 rounded-lg px-3 py-1.5 hover:bg-red-500/10 flex-shrink-0">Tentar de novo</button>
+        </div>
+      )}
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
       ) : (

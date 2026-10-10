@@ -94,46 +94,55 @@ function PulseProducaoContent() {
 
   const carregar = async () => {
     setLoading(true);
+    // Chão de fábrica não usa ficha técnica nem precisa do catálogo completo — só nome/foto
+    // (card) e preço (pedido de aditivo). '*' de centenas de insumos pesava no celular.
+    const gestao = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
     const [{ data: servicosData }, { data: producoesData }, { data: fichasData }] = await Promise.all([
-      supabase.from('servicos').select('*').order('nome', { ascending: true }),
+      gestao
+        ? supabase.from('servicos').select('*').order('nome', { ascending: true })
+        : supabase.from('servicos').select('id, nome, preco, tipo, imagem_url, unidade').order('nome', { ascending: true }),
       // '*' traz checklist_feito sem quebrar antes da migration rodar.
       supabase.from('pulse_producoes').select('*').order('created_at', { ascending: false }).limit(60),
-      supabase.from('pulse_fichas_tecnicas').select('id, produto_final_id, servico_id, quantidade_por_unidade'),
+      gestao
+        ? supabase.from('pulse_fichas_tecnicas').select('id, produto_final_id, servico_id, quantidade_por_unidade')
+        : Promise.resolve({ data: [] as { id: number; produto_final_id: number; servico_id: number; quantidade_por_unidade: number }[] }),
     ]);
     if (servicosData) setServicos(servicosData as ServicoConfig[]);
     if (producoesData) setProducoes(producoesData as Producao[]);
     if (fichasData) setFichas(fichasData);
 
     const leadIds = [...new Set((producoesData || []).map(p => p.lead_id).filter((x): x is number => !!x))];
-    if (leadIds.length > 0 && perfil?.cargo !== 'producao') {
-      const { data: leadsData } = await supabase.from('leads').select('id, empresa').in('id', leadIds);
-      setClientePorLead(Object.fromEntries((leadsData || []).map((l: any) => [l.id, l.empresa])));
-    } else setClientePorLead({});
-
     const ids = (producoesData || []).map(p => p.id);
-    if (ids.length > 0) {
+    // Nomes de cliente, fotos e início de etapa em paralelo (antes eram 3 idas seguidas ao banco).
+    const [leadsRes, fotosRes, etapasRes] = await Promise.all([
+      leadIds.length > 0 && perfil?.cargo !== 'producao'
+        ? supabase.from('leads').select('id, empresa').in('id', leadIds)
+        : Promise.resolve({ data: null }),
       // '*' traz foto_status sem quebrar antes da migration.
-      const { data: fotos } = await supabase.from('pulse_producao_eventos')
-        .select('*').in('producao_id', ids)
-        .not('foto_url', 'is', null).order('created_at', { ascending: true });
-      const mapa: Record<number, string> = {};
-      // Ordenado crescente — a última sobrescreve as anteriores, então sobra sempre a mais recente.
-      (fotos || []).forEach(f => { if (f.foto_url) mapa[f.producao_id] = f.foto_url; });
-      setFotosPorProducao(mapa);
-      setFotosPendentes((fotos || [])
-        .filter(f => f.foto_url && (!f.foto_status || f.foto_status === 'pendente'))
-        .map(f => ({ id: f.id, producao_id: f.producao_id, foto_url: f.foto_url, created_at: f.created_at, texto: f.texto }))
-        .reverse());
+      ids.length > 0
+        ? supabase.from('pulse_producao_eventos').select('*').in('producao_id', ids).not('foto_url', 'is', null).order('created_at', { ascending: true })
+        : Promise.resolve({ data: null }),
+      // Só eventos tipo "etapa" (conclusão de sub-etapa) — anexo de comentário também tem
+      // foto_url e ia contar como troca de etapa.
+      ids.length > 0
+        ? supabase.from('pulse_producao_eventos').select('producao_id, created_at').in('producao_id', ids).eq('tipo', 'etapa').order('created_at', { ascending: true })
+        : Promise.resolve({ data: null }),
+    ]);
+    setClientePorLead(Object.fromEntries((leadsRes.data || []).map((l: any) => [l.id, l.empresa])));
 
-      // Só eventos tipo "etapa" (conclusão de sub-etapa) — não usa o mesmo filtro de foto_url
-      // acima porque anexo de comentário também tem foto_url e ia contar como troca de etapa.
-      const { data: eventosEtapa } = await supabase.from('pulse_producao_eventos')
-        .select('producao_id, created_at').in('producao_id', ids)
-        .eq('tipo', 'etapa').order('created_at', { ascending: true });
-      const mapaEtapa: Record<number, string> = {};
-      (eventosEtapa || []).forEach(e => { mapaEtapa[e.producao_id] = e.created_at; });
-      setEtapaIniciadaEmPorProducao(mapaEtapa);
-    }
+    const fotos = (fotosRes.data || []) as any[];
+    const mapa: Record<number, string> = {};
+    // Ordenado crescente — a última sobrescreve as anteriores, então sobra sempre a mais recente.
+    fotos.forEach(f => { if (f.foto_url) mapa[f.producao_id] = f.foto_url; });
+    setFotosPorProducao(mapa);
+    setFotosPendentes(fotos
+      .filter(f => f.foto_url && (!f.foto_status || f.foto_status === 'pendente'))
+      .map(f => ({ id: f.id, producao_id: f.producao_id, foto_url: f.foto_url, created_at: f.created_at, texto: f.texto }))
+      .reverse());
+
+    const mapaEtapa: Record<number, string> = {};
+    ((etapasRes.data || []) as { producao_id: number; created_at: string }[]).forEach(e => { mapaEtapa[e.producao_id] = e.created_at; });
+    setEtapaIniciadaEmPorProducao(mapaEtapa);
     setLoading(false);
   };
 

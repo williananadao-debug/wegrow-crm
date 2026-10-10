@@ -62,6 +62,7 @@ export default function SaidaRapidaPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const ultimaLeituraRef = useRef<{ texto: string; hora: number }>({ texto: '', hora: 0 });
+  const processarCodigoRef = useRef<((texto: string) => void) | null>(null);
 
   useEffect(() => {
     if (!scannerAberto) return;
@@ -80,7 +81,7 @@ export default function SaidaRapidaPage() {
         if (texto === ultimaLeituraRef.current.texto && agora - ultimaLeituraRef.current.hora < 3000) return;
         ultimaLeituraRef.current = { texto, hora: agora };
         setCodigo(texto);
-        processarCodigo(texto);
+        processarCodigoRef.current?.(texto);
       },
     ).then(controls => { if (!cancelado) scannerControlsRef.current = controls; else controls.stop(); })
       .catch(err => setScannerErro(err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
@@ -97,17 +98,19 @@ export default function SaidaRapidaPage() {
   // câmera" — quem tá no celular não tem leitor USB/Bluetooth plugado nele, então a câmera
   // já É a forma de leitura esperada. No desktop (sem coincidir o padrão de mobile) mantém
   // o comportamento de antes (input pra leitor físico/digitação em foco).
+  // Abre já na montagem, em paralelo com a carga dos produtos — antes esperava a lista
+  // inteira chegar e a câmera demorava a aparecer no celular.
   useEffect(() => {
-    if (loading) return;
     if (typeof navigator === 'undefined') return;
     const ehCelular = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
     if (ehCelular) setScannerAberto(true);
-  }, [loading]);
+  }, []);
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;
     Promise.all([
-      supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).not('estoque', 'is', null),
+      // Só o que a tela usa — '*' trazia histórico de preços etc. de centenas de insumos.
+      supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao').eq('empresa_id', perfil.empresa_id).not('estoque', 'is', null),
       supabase.from('pulse_producoes').select('id, produto_final_nome').eq('empresa_id', perfil.empresa_id).eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
     ]).then(([s, p]) => {
       if (s.data) setServicos(ordenarPorNome(s.data as ServicoConfig[]));
@@ -165,6 +168,7 @@ export default function SaidaRapidaPage() {
   const processarCodigo = async (texto: string) => {
     const t = texto.trim();
     if (!t || processando) return;
+    if (loading) { setErro('Aguarde: ainda carregando os produtos…'); return; }
     setProcessando(true); setErro(null);
     const { servico, varios } = acharServico(t);
     if (!servico) {
@@ -180,6 +184,9 @@ export default function SaidaRapidaPage() {
     setProcessando(false); setCodigo('');
     inputRef.current?.focus();
   };
+  // A câmera abre antes da lista de produtos chegar: a leitura sempre chama a versão mais
+  // recente (com a lista carregada), não a que existia quando a câmera abriu.
+  useEffect(() => { processarCodigoRef.current = processarCodigo; });
 
   const desfazer = async (l: Leitura) => {
     if (!l.movimentoId || !l.servicoId || l.desfeita) return;

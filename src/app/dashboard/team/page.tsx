@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck, Factory, Printer } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck, Factory, Printer, Upload } from 'lucide-react';
 import { loginCurto, slugLogin } from '@/lib/loginSemEmail';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
@@ -238,7 +238,7 @@ export default function TeamPage() {
   const [loteSenha, setLoteSenha] = useState('');
   const [loteSufixo, setLoteSufixo] = useState('');
   const [loteCargo, setLoteCargo] = useState('producao');
-  const [loteResultado, setLoteResultado] = useState<{ nome: string; login?: string; erro?: string }[] | null>(null);
+  const [loteResultado, setLoteResultado] = useState<{ nome: string; login?: string; senha?: string; erro?: string }[] | null>(null);
   const [loteSenhaUsada, setLoteSenhaUsada] = useState('');
   const [loteErro, setLoteErro] = useState<string | null>(null);
   const abrirLote = () => {
@@ -249,6 +249,19 @@ export default function TeamPage() {
     setLoteNomes(''); setLoteSenha(''); setLoteCargo('producao'); setLoteResultado(null); setLoteErro(null);
     setLoteAberto(true);
   };
+  // Importa planilha salva como CSV (Excel: Arquivo → Salvar como → CSV) ou .txt: coluna 1 =
+  // nome, coluna 2 = senha (opcional). Separador ; , ou TAB. Cabeçalho "nome" é ignorado.
+  const importarArquivoLote = async (arquivo: File) => {
+    const texto = await arquivo.text();
+    const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      .map(l => l.split(/[;,\t]/).map(c => c.trim().replace(/^"|"$/g, '')))
+      .filter(c => c[0] && !/^nome$/i.test(c[0]))
+      .map(c => (c[1] ? `${c[0]}; ${c[1]}` : c[0]));
+    if (linhas.length === 0) { setLoteErro('Não achei nomes no arquivo. Use uma coluna com o nome e, se quiser, outra com a senha.'); return; }
+    setLoteErro(null);
+    setLoteNomes(linhas.join('\n'));
+  };
+
   const criarLote = async () => {
     setSaving(true); setLoteErro(null);
     try {
@@ -465,13 +478,13 @@ export default function TeamPage() {
             <div className="p-6 overflow-y-auto space-y-4" id="lote-impressao">
               {loteResultado ? (
                 <>
-                  <p className="text-sm text-slate-300">Entrem em <b className="text-white">wegrow.app.br</b> com o login abaixo e a senha <b className="text-white font-mono">{loteSenhaUsada}</b>.</p>
+                  <p className="text-sm text-slate-300">Entrem em <b className="text-white">wegrow.app.br</b> digitando só o login e a senha abaixo.</p>
                   <div className="divide-y divide-white/5 border border-white/10 rounded-2xl">
                     {loteResultado.map(r => (
                       <div key={r.nome} className="flex items-center justify-between gap-3 px-4 py-2.5">
                         <span className="text-sm font-bold text-white truncate">{r.nome}</span>
                         {r.login
-                          ? <span className="font-mono text-sm text-[#22C55E]">{r.login}</span>
+                          ? <span className="font-mono text-sm text-right"><span className="text-[#22C55E]">{r.login}</span> <span className="text-slate-400">/ {r.senha || loteSenhaUsada}</span></span>
                           : <span className="text-[11px] text-red-400 text-right">{r.erro}</span>}
                       </div>
                     ))}
@@ -480,10 +493,16 @@ export default function TeamPage() {
                 </>
               ) : (
                 <>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">Pra quem não tem e-mail. Cada pessoa entra com um <b className="text-slate-200">login</b> (ex.: <span className="font-mono">helton.{loteSufixo || 'empresa'}</span>) e a senha que você definir. Nome repetido ganha número (fabio2).</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">Planilha: salve como <b className="text-slate-200">CSV</b> com a coluna 1 = nome e a coluna 2 = senha. Pra quem não tem e-mail. Cada pessoa entra com um <b className="text-slate-200">login</b> (ex.: <span className="font-mono">helton.{loteSufixo || 'empresa'}</span>) e a senha que você definir. Nome repetido ganha número (fabio2).</p>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Nomes (um por linha)</label>
-                    <textarea value={loteNomes} onChange={e => setLoteNomes(e.target.value)} rows={8} placeholder={'Helton\nClaudecir\nFábio'} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] resize-y" />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block">Nomes (um por linha — opcional: &quot;Nome; senha&quot;)</label>
+                      <label className="text-[10px] font-black uppercase text-[#22C55E] hover:underline cursor-pointer flex items-center gap-1">
+                        <Upload size={11}/> Importar planilha
+                        <input type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importarArquivoLote(f); e.target.value = ''; }} />
+                      </label>
+                    </div>
+                    <textarea value={loteNomes} onChange={e => setLoteNomes(e.target.value)} rows={8} placeholder={'Helton; helton731\nClaudecir; claudecir458\nFábio'} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] resize-y" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -500,7 +519,7 @@ export default function TeamPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Senha inicial (mín. 6 caracteres)</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Senha padrão (pra quem estiver sem senha na lista — mín. 6)</label>
                     <input value={loteSenha} onChange={e => setLoteSenha(e.target.value)} autoComplete="new-password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold font-mono outline-none focus:border-[#22C55E]" />
                   </div>
                   {loteErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{loteErro}</div>}
@@ -511,7 +530,7 @@ export default function TeamPage() {
               {loteResultado ? (
                 <button type="button" onClick={() => window.print()} className="w-full bg-white/5 border border-white/10 text-white py-3.5 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 hover:bg-white/10"><Printer size={14}/> Imprimir lista</button>
               ) : (
-                <button type="button" onClick={criarLote} disabled={saving || !loteNomes.trim() || loteSenha.length < 6 || !loteSufixo} className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
+                <button type="button" onClick={criarLote} disabled={saving || !loteNomes.trim() || !loteSufixo || (loteSenha.length < 6 && loteNomes.split('\n').some(l => l.trim() && !/[;,\t]\s*\S{6,}/.test(l)))} className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
                   {saving ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} Criar acessos
                 </button>
               )}

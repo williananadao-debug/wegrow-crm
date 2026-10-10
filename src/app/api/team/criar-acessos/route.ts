@@ -8,10 +8,11 @@ export const maxDuration = 60;
 const CARGOS_PERMITIDOS = ['producao', 'almoxarifado', 'vendedor'];
 
 // POST { nomes: string[], senha, sufixo, cargo } — cria acessos SEM e-mail em lote (equipe de
-// fábrica). Login = "<primeiro nome>.<sufixo>" (ex.: helton.travel); no Auth vira
+// fábrica). Cada linha pode trazer a própria senha: "Helton; helton731" (senão vale a padrão).
+// Login = "<primeiro nome>.<sufixo>" (ex.: helton.travel); no Auth vira
 // <login>@acesso.wegrow.app.br, que nunca recebe e-mail. Nome repetido ganha número
-// (fabio.travel, fabio2.travel). Só diretor. Pelo admin API do Supabase — criar direto no SQL
-// deixava o login quebrado.
+// (fabio.travel, fabio2.travel). Só diretor. Pelo admin API do Supabase — pelo SQL Editor não
+// dá: o Supabase não deixa gravar em auth.identities por lá.
 export async function POST(req: Request) {
   const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -22,19 +23,27 @@ export async function POST(req: Request) {
   if (perfil?.cargo !== 'diretor' || !perfil.empresa_id) return NextResponse.json({ erro: 'Acesso restrito a diretores.' }, { status: 403 });
 
   const body = await req.json().catch(() => null);
-  const nomes: string[] = Array.isArray(body?.nomes)
-    ? [...new Set<string>(body.nomes.map((n: unknown) => String(n).trim().replace(/\s+/g, ' ')).filter(Boolean))]
-    : [];
-  const senha = String(body?.senha || '');
+  const senhaPadrao = String(body?.senha || '');
+  // "Nome; senha" ou "Nome<TAB>senha" (colado de planilha) — senha da linha vale sobre a padrão.
+  const linhas = Array.isArray(body?.nomes) ? body.nomes.map((n: unknown) => String(n).trim()).filter(Boolean) : [];
+  const porNome = new Map<string, string>();
+  for (const linha of linhas) {
+    const [nomeBruto, senhaLinha] = linha.split(/[;,\t]/);
+    const nomeLimpo = (nomeBruto || '').trim().replace(/\s+/g, ' ');
+    if (nomeLimpo) porNome.set(nomeLimpo, (senhaLinha || '').trim() || senhaPadrao);
+  }
+  const nomes = [...porNome.keys()];
   const sufixo = slugLogin(String(body?.sufixo || ''));
   const cargo = String(body?.cargo || 'producao');
   if (nomes.length === 0 || nomes.length > 50) return NextResponse.json({ erro: 'Informe de 1 a 50 nomes.' }, { status: 400 });
-  if (senha.length < 6) return NextResponse.json({ erro: 'A senha precisa ter pelo menos 6 caracteres.' }, { status: 400 });
+  const curtas = nomes.filter(n => (porNome.get(n) || '').length < 6);
+  if (curtas.length) return NextResponse.json({ erro: `Senha com menos de 6 caracteres (ou sem senha): ${curtas.join(', ')}.` }, { status: 400 });
   if (!sufixo) return NextResponse.json({ erro: 'Informe o sufixo do login (ex.: travel).' }, { status: 400 });
   if (!CARGOS_PERMITIDOS.includes(cargo)) return NextResponse.json({ erro: 'Cargo inválido.' }, { status: 400 });
 
-  const resultados: { nome: string; login?: string; erro?: string }[] = [];
+  const resultados: { nome: string; login?: string; senha?: string; erro?: string }[] = [];
   for (const nome of nomes) {
+    const senha = porNome.get(nome)!;
     const base = slugLogin(nome.split(' ')[0]) || 'usuario';
     let criado: { id: string; login: string } | null = null;
     let ultimoErro = '';
@@ -58,7 +67,7 @@ export async function POST(req: Request) {
       resultados.push({ nome, erro: erroPerfil.message });
       continue;
     }
-    resultados.push({ nome, login: criado.login });
+    resultados.push({ nome, login: criado.login, senha });
   }
 
   return NextResponse.json({ ok: true, resultados });

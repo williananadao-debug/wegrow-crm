@@ -105,7 +105,7 @@ function PulseProducaoContent() {
     if (fichasData) setFichas(fichasData);
 
     const leadIds = [...new Set((producoesData || []).map(p => p.lead_id).filter((x): x is number => !!x))];
-    if (leadIds.length > 0) {
+    if (leadIds.length > 0 && perfil?.cargo !== 'producao') {
       const { data: leadsData } = await supabase.from('leads').select('id, empresa').in('id', leadIds);
       setClientePorLead(Object.fromEntries((leadsData || []).map((l: any) => [l.id, l.empresa])));
     } else setClientePorLead({});
@@ -471,6 +471,14 @@ function PulseProducaoContent() {
     }
   };
 
+  // Chão de fábrica (cargo Produção) vê só o número do pedido, nunca o nome do cliente.
+  const ocultarCliente = perfil?.cargo === 'producao';
+  const numeroPedido = (leadId: number) => `Pedido LD-${String(leadId).padStart(4, '0')}`;
+  const rotuloCliente = (leadId: number | null) => {
+    if (!leadId) return 'Sem pedido (produção manual)';
+    return ocultarCliente ? numeroPedido(leadId) : (clientePorLead[leadId] || numeroPedido(leadId));
+  };
+
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;
   const processoProducao = producoes.find(p => p.id === processoId) || null;
 
@@ -627,8 +635,8 @@ function PulseProducaoContent() {
                         <button onClick={() => abrirDetalhe(p)} className="w-full text-left flex items-center gap-2">
                           {fotoCard && <img src={fotoCard} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0" />}
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-black uppercase tracking-wide text-[var(--cor-primaria)] truncate" title={p.lead_id ? clientePorLead[p.lead_id] : undefined}>
-                              {p.lead_id ? (clientePorLead[p.lead_id] || `Venda LD-${String(p.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}
+                            <p className="text-[11px] font-black uppercase tracking-wide text-[var(--cor-primaria)] truncate" title={p.lead_id && !ocultarCliente ? clientePorLead[p.lead_id] : undefined}>
+                              {rotuloCliente(p.lead_id)}
                             </p>
                             <p className="text-white font-bold text-sm truncate hover:underline">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
                           </div>
@@ -740,7 +748,7 @@ function PulseProducaoContent() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {fotosPendentes.map(f => {
                     const prod = producoes.find(x => x.id === f.producao_id);
-                    const cliente = prod?.lead_id ? (clientePorLead[prod.lead_id] || `LD-${String(prod.lead_id).padStart(4, '0')}`) : 'Produção manual';
+                    const cliente = rotuloCliente(prod?.lead_id ?? null);
                     const ocupado = avaliandoFotos.includes(f.id);
                     return (
                       <div key={f.id} className="bg-black/30 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
@@ -773,7 +781,7 @@ function PulseProducaoContent() {
               <div className="min-w-0">
                 <p className="text-amber-400 font-black text-xs uppercase tracking-wide flex items-center gap-1.5"><ListChecks size={13} /> Processo</p>
                 <p className="text-white font-black text-sm truncate">{processoProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {processoProducao.quantidade_produzida}</span></p>
-                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{processoProducao.lead_id ? (clientePorLead[processoProducao.lead_id] || `Venda LD-${String(processoProducao.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}</p>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{rotuloCliente(processoProducao.lead_id)}</p>
               </div>
               <button onClick={() => setProcessoId(null)} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
             </div>
@@ -841,7 +849,7 @@ function PulseProducaoContent() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
               <div className="min-w-0">
-                <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{detalheProducao.lead_id ? (clientePorLead[detalheProducao.lead_id] || `Venda LD-${String(detalheProducao.lead_id).padStart(4, '0')}`) : 'Sem cliente (produção manual)'}</p>
+                <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao.lead_id)}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
               </div>

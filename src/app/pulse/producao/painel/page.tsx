@@ -26,7 +26,6 @@ export default function PainelProducaoPage() {
   const [producoes, setProducoes] = useState<Producao[]>([]);
   const [entregas, setEntregas] = useState<EventoEntrega[]>([]);
   const [loading, setLoading] = useState(true);
-  const [clientePorLead, setClientePorLead] = useState<Record<number, string>>({});
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [agora, setAgora] = useState(() => new Date());
 
@@ -42,12 +41,6 @@ export default function PainelProducaoPage() {
         .gte('created_at', desde30d.toISOString()),
     ]);
     if (producoesData) setProducoes(producoesData as Producao[]);
-    // nome do cliente dono de cada projeto (só o nome — sem valor nem ID de venda, que o painel de TV não mostra)
-    const leadIds = [...new Set((producoesData || []).map((p: any) => p.lead_id).filter((x: any): x is number => !!x))];
-    if (leadIds.length > 0) {
-      const { data: leadsData } = await supabase.from('leads').select('id, empresa').in('id', leadIds);
-      setClientePorLead(Object.fromEntries((leadsData || []).map((l: any) => [l.id, l.empresa])));
-    }
     if (entregasData) setEntregas(entregasData as EventoEntrega[]);
     setAtualizadoEm(new Date());
     setLoading(false);
@@ -166,7 +159,8 @@ export default function PainelProducaoPage() {
               {atrasadas.map(p => (
                 <div key={p.id} className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
                   <div className="min-w-0">
-                    {p.lead_id && clientePorLead[p.lead_id] && <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{clientePorLead[p.lead_id]}</p>}
+                    {/* Painel fica à vista de toda a fábrica: número do pedido, nunca o nome do cliente. */}
+                    {p.lead_id && <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">Pedido LD-{String(p.lead_id).padStart(4, '0')}</p>}
                     <p className="text-white font-bold text-sm truncate">{p.produto_final_nome} × {p.quantidade_produzida}</p>
                     <p className="text-red-300 text-xs font-bold">{p.status === 'em_producao' ? ETAPAS_FABRICACAO[p.etapa_fabricacao_idx] : 'Aguardando entrega'}</p>
                   </div>

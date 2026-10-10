@@ -140,8 +140,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, perfil, loading, router]);
 
+  // Sair: escopo local (não depende de rede — com internet ruim, o signOut global falhava e o
+  // usuário ficava "preso" logado), limpa o estado e recarrega direto no login (no app
+  // instalado a navegação interna às vezes mantinha a tela antiga).
+  const sair = async () => {
+    limparCachePerfil();
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* segue saindo */ }
+    setUser(null); setPerfil(null); setEmpresa(null);
+    window.location.replace('/login');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, perfil, empresa, loading, signOut: () => { limparCachePerfil(); return supabase.auth.signOut(); } }}>
+    <AuthContext.Provider value={{ user, perfil, empresa, loading, signOut: sair }}>
       {(!loading || publicPage) ? children : <AuthLoadingShell />}
     </AuthContext.Provider>
   );

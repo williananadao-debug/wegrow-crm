@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck } from 'lucide-react';
+import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck, Factory, Printer } from 'lucide-react';
+import { loginCurto, slugLogin } from '@/lib/loginSemEmail';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
 
@@ -231,6 +232,42 @@ export default function TeamPage() {
     finally { setSaving(false); }
   };
 
+  // Acessos SEM e-mail em lote (equipe de fábrica): login "nome.sufixo" + senha inicial.
+  const [loteAberto, setLoteAberto] = useState(false);
+  const [loteNomes, setLoteNomes] = useState('');
+  const [loteSenha, setLoteSenha] = useState('');
+  const [loteSufixo, setLoteSufixo] = useState('');
+  const [loteCargo, setLoteCargo] = useState('producao');
+  const [loteResultado, setLoteResultado] = useState<{ nome: string; login?: string; erro?: string }[] | null>(null);
+  const [loteSenhaUsada, setLoteSenhaUsada] = useState('');
+  const [loteErro, setLoteErro] = useState<string | null>(null);
+  const abrirLote = () => {
+    // Sufixo sugerido: última palavra do nome da empresa que não seja LTDA/ME/etc.
+    const palavras = String(auth.empresa?.nome || '').split(/\s+/).map(slugLogin)
+      .filter(w => w && !['ltda', 'me', 'eireli', 'sa', 'epp', 'mei', 'cia', 'de', 'do', 'da'].includes(w));
+    setLoteSufixo(palavras[palavras.length - 1] || '');
+    setLoteNomes(''); setLoteSenha(''); setLoteCargo('producao'); setLoteResultado(null); setLoteErro(null);
+    setLoteAberto(true);
+  };
+  const criarLote = async () => {
+    setSaving(true); setLoteErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/team/criar-acessos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ nomes: loteNomes.split('\n'), senha: loteSenha, sufixo: loteSufixo, cargo: loteCargo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.erro || 'Erro ao criar acessos.');
+      setLoteResultado(json.resultados || []);
+      setLoteSenhaUsada(loteSenha);
+      carregarEquipe();
+    } catch (error: any) { setLoteErro(error.message); }
+    finally { setSaving(false); }
+  };
+
   const excluirUsuario = async () => {
     if (!editingUser) return;
     if (confirm(`Apagar ${editingUser.nome} de vez? Só funciona pra quem não tem histórico (cadastro feito por engano). Quem já trabalhou no sistema deve ser DESATIVADO.`)) {
@@ -268,9 +305,14 @@ export default function TeamPage() {
               <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{loading ? 'Carregando…' : (() => { const ativos = members.filter(m => !m.desativado_em).length; const inativos = members.length - ativos; return `${ativos} ${ativos === 1 ? 'membro ativo' : 'membros ativos'}${inativos ? ` · ${inativos} desativado${inativos > 1 ? 's' : ''}` : ''} · desempenho do mês atual`; })()}</p>
           </div>
           {isDirector && (
-              <button onClick={abrirModalNovo} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-2">
-                  <Plus size={16}/> Adicionar Membro
-              </button>
+              <div className="flex flex-wrap gap-2">
+                  <button onClick={abrirLote} title="Cria vários acessos sem e-mail (login + senha) — pra equipe de fábrica" className="bg-white/5 border border-white/10 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
+                      <Factory size={16}/> Acessos da fábrica
+                  </button>
+                  <button onClick={abrirModalNovo} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-2">
+                      <Plus size={16}/> Adicionar Membro
+                  </button>
+              </div>
           )}
       </div>
 
@@ -304,7 +346,7 @@ export default function TeamPage() {
                 </div>
 
                 <div className="space-y-1.5 text-[11px] text-slate-400">
-                  <p className="flex items-center gap-2 min-w-0"><Mail size={12} className="shrink-0 text-slate-600" /><span className="truncate">{m.email || '—'}</span></p>
+                  <p className="flex items-center gap-2 min-w-0"><Mail size={12} className="shrink-0 text-slate-600" /><span className="truncate">{loginCurto(m.email) ? `Login: ${loginCurto(m.email)}` : (m.email || '—')}</span></p>
                   <p className="flex items-center gap-2 min-w-0"><MapPin size={12} className="shrink-0 text-slate-600" /><span className="truncate">{m.unidade || 'Sem unidade'}</span></p>
                   <p className="flex items-center gap-2 min-w-0"><Fingerprint size={12} className="shrink-0 text-slate-600" /><span className="truncate font-mono">{m.cpf || 'CPF não cadastrado'}</span></p>
                 </div>
@@ -411,6 +453,70 @@ export default function TeamPage() {
                   )}
               </div>
            </div>
+        </div>
+      )}
+      {loteAberto && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-[#0B1120] border border-white/10 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b border-white/10 bg-[#0F172A]">
+              <h2 className="text-lg font-black uppercase italic text-white flex items-center gap-2"><Factory size={16} className="text-[#22C55E]"/> Acessos da fábrica</h2>
+              <button onClick={() => setLoteAberto(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={16}/></button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4" id="lote-impressao">
+              {loteResultado ? (
+                <>
+                  <p className="text-sm text-slate-300">Entrem em <b className="text-white">wegrow.app.br</b> com o login abaixo e a senha <b className="text-white font-mono">{loteSenhaUsada}</b>.</p>
+                  <div className="divide-y divide-white/5 border border-white/10 rounded-2xl">
+                    {loteResultado.map(r => (
+                      <div key={r.nome} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <span className="text-sm font-bold text-white truncate">{r.nome}</span>
+                        {r.login
+                          ? <span className="font-mono text-sm text-[#22C55E]">{r.login}</span>
+                          : <span className="text-[11px] text-red-400 text-right">{r.erro}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-500">Anote ou imprima agora — a senha não aparece de novo. Pra trocar depois: editar o membro → Resetar Senha.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">Pra quem não tem e-mail. Cada pessoa entra com um <b className="text-slate-200">login</b> (ex.: <span className="font-mono">helton.{loteSufixo || 'empresa'}</span>) e a senha que você definir. Nome repetido ganha número (fabio2).</p>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Nomes (um por linha)</label>
+                    <textarea value={loteNomes} onChange={e => setLoteNomes(e.target.value)} rows={8} placeholder={'Helton\nClaudecir\nFábio'} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] resize-y" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Final do login</label>
+                      <input value={loteSufixo} onChange={e => setLoteSufixo(slugLogin(e.target.value))} placeholder="travel" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Cargo</label>
+                      <select value={loteCargo} onChange={e => setLoteCargo(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold">
+                        <option value="producao">Produção</option>
+                        <option value="almoxarifado">Almoxarifado</option>
+                        <option value="vendedor">Vendedor</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Senha inicial (mín. 6 caracteres)</label>
+                    <input value={loteSenha} onChange={e => setLoteSenha(e.target.value)} autoComplete="new-password" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold font-mono outline-none focus:border-[#22C55E]" />
+                  </div>
+                  {loteErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{loteErro}</div>}
+                </>
+              )}
+            </div>
+            <div className="p-5 border-t border-white/10 bg-[#0F172A]">
+              {loteResultado ? (
+                <button type="button" onClick={() => window.print()} className="w-full bg-white/5 border border-white/10 text-white py-3.5 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 hover:bg-white/10"><Printer size={14}/> Imprimir lista</button>
+              ) : (
+                <button type="button" onClick={criarLote} disabled={saving || !loteNomes.trim() || loteSenha.length < 6 || !loteSufixo} className="w-full bg-[#22C55E] text-[#0B1120] py-3.5 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 disabled:opacity-40">
+                  {saving ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} Criar acessos
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />

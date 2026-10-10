@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { paraEmailDeLogin } from '@/lib/loginSemEmail';
 import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -22,7 +23,8 @@ export default function LoginPage() {
     // Autofill no mobile às vezes preenche o input sem disparar o onChange do React,
     // deixando o state desatualizado. Lê direto do form no submit para não depender disso.
     const formData = new FormData(e.currentTarget as HTMLFormElement);
-    const emailValue = (formData.get('email') as string) || email;
+    // Acesso da fábrica não tem e-mail: login curto ("helton.travel") vira o e-mail interno.
+    const emailValue = paraEmailDeLogin((formData.get('email') as string) || email);
     const passwordValue = (formData.get('password') as string) || password;
 
     try {
@@ -74,17 +76,20 @@ export default function LoginPage() {
         <form onSubmit={handleAuth} className="space-y-4">
           
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">E-mail Corporativo</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">E-mail ou login</label>
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
               <input
-                type="email"
+                type="text"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
                 name="email"
-                autoComplete="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"
-                placeholder="nome@wegrow.com"
+                placeholder="nome@empresa.com ou login"
                 required
               />
             </div>

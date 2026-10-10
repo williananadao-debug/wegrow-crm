@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { loginCurto } from '@/lib/loginSemEmail';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -68,6 +69,12 @@ export async function POST(request: Request) {
     if (updateError) {
         console.error('[team/reset-password] Erro ao redefinir senha:', updateError.message);
         return NextResponse.json({ erro: `Erro ao redefinir senha: ${updateError.message}` }, { status: 500 });
+    }
+
+    // Acesso sem e-mail (fábrica): não há pra onde mandar — devolve a senha pra tela.
+    const login = loginCurto(email);
+    if (login) {
+        return NextResponse.json({ ok: true, aviso: `Acesso sem e-mail — passe a senha pessoalmente (login: ${login})`, senhaTemp, email: login });
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';

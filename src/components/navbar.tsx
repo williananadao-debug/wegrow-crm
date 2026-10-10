@@ -192,7 +192,14 @@ export default function Navbar() {
             <span className="text-lg font-black italic text-white tracking-tighter truncate">{nomeMarca.toUpperCase()}</span>
           </div>
         </div>
-        <NotificationBell />
+        {/* Celular não tem a barra de cima do desktop: mostra quem está logado aqui. */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="text-right min-w-0 max-w-[110px]">
+            <p className="text-[11px] font-black text-white truncate leading-tight">{(perfil?.nome || 'Usuário').split(' ')[0]}</p>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate leading-tight">{perfil?.cargo === 'producao' ? 'Produção' : perfil?.cargo || ''}</p>
+          </div>
+          <NotificationBell />
+        </div>
       </div>
 
       {isMobileOpen && (

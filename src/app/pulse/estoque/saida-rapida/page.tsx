@@ -9,7 +9,7 @@ import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../../shared';
 
-type Leitura = { id: string; nome: string; sku: string; ok: boolean; mensagem: string; hora: string; servicoId?: number; movimentoId?: number; desfeita?: boolean };
+type Leitura = { id: string; nome: string; sku: string; ok: boolean; mensagem: string; hora: string; servicoId?: number; movimentoId?: number; desfeita?: boolean; quantidade?: number };
 type Linha = { servicoId: number; nome: string; sku: string; unidade: string; saldo: number; quantidade: number };
 type Comprovante = { codigo: string; data: string; solicitante: string; motivo: string; destino: string; observacao: string; linhas: (Linha & { saldoDepois: number })[] };
 
@@ -63,6 +63,9 @@ export default function SaidaRapidaPage() {
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const ultimaLeituraRef = useRef<{ texto: string; hora: number }>({ texto: '', hora: 0 });
   const processarCodigoRef = useRef<((texto: string) => void) | null>(null);
+  // Quantidade por leitura — item pequeno (parafuso, arruela) sai de vários de uma vez. Volta
+  // pra 1 depois de cada leitura certa, pra não repetir uma retirada grande sem querer.
+  const [qtdLeitura, setQtdLeitura] = useState(1);
 
   useEffect(() => {
     if (!scannerAberto) return;
@@ -142,27 +145,30 @@ export default function SaidaRapidaPage() {
     return servicos.filter(s => s.nome.toLowerCase().includes(t) || (s.sku || '').toLowerCase().includes(t)).slice(0, 6);
   }, [codigo, servicos]);
 
-  const adicionarLinha = (s: ServicoConfig) => {
+  const adicionarLinha = (s: ServicoConfig, qtd = 1) => {
     setLinhas(prev => {
       const existe = prev.find(l => l.servicoId === s.id);
-      if (existe) return prev.map(l => l.servicoId === s.id ? { ...l, quantidade: l.quantidade + 1 } : l);
-      return [...prev, { servicoId: s.id, nome: s.nome, sku: s.sku || '', unidade: s.unidade || 'un', saldo: s.estoque ?? 0, quantidade: 1 }];
+      const saldo = s.estoque ?? 0;
+      if (existe) return prev.map(l => l.servicoId === s.id ? { ...l, quantidade: Math.min(saldo, l.quantidade + qtd) } : l);
+      return [...prev, { servicoId: s.id, nome: s.nome, sku: s.sku || '', unidade: s.unidade || 'un', saldo, quantidade: Math.min(saldo, qtd) }];
     });
   };
 
-  const processarImediato = async (s: ServicoConfig, sku: string) => {
+  const processarImediato = async (s: ServicoConfig, sku: string, qtd = 1) => {
     const atual = s.estoque ?? 0;
     if (atual <= 0) { tocar(false); registrarLeitura({ nome: s.nome, sku, ok: false, mensagem: 'Sem estoque disponível pra dar saída.' }); return; }
-    const novo = atual - 1;
+    if (qtd > atual) { tocar(false); registrarLeitura({ nome: s.nome, sku, ok: false, mensagem: `Pediu ${qtd}, mas só há ${atual} em estoque.` }); return; }
+    const novo = atual - qtd;
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
     const { data: mov } = await supabase.from('estoque_movimentacoes').insert([{
-      empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: -1, tipo: 'ajuste', motivo, destino: destino || null,
+      empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: -qtd, tipo: 'ajuste', motivo, destino: destino || null,
       producao_id: producaoId ? Number(producaoId) : null, user_id: user?.id, observacao: 'Saída via leitor de código de barras.',
     }]).select('id').single();
     alertarEstoqueBaixoSeCruzou(s.id, atual, novo, s.estoque_minimo ?? 5);
     tocar(true);
-    registrarLeitura({ nome: s.nome, sku, ok: true, mensagem: `Saída registrada — estoque agora: ${novo}`, servicoId: s.id, movimentoId: mov?.id });
+    registrarLeitura({ nome: s.nome, sku, ok: true, mensagem: `Saída de ${qtd} registrada — estoque agora: ${novo}`, servicoId: s.id, movimentoId: mov?.id, quantidade: qtd });
+    setQtdLeitura(1);
   };
 
   const processarCodigo = async (texto: string) => {
@@ -175,11 +181,14 @@ export default function SaidaRapidaPage() {
       tocar(false);
       registrarLeitura({ nome: '—', sku: t, ok: false, mensagem: varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.' });
     } else if (modo === 'imediato') {
-      await processarImediato(servico, t);
+      await processarImediato(servico, t, qtdLeitura);
     } else {
       const jaNaLista = linhas.find(l => l.servicoId === servico.id)?.quantidade || 0;
-      if (jaNaLista + 1 > (servico.estoque ?? 0)) { tocar(false); setErro(`${servico.nome}: só há ${servico.estoque ?? 0} em estoque.`); }
-      else { adicionarLinha(servico); tocar(true); }
+      if (jaNaLista + qtdLeitura > (servico.estoque ?? 0)) { tocar(false); setErro(`${servico.nome}: só há ${servico.estoque ?? 0} em estoque${jaNaLista ? ` (${jaNaLista} já na lista)` : ''}.`); }
+      else {
+        adicionarLinha(servico, qtdLeitura); tocar(true); setQtdLeitura(1);
+        registrarLeitura({ nome: servico.nome, sku: t, ok: true, mensagem: `${qtdLeitura} adicionado(s) à requisição.` });
+      }
     }
     setProcessando(false); setCodigo('');
     inputRef.current?.focus();
@@ -191,10 +200,11 @@ export default function SaidaRapidaPage() {
   const desfazer = async (l: Leitura) => {
     if (!l.movimentoId || !l.servicoId || l.desfeita) return;
     const s = servicos.find(x => x.id === l.servicoId); if (!s) return;
-    const novo = (s.estoque ?? 0) + 1;
+    const qtd = l.quantidade || 1;
+    const novo = (s.estoque ?? 0) + qtd;
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
-    await supabase.from('estoque_movimentacoes').insert([{ empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: 1, tipo: 'estorno', motivo: 'uso_interno', user_id: user?.id, observacao: 'Desfeita a saída via leitor (erro de leitura).' }]);
+    await supabase.from('estoque_movimentacoes').insert([{ empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: qtd, tipo: 'estorno', motivo: 'uso_interno', user_id: user?.id, observacao: 'Desfeita a saída via leitor (erro de leitura).' }]);
     setLeituras(prev => prev.map(x => x.id === l.id ? { ...x, desfeita: true, mensagem: 'Saída desfeita — estoque devolvido.' } : x));
   };
 
@@ -283,12 +293,21 @@ export default function SaidaRapidaPage() {
               <div className="flex items-center gap-3">
                 <ScanLine size={26} className="text-[var(--cor-primaria)] shrink-0" />
                 <input ref={inputRef} value={codigo} onChange={e => setCodigo(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') processarCodigo(codigo); }} autoFocus disabled={processando}
-                  placeholder="Escaneie o código ou digite o nome do item + Enter" className="flex-1 bg-black/30 border-2 border-white/10 focus:border-[var(--cor-primaria)] rounded-2xl px-4 py-3.5 text-white text-base font-mono font-bold outline-none disabled:opacity-50" />
+                  placeholder="Escaneie o código ou digite o nome do item + Enter" className="flex-1 min-w-0 bg-black/30 border-2 border-white/10 focus:border-[var(--cor-primaria)] rounded-2xl px-4 py-3.5 text-white text-base font-mono font-bold outline-none disabled:opacity-50" />
+              </div>
+              <div className="flex items-center justify-between gap-3 mt-3">
+                <p className="text-[10px] text-slate-500">Item pequeno? Ajuste a quantidade antes de ler.</p>
+                <div className="flex items-center gap-1.5 shrink-0" title="Quantidade retirada por leitura">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-0.5">Qtd</span>
+                  <button type="button" onClick={() => setQtdLeitura(q => Math.max(1, q - 1))} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 active:bg-white/15"><Minus size={14} /></button>
+                  <input type="number" inputMode="numeric" min={1} value={qtdLeitura} onChange={e => setQtdLeitura(Math.max(1, Math.floor(Number(e.target.value) || 1)))} className="w-14 h-9 bg-black/30 border border-white/10 rounded-xl text-center text-white font-black text-base outline-none focus:border-[var(--cor-primaria)]" />
+                  <button type="button" onClick={() => setQtdLeitura(q => q + 1)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 active:bg-white/15"><Plus size={14} /></button>
+                </div>
               </div>
               {sugestoes.length > 0 && (
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-1.5">
                   {sugestoes.map(s => (
-                    <button key={s.id} onClick={() => { setCodigo(''); modo === 'imediato' ? processarImediato(s, s.sku || s.nome) : ((s.estoque ?? 0) > 0 ? (adicionarLinha(s), tocar(true)) : (tocar(false), setErro(`${s.nome}: sem estoque.`))); inputRef.current?.focus(); }}
+                    <button key={s.id} onClick={() => { setCodigo(''); modo === 'imediato' ? processarImediato(s, s.sku || s.nome, qtdLeitura) : ((s.estoque ?? 0) > 0 ? (adicionarLinha(s, qtdLeitura), setQtdLeitura(1), tocar(true)) : (tocar(false), setErro(`${s.nome}: sem estoque.`))); inputRef.current?.focus(); }}
                       className="text-left bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs">
                       <p className="font-bold truncate">{s.nome}</p><p className="text-[10px] text-slate-500">{s.sku || 'sem SKU'} · estoque {s.estoque ?? 0}{s.localizacao ? ` · 📍 ${s.localizacao}` : ''}</p>
                     </button>
@@ -380,10 +399,19 @@ export default function SaidaRapidaPage() {
               <div className="absolute inset-8 border-2 border-[var(--cor-primaria)]/70 rounded-2xl pointer-events-none" />
             </div>
             <div className="p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 bg-white/[0.03] border border-white/10 rounded-2xl px-3 py-2">
+                <span className="text-[11px] font-bold text-slate-300">Quantidade da próxima leitura</span>
+                <div className="flex items-center gap-1.5 shrink-0" title="Quantidade retirada por leitura">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-0.5">Qtd</span>
+                  <button type="button" onClick={() => setQtdLeitura(q => Math.max(1, q - 1))} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 active:bg-white/15"><Minus size={14} /></button>
+                  <input type="number" inputMode="numeric" min={1} value={qtdLeitura} onChange={e => setQtdLeitura(Math.max(1, Math.floor(Number(e.target.value) || 1)))} className="w-14 h-9 bg-black/30 border border-white/10 rounded-xl text-center text-white font-black text-base outline-none focus:border-[var(--cor-primaria)]" />
+                  <button type="button" onClick={() => setQtdLeitura(q => q + 1)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 active:bg-white/15"><Plus size={14} /></button>
+                </div>
+              </div>
               {scannerErro ? (
                 <p className="text-red-400 text-xs font-bold text-center">{scannerErro}</p>
               ) : (
-                <p className="text-slate-400 text-xs text-center">Aponte a câmera pro código de barras do item.</p>
+                <p className="text-slate-400 text-xs text-center">Ajuste a quantidade e aponte a câmera pro código de barras.</p>
               )}
               {erro && <p className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{erro}</p>}
               {leituras[0] && (

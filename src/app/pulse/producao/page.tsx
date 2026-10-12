@@ -600,7 +600,8 @@ function PulseProducaoContent() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+      {/* Chão de fábrica: sem cards de contagem — o foco é a linha de produção. */}
+      {!ocultarCliente && <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
         <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Hammer size={10} /> Em produção</p>
           <p className="text-2xl font-black text-white mt-1">{loading ? '…' : emProducaoCount}</p>
@@ -613,11 +614,11 @@ function PulseProducaoContent() {
           <p className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-slate-500'}`}><AlertTriangle size={10} /> Atrasadas</p>
           <p className={`text-2xl font-black mt-1 ${atrasadasCount > 0 ? 'text-red-400' : 'text-white'}`}>{loading ? '…' : atrasadasCount}</p>
         </div>
-      </div>
+      </div>}
 
       <div className="flex items-center gap-2 mb-3">
         <ClipboardList size={15} className="text-slate-500" />
-        <h3 className="font-black uppercase text-sm text-slate-300">Fluxo de produção</h3>
+        <h3 className="font-black uppercase text-sm text-slate-300">{ocultarCliente ? 'Linha de produção' : 'Fluxo de produção'}</h3>
       </div>
 
       {erroCarga && !loading && (
@@ -629,8 +630,8 @@ function PulseProducaoContent() {
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-600" /></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {COLUNAS.map(col => {
+        <div className={`grid grid-cols-1 gap-4 ${ocultarCliente ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+          {(ocultarCliente ? COLUNAS.filter(c => c.status !== 'entregue') : COLUNAS).map(col => {
             const itens = producoes.filter(p => p.status === col.status);
             const Icon = col.icon;
             return (
@@ -708,6 +709,13 @@ function PulseProducaoContent() {
                           <img src={fotosPorProducao[p.id]} alt="" className="mt-2 rounded-lg w-full h-20 object-cover border border-white/10" />
                         )}
 
+                        {ocultarCliente ? (
+                          p.previsao_entrega ? (
+                            <p className={`mt-2 text-[10px] font-bold ${atrasada ? 'text-red-400' : 'text-slate-500'}`}>
+                              Entrega prevista: {new Date(p.previsao_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </p>
+                          ) : null
+                        ) : (
                         <div className="grid grid-cols-2 gap-1.5 mt-2">
                           <input type="date" value={p.previsao_entrega || ''} onChange={e => atualizarPrazo(p, e.target.value)}
                             className={`bg-black/30 border rounded-lg px-2 py-1 text-[10px] outline-none focus:border-[var(--cor-primaria)] ${atrasada ? 'border-red-500/40 text-red-400' : 'border-white/10 text-slate-300'}`} />
@@ -721,13 +729,14 @@ function PulseProducaoContent() {
                             <span className="text-[10px] text-slate-500 font-bold truncate self-center">{p.responsavel_id && usersMap[p.responsavel_id] ? usersMap[p.responsavel_id] : '—'}</span>
                           )}
                         </div>
+                        )}
 
                         <div className="flex items-center justify-end mt-2.5 pt-2.5 border-t border-white/5">
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => abrirDetalhe(p)} className="flex items-center gap-1 text-slate-500 hover:text-white text-[9px] font-black uppercase">
                               <MessageSquare size={11} /> Detalhes
                             </button>
-                            {proximaInfo && (
+                            {proximaInfo && (proxima !== 'entregue' || isLideranca) && (
                               <button onClick={() => avancarEtapa(p)} className="flex items-center gap-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 hover:text-white uppercase tracking-widest transition-all">
                                 Marcar {proximaInfo.label}
                               </button>
@@ -888,7 +897,7 @@ function PulseProducaoContent() {
             )}
 
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              {(aditivos.length > 0 || detalheProducao.status !== 'entregue') && (
+              {!ocultarCliente && (aditivos.length > 0 || detalheProducao.status !== 'entregue') && (
                 <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aditivos</p>

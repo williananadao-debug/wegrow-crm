@@ -10,6 +10,7 @@ import {
 import { SkeletonPage } from '@/components/Skeleton';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { resumirVencimentos, temAlgo, hojeLocal, diasAte, DIAS_AVISO_VENCIMENTO, type ResumoLado } from '@/lib/vencimentosFinanceiros';
 import { useUnidades } from '@/lib/useUnidades';
 
 type Atividade = { id: number; tipo: string; descricao: string; created_at: string; };
@@ -57,7 +58,8 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
   const perfil = auth.perfil;
   const user = auth.user;
   const { unidades } = useUnidades(perfil?.empresa_id);
-  const hoje = new Date().toISOString().substring(0, 10);
+  // Data local — toISOString() é UTC e virava o dia às 21h (conta 'vencia' antes da hora).
+  const hoje = hojeLocal();
 
   const [aba, setAba] = useState<'alertas' | 'inadimplencia' | 'conciliacao' | 'contas_pagar' | 'contas_receber' | 'dre'>('alertas');
   const [leads, setLeads] = useState<LeadFinance[]>([]);
@@ -320,17 +322,31 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
     setCarregandoDetalhePagamento(false);
   };
 
+  // "Vence hoje / amanhã / em N dias" nos próximos dias, antes de virar "Atrasado".
+  const statusPrazo = (venc: string | null | undefined, atrasadoLabel: string) => {
+    if (!venc) return { label: 'Sem vencimento', cls: 'text-slate-400 bg-white/5' };
+    if (venc < hoje) return { label: `${atrasadoLabel} · ${-diasAte(venc, hoje)}d`, cls: 'text-red-400 bg-red-500/10' };
+    const dias = diasAte(venc, hoje);
+    if (dias === 0) return { label: 'Vence hoje', cls: 'text-orange-300 bg-orange-500/15 ring-1 ring-orange-500/30' };
+    if (dias <= DIAS_AVISO_VENCIMENTO) return { label: dias === 1 ? 'Vence amanhã' : `Vence em ${dias} dias`, cls: 'text-amber-300 bg-amber-500/15' };
+    return { label: 'No prazo', cls: 'text-emerald-300/80 bg-emerald-500/5' };
+  };
   const statusCobrancaInfo = (c: any) => {
     if (c.cancelada) return { label: 'Cancelada', cls: 'text-slate-500 bg-slate-500/10' };
     if (c.pago) return { label: 'Pago', cls: 'text-emerald-400 bg-emerald-500/10' };
-    if (c.vencimento && c.vencimento < hoje) return { label: 'Atrasada', cls: 'text-red-400 bg-red-500/10' };
-    return { label: 'No prazo', cls: 'text-amber-400 bg-amber-500/10' };
+    return statusPrazo(c.vencimento, 'Atrasada');
   };
   const statusLancamentoInfo = (d: Despesa) => {
     if (d.status === 'pago') return { label: 'Pago', cls: 'text-emerald-400 bg-emerald-500/10' };
-    if (d.data_vencimento < hoje) return { label: 'Atrasado', cls: 'text-red-400 bg-red-500/10' };
-    return { label: 'No prazo', cls: 'text-amber-400 bg-amber-500/10' };
+    return statusPrazo(d.data_vencimento, 'Atrasado');
   };
+
+  // Aviso do topo: vencidas e vencendo (a pagar e a receber, incluindo boletos das vendas).
+  const resumoVenc = useMemo(() => resumirVencimentos({
+    pagar: despesas, receber: entradas,
+    cobrancas: leadsComCobranca.flatMap(l => (Array.isArray(l.cobrancas_manuais) ? l.cobrancas_manuais : [])),
+    hoje,
+  }), [despesas, entradas, leadsComCobranca, hoje]);
 
   const excluirDespesa = async (id: number) => {
     if (!confirm('Excluir esta despesa?')) return;
@@ -640,6 +656,37 @@ function FinanceiroPadrao({ isCDL }: { isCDL: boolean }) {
           </p>
         </div>
       </header>
+
+      {/* Aviso de vencimentos — aparece em qualquer aba */}
+      {temAlgo(resumoVenc) && (() => {
+        const brl = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const bloco = (titulo: string, l: ResumoLado, abaAlvo: typeof aba) => {
+          const total = l.vencidas.qtd + l.hoje.qtd + l.proximas.qtd;
+          if (!total) return null;
+          return (
+            <button onClick={() => setAba(abaAlvo)} className="flex-1 min-w-[240px] text-left rounded-2xl bg-black/20 border border-white/10 hover:border-white/25 px-4 py-3 transition-colors">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-1.5">{titulo}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold">
+                {l.vencidas.qtd > 0 && <span className="text-red-400">{l.vencidas.qtd} vencida{l.vencidas.qtd > 1 ? 's' : ''} · {brl(l.vencidas.valor)}</span>}
+                {l.hoje.qtd > 0 && <span className="text-orange-300">{l.hoje.qtd} vence{l.hoje.qtd > 1 ? 'm' : ''} hoje · {brl(l.hoje.valor)}</span>}
+                {l.proximas.qtd > 0 && <span className="text-amber-300">{l.proximas.qtd} em até {DIAS_AVISO_VENCIMENTO} dias · {brl(l.proximas.valor)}</span>}
+              </div>
+            </button>
+          );
+        };
+        const temVencida = resumoVenc.pagar.vencidas.qtd + resumoVenc.receber.vencidas.qtd > 0;
+        return (
+          <div className={`mb-4 md:mb-5 rounded-2xl border p-3 md:p-4 ${temVencida ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+            <p className={`text-xs font-black uppercase tracking-widest mb-2.5 flex items-center gap-2 ${temVencida ? 'text-red-300' : 'text-amber-300'}`}>
+              <AlertTriangle size={14} /> {temVencida ? 'Pagamentos vencidos' : 'Pagamentos vencendo'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {bloco('Contas a pagar', resumoVenc.pagar, 'contas_pagar')}
+              {bloco('Contas a receber', resumoVenc.receber, 'contas_receber')}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Abas */}
       <div className="faixa-scroll md:flex-wrap gap-2 mb-4 md:mb-6 border-b border-white/5 pb-3 md:pb-4 -mx-4 px-4 md:mx-0 md:px-0">

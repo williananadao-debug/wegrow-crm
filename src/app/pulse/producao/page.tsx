@@ -21,6 +21,9 @@ type Producao = {
   status: StatusProducao; previsao_entrega: string | null; responsavel_id: string | null; lead_id: number | null;
   etapa_fabricacao_idx: number;
   checklist_feito?: ChecklistFeito | null;
+  // null = etapa atual aguardando a fábrica clicar em "Iniciar" (undefined = migration ainda
+  // não rodou: trata como iniciada pra não travar ninguém).
+  etapa_iniciada_em?: string | null;
 };
 type EventoProducao = {
   id: number; tipo: 'status' | 'etapa' | 'comentario' | 'anexo'; texto: string | null; foto_url: string | null;
@@ -221,6 +224,10 @@ function PulseProducaoContent() {
   const avancarEtapa = async (p: Producao) => {
     const proxima = PROXIMA_ETAPA[p.status];
     if (!proxima) return;
+    if (p.status === 'em_producao' && aguardandoInicio(p)) {
+      alert(`A etapa "${ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]}" ainda não foi iniciada.`);
+      return;
+    }
     if (p.status === 'em_producao' && !etapaAtualCompleta(p)) {
       alert(`Finalize o checklist da etapa "${ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]}" antes de marcar como concluída.`);
       return;
@@ -273,7 +280,37 @@ function PulseProducaoContent() {
     return feitosDaEtapa(p, nome) >= itensDaEtapa(nome).length;
   };
 
+  const aguardandoInicio = (p: Producao) => p.status === 'em_producao' && p.etapa_iniciada_em === null;
+  // Dias parado = desde a conclusão da etapa anterior (ou a criação da produção) até agora.
+  const diasParado = (p: Producao) => {
+    const desde = etapaIniciadaEmPorProducao[p.id] || p.created_at;
+    return Math.max(0, Math.floor((Date.now() - new Date(desde).getTime()) / 86400000));
+  };
+  const [iniciandoId, setIniciandoId] = useState<number | null>(null);
+  const iniciarEtapa = async (p: Producao) => {
+    setIniciandoId(p.id);
+    try {
+      const agora = new Date().toISOString();
+      const etapa = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+      const { error } = await supabase.from('pulse_producoes').update({ etapa_iniciada_em: agora, etapa_iniciada_por: user?.id || null }).eq('id', p.id);
+      if (error) throw error;
+      const dias = diasParado(p);
+      await supabase.from('pulse_producao_eventos').insert([{
+        producao_id: p.id, tipo: 'status', user_id: user?.id,
+        texto: `Etapa iniciada: ${etapa}.${dias > 0 ? ` Ficou ${dias} dia(s) aguardando início.` : ''}`,
+      }]);
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_iniciada_em: agora } : x));
+      if (detalheId === p.id) carregarEventos(p.id);
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      alert(/etapa_iniciada/.test(msg) ? 'Falta rodar a migration 20261013120000_producao_inicio_etapa.sql no Supabase.' : 'Erro ao iniciar etapa: ' + mensagemErroRede(err));
+    } finally {
+      setIniciandoId(null);
+    }
+  };
+
   const alternarItem = async (p: Producao, etapa: string, item: string) => {
+    if (aguardandoInicio(p)) { alert('Inicie a etapa antes de marcar o checklist.'); return; }
     setMarcandoItem(`${p.id}|${etapa}|${item}`);
     try {
       // Lê o atual antes de gravar: duas pessoas marcando ao mesmo tempo não apagam o item do outro.
@@ -297,6 +334,7 @@ function PulseProducaoContent() {
 
   const concluirEtapa = async (p: Producao, original?: File) => {
     if (p.etapa_fabricacao_idx >= ETAPAS_FABRICACAO.length - 1) return;
+    if (aguardandoInicio(p)) { alert('Essa etapa ainda não foi iniciada.'); return; }
     if (!etapaAtualCompleta(p)) { alert('Finalize todos os itens do checklist antes de concluir a etapa.'); return; }
     setConcluindoEtapaId(p.id);
     try {
@@ -313,7 +351,11 @@ function PulseProducaoContent() {
       const etapaConcluida = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
       const totalItens = itensDaEtapa(etapaConcluida).length;
       // Só atualiza a tela depois de gravar (antes o erro era ignorado e a tela mentia).
-      const { error: errEtapa } = await supabase.from('pulse_producoes').update({ etapa_fabricacao_idx: novoIdx }).eq('id', p.id);
+      // A próxima etapa começa "aguardando início" (se a migration já rodou).
+      const iniciouColuna = p.etapa_iniciada_em !== undefined;
+      const { error: errEtapa } = await supabase.from('pulse_producoes')
+        .update(iniciouColuna ? { etapa_fabricacao_idx: novoIdx, etapa_iniciada_em: null, etapa_iniciada_por: null } : { etapa_fabricacao_idx: novoIdx })
+        .eq('id', p.id);
       if (errEtapa) throw errEtapa;
       const { error: errEvento } = await supabase.from('pulse_producao_eventos').insert([{
         producao_id: p.id, tipo: 'etapa',
@@ -321,7 +363,7 @@ function PulseProducaoContent() {
         foto_url: fotoUrl, user_id: user?.id,
       }]);
       if (errEvento) throw errEvento;
-      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx } : x));
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx, ...(iniciouColuna ? { etapa_iniciada_em: null } : {}) } : x));
       if (fotoUrl) setFotosPorProducao(prev => ({ ...prev, [p.id]: fotoUrl! }));
       setEtapaIniciadaEmPorProducao(prev => ({ ...prev, [p.id]: new Date().toISOString() }));
       if (detalheId === p.id) carregarEventos(p.id);
@@ -679,8 +721,24 @@ function PulseProducaoContent() {
                         {p.status === 'em_producao' && (() => {
                           const nomeEtapaAtual = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
                           const prazoEtapa = PRAZOS_ETAPA[nomeEtapaAtual];
-                          const inicioEtapa = etapaIniciadaEmPorProducao[p.id] || p.created_at;
+                          const inicioEtapa = p.etapa_iniciada_em || etapaIniciadaEmPorProducao[p.id] || p.created_at;
                           const diasNaEtapa = Math.floor((Date.now() - new Date(inicioEtapa).getTime()) / 86400000);
+                          if (aguardandoInicio(p)) {
+                            const dias = diasParado(p);
+                            return (
+                              <div className={`mt-2 rounded-xl border p-2.5 ${dias >= 3 ? 'border-red-500/40 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className={`text-[10px] font-black uppercase tracking-wide ${dias >= 3 ? 'text-red-300' : 'text-amber-300'}`}>Aguardando início · {nomeEtapaAtual}</p>
+                                    <p className={`text-[11px] font-black ${dias >= 3 ? 'text-red-400' : 'text-amber-400'}`}>Parado há {dias} dia{dias === 1 ? '' : 's'}</p>
+                                  </div>
+                                  <button onClick={() => iniciarEtapa(p)} disabled={iniciandoId === p.id} className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-[#0B1120] rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-1">
+                                    {iniciandoId === p.id ? <Loader2 size={11} className="animate-spin" /> : <Hammer size={11} />} Iniciar
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
                           return (
                           <div className="flex items-center justify-between mt-1.5 gap-1.5">
                             <span className="text-[9px] text-slate-500 font-bold truncate">{nomeEtapaAtual}</span>
@@ -818,6 +876,7 @@ function PulseProducaoContent() {
                 const emProducao = p.status === 'em_producao';
                 const concluida = !emProducao || idx < p.etapa_fabricacao_idx;
                 const atual = emProducao && idx === p.etapa_fabricacao_idx;
+                const naoIniciada = atual && aguardandoInicio(p);
                 const itens = itensDaEtapa(etapa);
                 const marcados = p.checklist_feito?.[etapa] || {};
                 const completa = itens.every(i => marcados[i]);
@@ -836,7 +895,7 @@ function PulseProducaoContent() {
                           const feito = !!marcados[item];
                           const chave = `${p.id}|${etapa}|${item}`;
                           return (
-                            <button key={item} disabled={!atual || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
+                            <button key={item} disabled={!atual || naoIniciada || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
                               className={`w-full flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1.5 ${atual ? 'hover:bg-white/5' : ''} ${feito ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
                               {marcandoItem === chave ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : feito ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />}
                               <span>{item}</span>
@@ -845,7 +904,15 @@ function PulseProducaoContent() {
                         })}
                       </div>
                     )}
-                    {atual && !ultima && (
+                    {naoIniciada && (
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold text-amber-300">Aguardando início · parado há {diasParado(p)} dia(s)</p>
+                        <button onClick={() => iniciarEtapa(p)} disabled={iniciandoId === p.id} className="bg-amber-500 hover:bg-amber-400 text-[#0B1120] rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-1.5">
+                          {iniciandoId === p.id ? <Loader2 size={12} className="animate-spin" /> : <Hammer size={12} />} Iniciar etapa
+                        </button>
+                      </div>
+                    )}
+                    {atual && !ultima && !naoIniciada && (
                       <div className="flex gap-2 mt-3">
                         <button onClick={() => concluirEtapa(p)} disabled={!completa || concluindoEtapaId === p.id}
                           className="flex-1 bg-amber-500 hover:bg-amber-400 text-[#0B1120] py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center justify-center gap-1.5">
@@ -858,7 +925,7 @@ function PulseProducaoContent() {
                         </label>
                       </div>
                     )}
-                    {atual && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Marque todos os itens para liberar a conclusão da etapa.</p>}
+                    {atual && !naoIniciada && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Marque todos os itens para liberar a conclusão da etapa.</p>}
                     {atual && ultima && completa && <p className="text-[10px] text-emerald-400 font-bold mt-2">Última etapa completa — pode usar &quot;Marcar Concluída&quot; no card.</p>}
                   </div>
                 );

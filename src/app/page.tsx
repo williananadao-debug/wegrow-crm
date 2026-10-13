@@ -4,12 +4,13 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
-  BarChart3, Zap, Users, Briefcase, CheckCircle,
+  BarChart3, Users, Briefcase, CheckCircle,
   MapPin, Mail, Check, MessageCircle, PenLine, Wallet, ChevronDown,
   Loader2, Send, Brain, Activity, Bot, LayoutGrid, Link2,
   Radar, HardHat, Megaphone, Scale
 } from 'lucide-react';
-import { Reveal, TiltCard, Contador, OrbitaLeve, TelaSistema } from '@/components/site/efeitos';
+import { Reveal, TiltCard, Contador, OrbitaLeve, TelaSistema, TelaEstoque, VideoDepoimento } from '@/components/site/efeitos';
+import { Barcode, Boxes, Factory, FileText, ScanLine, Truck, Quote } from 'lucide-react';
 
 // Site institucional (wegrow.app.br). Visual com cena 3D no topo (components/site/Hero3D,
 // carregada só no navegador) e animações de entrada/efeitos em components/site/efeitos.
@@ -312,6 +313,37 @@ const FEATURES = [
 
 const MODULOS_3D = [...PRODUTOS, ...VERTICAIS];
 
+// Os dois produtos carro-chefe ganham seção própria; os demais módulos ficam num bloco compacto.
+const CRM_DESTAQUES = [
+  { icon: <LayoutGrid size={18} />, t: 'Funil visual por etapas', d: 'Kanban arrasta-e-solta com as etapas do seu processo, filtros por vendedor, unidade e período.' },
+  { icon: <PenLine size={18} />, t: 'Proposta e contrato com assinatura', d: 'Monta a proposta pelo catálogo, gera o contrato em PDF e manda pra assinar eletronicamente.' },
+  { icon: <Target size={18} />, t: 'Metas e ranking', d: 'Meta por vendedor e por equipe, venda contada no mês em que foi fechada de verdade.' },
+  { icon: <MapPin size={18} />, t: 'Visitas e agenda de campo', d: 'Registro de visitas com relatório por palavra-chave, check-in e app que funciona offline.' },
+  { icon: <ShieldCheck size={18} />, t: 'Risco de crédito por CNPJ', d: 'Semáforo verde/amarelo/vermelho antes de fechar, com cadastro preenchido pelo CNPJ.' },
+  { icon: <Bot size={18} />, t: 'IA de vendas (THOR)', d: 'Lista de clientes pra resgatar, alertas de churn e relatórios narrados em português.' },
+];
+
+const PULSE_DESTAQUES = [
+  { icon: <Boxes size={18} />, t: 'Estoque com mínimo e reposição', d: 'Saldo em tempo real, alerta de estoque baixo e sugestão de compra pelo consumo dos últimos dias.' },
+  { icon: <FileText size={18} />, t: 'Entrada pela nota fiscal', d: 'Notas de compra capturadas na SEFAZ ou lidas por IA pela foto — itens entram no estoque sem digitar.' },
+  { icon: <ScanLine size={18} />, t: 'Saída pelo código de barras', d: 'O time de fábrica lê o SKU com a câmera do celular e escolhe a quantidade. Kardex completo.' },
+  { icon: <Factory size={18} />, t: 'Produção com etapas e checklist', d: 'Venda vira ordem de produção, cada etapa tem checklist, fotos e contador de dias parado.' },
+  { icon: <Barcode size={18} />, t: 'Ficha técnica e custo', d: 'Matéria-prima baixa sozinha pela ficha técnica do produto, com custo médio e margem.' },
+  { icon: <Truck size={18} />, t: 'NF-e e portal do cliente', d: 'Emite a nota de faturamento e de entrega, e o cliente acompanha a produção com fotos aprovadas.' },
+];
+
+// Depoimento em vídeo. Preencher com o link do vídeo do Douglas — enquanto youtubeId/mp4
+// estiverem vazios a seção não aparece no site.
+const DEPOIMENTO: { youtubeId?: string; mp4?: string; capa?: string; nome: string; cargo: string; empresa: string; frase: string } = {
+  youtubeId: '',
+  mp4: '',
+  nome: 'Douglas',
+  cargo: '',
+  empresa: '',
+  frase: '',
+};
+const temDepoimento = !!(DEPOIMENTO.youtubeId || DEPOIMENTO.mp4);
+
 const SEGMENTOS = ['Indústria', 'Comércio & Atacado', 'Serviços & Agências', 'Mídia & Broadcasting', 'Licitações', 'Construção', 'Advocacia', 'Fábricas sob encomenda', 'Distribuidoras', 'Representação comercial'];
 
 const Hero3D = dynamic(() => import('@/components/site/Hero3D'), { ssr: false });
@@ -353,28 +385,39 @@ function Secao({ id, rotulo, titulo, subtitulo, children, className = '' }: { id
   );
 }
 
-function CardModulo({ m, i }: { m: typeof PRODUTOS[number]; i: number }) {
+function Destaque({ id, cor, rotulo, titulo, texto, itens, visual, invertido }: {
+  id: string; cor: string; rotulo: string; titulo: React.ReactNode; texto: string;
+  itens: { icon: React.ReactNode; t: string; d: string }[]; visual: React.ReactNode; invertido?: boolean;
+}) {
   return (
-    <Reveal delay={i * 90} className="h-full">
-      <TiltCard cor={m.hex} className="h-full rounded-[28px]">
-        <div className="relative h-full flex flex-col rounded-[28px] p-7 bg-gradient-to-b from-white/[0.07] to-white/[0.015] border border-white/10 overflow-hidden group">
-          <div className="absolute -top-16 -right-16 w-44 h-44 rounded-full blur-3xl opacity-25 group-hover:opacity-50 transition-opacity" style={{ background: m.hex }} />
-          <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center mb-6 border" style={{ color: m.hex, borderColor: `${m.hex}40`, background: `${m.hex}14`, boxShadow: `0 0 30px ${m.hex}30` }}>
-            {m.icon}
-          </div>
-          <h3 className="relative text-2xl font-black text-white mb-1 tracking-tight">{m.nome}</h3>
-          <p className="relative text-[10px] font-black uppercase tracking-[0.2em] mb-4" style={{ color: m.hex }}>{m.tagline}</p>
-          <p className="relative text-slate-400 text-sm font-medium leading-relaxed mb-5">{m.desc}</p>
-          <ul className="relative mt-auto pt-5 border-t border-white/5 space-y-2.5">
-            {m.features.map(f => (
-              <li key={f} className="flex items-start gap-2 text-[13px] text-slate-300 font-medium leading-snug">
-                <Check size={14} className="mt-0.5 flex-shrink-0" style={{ color: m.hex }} /> {f}
-              </li>
+    <section id={id} className="relative py-24 md:py-32 px-6 overflow-hidden">
+      <div className="absolute top-1/2 -translate-y-1/2 w-[800px] h-[520px] rounded-full blur-[130px] pointer-events-none opacity-[0.09]" style={{ background: cor, [invertido ? 'right' : 'left']: '-10%' }} />
+      <div className={`relative max-w-7xl mx-auto grid lg:grid-cols-2 gap-14 items-center ${invertido ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+        <div>
+          <Reveal de={invertido ? 'direita' : 'esquerda'}>
+            <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] mb-4" style={{ color: cor }}>
+              <span className="h-px w-6" style={{ background: cor }} /> {rotulo}
+            </div>
+            <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[1.05] mb-5">{titulo}</h2>
+            <p className="text-slate-400 text-base md:text-lg font-medium leading-relaxed mb-10 max-w-xl">{texto}</p>
+          </Reveal>
+          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-6">
+            {itens.map((it, i) => (
+              <Reveal key={it.t} delay={i * 70}>
+                <div className="flex gap-3.5">
+                  <div className="w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center border" style={{ color: cor, borderColor: `${cor}40`, background: `${cor}12` }}>{it.icon}</div>
+                  <div>
+                    <h3 className="text-white font-bold text-[15px] mb-1">{it.t}</h3>
+                    <p className="text-slate-400 text-[13px] leading-relaxed">{it.d}</p>
+                  </div>
+                </div>
+              </Reveal>
             ))}
-          </ul>
+          </div>
         </div>
-      </TiltCard>
-    </Reveal>
+        <Reveal de="zoom" delay={150}>{visual}</Reveal>
+      </div>
+    </section>
   );
 }
 
@@ -431,7 +474,7 @@ export default function LandingPage() {
               <span className="text-lg font-black tracking-tight text-white">WeGrow</span>
             </a>
             <div className="hidden lg:flex items-center gap-1">
-              {[['#produtos', 'Produtos'], ['#funcionalidades', 'Funcionalidades'], ['#precos', 'Preços'], ['#duvidas', 'Dúvidas']].map(([h, l]) => (
+              {[['#produtos', 'CRM'], ['#pulse', 'Pulse'], ['#funcionalidades', 'Funcionalidades'], ['#precos', 'Preços'], ['#duvidas', 'Dúvidas']].map(([h, l]) => (
                 <a key={h} href={h} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors">{l}</a>
               ))}
             </div>
@@ -466,7 +509,7 @@ export default function LandingPage() {
             </Reveal>
             <Reveal delay={200}>
               <p className="text-slate-400 text-lg md:text-xl max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed mb-10">
-                Funil de vendas, gestão de clientes, metas, produção e relatórios num sistema só — adaptável a qualquer segmento. Sua equipe fecha mais, erra menos e entrega mais rápido.
+                <b className="text-white">CRM</b> pra vender com processo e <b className="text-white">Pulse</b> pra controlar estoque, produção e notas fiscais — num sistema só, adaptável ao seu negócio. Sua equipe fecha mais, erra menos e entrega mais rápido.
               </p>
             </Reveal>
             <Reveal delay={300}>
@@ -537,75 +580,75 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ECOSSISTEMA */}
-      <Secao id="produtos" rotulo="O ecossistema WeGrow" titulo={<>Todos os seus módulos.<br /><span className="texto-gradiente">Um login.</span></>}
-        subtitulo="Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Mesma base, mesmo login, mesmo banco de clientes: você ativa só o que faz sentido pro seu time, e integra com os sistemas que já usa via API.">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80 whitespace-nowrap">Core · toda empresa usa</span>
-          <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {PRODUTOS.map((p, i) => <CardModulo key={p.nome} m={p} i={i} />)}
-        </div>
+      {/* CRM */}
+      <Destaque id="produtos" cor="#22C55E" rotulo="WeGrow CRM" visual={<TelaSistema />}
+        titulo={<>Vendas com processo, <span className="texto-gradiente">do lead ao contrato.</span></>}
+        texto="O motor comercial da sua empresa: cada oportunidade num funil visual, proposta e contrato saindo do próprio sistema, metas acompanhadas em tempo real — do jeito que o seu time já trabalha."
+        itens={CRM_DESTAQUES} />
 
-        <Reveal className="flex flex-col items-center gap-3 my-16">
-          <span className="h-12 w-px bg-gradient-to-b from-transparent to-[#22C55E]/50" />
-          <span className="relative flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest text-[#22C55E]">
-            <span className="absolute inset-0 rounded-full border border-[#22C55E]/40 animate-[pulso-anel_2.5s_ease-out_infinite]" />
-            <Zap size={12} /> Mais módulos, mesmo login
-          </span>
-          <span className="h-12 w-px bg-gradient-to-b from-[#22C55E]/50 to-transparent" />
-        </Reveal>
-
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80 whitespace-nowrap">Módulos · por segmento</span>
-          <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {VERTICAIS.map((v, i) => <CardModulo key={v.nome} m={v} i={i} />)}
-        </div>
-      </Secao>
-
-      {/* PIPELINE + TELA DO SISTEMA */}
-      <section className="relative py-24 md:py-32 px-6 overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-[#22C55E]/[0.07] rounded-full blur-[120px] pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
-          <div>
-            <Reveal>
-              <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-4"><span className="h-px w-6 bg-[#22C55E]/60" /> Como funciona</div>
-              <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[1.05] mb-10">Da proposta à entrega <span className="texto-gradiente">em minutos.</span></h2>
-            </Reveal>
-            <div className="relative space-y-4">
-              <div className="absolute left-6 top-6 bottom-6 w-px bg-gradient-to-b from-sky-400/40 via-[#22C55E]/40 to-purple-400/40" />
-              {STEPS.map((step, i) => {
-                const cor = step.color === 'blue' ? '#38bdf8' : step.color === 'green' ? '#22C55E' : '#c084fc';
-                return (
-                  <Reveal key={step.n} delay={i * 120} de="esquerda">
-                    <div className="relative flex gap-5 rounded-3xl p-5 hover:bg-white/[0.03] transition-colors">
-                      <div className="relative z-10 w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center border bg-[#020617]" style={{ color: cor, borderColor: `${cor}50`, boxShadow: `0 0 24px ${cor}30` }}>{step.icon}</div>
-                      <div>
-                        <p className="text-[10px] font-black tracking-[0.25em] mb-1" style={{ color: cor }}>ETAPA {step.n}</p>
-                        <h3 className="text-lg font-black text-white mb-1.5">{step.title}</h3>
-                        <p className="text-slate-400 text-sm font-medium leading-relaxed">{step.desc}</p>
-                      </div>
-                    </div>
-                  </Reveal>
-                );
-              })}
-            </div>
-          </div>
-          <Reveal de="direita" delay={150}>
-            <TelaSistema />
-            <div className="mt-10 grid grid-cols-2 gap-3">
-              {['Kanban visual drag & drop', 'Aprovação de desconto', 'Proposta e contrato com assinatura', 'Job direto na fila de produção'].map(t => (
-                <div key={t} className="flex items-center gap-2 text-[13px] text-slate-300 font-medium">
-                  <CheckCircle size={15} className="text-[#22C55E] flex-shrink-0" /> {t}
+      {/* COMO FUNCIONA — faixa de 3 passos */}
+      <section className="relative px-6 pb-8">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-4">
+          {STEPS.map((step, i) => {
+            const cor = step.color === 'blue' ? '#38bdf8' : step.color === 'green' ? '#22C55E' : '#c084fc';
+            return (
+              <Reveal key={step.n} delay={i * 110}>
+                <div className="h-full rounded-3xl p-6 bg-white/[0.03] border border-white/10">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center border" style={{ color: cor, borderColor: `${cor}50`, background: `${cor}12` }}>{step.icon}</div>
+                    <span className="text-[10px] font-black tracking-[0.25em]" style={{ color: cor }}>PASSO {step.n}</span>
+                  </div>
+                  <h3 className="text-white font-black mb-1.5">{step.title}</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed">{step.desc}</p>
                 </div>
-              ))}
-            </div>
-          </Reveal>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
+
+      {/* PULSE */}
+      <Destaque id="pulse" cor="#fbbf24" rotulo="WeGrow Pulse" invertido visual={<TelaEstoque />}
+        titulo={<>Estoque, produção e nota fiscal <span className="text-amber-400">no mesmo lugar.</span></>}
+        texto="Para quem fabrica, revende ou entrega: o Pulse controla o material que entra e sai, transforma venda em ordem de produção e emite a nota — com o chão de fábrica usando o celular."
+        itens={PULSE_DESTAQUES} />
+
+      {/* DEPOIMENTO */}
+      {temDepoimento && (
+        <section className="relative py-24 md:py-28 px-6">
+          <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.2fr_1fr] gap-10 items-center">
+            <Reveal de="zoom">
+              <div className="relative aspect-video rounded-[28px] overflow-hidden border border-white/10 bg-[#0B1120] shadow-[0_40px_120px_-30px_rgba(34,197,94,0.4)]">
+                <VideoDepoimento youtubeId={DEPOIMENTO.youtubeId || undefined} mp4={DEPOIMENTO.mp4 || undefined} capa={DEPOIMENTO.capa} titulo={`Depoimento — ${DEPOIMENTO.nome}`} />
+              </div>
+            </Reveal>
+            <Reveal de="direita" delay={150}>
+              <Quote size={40} className="text-[#22C55E]/40 mb-4" />
+              {DEPOIMENTO.frase && <p className="text-2xl md:text-3xl font-bold text-white leading-snug mb-6">&ldquo;{DEPOIMENTO.frase}&rdquo;</p>}
+              <p className="text-white font-black text-lg">{DEPOIMENTO.nome}</p>
+              <p className="text-slate-400 text-sm">{[DEPOIMENTO.cargo, DEPOIMENTO.empresa].filter(Boolean).join(' · ')}</p>
+            </Reveal>
+          </div>
+        </section>
+      )}
+
+      {/* MAIS MÓDULOS (compacto) */}
+      <Secao rotulo="Mesmo login" titulo={<>E quando precisar, <span className="texto-gradiente">mais módulos.</span></>}
+        subtitulo="Mesma base de clientes, mesmo login: ative só o que faz sentido pro seu time e integre com os sistemas que você já usa via API.">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[...PRODUTOS.filter(p => p.nome !== 'CRM' && p.nome !== 'Pulse'), ...VERTICAIS].map((m, i) => (
+            <Reveal key={m.nome} delay={i * 60}>
+              <TiltCard cor={m.hex} intensidade={8} className="h-full rounded-2xl">
+                <div className="h-full rounded-2xl p-5 bg-white/[0.035] border border-white/10">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 border" style={{ color: m.hex, borderColor: `${m.hex}40`, background: `${m.hex}12` }}>{m.icon}</div>
+                  <p className="text-white font-black">{m.nome}</p>
+                  <p className="text-[11px] text-slate-500 font-semibold">{m.tagline}</p>
+                </div>
+              </TiltCard>
+            </Reveal>
+          ))}
+        </div>
+      </Secao>
 
       {/* FUNCIONALIDADES (bento) */}
       <Secao id="funcionalidades" rotulo="Funcionalidades" titulo="O core serve qualquer negócio"

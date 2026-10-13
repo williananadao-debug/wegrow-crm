@@ -156,3 +156,74 @@ export function TelaSistema({ className = '' }: { className?: string }) {
     </div>
   );
 }
+
+// Tela do Pulse (estoque) montada em HTML, flutuando em perspectiva do lado oposto da do CRM.
+export function TelaEstoque({ className = '' }: { className?: string }) {
+  const itens = [
+    { nome: 'Chapa ACM 3mm', sku: 'ACM-003', qtd: 42, min: 20, cor: '#22C55E' },
+    { nome: 'Perfil alumínio 40x40', sku: 'PRF-440', qtd: 18, min: 25, cor: '#fbbf24' },
+    { nome: 'Parafuso inox 6mm', sku: 'PAR-606', qtd: 1250, min: 300, cor: '#22C55E' },
+    { nome: 'Janela acrílico 60x40', sku: 'JAN-604', qtd: 3, min: 8, cor: '#f87171' },
+  ];
+  return (
+    <div className={`[perspective:1600px] ${className}`}>
+      <div className="rounded-2xl border border-white/10 bg-[#0B1120]/95 shadow-[0_40px_120px_-20px_rgba(251,191,36,0.3)] overflow-hidden [transform:rotateX(12deg)_rotateY(12deg)_rotateZ(-1deg)] animate-[flutuar_8s_ease-in-out_infinite]">
+        <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" /><span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" /><span className="w-2.5 h-2.5 rounded-full bg-emerald-400/70" />
+          <span className="ml-3 text-[10px] font-bold text-slate-500 tracking-widest">wegrow.app.br/pulse/estoque</span>
+        </div>
+        <div className="p-4 space-y-2.5">
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 animate-[surgir_0.8s_ease-out_both]">
+            <span className="text-[9px] font-black uppercase tracking-widest text-amber-300">Reposição</span>
+            <span className="text-[10px] text-amber-200/80 truncate">2 itens abaixo do mínimo — sugestão de compra pronta</span>
+          </div>
+          {itens.map((it, i) => {
+            const pct = Math.min(100, Math.round((it.qtd / (it.min * 2.5)) * 100));
+            return (
+              <div key={it.sku} className="rounded-lg border border-white/5 bg-white/[0.03] p-2.5 animate-[surgir_0.8s_ease-out_both]" style={{ animationDelay: `${i * 140 + 300}ms` }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-200 truncate">{it.nome}</p>
+                    <p className="text-[8px] font-mono text-slate-500">{it.sku}</p>
+                  </div>
+                  <p className="text-[11px] font-black" style={{ color: it.cor }}>{it.qtd.toLocaleString('pt-BR')}</p>
+                </div>
+                <div className="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: it.cor }} /></div>
+              </div>
+            );
+          })}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-center"><p className="text-[8px] uppercase tracking-widest text-slate-500 font-black">Entrada por NF</p><p className="text-[11px] font-black text-sky-300">lida por IA</p></div>
+            <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-center"><p className="text-[8px] uppercase tracking-widest text-slate-500 font-black">Saída</p><p className="text-[11px] font-black text-[#22C55E]">pela câmera</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Depoimento em vídeo: mostra a capa e só carrega o player do YouTube no clique (não pesa a página).
+export function VideoDepoimento({ youtubeId, mp4, capa, titulo }: { youtubeId?: string; mp4?: string; capa?: string; titulo: string }) {
+  const [tocando, setTocando] = useState(false);
+  const capaUrl = capa || (youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : undefined);
+  if (tocando) {
+    return youtubeId ? (
+      <iframe className="absolute inset-0 w-full h-full" src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0`} title={titulo} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+    ) : (
+      <video className="absolute inset-0 w-full h-full object-cover" src={mp4} controls autoPlay playsInline />
+    );
+  }
+  return (
+    <button onClick={() => setTocando(true)} className="group absolute inset-0 w-full h-full" aria-label={`Assistir: ${titulo}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {capaUrl && <img src={capaUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" />}
+      <span className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/30 to-transparent" />
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="relative w-20 h-20 rounded-full bg-[#22C55E] flex items-center justify-center shadow-[0_0_60px_rgba(34,197,94,0.6)] group-hover:scale-110 transition-transform">
+          <span className="absolute inset-0 rounded-full border-2 border-[#22C55E] animate-[pulso-anel_2s_ease-out_infinite]" />
+          <svg viewBox="0 0 24 24" className="w-8 h-8 ml-1 fill-[#0F172A]"><path d="M8 5v14l11-7z" /></svg>
+        </span>
+      </span>
+    </button>
+  );
+}

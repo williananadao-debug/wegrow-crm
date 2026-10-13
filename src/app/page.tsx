@@ -1,14 +1,18 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   ArrowRight, Sparkles, ShieldCheck, Target, Cpu,
-  BarChart3, Zap, Radio, Users, Briefcase, CheckCircle,
-  TrendingUp, MapPin, Mail, ChevronRight,
-  Check, MessageCircle, PenLine, Wallet, ChevronDown,
-  Loader2, Send, Factory, Building2, Brain, Activity, Bot, LayoutGrid, Link2,
+  BarChart3, Zap, Users, Briefcase, CheckCircle,
+  MapPin, Mail, Check, MessageCircle, PenLine, Wallet, ChevronDown,
+  Loader2, Send, Brain, Activity, Bot, LayoutGrid, Link2,
   Radar, HardHat, Megaphone, Scale
 } from 'lucide-react';
+import { Reveal, TiltCard, Contador, OrbitaLeve, TelaSistema } from '@/components/site/efeitos';
+
+// Site institucional (wegrow.app.br). Visual com cena 3D no topo (components/site/Hero3D,
+// carregada só no navegador) e animações de entrada/efeitos em components/site/efeitos.
 
 const STATS = [
   { value: '3x', label: 'mais vendas fechadas' },
@@ -245,58 +249,6 @@ const VERTICAIS = [
   },
 ];
 
-// Logo WeGrow no centro, os 8 módulos ao redor — a imagem literal do "ecossistema, não um
-// CRM só". Posições calculadas por trigonometria (ângulo igual entre os nós), não por
-// grid — é o que permite qualquer quantidade de módulos sem reformatar o layout à mão.
-const ECOSSISTEMA_NODOS = [...PRODUTOS, ...VERTICAIS];
-
-function EcossistemaDiagrama() {
-  const n = ECOSSISTEMA_NODOS.length;
-  const raio = 36;
-  const posicao = (i: number) => {
-    const angulo = (i / n) * 2 * Math.PI - Math.PI / 2;
-    return { x: 50 + raio * Math.cos(angulo), y: 50 + raio * Math.sin(angulo) };
-  };
-
-  return (
-    <div className="relative mx-auto mb-20 w-full max-w-[560px] aspect-square">
-      <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {ECOSSISTEMA_NODOS.map((m, i) => {
-          const { x, y } = posicao(i);
-          return <line key={m.nome} x1="50" y1="50" x2={x} y2={y} stroke={m.hex} strokeOpacity="0.3" strokeWidth="0.4" />;
-        })}
-      </svg>
-
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
-        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#22C55E] rounded-3xl flex items-center justify-center font-black text-[#0F172A] text-3xl sm:text-4xl shadow-[0_0_60px_rgba(34,197,94,0.55)]">
-          W
-        </div>
-        <span className="mt-2.5 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white">WeGrow</span>
-      </div>
-
-      {ECOSSISTEMA_NODOS.map((m, i) => {
-        const { x, y } = posicao(i);
-        const corTexto = m.cor.split(' ')[0];
-        return (
-          <div
-            key={m.nome}
-            className="absolute z-10 flex flex-col items-center gap-1.5"
-            style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
-          >
-            <div
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border bg-[#020617] ${m.borda} ${corTexto}`}
-              style={{ boxShadow: `0 0 18px ${m.hex}25` }}
-            >
-              {m.icon}
-            </div>
-            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-wide text-white whitespace-nowrap">{m.nome}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 const ADDONS = [
   { icon: <MessageCircle size={16}/>, label: 'WhatsApp Business', cor: 'text-green-400 bg-green-400/10' },
   { icon: <PenLine size={16}/>, label: 'Assinatura Digital', cor: 'text-blue-400 bg-blue-400/10' },
@@ -358,6 +310,74 @@ const FEATURES = [
   },
 ];
 
+const MODULOS_3D = [...PRODUTOS, ...VERTICAIS];
+
+const SEGMENTOS = ['Indústria', 'Comércio & Atacado', 'Serviços & Agências', 'Mídia & Broadcasting', 'Licitações', 'Construção', 'Advocacia', 'Fábricas sob encomenda', 'Distribuidoras', 'Representação comercial'];
+
+const Hero3D = dynamic(() => import('@/components/site/Hero3D'), { ssr: false });
+
+// Decide entre a cena WebGL e a órbita leve em CSS: sem WebGL ou com "menos movimento" ligado
+// no sistema → versão leve. No celular a cena roda em modo leve (menos partículas, 1x de pixel).
+// useSyncExternalStore: no servidor "carregando", no navegador lê o aparelho (sem setState em efeito).
+const semAssinatura = () => () => {};
+let modoCache: 'webgl' | 'leve' | null = null;
+function modoDoAparelho(): 'webgl' | 'leve' {
+  if (modoCache) return modoCache;
+  let modo: 'webgl' | 'leve' = 'leve';
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    try { modo = document.createElement('canvas').getContext('webgl2') ? 'webgl' : 'leve'; } catch { modo = 'leve'; }
+  }
+  modoCache = modo;
+  return modo;
+}
+function useModo3D() {
+  const modo = useSyncExternalStore<'carregando' | 'webgl' | 'leve'>(semAssinatura, modoDoAparelho, () => 'carregando');
+  const celular = useSyncExternalStore(semAssinatura, () => window.matchMedia('(max-width: 768px)').matches, () => false);
+  return { modo, celular };
+}
+
+function Secao({ id, rotulo, titulo, subtitulo, children, className = '' }: { id?: string; rotulo: string; titulo: React.ReactNode; subtitulo?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <section id={id} className={`relative py-24 md:py-32 px-6 ${className}`}>
+      <div className="max-w-7xl mx-auto">
+        <Reveal className="text-center mb-14 md:mb-20">
+          <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-4">
+            <span className="h-px w-6 bg-[#22C55E]/60" /> {rotulo} <span className="h-px w-6 bg-[#22C55E]/60" />
+          </div>
+          <h2 className="text-3xl md:text-6xl font-black text-white tracking-tight leading-[1.02] max-w-4xl mx-auto">{titulo}</h2>
+          {subtitulo && <p className="text-slate-400 text-base md:text-lg font-medium max-w-2xl mx-auto mt-5 leading-relaxed">{subtitulo}</p>}
+        </Reveal>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function CardModulo({ m, i }: { m: typeof PRODUTOS[number]; i: number }) {
+  return (
+    <Reveal delay={i * 90} className="h-full">
+      <TiltCard cor={m.hex} className="h-full rounded-[28px]">
+        <div className="relative h-full flex flex-col rounded-[28px] p-7 bg-gradient-to-b from-white/[0.07] to-white/[0.015] border border-white/10 overflow-hidden group">
+          <div className="absolute -top-16 -right-16 w-44 h-44 rounded-full blur-3xl opacity-25 group-hover:opacity-50 transition-opacity" style={{ background: m.hex }} />
+          <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center mb-6 border" style={{ color: m.hex, borderColor: `${m.hex}40`, background: `${m.hex}14`, boxShadow: `0 0 30px ${m.hex}30` }}>
+            {m.icon}
+          </div>
+          <h3 className="relative text-2xl font-black text-white mb-1 tracking-tight">{m.nome}</h3>
+          <p className="relative text-[10px] font-black uppercase tracking-[0.2em] mb-4" style={{ color: m.hex }}>{m.tagline}</p>
+          <p className="relative text-slate-400 text-sm font-medium leading-relaxed mb-5">{m.desc}</p>
+          <ul className="relative mt-auto pt-5 border-t border-white/5 space-y-2.5">
+            {m.features.map(f => (
+              <li key={f} className="flex items-start gap-2 text-[13px] text-slate-300 font-medium leading-snug">
+                <Check size={14} className="mt-0.5 flex-shrink-0" style={{ color: m.hex }} /> {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </TiltCard>
+    </Reveal>
+  );
+}
+
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [faqAberta, setFaqAberta] = useState<number | null>(0);
@@ -365,10 +385,11 @@ export default function LandingPage() {
   const [enviandoLead, setEnviandoLead] = useState(false);
   const [leadEnviado, setLeadEnviado] = useState(false);
   const [erroLead, setErroLead] = useState('');
+  const { modo, celular } = useModo3D();
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handler);
+    window.addEventListener('scroll', handler, { passive: true });
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
@@ -396,517 +417,357 @@ export default function LandingPage() {
     }
   };
 
+  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] focus:bg-white/[0.07] placeholder:text-slate-500 transition-colors';
+
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 selection:bg-[#22C55E]/30 overflow-x-hidden">
 
       {/* NAVBAR */}
-      <nav className={`fixed top-0 w-full z-[100] transition-all duration-300 ${scrolled ? 'border-b border-white/10 bg-[#020617]/90 backdrop-blur-xl' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-2xl shadow-[0_0_20px_rgba(34,197,94,0.5)]">W</div>
-            <span className="text-xl font-black uppercase italic tracking-tighter text-white">WeGrow</span>
-          </div>
-          <div className="hidden lg:flex items-center gap-8">
-            <a href="#produtos" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Produtos</a>
-            <a href="#funcionalidades" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Funcionalidades</a>
-            <a href="#precos" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Preços</a>
-            <a href="#duvidas" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Dúvidas</a>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all hover:shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-              Acessar
-            </Link>
+      <nav className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'py-3' : 'py-5'}`}>
+        <div className={`mx-auto px-4 md:px-6 transition-all duration-500 ${scrolled ? 'max-w-5xl' : 'max-w-7xl'}`}>
+          <div className={`flex items-center justify-between rounded-2xl px-4 md:px-5 h-16 transition-all duration-500 ${scrolled ? 'bg-[#0B1120]/80 backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.4)]' : 'border border-transparent'}`}>
+            <a href="#topo" className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-[#22C55E] rounded-xl flex items-center justify-center font-black text-[#0F172A] text-xl shadow-[0_0_24px_rgba(34,197,94,0.55)]">W</div>
+              <span className="text-lg font-black tracking-tight text-white">WeGrow</span>
+            </a>
+            <div className="hidden lg:flex items-center gap-1">
+              {[['#produtos', 'Produtos'], ['#funcionalidades', 'Funcionalidades'], ['#precos', 'Preços'], ['#duvidas', 'Dúvidas']].map(([h, l]) => (
+                <a key={h} href={h} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors">{l}</a>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/login" className="hidden sm:inline-flex px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-300 hover:text-white transition-colors">Entrar</Link>
+              <a href="#contato" className="bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-5 py-2.5 rounded-xl text-[13px] font-black transition-all hover:shadow-[0_0_24px_rgba(34,197,94,0.45)]">
+                Quero uma demo
+              </a>
+            </div>
           </div>
         </div>
       </nav>
 
       {/* HERO */}
-      <section className="relative pt-44 pb-24 px-6 overflow-hidden">
-        {/* glow bg */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-[#22C55E]/5 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute top-20 right-0 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+      <section id="topo" className="relative min-h-[100svh] flex items-center pt-28 pb-16 px-6 overflow-hidden">
+        <div className="absolute inset-0 grade-fundo pointer-events-none" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[700px] bg-[#22C55E]/10 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-        <div className="max-w-5xl mx-auto text-center relative">
-          <div className="inline-flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/20 px-4 py-1.5 rounded-full text-[#22C55E] text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-            <Sparkles size={12} /> Soluções tecnológicas inteligentes para o seu negócio
-          </div>
-
-          <h1 className="text-5xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-[0.9] mb-6">
-            Venda mais.<br />Entregue{' '}
-            <span className="relative inline-block">
-              <span className="text-[#22C55E] relative z-10">melhor.</span>
-              <span className="absolute inset-0 bg-[#22C55E]/10 blur-2xl rounded-full" />
-            </span>
-          </h1>
-
-          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed mb-12">
-            Funil de vendas, gestão de clientes, metas, produção e relatórios num sistema só — adaptável a qualquer segmento. Sua equipe fecha mais, erra menos e entrega mais rápido.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
-            <a
-              href="https://wa.me/5547997022381"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all hover:scale-105 shadow-[0_0_30px_rgba(34,197,94,0.3)]"
-            >
-              Ver demonstração <ArrowRight size={18} />
-            </a>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white px-10 py-5 rounded-2xl font-black uppercase text-sm tracking-widest transition-all border border-white/10 text-center"
-            >
-              Já tenho acesso
-            </Link>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-16 text-[11px] font-bold uppercase tracking-widest text-slate-500">
-            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Sem fidelidade</span>
-            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Suporte direto do fundador</span>
-            <span className="flex items-center gap-1.5"><Check size={13} className="text-[#22C55E]"/> Onboarding em dias, não meses</span>
-          </div>
-
-          {/* STATS BAR */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {STATS.map((s) => (
-              <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <div className="text-3xl font-black text-[#22C55E]">{s.value}</div>
-                <div className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mt-1">{s.label}</div>
+        <div className="relative max-w-7xl mx-auto w-full grid lg:grid-cols-[1.05fr_1fr] gap-10 items-center">
+          <div className="text-center lg:text-left relative z-10">
+            <Reveal>
+              <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 backdrop-blur px-4 py-1.5 rounded-full text-slate-300 text-[11px] font-bold mb-8">
+                <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#22C55E] animate-ping" /><span className="relative w-2 h-2 rounded-full bg-[#22C55E]" /></span>
+                Soluções tecnológicas inteligentes para o seu negócio
               </div>
-            ))}
+            </Reveal>
+            <Reveal delay={100}>
+              <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl font-black text-white tracking-tighter leading-[0.92] mb-7">
+                Venda mais.<br />Entregue <span className="texto-gradiente">melhor.</span>
+              </h1>
+            </Reveal>
+            <Reveal delay={200}>
+              <p className="text-slate-400 text-lg md:text-xl max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed mb-10">
+                Funil de vendas, gestão de clientes, metas, produção e relatórios num sistema só — adaptável a qualquer segmento. Sua equipe fecha mais, erra menos e entrega mais rápido.
+              </p>
+            </Reveal>
+            <Reveal delay={300}>
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mb-10">
+                <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer"
+                  className="group w-full sm:w-auto relative overflow-hidden bg-[#22C55E] text-[#0F172A] px-8 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.03] shadow-[0_0_40px_rgba(34,197,94,0.35)]">
+                  <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                  <span className="relative">Ver demonstração</span> <ArrowRight size={18} className="relative group-hover:translate-x-1 transition-transform" />
+                </a>
+                <Link href="/login" className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10 text-center backdrop-blur">
+                  Já tenho acesso
+                </Link>
+              </div>
+            </Reveal>
+            <Reveal delay={400}>
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2 text-[12px] font-semibold text-slate-500">
+                <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Sem fidelidade</span>
+                <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Suporte direto do fundador</span>
+                <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Onboarding em dias</span>
+              </div>
+            </Reveal>
           </div>
+
+          {/* Cena 3D */}
+          <Reveal de="zoom" delay={150} className="relative">
+            <div className="relative mx-auto w-full max-w-[640px] aspect-square">
+              <div className="absolute inset-[12%] rounded-full bg-[#22C55E]/10 blur-3xl" />
+              {modo === 'webgl' && <Hero3D modulos={MODULOS_3D.map(m => ({ nome: m.nome, hex: m.hex }))} leve={celular} />}
+              {modo === 'leve' && <OrbitaLeve modulos={MODULOS_3D.map(m => ({ nome: m.nome, hex: m.hex, icon: m.icon }))} />}
+              {/* rótulos dos módulos flutuando por cima da cena */}
+              <div className="absolute inset-x-0 bottom-0 flex flex-wrap justify-center gap-1.5 px-4 pointer-events-none">
+                {MODULOS_3D.map(m => (
+                  <span key={m.nome} className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#020617]/70 backdrop-blur border" style={{ color: m.hex, borderColor: `${m.hex}35` }}>{m.nome}</span>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </div>
+
+        <a href="#numeros" aria-label="Rolar" className="hidden md:flex absolute bottom-6 left-1/2 -translate-x-1/2 w-6 h-10 rounded-full border-2 border-white/15 justify-center pt-2">
+          <span className="w-1 h-2 rounded-full bg-[#22C55E] animate-bounce" />
+        </a>
+      </section>
+
+      {/* NÚMEROS */}
+      <section id="numeros" className="relative px-6 -mt-4">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {STATS.map((s, i) => (
+            <Reveal key={s.label} delay={i * 80}>
+              <div className="relative rounded-3xl p-6 md:p-7 bg-gradient-to-b from-white/[0.06] to-transparent border border-white/10 overflow-hidden text-center">
+                <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#22C55E]/60 to-transparent" />
+                <Contador valor={s.value} className="block text-4xl md:text-5xl font-black text-white tracking-tight" />
+                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-2">{s.label}</div>
+              </div>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* ECOSSISTEMA WEGROW */}
-      <section className="py-24 px-6" id="produtos">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">O ecossistema WeGrow</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
-              Todos os seus módulos. Um login.
-            </h2>
-            <p className="text-slate-400 text-sm font-medium max-w-2xl mx-auto">
-              Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Mesma base, mesmo login, mesmo banco de clientes: você ativa só o que faz sentido pro seu time, e integra com os sistemas que já usa (ERP, financeiro, WhatsApp, o que for) via API.
-            </p>
-          </div>
-
-          <EcossistemaDiagrama />
-
-          <div className="flex items-center gap-3 mb-6 max-w-7xl">
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/80 whitespace-nowrap">Core · toda empresa usa</span>
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {PRODUTOS.map((p) => (
-              <div key={p.nome} className={`flex flex-col bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${p.borda}`}>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${p.cor}`}>
-                  {p.icon}
-                </div>
-                <h3 className="text-xl font-black text-white uppercase italic mb-1">{p.nome}</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{p.tagline}</p>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-4">{p.desc}</p>
-                <ul className="mt-auto pt-4 border-t border-white/5 space-y-2">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[12.5px] text-slate-400 font-medium leading-snug">
-                      <CheckCircle size={13} className="text-[#22C55E] mt-0.5 flex-shrink-0" /> {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {/* CONECTOR */}
-          <div className="flex flex-col items-center gap-3 my-14">
-            <span className="h-10 w-px bg-gradient-to-b from-white/20 to-white/5" />
-            <span className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <Zap size={11} className="text-[#22C55E]" /> Mais módulos, mesmo login
+      {/* SEGMENTOS (faixa rolando) */}
+      <div className="relative py-14 overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_15%,black_85%,transparent)]">
+        <div className="flex w-max gap-3 animate-[marquee_40s_linear_infinite] hover:[animation-play-state:paused]">
+          {[...SEGMENTOS, ...SEGMENTOS].map((s, i) => (
+            <span key={i} className="flex items-center gap-2 whitespace-nowrap px-5 py-2.5 rounded-full border border-white/10 bg-white/[0.03] text-sm font-semibold text-slate-400">
+              <Sparkles size={13} className="text-[#22C55E]" /> {s}
             </span>
-            <span className="h-10 w-px bg-gradient-to-b from-white/5 to-white/20" />
-          </div>
-
-          <div className="flex items-center gap-3 mb-6 max-w-7xl">
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/80 whitespace-nowrap">Módulos · por segmento</span>
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {VERTICAIS.map((v) => (
-              <div key={v.nome} className={`flex flex-col bg-white/[0.04] border rounded-[32px] p-7 hover:bg-white/[0.07] transition-all ${v.borda}`}>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${v.cor}`}>
-                  {v.icon}
-                </div>
-                <h3 className="text-xl font-black text-white uppercase italic mb-1">{v.nome}</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">{v.tagline}</p>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-4">{v.desc}</p>
-                <ul className="mt-auto pt-4 border-t border-white/5 space-y-2">
-                  {v.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[12.5px] text-slate-400 font-medium leading-snug">
-                      <CheckCircle size={13} className="text-[#22C55E] mt-0.5 flex-shrink-0" /> {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
-      </section>
+      </div>
 
-      {/* ADAPTABILITY CALLOUT */}
-      <section className="py-16 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="bg-gradient-to-r from-white/5 via-white/[0.03] to-transparent border border-white/10 rounded-[40px] p-10 md:p-14">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-4">Flexível por natureza</div>
-            <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-tight mb-4">
-              Moldado para o seu segmento.
-            </h2>
-            <p className="text-slate-400 font-medium leading-relaxed max-w-2xl mb-8">
-              O WeGrow se adapta ao fluxo do seu negócio — não o contrário. Configure seu catálogo de serviços, etapas do funil e equipe do jeito que faz sentido pra você.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { icon: <Factory size={16} />, label: 'Indústria' },
-                { icon: <Building2 size={16} />, label: 'Comércio & Atacado' },
-                { icon: <Briefcase size={16} />, label: 'Serviços & Agências' },
-                { icon: <Radio size={16} />, label: 'Mídia & Broadcasting' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-                  <span className="text-[#22C55E]">{item.icon}</span>
-                  <span className="text-sm font-semibold text-slate-300">{item.label}</span>
+      {/* ECOSSISTEMA */}
+      <Secao id="produtos" rotulo="O ecossistema WeGrow" titulo={<>Todos os seus módulos.<br /><span className="texto-gradiente">Um login.</span></>}
+        subtitulo="Sua empresa não vende do mesmo jeito em todo canal — o WeGrow também não te obriga a isso. Mesma base, mesmo login, mesmo banco de clientes: você ativa só o que faz sentido pro seu time, e integra com os sistemas que já usa via API.">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80 whitespace-nowrap">Core · toda empresa usa</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {PRODUTOS.map((p, i) => <CardModulo key={p.nome} m={p} i={i} />)}
+        </div>
+
+        <Reveal className="flex flex-col items-center gap-3 my-16">
+          <span className="h-12 w-px bg-gradient-to-b from-transparent to-[#22C55E]/50" />
+          <span className="relative flex items-center gap-2 bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest text-[#22C55E]">
+            <span className="absolute inset-0 rounded-full border border-[#22C55E]/40 animate-[pulso-anel_2.5s_ease-out_infinite]" />
+            <Zap size={12} /> Mais módulos, mesmo login
+          </span>
+          <span className="h-12 w-px bg-gradient-to-b from-[#22C55E]/50 to-transparent" />
+        </Reveal>
+
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/80 whitespace-nowrap">Módulos · por segmento</span>
+          <span className="h-px flex-1 bg-gradient-to-r from-white/15 to-transparent" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {VERTICAIS.map((v, i) => <CardModulo key={v.nome} m={v} i={i} />)}
+        </div>
+      </Secao>
+
+      {/* PIPELINE + TELA DO SISTEMA */}
+      <section className="relative py-24 md:py-32 px-6 overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] bg-[#22C55E]/[0.07] rounded-full blur-[120px] pointer-events-none" />
+        <div className="relative max-w-7xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
+          <div>
+            <Reveal>
+              <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-4"><span className="h-px w-6 bg-[#22C55E]/60" /> Como funciona</div>
+              <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[1.05] mb-10">Da proposta à entrega <span className="texto-gradiente">em minutos.</span></h2>
+            </Reveal>
+            <div className="relative space-y-4">
+              <div className="absolute left-6 top-6 bottom-6 w-px bg-gradient-to-b from-sky-400/40 via-[#22C55E]/40 to-purple-400/40" />
+              {STEPS.map((step, i) => {
+                const cor = step.color === 'blue' ? '#38bdf8' : step.color === 'green' ? '#22C55E' : '#c084fc';
+                return (
+                  <Reveal key={step.n} delay={i * 120} de="esquerda">
+                    <div className="relative flex gap-5 rounded-3xl p-5 hover:bg-white/[0.03] transition-colors">
+                      <div className="relative z-10 w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center border bg-[#020617]" style={{ color: cor, borderColor: `${cor}50`, boxShadow: `0 0 24px ${cor}30` }}>{step.icon}</div>
+                      <div>
+                        <p className="text-[10px] font-black tracking-[0.25em] mb-1" style={{ color: cor }}>ETAPA {step.n}</p>
+                        <h3 className="text-lg font-black text-white mb-1.5">{step.title}</h3>
+                        <p className="text-slate-400 text-sm font-medium leading-relaxed">{step.desc}</p>
+                      </div>
+                    </div>
+                  </Reveal>
+                );
+              })}
+            </div>
+          </div>
+          <Reveal de="direita" delay={150}>
+            <TelaSistema />
+            <div className="mt-10 grid grid-cols-2 gap-3">
+              {['Kanban visual drag & drop', 'Aprovação de desconto', 'Proposta e contrato com assinatura', 'Job direto na fila de produção'].map(t => (
+                <div key={t} className="flex items-center gap-2 text-[13px] text-slate-300 font-medium">
+                  <CheckCircle size={15} className="text-[#22C55E] flex-shrink-0" /> {t}
                 </div>
               ))}
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Como funciona</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
-              Três etapas. Um sistema.
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 relative">
-            <div className="hidden md:block absolute top-10 left-[calc(16.5%+32px)] right-[calc(16.5%+32px)] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            {STEPS.map((step, i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] transition-all group">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center
-                    ${step.color === 'blue' ? 'bg-blue-500/10 text-blue-400' : ''}
-                    ${step.color === 'green' ? 'bg-[#22C55E]/10 text-[#22C55E]' : ''}
-                    ${step.color === 'purple' ? 'bg-purple-500/10 text-purple-400' : ''}
-                  `}>
-                    {step.icon}
-                  </div>
-                  <span className="text-4xl font-black text-white/10 group-hover:text-white/20 transition-colors">{step.n}</span>
+      {/* FUNCIONALIDADES (bento) */}
+      <Secao id="funcionalidades" rotulo="Funcionalidades" titulo="O core serve qualquer negócio"
+        subtitulo="Funil, clientes, metas e relatórios funcionam pra qualquer segmento. Os itens marcados como módulo são complementos que só aparecem pra quem precisa deles."
+        className="bg-gradient-to-b from-transparent via-white/[0.02] to-transparent">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 3) * 90} className={f.span === 2 ? 'md:col-span-2' : ''}>
+              <TiltCard intensidade={6} className="h-full rounded-[28px]">
+                <div className="relative h-full rounded-[28px] p-8 bg-white/[0.035] border border-white/10 hover:border-white/20 transition-colors overflow-hidden">
+                  {f.modulo && (
+                    <span className="absolute top-6 right-6 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">Módulo {f.modulo}</span>
+                  )}
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${f.color}`}>{f.icon}</div>
+                  <h3 className="text-xl font-black text-white mb-3 tracking-tight">{f.title}</h3>
+                  <p className="text-slate-400 text-sm font-medium leading-relaxed max-w-lg">{f.desc}</p>
                 </div>
-                <h3 className="text-lg font-black text-white uppercase italic mb-3">{step.title}</h3>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed">{step.desc}</p>
-              </div>
-            ))}
-          </div>
+              </TiltCard>
+            </Reveal>
+          ))}
         </div>
-      </section>
+      </Secao>
 
-      {/* FEATURES BENTO */}
-      <section className="py-16 px-6 bg-white/[0.015] border-y border-white/5" id="funcionalidades">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Funcionalidades</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
-              O core serve qualquer negócio
-            </h2>
-            <p className="text-slate-400 text-sm font-medium max-w-xl mx-auto">
-              Funil, clientes, metas e relatórios funcionam pra qualquer segmento. Os itens marcados como módulo são complementos que só aparecem pra quem precisa deles.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {FEATURES.map((f, i) => (
-              <div
-                key={i}
-                className={`relative bg-white/[0.04] border border-white/10 rounded-[32px] p-8 hover:bg-white/[0.07] hover:border-white/20 transition-all group ${f.span === 2 ? 'md:col-span-2' : ''}`}
-              >
-                {f.modulo && (
-                  <span className="absolute top-6 right-6 text-[9px] font-black uppercase tracking-widest text-slate-500 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    Módulo {f.modulo}
-                  </span>
-                )}
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${f.color}`}>
-                  {f.icon}
-                </div>
-                <h3 className="text-xl font-black text-white uppercase italic mb-3">{f.title}</h3>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed">{f.desc}</p>
+      {/* POR QUE WEGROW */}
+      <Secao rotulo="Por que WeGrow" titulo="Não é mais um SaaS genérico feito pra ficar bonito na demo.">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[
+            { icon: <ShieldCheck size={22} />, title: 'Validado em operação real', desc: 'Construído e testado no dia a dia de uma operação de verdade, com pressão de prazo e cliente de verdade — não em uma planilha de investidor.' },
+            { icon: <Target size={22} />, title: 'Se adapta a você, não o contrário', desc: 'Funil, catálogo, cargos e módulos configuráveis. Você não muda seu processo pra caber no sistema.' },
+            { icon: <MessageCircle size={22} />, title: 'Suporte de quem construiu', desc: 'Sem fila de ticket genérica: onboarding e suporte direto de quem desenvolve o produto.' },
+          ].map((d, i) => (
+            <Reveal key={d.title} delay={i * 100}>
+              <div className="h-full rounded-[28px] p-8 bg-gradient-to-br from-[#22C55E]/[0.08] to-transparent border border-white/10 hover:border-[#22C55E]/40 transition-colors">
+                <div className="w-12 h-12 rounded-2xl bg-[#22C55E]/15 text-[#22C55E] flex items-center justify-center mb-6">{d.icon}</div>
+                <h3 className="text-white font-black text-lg mb-2 tracking-tight">{d.title}</h3>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">{d.desc}</p>
               </div>
-            ))}
-          </div>
+            </Reveal>
+          ))}
         </div>
-      </section>
-
-      {/* WORKFLOW VISUAL */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="bg-[#0B1120] border border-white/10 rounded-[40px] p-10 md:p-14 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-[#22C55E]/5 rounded-full blur-[100px] pointer-events-none" />
-            <div className="relative">
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Pipeline completo</div>
-              <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight mb-10">
-                Da proposta à entrega em minutos
-              </h2>
-
-              <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-                {['Novo Lead', 'Proposta', 'Contrato', 'Produção', 'Entregue'].map((s, i, arr) => (
-                  <React.Fragment key={s}>
-                    <div className="flex md:flex-col items-center md:items-center gap-3 md:gap-2 flex-1">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black border-2
-                        ${i === 4 ? 'bg-[#22C55E] border-[#22C55E] text-[#0F172A] shadow-[0_0_20px_rgba(34,197,94,0.5)]' : 'border-white/20 text-white/60 bg-white/5'}`}>
-                        {i + 1}
-                      </div>
-                      <span className={`text-xs font-bold uppercase tracking-wide ${i === 4 ? 'text-[#22C55E]' : 'text-slate-400'}`}>{s}</span>
-                    </div>
-                    {i < arr.length - 1 && (
-                      <ChevronRight size={16} className="text-white/20 hidden md:block flex-shrink-0" />
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-
-              <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { icon: <CheckCircle size={16} />, text: 'Kanban visual drag & drop' },
-                  { icon: <CheckCircle size={16} />, text: 'Aprovação de desconto' },
-                  { icon: <CheckCircle size={16} />, text: 'Envio de proposta por e-mail' },
-                  { icon: <CheckCircle size={16} />, text: 'Job direto na fila de produção' },
-                ].map((item) => (
-                  <div key={item.text} className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-                    <span className="text-[#22C55E]">{item.icon}</span>
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* DIFERENCIAIS */}
-      <section className="py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Por que WeGrow</div>
-            <h2 className="text-2xl md:text-4xl font-black text-white italic uppercase tracking-tight max-w-3xl mx-auto leading-tight">
-              Não é mais um SaaS genérico feito pra bonito na demo.
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {[
-              { icon: <ShieldCheck size={22}/>, title: 'Validado em operação real', desc: 'Construído e testado no dia a dia de uma operação de verdade, com pressão de prazo e cliente de verdade — não em uma planilha de investidor.' },
-              { icon: <Target size={22}/>, title: 'Se adapta a você, não o contrário', desc: 'Funil, catálogo, cargos e módulos configuráveis. Você não muda seu processo pra caber no sistema.' },
-              { icon: <MessageCircle size={22}/>, title: 'Suporte de quem construiu', desc: 'Sem fila de ticket genérica: onboarding e suporte direto de quem desenvolve o produto.' },
-            ].map((d) => (
-              <div key={d.title} className="bg-white/[0.04] border border-white/10 rounded-[28px] p-7 hover:border-[#22C55E]/30 transition-all">
-                <div className="w-11 h-11 rounded-2xl bg-[#22C55E]/10 text-[#22C55E] flex items-center justify-center mb-5">{d.icon}</div>
-                <h3 className="text-white font-black text-sm uppercase italic mb-2">{d.title}</h3>
-                <p className="text-slate-400 text-xs font-medium leading-relaxed">{d.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      </Secao>
 
       {/* PREÇOS */}
-      <section className="py-24 px-6 bg-white/[0.015] border-y border-white/5" id="precos">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Preços</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight mb-4">
-              Simples. Previsível. Sem surpresas.
-            </h2>
-            <p className="text-slate-400 max-w-xl mx-auto text-sm font-medium">
-              A partir de R$ 497/mês, por empresa — sem cobrar por usuário. Projetos maiores e integrações sob medida? Fale com a gente.
-            </p>
-          </div>
-
-          {/* Cards de plano */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            {PLANOS.map((plano) => (
-              <div
-                key={plano.nome}
-                className={`relative bg-[#0B1120] border-2 ${plano.cor} rounded-[32px] p-8 flex flex-col transition-transform ${plano.destaque ? 'shadow-[0_0_60px_rgba(34,197,94,0.16)] md:scale-105 md:-translate-y-2' : ''}`}
-              >
-                {plano.destaque && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#22C55E] text-[#0B1120] text-[9px] font-black uppercase tracking-[0.2em] px-5 py-1.5 rounded-full whitespace-nowrap shadow-[0_4px_20px_rgba(34,197,94,0.3)]">
-                    Mais popular
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`}>{plano.nome}</p>
+      <Secao id="precos" rotulo="Preços" titulo={<>Simples. Previsível.<br /><span className="texto-gradiente">Sem surpresas.</span></>}
+        subtitulo="A partir de R$ 497/mês, por empresa — sem cobrar por usuário. Projetos maiores e integrações sob medida? Fale com a gente.">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 items-stretch">
+          {PLANOS.map((plano, i) => (
+            <Reveal key={plano.nome} delay={i * 110} className="h-full">
+              <div className={`relative h-full rounded-[32px] p-[1.5px] ${plano.destaque ? 'bg-gradient-to-b from-[#22C55E] via-[#22C55E]/40 to-sky-500/40 md:-translate-y-3 shadow-[0_30px_80px_-20px_rgba(34,197,94,0.45)]' : 'bg-white/10'}`}>
+                <div className="relative h-full bg-[#0B1120] rounded-[31px] p-8 flex flex-col">
+                  {plano.destaque && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#22C55E] text-[#0B1120] text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full whitespace-nowrap">Mais popular</div>
+                  )}
+                  <p className={`text-xs font-black uppercase tracking-[0.2em] mb-3 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`}>{plano.nome}</p>
                   <div className="flex items-end gap-1 mb-3">
                     {plano.preco === 'consultar' ? (
                       <span className="text-3xl font-black text-white">Sob consulta</span>
                     ) : (
-                      <>
-                        <span className="text-4xl font-black text-white">R$ {plano.preco.toLocaleString('pt-BR')}</span>
-                        <span className="text-slate-500 text-sm font-bold pb-1">/mês</span>
-                      </>
+                      <><span className="text-5xl font-black text-white tracking-tight">R$ {plano.preco.toLocaleString('pt-BR')}</span><span className="text-slate-500 text-sm font-bold pb-1.5">/mês</span></>
                     )}
                   </div>
-                  <p className="text-slate-500 text-xs font-medium leading-relaxed">{plano.desc}</p>
+                  <p className="text-slate-400 text-sm font-medium leading-relaxed mb-7">{plano.desc}</p>
+                  <div className="space-y-3 flex-1 mb-8">
+                    {plano.itens.map(item => (
+                      <div key={item} className="flex items-start gap-2.5 text-sm text-slate-300">
+                        <span className={`mt-0.5 w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${plano.destaque ? 'bg-[#22C55E]/20 text-[#22C55E]' : 'bg-white/5 text-slate-400'}`}><Check size={11} /></span>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                  <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer"
+                    className={`w-full py-4 rounded-2xl font-black text-sm text-center transition-all flex items-center justify-center gap-2 ${plano.destaque ? 'bg-[#22C55E] text-[#0B1120] hover:bg-[#16a34a] shadow-[0_10px_30px_rgba(34,197,94,0.3)]' : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'}`}>
+                    Falar com consultor <ArrowRight size={15} />
+                  </a>
                 </div>
-
-                <div className="space-y-2.5 flex-1 mb-8">
-                  {plano.itens.map((item) => (
-                    <div key={item} className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <Check size={13} className={`flex-shrink-0 mt-0.5 ${plano.destaque ? 'text-[#22C55E]' : 'text-slate-500'}`} />
-                      {item}
-                    </div>
-                  ))}
-                </div>
-
-                <a
-                  href="https://wa.me/5547997022381"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-full py-3.5 rounded-2xl font-black uppercase text-xs tracking-widest text-center transition-all flex items-center justify-center gap-2
-                    ${plano.destaque
-                      ? 'bg-[#22C55E] text-[#0B1120] hover:bg-[#16a34a] shadow-[0_8px_30px_rgba(34,197,94,0.25)]'
-                      : 'bg-white/5 text-white hover:bg-white/10 border border-white/10'
-                    }`}
-                >
-                  Falar com consultor <ArrowRight size={13}/>
-                </a>
               </div>
-            ))}
-          </div>
+            </Reveal>
+          ))}
+        </div>
 
-          {/* Add-ons */}
-          <div className="bg-white/[0.03] border border-white/8 rounded-[32px] p-8">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6">Add-ons disponíveis em qualquer plano</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {ADDONS.map((a) => (
-                <div key={a.label} className="flex flex-col gap-3 bg-white/5 border border-white/10 rounded-2xl p-4">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${a.cor}`}>{a.icon}</div>
-                  <div>
-                    <p className="text-white text-xs font-black">{a.label}</p>
+        <Reveal>
+          <div className="rounded-[28px] p-7 md:p-8 bg-white/[0.03] border border-white/10">
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-5">Add-ons disponíveis em qualquer plano</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {ADDONS.map(a => (
+                <div key={a.label} className="flex items-center gap-3 bg-white/[0.04] border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-colors">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${a.cor}`}>{a.icon}</div>
+                  <div className="min-w-0">
+                    <p className="text-white text-[13px] font-bold leading-tight">{a.label}</p>
                     <p className="text-slate-500 text-[10px] font-bold mt-0.5 uppercase tracking-wide">Sob consulta</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Nota */}
-          <p className="text-center text-slate-600 text-[10px] uppercase tracking-widest font-bold mt-6">
-            Todos os planos incluem usuários ilimitados · PWA offline · suporte por chat · sem taxa de setup
-          </p>
-        </div>
-      </section>
+        </Reveal>
+        <p className="text-center text-slate-600 text-[11px] uppercase tracking-widest font-bold mt-6">
+          Todos os planos incluem usuários ilimitados · PWA offline · suporte por chat · sem taxa de setup
+        </p>
+      </Secao>
 
       {/* FAQ */}
-      <section className="py-16 px-6" id="duvidas">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22C55E] mb-3">Dúvidas</div>
-            <h2 className="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tight">
-              Perguntas frequentes
-            </h2>
-          </div>
-
-          <div className="space-y-3">
-            {FAQ.map((item, i) => {
-              const aberta = faqAberta === i;
-              return (
-                <div key={item.q} className="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden">
-                  <button
-                    onClick={() => setFaqAberta(aberta ? null : i)}
-                    className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
-                  >
-                    <span className="text-sm md:text-base font-bold text-white">{item.q}</span>
-                    <ChevronDown size={18} className={`text-[#22C55E] flex-shrink-0 transition-transform ${aberta ? 'rotate-180' : ''}`} />
+      <Secao id="duvidas" rotulo="Dúvidas" titulo="Perguntas frequentes">
+        <div className="max-w-3xl mx-auto space-y-3">
+          {FAQ.map((item, i) => {
+            const aberta = faqAberta === i;
+            return (
+              <Reveal key={item.q} delay={i * 60}>
+                <div className={`rounded-2xl border transition-colors ${aberta ? 'bg-white/[0.05] border-[#22C55E]/30' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}>
+                  <button onClick={() => setFaqAberta(aberta ? null : i)} className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left">
+                    <span className="text-base font-bold text-white">{item.q}</span>
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${aberta ? 'bg-[#22C55E] text-[#0F172A] rotate-180' : 'bg-white/5 text-[#22C55E]'}`}><ChevronDown size={16} /></span>
                   </button>
-                  {aberta && (
-                    <div className="px-6 pb-5 text-sm text-slate-400 font-medium leading-relaxed">
-                      {item.a}
+                  <div className={`grid transition-all duration-500 ease-out ${aberta ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <p className="px-6 pb-6 text-[15px] text-slate-400 font-medium leading-relaxed">{item.a}</p>
                     </div>
-                  )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </Reveal>
+            );
+          })}
         </div>
-      </section>
+      </Secao>
 
       {/* CTA FINAL */}
-      <section className="py-32 px-6" id="contato">
-        <div className="max-w-5xl mx-auto relative">
-          <div className="bg-[#22C55E] rounded-[50px] p-8 md:p-16 overflow-hidden shadow-[0_0_120px_rgba(34,197,94,0.25)] relative">
-            <div className="relative z-10 grid md:grid-cols-2 gap-10 md:gap-14 items-center">
+      <section className="py-24 md:py-32 px-6" id="contato">
+        <Reveal de="zoom">
+          <div className="max-w-6xl mx-auto relative rounded-[44px] overflow-hidden border border-[#22C55E]/30 bg-gradient-to-br from-[#22C55E]/25 via-[#0B1120] to-[#0B1120] p-8 md:p-16 shadow-[0_0_140px_-20px_rgba(34,197,94,0.35)]">
+            <div className="absolute inset-0 grade-fundo opacity-60 pointer-events-none" />
+            <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#22C55E]/30 rounded-full blur-[120px] pointer-events-none" />
+            <div className="relative grid md:grid-cols-2 gap-10 md:gap-14 items-center">
               <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0F172A]/60 mb-4">Pronto para começar?</div>
-                <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] uppercase italic tracking-tighter mb-6 leading-tight">
-                  Escale sua operação<br />comercial agora.
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-4">Pronto para começar?</div>
+                <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter mb-6 leading-[1.02]">
+                  Escale sua operação <span className="texto-gradiente">comercial agora.</span>
                 </h2>
-                <p className="text-[#0F172A]/70 font-medium mb-8 max-w-md">
-                  Deixe seus dados que a gente te chama, ou fale agora direto pelo WhatsApp.
-                </p>
-                <a
-                  href="https://wa.me/5547997022381"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 bg-[#0F172A] text-white px-8 py-4 rounded-2xl font-black uppercase text-sm tracking-[0.15em] hover:scale-105 transition-all shadow-xl"
-                >
-                  Chamar no WhatsApp <ArrowRight size={18} />
+                <p className="text-slate-300 font-medium mb-8 max-w-md text-lg">Deixe seus dados que a gente te chama, ou fale agora direto pelo WhatsApp.</p>
+                <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 bg-white text-[#0F172A] px-7 py-4 rounded-2xl font-black text-sm hover:scale-[1.03] transition-all shadow-xl">
+                  <MessageCircle size={18} /> Chamar no WhatsApp <ArrowRight size={16} />
                 </a>
               </div>
 
-              <div className="bg-[#0B1120] rounded-[32px] p-6 md:p-8 border border-black/10 shadow-2xl">
+              <div className="bg-[#020617]/80 backdrop-blur-xl rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl">
                 {leadEnviado ? (
                   <div className="text-center py-10">
-                    <CheckCircle className="text-[#22C55E] mx-auto mb-4" size={40} />
-                    <p className="text-white font-black uppercase italic text-lg mb-2">Recebemos seu contato!</p>
+                    <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[#22C55E]/15 flex items-center justify-center"><CheckCircle className="text-[#22C55E]" size={34} /></div>
+                    <p className="text-white font-black text-xl mb-2">Recebemos seu contato!</p>
                     <p className="text-slate-400 text-sm">Vamos te chamar em breve pelo WhatsApp ou e-mail.</p>
                   </div>
                 ) : (
                   <form onSubmit={enviarLead} className="space-y-3">
-                    <input
-                      required
-                      value={leadForm.nome}
-                      onChange={(e) => atualizarLead('nome', e.target.value)}
-                      placeholder="Seu nome"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
-                    />
-                    <input
-                      required
-                      value={leadForm.empresa}
-                      onChange={(e) => atualizarLead('empresa', e.target.value)}
-                      placeholder="Sua empresa"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
-                    />
-                    <input
-                      required
-                      value={leadForm.telefone}
-                      onChange={(e) => atualizarLead('telefone', e.target.value)}
-                      placeholder="WhatsApp"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
-                    />
-                    <input
-                      type="email"
-                      value={leadForm.email}
-                      onChange={(e) => atualizarLead('email', e.target.value)}
-                      placeholder="E-mail (opcional)"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] placeholder:text-slate-500 transition-colors"
-                    />
+                    <p className="text-white font-black text-lg mb-1">Quero uma demonstração</p>
+                    <p className="text-slate-500 text-xs mb-4">Leva 1 minuto. Sem compromisso.</p>
+                    <input required value={leadForm.nome} onChange={e => atualizarLead('nome', e.target.value)} placeholder="Seu nome" className={inputCls} />
+                    <input required value={leadForm.empresa} onChange={e => atualizarLead('empresa', e.target.value)} placeholder="Sua empresa" className={inputCls} />
+                    <input required value={leadForm.telefone} onChange={e => atualizarLead('telefone', e.target.value)} placeholder="WhatsApp" inputMode="tel" className={inputCls} />
+                    <input type="email" value={leadForm.email} onChange={e => atualizarLead('email', e.target.value)} placeholder="E-mail (opcional)" className={inputCls} />
                     {erroLead && <p className="text-red-400 text-xs font-bold">{erroLead}</p>}
-                    <button
-                      type="submit"
-                      disabled={enviandoLead}
-                      className="w-full bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] py-4 rounded-xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
-                    >
+                    <button type="submit" disabled={enviandoLead}
+                      className="w-full bg-[#22C55E] hover:bg-[#16a34a] text-[#0F172A] py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60">
                       {enviandoLead ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
                       Quero uma demonstração
                     </button>
@@ -914,20 +775,18 @@ export default function LandingPage() {
                 )}
               </div>
             </div>
-            <Zap className="absolute top-[-60px] left-[-60px] text-[#0F172A]/10" size={320} />
-            <TrendingUp className="absolute bottom-[-40px] right-[-40px] text-[#0F172A]/10" size={280} />
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* FOOTER */}
       <footer className="py-10 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-sm">W</div>
-            <span className="text-sm font-black uppercase italic tracking-tighter text-white/60">WeGrow</span>
+            <div className="w-8 h-8 bg-[#22C55E] rounded-lg flex items-center justify-center font-black text-[#0F172A] text-sm">W</div>
+            <span className="text-sm font-black tracking-tight text-white/70">WeGrow</span>
           </div>
-          <p className="text-[10px] font-bold uppercase text-slate-600 tracking-[0.25em]">
+          <p className="text-[11px] font-semibold text-slate-600 tracking-wide">
             &copy; {new Date().getFullYear()} WeGrow Tecnologia · Todos os direitos reservados
           </p>
           <div className="flex gap-6">

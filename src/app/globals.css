@@ -106,3 +106,7 @@ body {
   .texto-gradiente { animation: none; }
   [class*="animate-["] { animation: none !important; }
 }
+/* Celular: gradiente do texto parado (animar background-position redesenha a cada quadro) */
+@media (max-width: 767px) {
+  .texto-gradiente { animation: none; background-position: 0% 50%; }
+}

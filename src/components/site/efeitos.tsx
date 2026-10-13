@@ -99,7 +99,7 @@ export function OrbitaLeve({ modulos }: { modulos: { nome: string; hex: string; 
   return (
     <div className="absolute inset-0 flex items-center justify-center [perspective:1200px]">
       <div className="relative w-[78%] aspect-square [transform:rotateX(58deg)] [transform-style:preserve-3d]">
-        <div className="absolute inset-0 rounded-full border border-[#22C55E]/20 animate-[girar_40s_linear_infinite] [transform-style:preserve-3d]">
+        <div className="absolute inset-0 rounded-full border border-[#22C55E]/20 animate-[girar_40s_linear_infinite] [transform-style:preserve-3d] will-change-transform">
           {modulos.map((m, i) => {
             const a = (i / n) * 360;
             return (
@@ -107,7 +107,7 @@ export function OrbitaLeve({ modulos }: { modulos: { nome: string; hex: string; 
                 style={{ transform: `rotate(${a}deg) translateX(min(39vw, 230px)) rotate(-${a}deg)` }}>
                 {/* contra-gira pra o ícone ficar de pé */}
                 <div className="-translate-x-1/2 -translate-y-1/2 [transform:rotateX(-58deg)] animate-[girar-reverso_40s_linear_infinite]">
-                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-[#020617] border" style={{ borderColor: `${m.hex}55`, color: m.hex, boxShadow: `0 0 24px ${m.hex}40` }}>
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-[#020617] border" style={{ borderColor: `${m.hex}55`, color: m.hex }}>
                     {m.icon}
                   </div>
                 </div>

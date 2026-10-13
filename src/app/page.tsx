@@ -359,7 +359,9 @@ let modoCache: 'webgl' | 'leve' | null = null;
 function modoDoAparelho(): 'webgl' | 'leve' {
   if (modoCache) return modoCache;
   let modo: 'webgl' | 'leve' = 'leve';
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  // Celular/tablet (tela pequena ou toque) usa a órbita em CSS: a cena WebGL pesava demais.
+  const celularOuToque = window.matchMedia('(max-width: 1023px), (pointer: coarse)').matches;
+  if (!celularOuToque && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     try { modo = document.createElement('canvas').getContext('webgl2') ? 'webgl' : 'leve'; } catch { modo = 'leve'; }
   }
   modoCache = modo;
@@ -394,7 +396,7 @@ function Destaque({ id, cor, rotulo, titulo, texto, itens, visual, invertido }: 
 }) {
   return (
     <section id={id} className="relative py-24 md:py-32 px-6 overflow-hidden">
-      <div className="absolute top-1/2 -translate-y-1/2 w-[800px] h-[520px] rounded-full blur-[130px] pointer-events-none opacity-[0.09]" style={{ background: cor, [invertido ? 'right' : 'left']: '-10%' }} />
+      <div className="hidden md:block absolute top-1/2 -translate-y-1/2 w-[800px] h-[520px] rounded-full blur-[130px] pointer-events-none opacity-[0.09]" style={{ background: cor, [invertido ? 'right' : 'left']: '-10%' }} />
       <div className={`relative max-w-7xl mx-auto grid lg:grid-cols-2 gap-14 items-center ${invertido ? 'lg:[&>*:first-child]:order-2' : ''}`}>
         <div>
           <Reveal de={invertido ? 'direita' : 'esquerda'}>
@@ -494,58 +496,60 @@ export default function LandingPage() {
       {/* HERO */}
       <section id="topo" className="relative min-h-[100svh] flex items-center pt-28 pb-16 px-6 overflow-hidden">
         <div className="absolute inset-0 grade-fundo pointer-events-none" />
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[700px] bg-[#22C55E]/10 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[140px] pointer-events-none" />
+        <div className="hidden md:block absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[700px] bg-[#22C55E]/10 rounded-full blur-[140px] pointer-events-none" />
+        {/* Celular: gradiente simples no lugar do desfoque */}
+        <div className="md:hidden absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.14),transparent_60%)] pointer-events-none" />
+        <div className="hidden md:block absolute bottom-0 right-0 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[140px] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto w-full grid lg:grid-cols-[1.05fr_1fr] gap-10 items-center">
           <div className="text-center lg:text-left relative z-10">
-            <Reveal>
-              <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 backdrop-blur px-4 py-1.5 rounded-full text-slate-300 text-[11px] font-bold mb-8">
+            <div className="animate-[surgir_0.7s_ease-out_both]" style={{ animationDelay: '0ms' }}>
+              <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-1.5 rounded-full text-slate-300 text-[11px] font-bold mb-8">
                 <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#22C55E] animate-ping" /><span className="relative w-2 h-2 rounded-full bg-[#22C55E]" /></span>
                 Soluções tecnológicas inteligentes para o seu negócio
               </div>
-            </Reveal>
-            <Reveal delay={100}>
+            </div>
+            <div className="animate-[surgir_0.7s_ease-out_both]" style={{ animationDelay: '80ms' }}>
               <h1 className="text-5xl sm:text-6xl md:text-7xl xl:text-8xl font-black text-white tracking-tighter leading-[0.92] mb-7">
                 Venda mais.<br />Entregue <span className="texto-gradiente">melhor.</span>
               </h1>
-            </Reveal>
-            <Reveal delay={200}>
+            </div>
+            <div className="animate-[surgir_0.7s_ease-out_both]" style={{ animationDelay: '160ms' }}>
               <p className="text-slate-400 text-lg md:text-xl max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed mb-10">
                 <b className="text-white">CRM</b> pra vender com processo e <b className="text-white">Pulse</b> pra controlar estoque, produção e notas fiscais — num sistema só, adaptável ao seu negócio. Sua equipe fecha mais, erra menos e entrega mais rápido.
               </p>
-            </Reveal>
-            <Reveal delay={300}>
+            </div>
+            <div className="animate-[surgir_0.7s_ease-out_both]" style={{ animationDelay: '240ms' }}>
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mb-10">
                 <a href="https://wa.me/5547997022381" target="_blank" rel="noopener noreferrer"
                   className="group w-full sm:w-auto relative overflow-hidden bg-[#22C55E] text-[#0F172A] px-8 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.03] shadow-[0_0_40px_rgba(34,197,94,0.35)]">
                   <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
                   <span className="relative">Ver demonstração</span> <ArrowRight size={18} className="relative group-hover:translate-x-1 transition-transform" />
                 </a>
-                <Link href="/login" className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10 text-center backdrop-blur">
+                <Link href="/login" className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10 text-center">
                   Já tenho acesso
                 </Link>
               </div>
-            </Reveal>
-            <Reveal delay={400}>
+            </div>
+            <div className="animate-[surgir_0.7s_ease-out_both]" style={{ animationDelay: '320ms' }}>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2 text-[12px] font-semibold text-slate-500">
                 <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Sem fidelidade</span>
                 <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Suporte direto do fundador</span>
                 <span className="flex items-center gap-1.5"><Check size={14} className="text-[#22C55E]" /> Onboarding em dias</span>
               </div>
-            </Reveal>
+            </div>
           </div>
 
           {/* Cena 3D */}
           <Reveal de="zoom" delay={150} className="relative">
             <div className="relative mx-auto w-full max-w-[640px] aspect-square">
-              <div className="absolute inset-[12%] rounded-full bg-[#22C55E]/10 blur-3xl" />
+              <div className="absolute inset-[12%] rounded-full bg-[radial-gradient(circle,rgba(34,197,94,0.18),transparent_70%)]" />
               {modo === 'webgl' && <Hero3D modulos={MODULOS_3D.map(m => ({ nome: m.nome, hex: m.hex }))} leve={celular} />}
               {modo === 'leve' && <OrbitaLeve modulos={MODULOS_3D.map(m => ({ nome: m.nome, hex: m.hex, icon: m.icon }))} />}
               {/* rótulos dos módulos flutuando por cima da cena */}
               <div className="absolute inset-x-0 bottom-0 flex flex-wrap justify-center gap-1.5 px-4 pointer-events-none">
                 {MODULOS_3D.map(m => (
-                  <span key={m.nome} className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#020617]/70 backdrop-blur border" style={{ color: m.hex, borderColor: `${m.hex}35` }}>{m.nome}</span>
+                  <span key={m.nome} className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#020617]/85 border" style={{ color: m.hex, borderColor: `${m.hex}35` }}>{m.nome}</span>
                 ))}
               </div>
             </div>
@@ -783,7 +787,7 @@ export default function LandingPage() {
         <Reveal de="zoom">
           <div className="max-w-6xl mx-auto relative rounded-[44px] overflow-hidden border border-[#22C55E]/30 bg-gradient-to-br from-[#22C55E]/25 via-[#0B1120] to-[#0B1120] p-8 md:p-16 shadow-[0_0_140px_-20px_rgba(34,197,94,0.35)]">
             <div className="absolute inset-0 grade-fundo opacity-60 pointer-events-none" />
-            <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#22C55E]/30 rounded-full blur-[120px] pointer-events-none" />
+            <div className="hidden md:block absolute -top-32 -left-32 w-96 h-96 bg-[#22C55E]/30 rounded-full blur-[120px] pointer-events-none" />
             <div className="relative grid md:grid-cols-2 gap-10 md:gap-14 items-center">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-4">Pronto para começar?</div>
@@ -797,7 +801,7 @@ export default function LandingPage() {
                 </a>
               </div>
 
-              <div className="bg-[#020617]/80 backdrop-blur-xl rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl">
+              <div className="bg-[#020617]/90 md:backdrop-blur-xl rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl">
                 {leadEnviado ? (
                   <div className="text-center py-10">
                     <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[#22C55E]/15 flex items-center justify-center"><CheckCircle className="text-[#22C55E]" size={34} /></div>

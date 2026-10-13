@@ -9,6 +9,9 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV,
+    // Operação cancelada pelo próprio navegador (saiu da página, trocou de aba, vídeo/requisição
+    // interrompidos — comum no Safari do iPhone). Não é bug e não afeta o usuário: só ruído.
+    ignoreErrors: [/AbortError/, /The operation was aborted/, /The play\(\) request was interrupted/],
   });
 }
 

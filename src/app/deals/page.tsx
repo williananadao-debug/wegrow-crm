@@ -47,7 +47,8 @@ type Historico = { id: number; texto: string; created_at: string; };
 type Atividade = { id: number; tipo: 'etapa' | 'nota' | 'followup'; descricao: string; created_at: string; };
 type ServicoConfig = { id: number; nome: string; preco: number; tipo?: string; unidade?: string; estoque?: number | null; };
 
-type Lead = { 
+type Lead = {
+  observacao_contrato?: string | null; 
   id: number; 
   empresa: string; 
   valor_total: number; 
@@ -313,7 +314,10 @@ export default function DealsPage() {
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
   const [novaCidade, setNovaCidade] = useState('');     
-  const [novaDescricao, setNovaDescricao] = useState(''); 
+  const [novaDescricao, setNovaDescricao] = useState('');
+  // Texto que sai no contrato/proposta. Antes era a nota mais recente do lead — e as notas são a
+  // conversa interna da equipe (e recebem notas automáticas: motivo de perda, WhatsApp, e-mail).
+  const [observacaoContrato, setObservacaoContrato] = useState(''); 
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [veiculoReferencia, setVeiculoReferencia] = useState('');
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
@@ -434,7 +438,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
+    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
     // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
     // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
@@ -1066,7 +1070,7 @@ export default function DealsPage() {
       ? `, na cidade de ${dadosEmissora.cidade}${dadosEmissora.estado ? ` - Estado de ${nomeEstadoExtenso(dadosEmissora.estado)}` : ''}`
       : '';
     const timbradoUrl = timbradoPorUnidade(unidadeData?.nome || '');
-    const ultimaNota = Array.isArray(lead.notas) && lead.notas.length > 0 ? lead.notas[0].texto : '';
+    const ultimaNota = (lead.observacao_contrato || '').trim();
     const qtdParcelasContrato = Math.max(1, parseInt(lead.parcelas || '1', 10) || 1);
     const vencimentosEfetivos = Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length === qtdParcelasContrato
       ? lead.vencimentos_datas
@@ -1364,8 +1368,7 @@ export default function DealsPage() {
 
     const subtotal = itensTemporarios.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
     const total = Math.max(0, subtotal - desconto);
-    const notasLead = leadAtual?.notas;
-    const ultimaNota = Array.isArray(notasLead) && notasLead.length > 0 ? notasLead[0].texto : '';
+    const ultimaNota = observacaoContrato.trim();
 
     const res = await fetch('/api/docuseal', {
       method: 'POST',
@@ -1761,6 +1764,7 @@ export default function DealsPage() {
         unidade: novaUnidade,
         cidade: novaCidade,
         descricao: novaDescricao,
+        observacao_contrato: observacaoContrato.trim() || null,
         notas: historico,
         atividades: atividadesPayload,
         tipo: tipoCliente,
@@ -1859,6 +1863,7 @@ export default function DealsPage() {
         setNovaUnidade(lead.unidade || '');
         setNovaCidade(lead.cidade || '');
         setNovaDescricao(lead.descricao || '');
+        setObservacaoContrato(lead.observacao_contrato || '');
         setSelectedClientId(lead.client_id || null);
         setVeiculoReferencia(lead.veiculo_referencia || '');
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
@@ -1916,6 +1921,7 @@ export default function DealsPage() {
         setNovaUnidade(perfil?.unidade || '');
         setNovaCidade('');
         setNovaDescricao('');
+        setObservacaoContrato('');
         setSelectedClientId(null);
         setVeiculoReferencia('');
         setItensTemporarios([]);
@@ -2499,6 +2505,12 @@ export default function DealsPage() {
                             )}
                         </div>
                     )}
+
+                    <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl">
+                        <label className="text-[10px] font-black uppercase text-amber-400 mb-1 flex items-center gap-1"><FileText size={12}/> Observação do contrato</label>
+                        <p className="text-[10px] text-slate-500 mb-2">Sai no contrato e na proposta (seção &quot;Observações&quot;). As notas do lead são só da equipe e não vão mais pro contrato.</p>
+                        <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-amber-500 min-h-[70px] custom-scrollbar disabled:opacity-60" value={observacaoContrato} onChange={e => setObservacaoContrato(e.target.value)} disabled={leadTravado} placeholder="Ex.: Inserções de segunda a sábado. Cliente envia o áudio até 48h antes da estreia." />
+                    </div>
 
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">

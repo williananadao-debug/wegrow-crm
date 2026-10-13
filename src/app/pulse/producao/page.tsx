@@ -658,6 +658,26 @@ function PulseProducaoContent() {
         </div>
       </div>}
 
+      {/* Alerta de produção parada (etapa aguardando "Iniciar" há 3+ dias) — mesmo corte do aviso diário no sino */}
+      {!loading && (() => {
+        const paradas = producoes.filter(p => aguardandoInicio(p) && diasParado(p) >= 3).sort((a, b) => diasParado(b) - diasParado(a));
+        if (paradas.length === 0) return null;
+        return (
+          <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-3.5">
+            <p className="text-xs font-black uppercase tracking-widest text-red-300 flex items-center gap-2 mb-2">
+              <AlertTriangle size={14} /> {paradas.length} etapa{paradas.length > 1 ? 's' : ''} parada{paradas.length > 1 ? 's' : ''} há 3 dias ou mais
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {paradas.map(p => (
+                <button key={p.id} onClick={() => setProcessoId(p.id)} className="text-[11px] font-bold text-red-200 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 rounded-lg px-2.5 py-1">
+                  {rotuloCliente(p.lead_id)} · {ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]} · {diasParado(p)}d
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex items-center gap-2 mb-3">
         <ClipboardList size={15} className="text-slate-500" />
         <h3 className="font-black uppercase text-sm text-slate-300">{ocultarCliente ? 'Linha de produção' : 'Fluxo de produção'}</h3>

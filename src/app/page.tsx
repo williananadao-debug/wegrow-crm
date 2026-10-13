@@ -334,13 +334,16 @@ const PULSE_DESTAQUES = [
 
 // Depoimento em vídeo. Preencher com o link do vídeo do Douglas — enquanto youtubeId/mp4
 // estiverem vazios a seção não aparece no site.
-const DEPOIMENTO: { youtubeId?: string; mp4?: string; capa?: string; nome: string; cargo: string; empresa: string; frase: string } = {
-  youtubeId: '',
-  mp4: '',
-  nome: 'Douglas',
-  cargo: '',
-  empresa: '',
-  frase: '',
+// Vídeo em public/noprecache/ (fora do cache offline do app — senão todo celular com o app
+// instalado baixaria os 10 MB). Frase = palavras do próprio Douglas no vídeo (legenda).
+const DEPOIMENTO: { youtubeId?: string; mp4?: string; capa?: string; vertical?: boolean; nome: string; cargo: string; empresa: string; frase: string } = {
+  mp4: '/noprecache/depoimento-douglas.mp4',
+  capa: '/noprecache/depoimento-douglas.jpg',
+  vertical: true,
+  nome: 'Douglas Fernandes',
+  cargo: 'Diretor Executivo',
+  empresa: 'Rede Demais FM de Rádios',
+  frase: 'Um sistema desenvolvido e modulado de acordo com as nossas necessidades. Faça como a Rede Demais FM: coloque na sua empresa o CRM WeGrow — a revolução em dados e informações pro seu time de vendas.',
 };
 const temDepoimento = !!(DEPOIMENTO.youtubeId || DEPOIMENTO.mp4);
 
@@ -616,13 +619,14 @@ export default function LandingPage() {
       {/* DEPOIMENTO */}
       {temDepoimento && (
         <section className="relative py-24 md:py-28 px-6">
-          <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.2fr_1fr] gap-10 items-center">
+          <div className={`max-w-6xl mx-auto grid gap-10 md:gap-16 items-center ${DEPOIMENTO.vertical ? 'md:grid-cols-[minmax(0,360px)_1fr] justify-center' : 'lg:grid-cols-[1.2fr_1fr]'}`}>
             <Reveal de="zoom">
-              <div className="relative aspect-video rounded-[28px] overflow-hidden border border-white/10 bg-[#0B1120] shadow-[0_40px_120px_-30px_rgba(34,197,94,0.4)]">
+              <div className={`relative rounded-[28px] overflow-hidden border border-white/10 bg-[#0B1120] shadow-[0_40px_120px_-30px_rgba(34,197,94,0.4)] ${DEPOIMENTO.vertical ? 'aspect-[9/16] w-full max-w-[360px] mx-auto' : 'aspect-video'}`}>
                 <VideoDepoimento youtubeId={DEPOIMENTO.youtubeId || undefined} mp4={DEPOIMENTO.mp4 || undefined} capa={DEPOIMENTO.capa} titulo={`Depoimento — ${DEPOIMENTO.nome}`} />
               </div>
             </Reveal>
             <Reveal de="direita" delay={150}>
+              <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-[#22C55E] mb-5"><span className="h-px w-6 bg-[#22C55E]/60" /> Quem usa</div>
               <Quote size={40} className="text-[#22C55E]/40 mb-4" />
               {DEPOIMENTO.frase && <p className="text-2xl md:text-3xl font-bold text-white leading-snug mb-6">&ldquo;{DEPOIMENTO.frase}&rdquo;</p>}
               <p className="text-white font-black text-lg">{DEPOIMENTO.nome}</p>

@@ -24,7 +24,11 @@ export async function GET(req: Request) {
   if (ctx.erro) return ctx.erro;
   const { data } = await ctx.db.from('fiscal_integracoes').select('*').eq('empresa_id', ctx.perfil.empresa_id).maybeSingle();
   if (!data) return NextResponse.json({ integracao: false, aliquota: null });
-  return NextResponse.json({ integracao: true, aliquota: data.aliquota_simples != null ? Number(data.aliquota_simples) : null });
+  return NextResponse.json({
+    integracao: true,
+    aliquota: data.aliquota_simples != null ? Number(data.aliquota_simples) : null,
+    tributosAprox: data.tributos_aprox_percentual != null ? Number(data.tributos_aprox_percentual) : null,
+  });
 }
 
 export async function POST(req: Request) {
@@ -34,10 +38,18 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const aliquota = Math.round(Number(body?.aliquota) * 100) / 100;
   if (!(aliquota > 0 && aliquota < 20)) return NextResponse.json({ error: 'Alíquota inválida (ex.: 3,83).' }, { status: 400 });
-  const { error } = await ctx.db.from('fiscal_integracoes').update({ aliquota_simples: aliquota }).eq('empresa_id', ctx.perfil.empresa_id);
+  // % aproximado de tributos (IBPT, Lei 12.741) — opcional; null limpa.
+  const campos: Record<string, number | null> = { aliquota_simples: aliquota };
+  if (body && 'tributosAprox' in body) {
+    const t = body.tributosAprox == null || body.tributosAprox === '' ? null : Math.round(Number(body.tributosAprox) * 100) / 100;
+    if (t != null && !(t > 0 && t < 100)) return NextResponse.json({ error: '% de tributos aproximados inválido (ex.: 29,1).' }, { status: 400 });
+    campos.tributos_aprox_percentual = t;
+  }
+  const { error } = await ctx.db.from('fiscal_integracoes').update(campos).eq('empresa_id', ctx.perfil.empresa_id);
   if (error) {
+    if (/tributos_aprox_percentual/.test(error.message)) return NextResponse.json({ error: 'Falta rodar a migration 20261014150000_fiscal_tributos_aprox.sql no Supabase.' }, { status: 500 });
     const semColuna = /aliquota_simples/.test(error.message);
     return NextResponse.json({ error: semColuna ? 'Falta rodar a migration 20261008120000_fiscal_aliquota_simples.sql no Supabase.' : error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, aliquota });
+  return NextResponse.json({ ok: true, aliquota, tributosAprox: campos.tributos_aprox_percentual ?? null });
 }

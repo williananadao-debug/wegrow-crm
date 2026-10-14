@@ -88,6 +88,22 @@ function creditoSimples(valor: number, aliquota: number) {
   };
 }
 
+// Lei 12.741/2012 — valor aproximado dos tributos (percentual da tabela IBPT, definido pela empresa).
+function valorTributosAprox(valor: number, percentual: number | null | undefined) {
+  return percentual && percentual > 0 ? Number((valor * percentual / 100).toFixed(2)) : null;
+}
+function textoTributosAprox(valor: number, percentual: number | null | undefined) {
+  const v = valorTributosAprox(valor, percentual);
+  if (v == null) return null;
+  return `Valor aproximado dos tributos: R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${percentual!.toLocaleString('pt-BR')}%). Fonte: IBPT (Lei 12.741/2012).`;
+}
+function comTributosAprox<T extends { valor_bruto: number }>(itens: T[], percentual: number | null | undefined) {
+  return itens.map(i => {
+    const v = valorTributosAprox(i.valor_bruto, percentual);
+    return v == null ? i : { ...i, valor_total_tributos: v };
+  });
+}
+
 function textoCredito(valor: number, trib: Tributacao) {
   if (trib.csosn !== '101' || !trib.aliquotaCredito) return null;
   const credito = (valor * trib.aliquotaCredito / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -188,6 +204,7 @@ function juntarInfo(...partes: (string | null | undefined)[]) {
 // NF1 — simples faturamento, valor cheio, CFOP 5922 (dentro de SC) / 6922 (outro estado).
 export function montarPayloadNF1(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; aliquotaSimples: number | null;
+  tributosAprox?: number | null;
 }) {
   const cfop = params.emitente.uf === params.destinatario.uf ? '5922' : '6922';
   const trib = tributacaoPorCfop(cfop, params.destinatario, params.aliquotaSimples);
@@ -196,8 +213,8 @@ export function montarPayloadNF1(params: {
   return {
     ...base,
     natureza_operacao: 'Lançamento efetuado para entrega futura',
-    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib)),
-    items: itensPayload(params.itens, cfop, trib),
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib), textoTributosAprox(total, params.tributosAprox)),
+    items: comTributosAprox(itensPayload(params.itens, cfop, trib), params.tributosAprox),
   };
 }
 
@@ -213,7 +230,7 @@ export function cfopVendaNormal(emitente: EmitenteFiscal, destinatario: Destinat
 
 export function montarPayloadVendaNormal(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; aliquotaSimples: number | null;
-  origem: 'producao' | 'revenda';
+  origem: 'producao' | 'revenda'; tributosAprox?: number | null;
 }) {
   const cfop = cfopVendaNormal(params.emitente, params.destinatario, params.origem);
   const trib = tributacaoPorCfop(cfop, params.destinatario, params.aliquotaSimples);
@@ -222,8 +239,8 @@ export function montarPayloadVendaNormal(params: {
   return {
     ...base,
     natureza_operacao: naturezaPorCfop(cfop),
-    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib)),
-    items: itensPayload(params.itens, cfop, trib),
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib), textoTributosAprox(total, params.tributosAprox)),
+    items: comTributosAprox(itensPayload(params.itens, cfop, trib), params.tributosAprox),
   };
 }
 

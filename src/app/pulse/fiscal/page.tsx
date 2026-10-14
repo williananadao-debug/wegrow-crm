@@ -147,6 +147,8 @@ export default function FiscalPage() {
   const [temIntegracao, setTemIntegracao] = useState(false);
   const [aliquotaAberta, setAliquotaAberta] = useState(false);
   const [aliquotaTexto, setAliquotaTexto] = useState('');
+  const [tributosAprox, setTributosAprox] = useState<number | null>(null);
+  const [tributosTexto, setTributosTexto] = useState('');
   const [aliquotaErro, setAliquotaErro] = useState<string | null>(null);
   const [salvandoAliquota, setSalvandoAliquota] = useState(false);
   useEffect(() => {
@@ -156,7 +158,7 @@ export default function FiscalPage() {
       if (!session) return;
       const res = await fetch('/api/pulse/fiscal/aliquota', { headers: { Authorization: `Bearer ${session.access_token}` } });
       const json = await res.json().catch(() => ({}));
-      if (res.ok) { setTemIntegracao(!!json.integracao); setAliquota(json.aliquota ?? null); }
+      if (res.ok) { setTemIntegracao(!!json.integracao); setAliquota(json.aliquota ?? null); setTributosAprox(json.tributosAprox ?? null); }
     })();
   }, [isLideranca]);
   const salvarAliquota = async () => {
@@ -166,11 +168,11 @@ export default function FiscalPage() {
       if (!session) throw new Error('Sessão expirada.');
       const res = await fetch('/api/pulse/fiscal/aliquota', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ aliquota: Number(aliquotaTexto.replace(',', '.')) }),
+        body: JSON.stringify({ aliquota: Number(aliquotaTexto.replace(',', '.')), tributosAprox: tributosTexto ? Number(tributosTexto.replace(',', '.')) : null }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `Erro ${res.status}`);
-      setAliquota(json.aliquota); setAliquotaAberta(false);
+      setAliquota(json.aliquota); setTributosAprox(json.tributosAprox ?? null); setAliquotaAberta(false);
     } catch (e) { setAliquotaErro(e instanceof Error ? e.message : 'Erro ao salvar.'); }
     finally { setSalvandoAliquota(false); }
   };
@@ -390,8 +392,9 @@ export default function FiscalPage() {
             </button>
           )}
           {isDiretor && temIntegracao && (
-            <button onClick={() => { setAliquotaTexto(aliquota != null ? String(aliquota).replace('.', ',') : ''); setAliquotaErro(null); setAliquotaAberta(true); }} title="Alíquota efetiva do Simples Nacional — usada no crédito de ICMS (CSOSN 101). Atualize todo mês com o valor da contabilidade." className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${aliquota != null ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}`}>
+            <button onClick={() => { setAliquotaTexto(aliquota != null ? String(aliquota).replace('.', ',') : ''); setTributosTexto(tributosAprox != null ? String(tributosAprox).replace('.', ',') : ''); setAliquotaErro(null); setAliquotaAberta(true); }} title="Alíquota efetiva do Simples Nacional — usada no crédito de ICMS (CSOSN 101). Atualize todo mês com o valor da contabilidade." className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${aliquota != null ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}`}>
               % Simples: {aliquota != null ? `${aliquota.toLocaleString('pt-BR')}%` : 'definir'}
+              {aliquota != null && <span className="text-slate-500">· IBPT: {tributosAprox != null ? `${tributosAprox.toLocaleString('pt-BR')}%` : '—'}</span>}
             </button>
           )}
           {isDiretor && temIntegracao && (
@@ -607,6 +610,12 @@ export default function FiscalPage() {
             <p className="text-slate-400 text-xs leading-relaxed mb-4">Alíquota efetiva do mês, informada pela contabilidade. Sai como crédito de ICMS (CSOSN 101) nas notas para clientes com inscrição estadual. Atualize todo mês.</p>
             <div className="flex items-center gap-2 mb-3">
               <input value={aliquotaTexto} onChange={e => setAliquotaTexto(e.target.value.replace(/[^\d,.]/g, ''))} inputMode="decimal" placeholder="3,83" className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
+              <span className="text-slate-400 font-black">%</span>
+            </div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Tributos aproximados (IBPT, Lei 12.741)</label>
+            <p className="text-slate-500 text-[11px] leading-snug mb-2">Sai nas notas de venda como &quot;Valor aproximado dos tributos&quot;. Use o % da tabela IBPT do NCM. Deixe vazio pra não informar.</p>
+            <div className="flex items-center gap-2 mb-3">
+              <input value={tributosTexto} onChange={e => setTributosTexto(e.target.value.replace(/[^\d,.]/g, ''))} inputMode="decimal" placeholder="29,1" className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)]" />
               <span className="text-slate-400 font-black">%</span>
             </div>
             {aliquotaErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mb-3">{aliquotaErro}</div>}

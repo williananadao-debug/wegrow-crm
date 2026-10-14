@@ -103,12 +103,13 @@ export async function POST(req: NextRequest) {
     telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
   const aliquotaSimples = integracao.aliquota_simples != null ? Number(integracao.aliquota_simples) : null;
+  const tributosAprox = integracao.tributos_aprox_percentual != null ? Number(integracao.tributos_aprox_percentual) : null;
 
   let payload;
   try {
     payload = vendaNormal
-      ? montarPayloadVendaNormal({ emitente, destinatario, itens, aliquotaSimples, origem })
-      : montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples });
+      ? montarPayloadVendaNormal({ emitente, destinatario, itens, aliquotaSimples, origem, tributosAprox })
+      : montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples, tributosAprox });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Falha ao montar a NF.' }, { status: 400 }); }
   // "nfv" marca a venda normal — a NF2 (remessa de entrega futura) não sai pra ela.

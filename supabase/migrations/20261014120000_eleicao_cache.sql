@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS public.eleicao_cache (
 
 -- Sem policies: só a service role (rotas /api/eleicao) lê e escreve.
 ALTER TABLE public.eleicao_cache ENABLE ROW LEVEL SECURITY;
+-- Tabela criada pelo SQL Editor fica sem os GRANTs padrão (ver 20260805070000_grant_metas_table.sql).
+GRANT SELECT, INSERT, UPDATE ON public.eleicao_cache TO service_role;
 
 INSERT INTO public.eleicao_cache (chave) VALUES ('real'), ('teste')
 ON CONFLICT (chave) DO NOTHING;

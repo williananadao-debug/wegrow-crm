@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
-import { normalizarUf, montarPayloadNF2, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
+import { normalizarUf, montarPayloadNF2, lerModalidadeFrete, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
 import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
@@ -18,7 +18,8 @@ function supabaseAdmin() {
 
 function soDigitos(v: string) { return (v || '').replace(/\D/g, ''); }
 
-// POST { leadId } — emite a NF2 (remessa, CFOP 5116/6116) referenciando a chave da NF1 já
+// POST { leadId, modalidadeFrete?, verificar? } — verificar=true só confere se a NF2 pode sair
+// (a Produção pergunta o frete antes de emitir). Emite a NF2 (remessa, CFOP 5116/6116) referenciando a chave da NF1 já
 // autorizada dessa venda. Chamar só no momento real da entrega do trailer.
 export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
     .not('ref_focus_nfe', 'ilike', '%comp%') // NF complementar também referencia a NF1, mas não é remessa
     .limit(1).maybeSingle();
   if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF2 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
+  if (body?.verificar) return NextResponse.json({ ok: true, pronta: true });
 
   // NF complementar de valor autorizada da NF1 também vai referenciada na remessa.
   const { data: complementares } = await db.from('fiscal_notas').select('chave_acesso')
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
     telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
 
-  const payload = montarPayloadNF2({ emitente, destinatario, itens, chaveNf1: nf1.chave_acesso, chavesComplementares });
+  const payload = montarPayloadNF2({ emitente, destinatario, itens, chaveNf1: nf1.chave_acesso, chavesComplementares, modalidadeFrete: lerModalidadeFrete(body?.modalidadeFrete) });
   const ref = `venda${leadId}nf2${Date.now()}`;
 
   const { data: notaRascunho, error: erroInsert } = await db.from('fiscal_notas').insert([{

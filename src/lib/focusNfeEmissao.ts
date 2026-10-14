@@ -230,7 +230,7 @@ export function cfopVendaNormal(emitente: EmitenteFiscal, destinatario: Destinat
 
 export function montarPayloadVendaNormal(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; aliquotaSimples: number | null;
-  origem: 'producao' | 'revenda'; tributosAprox?: number | null;
+  origem: 'producao' | 'revenda'; tributosAprox?: number | null; modalidadeFrete?: ModalidadeFrete;
 }) {
   const cfop = cfopVendaNormal(params.emitente, params.destinatario, params.origem);
   const trib = tributacaoPorCfop(cfop, params.destinatario, params.aliquotaSimples);
@@ -239,6 +239,7 @@ export function montarPayloadVendaNormal(params: {
   return {
     ...base,
     natureza_operacao: naturezaPorCfop(cfop),
+    modalidade_frete: params.modalidadeFrete ?? 9,
     informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib), textoTributosAprox(total, params.tributosAprox)),
     items: comTributosAprox(itensPayload(params.itens, cfop, trib), params.tributosAprox),
   };
@@ -248,12 +249,13 @@ export function montarPayloadVendaNormal(params: {
 // referenciando a chave da NF1. Repete o mesmo valor/itens da NF1 (padrão de mercado pra entrega futura).
 export function montarPayloadNF2(params: {
   emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; chaveNf1: string;
-  chavesComplementares?: string[];
+  chavesComplementares?: string[]; modalidadeFrete?: ModalidadeFrete;
 }) {
   const cfop = params.emitente.uf === params.destinatario.uf ? '5116' : '6116';
   return {
     ...baseComum(params.emitente, params.destinatario),
     natureza_operacao: 'Remessa de mercadoria em venda para entrega futura',
+    modalidade_frete: params.modalidadeFrete ?? 9,
     // NF complementar de valor da NF1 também é referenciada na remessa.
     notas_referenciadas: [params.chaveNf1, ...(params.chavesComplementares || [])].map(chave_nfe => ({ chave_nfe })),
     items: itensPayload(params.itens, cfop, { csosn: '400', aliquotaCredito: null }),
@@ -272,6 +274,10 @@ export function naturezaPorCfop(cfop: string) {
 
 // 0 = por conta do emitente, 1 = do destinatário, 9 = sem frete (entrega/retirada própria).
 export type ModalidadeFrete = 0 | 1 | 9;
+export function lerModalidadeFrete(v: unknown): ModalidadeFrete {
+  const n = Number(v);
+  return n === 0 || n === 1 ? n : 9;
+}
 
 // NF avulsa de REMESSA PARA CONSERTO (inclusive envio em garantia): CFOP 5915 (dentro do
 // estado) / 6915 (outro estado), CSOSN 400 — sem destaque de ICMS na remessa (Simples).

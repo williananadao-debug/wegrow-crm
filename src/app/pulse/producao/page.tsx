@@ -6,6 +6,7 @@ import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, Cli
 import { supabase } from '@/lib/supabase';
 import { comprimirImagem } from '@/lib/comprimirImagem';
 import { usePulseAccess } from '../usePulseAccess';
+import { SeletorFrete, type FreteNf } from '@/components/SeletorTipoNf';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, checklistsEtapasFabricacaoDe, type ChecklistFeito, ehMateriaPrima, ehUsoConsumo } from '../shared';
 
 // "Load failed" (Safari) / "Failed to fetch" (Chrome) = a internet caiu no meio do envio.
@@ -221,6 +222,38 @@ function PulseProducaoContent() {
     }
   };
 
+  // NF2 (remessa da entrega futura): ao marcar "Entregue", pergunta o frete antes de emitir.
+  const [nf2Pendente, setNf2Pendente] = useState<{ leadId: number; nome: string } | null>(null);
+  const [nf2Frete, setNf2Frete] = useState<FreteNf>(9);
+  const [nf2Enviando, setNf2Enviando] = useState(false);
+
+  const chamarNf2 = async (leadId: number, extra: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Sessão expirada.');
+    const res = await fetch('/api/pulse/fiscal/emitir-nf2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ leadId, ...extra }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'erro desconhecido');
+    return json;
+  };
+
+  const emitirNf2Pendente = async () => {
+    if (!nf2Pendente) return;
+    setNf2Enviando(true);
+    try {
+      await chamarNf2(nf2Pendente.leadId, { modalidadeFrete: nf2Frete });
+      setNf2Pendente(null);
+      alert('NF de entrega enviada pra SEFAZ. A autorização aparece em Notas Fiscais em alguns segundos.');
+    } catch (err: any) {
+      alert(`A NF de entrega não saiu: ${err?.message || 'erro desconhecido'}.`);
+    } finally {
+      setNf2Enviando(false);
+    }
+  };
+
   const avancarEtapa = async (p: Producao) => {
     const proxima = PROXIMA_ETAPA[p.status];
     if (!proxima) return;
@@ -245,21 +278,19 @@ function PulseProducaoContent() {
 
     // Entrega futura: NF2 (remessa, CFOP 5116/6116) só faz sentido no momento real da
     // entrega — dispara aqui, sem travar a mudança de coluna se a emissão falhar (dá pra
-    // tentar de novo depois em /pulse/fiscal).
-    if (proxima === 'entregue' && p.lead_id) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Sessão expirada.');
-        const res = await fetch('/api/pulse/fiscal/emitir-nf2', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ leadId: p.lead_id }),
-        });
-        const json = await res.json();
-        if (!res.ok) alert(`Produção marcada como entregue, mas a NF de entrega não saiu: ${json.error || 'erro desconhecido'}. Pode tentar emitir manualmente em /pulse/fiscal.`);
-      } catch (err: any) {
-        alert(`Produção marcada como entregue, mas a NF de entrega não saiu: ${err?.message || 'erro desconhecido'}.`);
-      }
+    // tentar de novo pelo botão "NF de entrega" no detalhe do pedido entregue).
+    if (proxima === 'entregue' && p.lead_id) abrirNf2(p, 'Produção marcada como entregue, mas a NF de entrega não saiu');
+  };
+
+  // Só confere; se a NF2 pode sair, abre a escolha do frete. Venda normal volta "ignorada".
+  const abrirNf2 = async (p: Producao, prefixoErro = 'A NF de entrega não pode sair') => {
+    if (!p.lead_id) return;
+    try {
+      const json = await chamarNf2(p.lead_id, { verificar: true });
+      if (json.pronta) { setNf2Frete(9); setNf2Pendente({ leadId: p.lead_id, nome: `${p.produto_final_nome} · ${rotuloCliente(p.lead_id)}` }); }
+      else if (json.ignorada) alert('Essa venda saiu com NF de venda normal — não tem NF de entrega separada.');
+    } catch (err: any) {
+      alert(`${prefixoErro}: ${err?.message || 'erro desconhecido'}.`);
     }
   };
 
@@ -968,6 +999,11 @@ function PulseProducaoContent() {
                 <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao.lead_id)}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
+                {isLideranca && detalheProducao.status === 'entregue' && detalheProducao.lead_id && (
+                  <button onClick={() => abrirNf2(detalheProducao)} className="mt-2 inline-flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase">
+                    <PackageCheck size={11} /> NF de entrega
+                  </button>
+                )}
               </div>
               <button onClick={fecharDetalhe} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
             </div>
@@ -1111,6 +1147,26 @@ function PulseProducaoContent() {
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {nf2Pendente && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => !nf2Enviando && setNf2Pendente(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="min-w-0">
+                <h3 className="font-black text-white uppercase italic text-lg">NF de entrega</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{nf2Pendente.nome}</p>
+              </div>
+              <button onClick={() => !nf2Enviando && setNf2Pendente(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <p className="text-slate-400 text-xs leading-relaxed mb-3">Remessa da entrega futura (CFOP 5116/6116), referenciando a nota de faturamento.</p>
+            <SeletorFrete valor={nf2Frete} onChange={setNf2Frete} />
+            <button onClick={emitirNf2Pendente} disabled={nf2Enviando} className="w-full mt-5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all">
+              {nf2Enviando ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />} {nf2Enviando ? 'Enviando pra SEFAZ...' : 'Emitir NF de entrega'}
+            </button>
+            <button onClick={() => setNf2Pendente(null)} disabled={nf2Enviando} className="w-full mt-2 text-slate-500 hover:text-slate-300 text-[10px] font-black uppercase py-2">Agora não</button>
           </div>
         </div>
       )}

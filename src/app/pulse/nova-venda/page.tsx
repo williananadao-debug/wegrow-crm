@@ -884,7 +884,7 @@ function PulseNovaVendaContent() {
       const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: venda.id, modalidade: escolha.modalidade, origem: escolha.origem }),
+        body: JSON.stringify({ leadId: venda.id, modalidade: escolha.modalidade, origem: escolha.origem, modalidadeFrete: escolha.modalidadeFrete }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');

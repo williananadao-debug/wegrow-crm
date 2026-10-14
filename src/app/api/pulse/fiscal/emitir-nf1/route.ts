@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
-import { normalizarUf, montarPayloadNF1, montarPayloadVendaNormal, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
+import { normalizarUf, montarPayloadNF1, montarPayloadVendaNormal, lerModalidadeFrete, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
 import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
   let payload;
   try {
     payload = vendaNormal
-      ? montarPayloadVendaNormal({ emitente, destinatario, itens, aliquotaSimples, origem, tributosAprox })
+      ? montarPayloadVendaNormal({ emitente, destinatario, itens, aliquotaSimples, origem, tributosAprox, modalidadeFrete: lerModalidadeFrete(body?.modalidadeFrete) })
       : montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples, tributosAprox });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Falha ao montar a NF.' }, { status: 400 }); }

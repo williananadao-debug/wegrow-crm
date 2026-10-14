@@ -393,7 +393,7 @@ export default function PulsePainelPage() {
       const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: nfseVenda.id, modalidade: nfeEscolha.modalidade, origem: nfeEscolha.origem }),
+        body: JSON.stringify({ leadId: nfseVenda.id, modalidade: nfeEscolha.modalidade, origem: nfeEscolha.origem, modalidadeFrete: nfeEscolha.modalidadeFrete }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
-import { montarPayloadNF1, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
+import { normalizarUf, montarPayloadNF1, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
 import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
@@ -91,9 +91,11 @@ export async function POST(req: NextRequest) {
     cep: integracao.cep || '', municipio: integracao.municipio || '', codigoMunicipio: integracao.codigo_municipio,
     uf: integracao.uf || '', telefone: integracao.telefone, email: integracao.email, regimeTributario: integracao.regime_tributario,
   };
+  const ufDestinatario = normalizarUf(cliente.estado);
+  if (!ufDestinatario) return NextResponse.json({ error: `Estado do cliente inválido ("${cliente.estado}") — corrija em Clientes com a sigla, ex.: SC.` }, { status: 400 });
   const destinatario: DestinatarioFiscal = {
     nome: cliente.nome_empresa, cnpjOuCpf: cliente.cnpj, endereco: cliente.endereco, numero: cliente.numero,
-    bairro: cliente.bairro, cep: cliente.cep, municipio: cliente.cidade, uf: cliente.estado,
+    bairro: cliente.bairro, cep: cliente.cep, municipio: cliente.cidade, uf: ufDestinatario,
     telefone: cliente.telefone, email: cliente.email, ie: cliente.inscricao_estadual,
   };
   const aliquotaSimples = integracao.aliquota_simples != null ? Number(integracao.aliquota_simples) : null;

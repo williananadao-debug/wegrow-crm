@@ -94,6 +94,28 @@ function textoCredito(valor: number, trib: Tributacao) {
   return `Permite o aproveitamento do crédito de ICMS no valor de R$ ${credito}, correspondente à alíquota de ${trib.aliquotaCredito.toLocaleString('pt-BR')}%, nos termos do art. 23 da LC 123/2006.`;
 }
 
+const UF_POR_NOME: Record<string, string> = {
+  ACRE: 'AC', ALAGOAS: 'AL', AMAPA: 'AP', AMAZONAS: 'AM', BAHIA: 'BA', CEARA: 'CE', 'DISTRITO FEDERAL': 'DF',
+  'ESPIRITO SANTO': 'ES', GOIAS: 'GO', MARANHAO: 'MA', 'MATO GROSSO': 'MT', 'MATO GROSSO DO SUL': 'MS',
+  'MINAS GERAIS': 'MG', PARA: 'PA', PARAIBA: 'PB', PARANA: 'PR', PERNAMBUCO: 'PE', PIAUI: 'PI',
+  'RIO DE JANEIRO': 'RJ', 'RIO GRANDE DO NORTE': 'RN', 'RIO GRANDE DO SUL': 'RS', RONDONIA: 'RO', RORAIMA: 'RR',
+  'SANTA CATARINA': 'SC', 'SAO PAULO': 'SP', SERGIPE: 'SE', TOCANTINS: 'TO',
+};
+const UFS = new Set(Object.values(UF_POR_NOME));
+
+// Cadastro de cliente guarda o estado do jeito que digitaram ("sc", "Santa Catarina", "SC - Brasil").
+// A SEFAZ só aceita a sigla em maiúsculas — devolve null quando não dá pra reconhecer.
+export function normalizarUf(estado: unknown): string | null {
+  const t = String(estado ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  if (UFS.has(t)) return t;
+  if (UF_POR_NOME[t]) return UF_POR_NOME[t];
+  const sigla = t.split(' ').find(p => UFS.has(p));
+  if (sigla) return sigla;
+  const nome = Object.keys(UF_POR_NOME).sort((a, b) => b.length - a.length).find(n => t.includes(n));
+  return nome ? UF_POR_NOME[nome] : null;
+}
+
 function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
   const pf = ehPessoaFisica(destinatario.cnpjOuCpf);
   const ieDest = digitos(destinatario.ie);

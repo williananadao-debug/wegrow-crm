@@ -537,7 +537,9 @@ export default function FiscalPage() {
                     {STATUS_NF_FALHA.includes(n.status) && motivoRecusaNf(n.observacao) && (
                       <p className="mt-1.5 text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5 leading-snug">
                         <b>Motivo da recusa:</b> {motivoRecusaNf(n.observacao)}
-                        <span className="block text-red-300/70 mt-0.5">Corrija e emita de novo pela venda (Nova Venda → Histórico → venda → Emitir NF).</span>
+                        <span className="block text-red-300/70 mt-0.5">{n.ref_focus_nfe?.startsWith('nfrc')
+                          ? 'Corrija e emita de novo pelo botão "Remessa p/ conserto".'
+                          : 'Corrija e emita de novo pela venda (Nova Venda → Histórico → venda → Emitir NF).'}</span>
                       </p>
                     )}
                     {(n.danfe_url || n.xml_url) && (

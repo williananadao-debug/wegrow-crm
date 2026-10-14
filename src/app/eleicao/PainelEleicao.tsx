@@ -228,10 +228,13 @@ export default function PainelEleicao() {
 
   const q = params?.teste ? '&teste=1' : '';
 
-  // Resumo a cada 4s (pequeno); o mapa por município só quando a versão muda.
+  // Resumo a cada 4s (pequeno); o mapa por município (~50 KB) só quando a versão muda e no
+  // máximo a cada 30s no celular / 10s na TV — com muitos ouvintes ao mesmo tempo, baixar o
+  // mapa a cada versão (~5s) multiplicaria o tráfego da Vercel sem ganho visível.
   useEffect(() => {
     if (!params) return;
-    let vivo = true, versaoMapa = -1;
+    const intervaloMapa = params.tv ? 10_000 : 30_000;
+    let vivo = true, versaoMapa = -1, mapaEm = 0;
     let timer: ReturnType<typeof setTimeout>;
     const ciclo = async () => {
       try {
@@ -240,9 +243,9 @@ export default function PainelEleicao() {
         if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`);
         if (!vivo) return;
         setResumo(j); setErro('');
-        if (j.versao !== versaoMapa) {
+        if (j.versao !== versaoMapa && (versaoMapa < 0 || Date.now() - mapaEm >= intervaloMapa)) {
           const m = await fetch(`/api/eleicao?parte=mapa&v=${j.versao}${q}`).then(x => x.json());
-          if (vivo && m?.presidente) { versaoMapa = j.versao; setMapa(m); }
+          if (vivo && m?.presidente) { versaoMapa = j.versao; mapaEm = Date.now(); setMapa(m); }
         }
       } catch (e: any) {
         if (vivo) setErro(e.message || 'Sem conexão');

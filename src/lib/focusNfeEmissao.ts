@@ -186,7 +186,32 @@ export function montarPayloadNF2(params: {
 export function naturezaPorCfop(cfop: string) {
   if (cfop === '5922' || cfop === '6922') return 'Lançamento efetuado para entrega futura';
   if (cfop === '5116' || cfop === '6116') return 'Remessa de mercadoria em venda para entrega futura';
+  if (cfop === '5915' || cfop === '6915') return 'Remessa para conserto';
   return 'Complemento de valor';
+}
+
+// 0 = por conta do emitente, 1 = do destinatário, 9 = sem frete (entrega/retirada própria).
+export type ModalidadeFrete = 0 | 1 | 9;
+
+// NF avulsa de REMESSA PARA CONSERTO (inclusive envio em garantia): CFOP 5915 (dentro do
+// estado) / 6915 (outro estado), CSOSN 400 — sem destaque de ICMS na remessa (Simples).
+// Quem conserta devolve com a nota de retorno (5916/6916) dele; aqui não sai nada na volta.
+// chaveReferenciada = NF de compra da peça (ajuda o fornecedor a localizar a garantia).
+export function montarPayloadRemessaConserto(params: {
+  emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[];
+  chaveReferenciada?: string | null; observacao?: string | null; modalidadeFrete: ModalidadeFrete;
+}) {
+  const cfop = params.emitente.uf === params.destinatario.uf ? '5915' : '6915';
+  const base = baseComum(params.emitente, params.destinatario);
+  return {
+    ...base,
+    natureza_operacao: 'Remessa para conserto',
+    presenca_comprador: 0, // 0 = não se aplica (não é venda)
+    modalidade_frete: params.modalidadeFrete,
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, params.observacao),
+    ...(params.chaveReferenciada ? { notas_referenciadas: [{ chave_nfe: params.chaveReferenciada }] } : {}),
+    items: itensPayload(params.itens, cfop, { csosn: '400', aliquotaCredito: null }),
+  };
 }
 
 // NF-e complementar de VALOR (finalidade 2): referencia a chave da nota original, mesmo CFOP

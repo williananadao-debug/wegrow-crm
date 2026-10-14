@@ -526,11 +526,13 @@ function PulseProducaoContent() {
   };
 
   // Chão de fábrica (cargo Produção) vê só o número do pedido, nunca o nome do cliente.
+  // Diretoria vê os dois: o número é o que a fábrica fala, o nome é quem ela atende.
   const ocultarCliente = perfil?.cargo === 'producao';
   const numeroPedido = (leadId: number) => `Pedido LD-${String(leadId).padStart(4, '0')}`;
   const rotuloCliente = (leadId: number | null) => {
     if (!leadId) return 'Sem pedido (produção manual)';
-    return ocultarCliente ? numeroPedido(leadId) : (clientePorLead[leadId] || numeroPedido(leadId));
+    if (ocultarCliente || !clientePorLead[leadId]) return numeroPedido(leadId);
+    return `LD-${String(leadId).padStart(4, '0')} · ${clientePorLead[leadId]}`;
   };
 
   const detalheProducao = producoes.find(p => p.id === detalheId) || null;

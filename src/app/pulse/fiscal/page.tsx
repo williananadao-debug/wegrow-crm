@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine, Trash2 } from 'lucide-react';
+import { Loader2, Activity, Receipt, Search, X, Filter, FileText, FileCode2, Copy, Check, TrendingUp, TrendingDown, Plus, History, ListChecks, PenLine, Trash2, Wrench } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, ehMateriaPrima } from '../shared';
@@ -11,6 +11,7 @@ import { motivoRecusaNf, STATUS_NF_FALHA, ehNfComplementar } from '@/lib/fiscalM
 // de produto etc., e estava tudo no bundle inicial da página (pior rota no Speed Insights).
 const RevisarItensNotaModal = dynamic(() => import('@/components/RevisarItensNotaModal'), { ssr: false });
 const LancarNotaFiscalModal = dynamic(() => import('@/components/LancarNotaFiscalModal'), { ssr: false });
+const RemessaConsertoModal = dynamic(() => import('./RemessaConsertoModal'), { ssr: false });
 const VerNotaFiscalModal = dynamic(() => import('@/components/VerNotaFiscalModal'), { ssr: false });
 
 const NOTAS_COLUNAS = 'id, ref_focus_nfe, chave_nf_referenciada, tipo, chave_acesso, numero, serie, cnpj_participante, nome_participante, valor_total, status, xml_url, danfe_url, data_emissao, origem, observacao, itens_status, created_at';
@@ -209,6 +210,7 @@ export default function FiscalPage() {
   const [notaEmRevisao, setNotaEmRevisao] = useState<NotaFiscal | null>(null);
   const [verNotaId, setVerNotaId] = useState<number | null>(null);
   const [lancarNotaAberto, setLancarNotaAberto] = useState(false);
+  const [remessaAberta, setRemessaAberta] = useState(false);
   const [buscandoHistorico, setBuscandoHistorico] = useState(false);
   const [resultadoHistorico, setResultadoHistorico] = useState<string | null>(null);
   const [buscandoHistoricoSaida, setBuscandoHistoricoSaida] = useState(false);
@@ -390,6 +392,11 @@ export default function FiscalPage() {
           {isDiretor && temIntegracao && (
             <button onClick={() => { setAliquotaTexto(aliquota != null ? String(aliquota).replace('.', ',') : ''); setAliquotaErro(null); setAliquotaAberta(true); }} title="Alíquota efetiva do Simples Nacional — usada no crédito de ICMS (CSOSN 101). Atualize todo mês com o valor da contabilidade." className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${aliquota != null ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}`}>
               % Simples: {aliquota != null ? `${aliquota.toLocaleString('pt-BR')}%` : 'definir'}
+            </button>
+          )}
+          {isDiretor && temIntegracao && (
+            <button onClick={() => setRemessaAberta(true)} title="Nota avulsa de remessa para conserto / garantia (CFOP 5915/6915)" className="inline-flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              <Wrench size={14} /> Remessa p/ conserto
             </button>
           )}
           <button onClick={() => setLancarNotaAberto(true)} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
@@ -606,6 +613,13 @@ export default function FiscalPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {remessaAberta && (
+        <RemessaConsertoModal
+          onFechar={() => setRemessaAberta(false)}
+          onEmitida={() => { setRemessaAberta(false); carregar(); setTimeout(carregar, 5000); }}
+        />
       )}
 
       {complementarAlvo && (

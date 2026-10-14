@@ -116,6 +116,17 @@ export function normalizarUf(estado: unknown): string | null {
   return nome ? UF_POR_NOME[nome] : null;
 }
 
+// Horário de Brasília com offset (-03:00) — com "Z" (UTC) a DANFE mostrava a hora 3h adiantada.
+function agoraBrasilia() {
+  const d = new Date(Date.now() - 3 * 3600 * 1000);
+  return d.toISOString().slice(0, 19) + '-03:00';
+}
+
+// SEFAZ/DANFE: município em maiúsculas, sem depender de como digitaram no cadastro.
+function municipioMaiusculo(m: string | null | undefined) {
+  return String(m || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
   const pf = ehPessoaFisica(destinatario.cnpjOuCpf);
   const ieDest = digitos(destinatario.ie);
@@ -123,7 +134,9 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
   const isento = !pf && !contribuinte && /isent/i.test(destinatario.ie || '');
   return {
     natureza_operacao: '',
-    data_emissao: new Date().toISOString(),
+    data_emissao: agoraBrasilia(),
+    // Data/hora de saída da mercadoria (campo "Hora da saída" da DANFE).
+    data_entrada_saida: agoraBrasilia(),
     tipo_documento: 1, // 1 = saída
     finalidade_emissao: 1, // 1 = normal
     presenca_comprador: 9, // 9 = não se aplica (venda sob encomenda, sem presença física no ato)
@@ -137,7 +150,7 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
     logradouro_emitente: emitente.endereco,
     numero_emitente: emitente.numero,
     bairro_emitente: emitente.bairro,
-    municipio_emitente: emitente.municipio,
+    municipio_emitente: municipioMaiusculo(emitente.municipio),
     uf_emitente: emitente.uf,
     cep_emitente: digitos(emitente.cep),
     codigo_municipio_emitente: emitente.codigoMunicipio,
@@ -149,7 +162,7 @@ function baseComum(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal) {
     logradouro_destinatario: destinatario.endereco,
     numero_destinatario: destinatario.numero || 'S/N',
     bairro_destinatario: destinatario.bairro || undefined,
-    municipio_destinatario: destinatario.municipio,
+    municipio_destinatario: municipioMaiusculo(destinatario.municipio),
     uf_destinatario: destinatario.uf,
     cep_destinatario: destinatario.cep ? digitos(destinatario.cep) : undefined,
     pais_destinatario: 'Brasil',

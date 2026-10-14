@@ -55,6 +55,9 @@ export default function PulsePainelPage() {
   const [nfseCpfCnpj, setNfseCpfCnpj] = useState('');
   const [nfseLoading, setNfseLoading] = useState(false);
   const [nfseErro, setNfseErro] = useState<string | null>(null);
+  // Empresa com Focus NFe (venda de produto) emite NF-e pela venda; a NFS-e via Asaas é só pra serviço.
+  const [temNfe, setTemNfe] = useState(false);
+  const [nfeEnviada, setNfeEnviada] = useState(false);
 
   const [estornoVenda, setEstornoVenda] = useState<VendaPulse | null>(null);
   const [estornoMotivo, setEstornoMotivo] = useState('');
@@ -148,6 +151,16 @@ export default function PulsePainelPage() {
 
   useEffect(() => { if (perfil?.empresa_id) { fetchVendas(); fetchServicos(); } }, [perfil?.empresa_id, mesVendas]);
   useEffect(() => { if (perfil?.empresa_id) fetchOrcamentos(); }, [perfil?.empresa_id, temCRM]);
+  useEffect(() => {
+    if (!perfil?.empresa_id) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/pulse/fiscal/aliquota', { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) setTemNfe(!!json.integracao);
+    })();
+  }, [perfil?.empresa_id]);
 
   // Série independente do mês selecionado na lista — alimenta só o gráfico "Vendas por Mês"
   // (visão alternativa à de dia), últimos 12 meses fechados.
@@ -367,7 +380,28 @@ export default function PulsePainelPage() {
     }
   };
 
-  const abrirNfse = (venda: VendaPulse) => { setNfseVenda(venda); setNfseCpfCnpj(venda.cnpj || ''); setNfseErro(null); };
+  const abrirNfse = (venda: VendaPulse) => { setNfseVenda(venda); setNfseCpfCnpj(venda.cnpj || ''); setNfseErro(null); setNfeEnviada(false); };
+
+  const emitirNfe = async () => {
+    if (!nfseVenda) return;
+    setNfseLoading(true); setNfseErro(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ leadId: nfseVenda.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');
+      setNfeEnviada(true);
+    } catch (err: any) {
+      setNfseErro(err?.message || 'Erro ao emitir a NF.');
+    } finally {
+      setNfseLoading(false);
+    }
+  };
 
   const emitirNfse = async () => {
     if (!nfseVenda) return;
@@ -853,7 +887,7 @@ export default function PulsePainelPage() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="font-black text-white uppercase italic text-lg">Emitir NFS-e</h3>
+                <h3 className="font-black text-white uppercase italic text-lg">{temNfe ? 'Emitir NF-e' : 'Emitir NFS-e'}</h3>
                 <p className="text-slate-500 text-xs font-bold truncate">{nfseVenda.empresa}</p>
               </div>
               <button onClick={() => setNfseVenda(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
@@ -863,15 +897,23 @@ export default function PulsePainelPage() {
                 <span className="text-slate-400 text-xs font-bold uppercase">Valor</span>
                 <span className="text-white font-black text-lg">R$ {(nfseVenda.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>
-                <input value={nfseCpfCnpj} onChange={e => setNfseCpfCnpj(e.target.value)} placeholder="00.000.000/0001-00" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all" />
-              </div>
+              {temNfe ? (
+                <p className="text-slate-400 text-xs leading-relaxed">NF-e de venda com os dados do cliente e os itens cadastrados na venda. Confira o cadastro do cliente (CPF/CNPJ e endereço) antes de emitir.</p>
+              ) : (
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>
+                  <input value={nfseCpfCnpj} onChange={e => setNfseCpfCnpj(e.target.value)} placeholder="00.000.000/0001-00" className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-[var(--cor-primaria)] transition-all" />
+                </div>
+              )}
               {nfseErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{nfseErro}</div>}
-              <button onClick={emitirNfse} disabled={nfseLoading || !nfseCpfCnpj} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {nfeEnviada ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold p-3 rounded-xl">NF enviada pra SEFAZ. A autorização aparece em <Link href="/pulse/fiscal" className="underline">Notas Fiscais</Link> em alguns segundos.</div>
+              ) : (
+              <button onClick={temNfe ? emitirNfe : emitirNfse} disabled={nfseLoading || (!temNfe && !nfseCpfCnpj)} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                 {nfseLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                {nfseLoading ? 'Emitindo...' : 'Emitir NFS-e'}
+                {nfseLoading ? 'Emitindo...' : temNfe ? 'Emitir NF-e' : 'Emitir NFS-e'}
               </button>
+              )}
             </div>
           </div>
         </div>

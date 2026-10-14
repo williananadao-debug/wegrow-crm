@@ -8,6 +8,8 @@ const withPWA = withPWAInit({
   // uma mistura de bundle antigo (cache) + backend novo, causando tela quebrada/travada
   // depois de navegar (ex: login → dashboard). Voltando ao padrão da lib (false).
   reloadOnOnline: true,
+  // Malha do mapa da eleição (1,4 MB) só baixa quem abre /eleicao — fora do precache do app.
+  publicExcludes: ['!noprecache/**/*', '!eleicao/**/*'],
   disable: process.env.NODE_ENV === "development", // Fica invisível enquanto você programa
   workboxOptions: {
     disableDevLogs: true,
@@ -28,6 +30,15 @@ const nextConfig = {
   // porque o repo inteiro tá em disco).
   outputFileTracingIncludes: {
     '/api/max/proposta': ['./docs/max/template-proposta.pptx'],
+  },
+  // Endereço próprio do painel da apuração: qualquer domínio que comece com apuracao.,
+  // eleicao. ou eleicoes. (apontado pra este mesmo projeto na Vercel) abre direto em /eleicao.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: '/', has: [{ type: 'host' as const, value: '(?:apuracao|eleicao|eleicoes)\\..+' }], destination: '/eleicao' },
+      ],
+    };
   },
 };
 

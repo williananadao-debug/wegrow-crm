@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import SeletorTipoNf, { ESCOLHA_NF_PADRAO, type EscolhaNfVenda } from '@/components/SeletorTipoNf';
 import { Search, Plus, Minus, Trash2, X, Loader2, CheckCircle2, Printer, ShoppingBag, Package, AlertTriangle, Activity, FileText, Factory, History, ChevronDown, ChevronUp, Info, Pencil, Settings2, UserPlus, PenTool, Zap, Copy, FileCheck, BadgeCheck, Globe, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from '../usePulseAccess';
@@ -97,11 +98,14 @@ function PulseNovaVendaContent() {
   const [contratoErro, setContratoErro] = useState<string | null>(null);
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
 
-  // NF1 (entrega futura, CFOP 5922) — emitida na hora da venda. A NF2 (entrega, CFOP
+  // NF de venda: normal (5101/5102) ou NF1 (entrega futura, CFOP 5922) — emitida na hora da venda. A NF2 (entrega, CFOP
   // 5116/6116) fica pro momento real da entrega, disparada em /pulse/producao.
   const [emitindoNf, setEmitindoNf] = useState(false);
   const [nfErro, setNfErro] = useState<string | null>(null);
   const [nfEmitida, setNfEmitida] = useState(false);
+  // Antes de emitir pergunta o tipo: venda normal ou entrega futura (ver SeletorTipoNf).
+  const [nfEscolhaVenda, setNfEscolhaVenda] = useState<{ venda: any; depois?: () => void } | null>(null);
+  const [nfEscolha, setNfEscolha] = useState<EscolhaNfVenda>(ESCOLHA_NF_PADRAO);
 
   // Detalhes da venda — clicar numa linha do histórico abre um resumo completo (cliente,
   // itens, pagamento, contrato assinado, cobranças) sem precisar entrar no modo de edição.
@@ -858,8 +862,21 @@ function PulseNovaVendaContent() {
     }
   };
 
-  const emitirNf1 = async (venda: any = vendaConcluida) => {
+  const emitirNf1 = (venda: any = vendaConcluida, depois?: () => void) => {
     if (!venda) return;
+    setNfEscolha(ESCOLHA_NF_PADRAO);
+    setNfEscolhaVenda({ venda, depois });
+  };
+
+  const confirmarEmissaoNf = async () => {
+    if (!nfEscolhaVenda) return;
+    const { venda, depois } = nfEscolhaVenda;
+    setNfEscolhaVenda(null);
+    await emitirNfVenda(venda, nfEscolha);
+    depois?.();
+  };
+
+  const emitirNfVenda = async (venda: any, escolha: EscolhaNfVenda) => {
     setEmitindoNf(true); setNfErro(null); setNfEmitida(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -867,7 +884,7 @@ function PulseNovaVendaContent() {
       const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: venda.id }),
+        body: JSON.stringify({ leadId: venda.id, modalidade: escolha.modalidade, origem: escolha.origem }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');
@@ -1341,12 +1358,12 @@ function PulseNovaVendaContent() {
                     : <p className="text-slate-500 text-xs">Nenhuma NF emitida ainda.</p>}
                   {!temValida && (
                     <button
-                      onClick={async () => { await emitirNf1(v); setTimeout(() => carregarNotasDetalhe(v.id), 4000); }}
+                      onClick={() => emitirNf1(v, () => setTimeout(() => carregarNotasDetalhe(v.id), 4000))}
                       disabled={emitindoNf}
                       className="mt-2 w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 disabled:opacity-50 text-blue-300 text-[10px] font-black uppercase py-2.5 rounded-xl flex items-center justify-center gap-1.5"
                     >
                       {emitindoNf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-                      {notasDetalhe.length > 0 ? 'Emitir NF de novo (entrega futura)' : 'Emitir NF (entrega futura)'}
+                      {notasDetalhe.length > 0 ? 'Emitir NF de novo' : 'Emitir NF'}
                     </button>
                   )}
                 </div>
@@ -1514,7 +1531,7 @@ function PulseNovaVendaContent() {
                 className="w-full bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-50 border border-blue-500/30 text-blue-300 font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
               >
                 {emitindoNf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                {nfEmitida ? 'NF enviada pra SEFAZ' : 'Emitir NF (entrega futura)'}
+                {nfEmitida ? 'NF enviada pra SEFAZ' : 'Emitir NF'}
               </button>
               {nfErro && <p className="text-red-400 text-[10px] font-bold mt-1.5">{nfErro}</p>}
               {nfEmitida && <p className="text-slate-500 text-[10px] mt-1.5">Confirmação de autorização chega em /pulse/fiscal em alguns segundos.</p>}
@@ -2126,6 +2143,24 @@ function PulseNovaVendaContent() {
       {renderModalContrato()}
       {renderModalCobranca()}
       {renderModalDetalheVenda()}
+
+      {nfEscolhaVenda && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setNfEscolhaVenda(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="min-w-0">
+                <h3 className="font-black text-white uppercase italic text-lg">Emitir NF-e</h3>
+                <p className="text-slate-500 text-xs font-bold truncate">{nfEscolhaVenda.venda.empresa}</p>
+              </div>
+              <button onClick={() => setNfEscolhaVenda(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+            </div>
+            <SeletorTipoNf valor={nfEscolha} onChange={setNfEscolha} />
+            <button onClick={confirmarEmissaoNf} className="w-full mt-5 bg-blue-500 hover:bg-blue-600 text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all">
+              <FileText size={14} /> Emitir NF-e
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

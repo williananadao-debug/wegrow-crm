@@ -40,12 +40,15 @@ export async function POST(req: NextRequest) {
 
   // Pode existir NF1 recusada + NF1 autorizada (reemitida) — usa a válida mais recente.
   // Qualquer origem: a NF1 pode ter sido lançada na mão e ligada à venda (ex.: NF 49 da Travel).
-  const { data: nf1s } = await db.from('fiscal_notas').select('chave_acesso, status, created_at')
+  const { data: nf1s } = await db.from('fiscal_notas').select('chave_acesso, status, created_at, ref_focus_nfe')
     .eq('lead_id', leadId).eq('empresa_id', perfil.empresa_id).eq('tipo', 'saida')
     .is('chave_nf_referenciada', null).not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
     .order('created_at', { ascending: false });
   const nf1 = (nf1s || []).find(n => n.status === 'autorizada') || (nf1s || [])[0] || null;
   if (!nf1) return NextResponse.json({ error: 'Essa venda ainda não tem NF1 emitida.' }, { status: 400 });
+  // Venda normal (5101/5102) já foi a nota da entrega — não existe remessa. 200 pra a Produção
+  // não acusar erro ao marcar "Entregue".
+  if (/nfv/.test(nf1.ref_focus_nfe || '')) return NextResponse.json({ ok: true, ignorada: true, motivo: 'Venda normal — sem NF de remessa.' });
   if (nf1.status !== 'autorizada') return NextResponse.json({ error: `A NF1 dessa venda ainda não foi autorizada (status: ${nf1.status}). Aguarde antes de emitir a NF2.` }, { status: 409 });
   if (!nf1.chave_acesso) return NextResponse.json({ error: 'NF1 autorizada mas sem chave de acesso registrada — verifique manualmente.' }, { status: 500 });
 

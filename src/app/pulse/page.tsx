@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, LayoutGrid, ShoppingBag, BarChart3, Users, Printer, FileText, ExternalLink, CheckCircle2, X, Navigation, Plus, Boxes, Undo2, Wallet, TrendingDown, Hammer, AlertTriangle, PackageCheck, Clock, Factory, Package, Pencil, Trash2, BadgeCheck, ArrowRight } from 'lucide-react';
 import { dataReferenciaLead, diaReferenciaLead } from '@/lib/dataFechamento';
+import SeletorTipoNf, { ESCOLHA_NF_PADRAO, type EscolhaNfVenda } from '@/components/SeletorTipoNf';
 import NotasDaVenda, { COLUNAS_NOTA_VENDA, type NotaVenda } from '@/components/NotasDaVenda';
 import { supabase } from '@/lib/supabase';
 import { usePulseAccess } from './usePulseAccess';
@@ -58,6 +59,7 @@ export default function PulsePainelPage() {
   // Empresa com Focus NFe (venda de produto) emite NF-e pela venda; a NFS-e via Asaas é só pra serviço.
   const [temNfe, setTemNfe] = useState(false);
   const [nfeEnviada, setNfeEnviada] = useState(false);
+  const [nfeEscolha, setNfeEscolha] = useState<EscolhaNfVenda>(ESCOLHA_NF_PADRAO);
 
   const [estornoVenda, setEstornoVenda] = useState<VendaPulse | null>(null);
   const [estornoMotivo, setEstornoMotivo] = useState('');
@@ -380,7 +382,7 @@ export default function PulsePainelPage() {
     }
   };
 
-  const abrirNfse = (venda: VendaPulse) => { setNfseVenda(venda); setNfseCpfCnpj(venda.cnpj || ''); setNfseErro(null); setNfeEnviada(false); };
+  const abrirNfse = (venda: VendaPulse) => { setNfseVenda(venda); setNfseCpfCnpj(venda.cnpj || ''); setNfseErro(null); setNfeEnviada(false); setNfeEscolha(ESCOLHA_NF_PADRAO); };
 
   const emitirNfe = async () => {
     if (!nfseVenda) return;
@@ -391,7 +393,7 @@ export default function PulsePainelPage() {
       const res = await fetch('/api/pulse/fiscal/emitir-nf1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ leadId: nfseVenda.id }),
+        body: JSON.stringify({ leadId: nfseVenda.id, modalidade: nfeEscolha.modalidade, origem: nfeEscolha.origem }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Erro ao emitir a NF.');
@@ -898,7 +900,10 @@ export default function PulsePainelPage() {
                 <span className="text-white font-black text-lg">R$ {(nfseVenda.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               {temNfe ? (
-                <p className="text-slate-400 text-xs leading-relaxed">NF-e de venda com os dados do cliente e os itens cadastrados na venda. Confira o cadastro do cliente (CPF/CNPJ e endereço) antes de emitir.</p>
+                <>
+                  <SeletorTipoNf valor={nfeEscolha} onChange={setNfeEscolha} />
+                  <p className="text-slate-500 text-[11px] leading-relaxed">Sai com os dados do cliente e os itens da venda — confira o cadastro (CPF/CNPJ e endereço) antes.</p>
+                </>
               ) : (
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CPF / CNPJ do cliente</label>

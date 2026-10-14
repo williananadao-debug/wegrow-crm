@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FocusNfeAmbiente } from '@/lib/focusNfe';
-import { normalizarUf, montarPayloadNF1, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
+import { normalizarUf, montarPayloadNF1, montarPayloadVendaNormal, emitirNota, type EmitenteFiscal, type DestinatarioFiscal, type ItemFiscal } from '@/lib/focusNfeEmissao';
 import { resolverNcmItens } from '@/lib/ncmItens';
 import { motivoRecusaNf } from '@/lib/fiscalMotivo';
 
@@ -16,7 +16,9 @@ function supabaseAdmin() {
   );
 }
 
-// POST { leadId } — emite a NF1 (CFOP 5922, simples faturamento, valor cheio) de uma venda
+// POST { leadId, modalidade?, origem? } — modalidade 'venda' = NF de venda normal (5101/5102,
+// entrega na hora, nota única); 'entrega_futura' (padrão antigo) = NF1 abaixo.
+// Emite a NF1 (CFOP 5922, simples faturamento, valor cheio) de uma venda
 // fechada no Pulse. Fila assíncrona no Focus NFe — o resultado final (autorizado/erro) chega
 // depois pelo webhook /api/webhooks/focus-nfe/emitida, que atualiza esse mesmo registro.
 export async function POST(req: NextRequest) {
@@ -36,6 +38,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const leadId = body?.leadId;
   if (!leadId) return NextResponse.json({ error: 'leadId é obrigatório.' }, { status: 422 });
+  const vendaNormal = body?.modalidade === 'venda';
+  const origem: 'producao' | 'revenda' = body?.origem === 'revenda' ? 'revenda' : 'producao';
 
   const { data: lead } = await db.from('leads').select('id, empresa, telefone, cnpj, valor_total, itens, client_id, empresa_id')
     .eq('id', leadId).eq('empresa_id', perfil.empresa_id).single();
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Nota recusada/cancelada não bloqueia: dá pra corrigir o motivo e emitir de novo.
     .not('status', 'in', '(erro_autorizacao,rejeitada,cancelada,denegada)')
     .limit(1).maybeSingle();
-  if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF1 (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
+  if (jaEmitida) return NextResponse.json({ error: `Já existe uma NF de venda (${jaEmitida.status}) pra essa venda.` }, { status: 409 });
 
   const { data: cliente } = lead.client_id
     ? await db.from('clientes').select('nome_empresa, cnpj, inscricao_estadual, endereco, numero, bairro, cep, cidade, estado, telefone, email').eq('id', lead.client_id).single()
@@ -101,15 +105,22 @@ export async function POST(req: NextRequest) {
   const aliquotaSimples = integracao.aliquota_simples != null ? Number(integracao.aliquota_simples) : null;
 
   let payload;
-  try { payload = montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples }); }
+  try {
+    payload = vendaNormal
+      ? montarPayloadVendaNormal({ emitente, destinatario, itens, aliquotaSimples, origem })
+      : montarPayloadNF1({ emitente, destinatario, itens, aliquotaSimples });
+  }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Falha ao montar a NF.' }, { status: 400 }); }
-  const ref = `venda${leadId}nf1${Date.now()}`;
+  // "nfv" marca a venda normal — a NF2 (remessa de entrega futura) não sai pra ela.
+  const ref = `venda${leadId}${vendaNormal ? 'nfv' : 'nf1'}${Date.now()}`;
 
   const { data: notaRascunho, error: erroInsert } = await db.from('fiscal_notas').insert([{
     empresa_id: perfil.empresa_id, tipo: 'saida', status: 'processando', origem: 'emissao_wegrow',
     lead_id: leadId, ref_focus_nfe: ref, valor_total: lead.valor_total,
     cnpj_participante: soDigitos(cliente.cnpj), nome_participante: cliente.nome_empresa,
-    observacao: 'NF1 (simples faturamento, entrega futura) — aguardando autorização da SEFAZ.',
+    observacao: vendaNormal
+      ? 'NF de venda (entrega na hora) — aguardando autorização da SEFAZ.'
+      : 'NF1 (simples faturamento, entrega futura) — aguardando autorização da SEFAZ.',
   }]).select('id').single();
   if (erroInsert) return NextResponse.json({ error: `Falha ao registrar nota localmente: ${erroInsert.message}` }, { status: 500 });
 

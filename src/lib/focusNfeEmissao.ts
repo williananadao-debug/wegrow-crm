@@ -188,6 +188,32 @@ export function montarPayloadNF1(params: {
   };
 }
 
+// Venda normal (entrega na hora) — uma NF só. Produção própria 5101 / revenda 5102; outro
+// estado: 6101/6102 pra contribuinte, 6107/6108 pra não contribuinte (consumidor final).
+// Mesma tributação da NF1 (CSOSN 102, ou 101 com crédito se o cliente tem IE).
+export function cfopVendaNormal(emitente: EmitenteFiscal, destinatario: DestinatarioFiscal, origem: 'producao' | 'revenda') {
+  const revenda = origem === 'revenda';
+  if (emitente.uf === destinatario.uf) return revenda ? '5102' : '5101';
+  if (ehContribuinte(destinatario)) return revenda ? '6102' : '6101';
+  return revenda ? '6108' : '6107';
+}
+
+export function montarPayloadVendaNormal(params: {
+  emitente: EmitenteFiscal; destinatario: DestinatarioFiscal; itens: ItemFiscal[]; aliquotaSimples: number | null;
+  origem: 'producao' | 'revenda';
+}) {
+  const cfop = cfopVendaNormal(params.emitente, params.destinatario, params.origem);
+  const trib = tributacaoPorCfop(cfop, params.destinatario, params.aliquotaSimples);
+  const base = baseComum(params.emitente, params.destinatario);
+  const total = params.itens.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
+  return {
+    ...base,
+    natureza_operacao: naturezaPorCfop(cfop),
+    informacoes_adicionais_contribuinte: juntarInfo(base.informacoes_adicionais_contribuinte, textoCredito(total, trib)),
+    items: itensPayload(params.itens, cfop, trib),
+  };
+}
+
 // NF2 — remessa na entrega, CFOP 5116 (mesmo estado) ou 6116 (outro estado), CSOSN 400,
 // referenciando a chave da NF1. Repete o mesmo valor/itens da NF1 (padrão de mercado pra entrega futura).
 export function montarPayloadNF2(params: {
@@ -209,6 +235,8 @@ export function naturezaPorCfop(cfop: string) {
   if (cfop === '5922' || cfop === '6922') return 'Lançamento efetuado para entrega futura';
   if (cfop === '5116' || cfop === '6116') return 'Remessa de mercadoria em venda para entrega futura';
   if (cfop === '5915' || cfop === '6915') return 'Remessa para conserto';
+  if (['5101', '6101', '6107'].includes(cfop)) return 'Venda de produção do estabelecimento';
+  if (['5102', '6102', '6108'].includes(cfop)) return 'Venda de mercadoria adquirida de terceiros';
   return 'Complemento de valor';
 }
 

@@ -112,6 +112,7 @@ type ClienteOpcao = {
   cidade?: string;
   endereco?: string;
   razao_social?: string;
+  nome_fantasia?: string;
   risco?: string;
 };
 
@@ -310,6 +311,7 @@ export default function DealsPage() {
   // Razão social separada do "nome" (novaEmpresa, que na prática é o nome fantasia/comercial)
   // — sem isso o contrato de rádio imprimia "Razão Social" e "Nome Fantasia" com o mesmo valor.
   const [novaRazaoSocial, setNovaRazaoSocial] = useState('');
+  const [novoNomeFantasia, setNovoNomeFantasia] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false); 
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novaUnidade, setNovaUnidade] = useState(''); 
@@ -423,7 +425,7 @@ export default function DealsPage() {
               ? `nome_empresa.ilike.%${q}%,cnpj.ilike.%${qCnpj}%`
               : `nome_empresa.ilike.%${q}%`;
           let query = supabase.from('clientes')
-              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, razao_social, status_risco')
+              .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, razao_social, nome_fantasia, status_risco')
               .eq('status', 'ativo')
               .or(orFilter)
               .order('nome_empresa', { ascending: true })
@@ -1055,7 +1057,7 @@ export default function DealsPage() {
     janela.document.close();
   }, [itensTemporarios, desconto, novaEmpresa, empresa]);
 
-  const imprimirContrato = useCallback((e: React.MouseEvent, lead: Lead) => {
+  const imprimirContrato = useCallback(async (e: React.MouseEvent, lead: Lead) => {
     e.stopPropagation();
     
     const unidadeData = unidades.find(u => u.nome === (lead.unidade || '')) || unidades[0];
@@ -1086,6 +1088,20 @@ export default function DealsPage() {
 
     const janela = window.open('', '', 'width=900,height=800');
     if(!janela) return alert("Habilite popups no seu navegador!");
+
+    // O lead só guarda o "nome" (lead.empresa) — razão social e nome fantasia ficam no
+    // cadastro do cliente. Sem buscar aqui, o contrato saía com o mesmo nome nas duas linhas.
+    // A janela é aberta antes do await pra não ser barrada pelo bloqueador de popup.
+    let razaoSocialCliente = lead.empresa;
+    let nomeFantasiaCliente = lead.empresa;
+    if (lead.client_id) {
+        const { data: cli } = await supabase.from('clientes')
+            .select('razao_social, nome_fantasia')
+            .eq('id', lead.client_id)
+            .single();
+        if (cli?.razao_social?.trim()) razaoSocialCliente = cli.razao_social.trim();
+        if (cli?.nome_fantasia?.trim()) nomeFantasiaCliente = cli.nome_fantasia.trim();
+    }
 
     let listaItens: ItemVenda[] = [];
     try {
@@ -1262,8 +1278,8 @@ export default function DealsPage() {
 
                 <div class="cliente-box">
                     <strong>CLIENTE:</strong> <br/>
-                    <strong>Razão Social:</strong> ${lead.empresa.toUpperCase()}<br/>
-                    <strong>Nome Fantasia:</strong> ${lead.empresa.toUpperCase()}<br/>
+                    <strong>Razão Social:</strong> ${razaoSocialCliente.toUpperCase()}<br/>
+                    <strong>Nome Fantasia:</strong> ${nomeFantasiaCliente.toUpperCase()}<br/>
                     <div style="display: flex; gap: 40px;">
                         <div><strong>${rotuloDocumento(lead.cnpj || '')}:</strong> ${lead.cnpj || ''}</div>
                         <div><strong>Inscrição Estadual:</strong> ${lead.inscricao_estadual || ''}</div>
@@ -1350,7 +1366,7 @@ export default function DealsPage() {
 
     janela.document.write(htmlContrato);
     janela.document.close();
-  }, [isCDL, unidades]);
+  }, [isCDL, unidades, supabase]);
 
   const enviarParaDocuseal = useCallback(async () => {
     if (!docuSignerName.trim()) { setDocuErro('Informe o nome do signatário.'); return; }
@@ -1381,6 +1397,7 @@ export default function DealsPage() {
           id: editingLeadId,
           empresa: novaEmpresa,
           razao_social: novaRazaoSocial,
+          nome_fantasia: novoNomeFantasia,
           cnpj: novoCnpj,
           endereco: novoEndereco,
           inscricao_estadual: novoIE,
@@ -1420,7 +1437,7 @@ export default function DealsPage() {
       }
     }
     setDocuSending(false);
-  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, vencimentosDatas, formaPagamento, editingLeadId, leads, supabase, fetchData]);
+  }, [docuSignerName, docuSignerEmail, docuSignerPhone, perfil?.empresa_id, perfil?.nome, user?.email, usersMap, usersEmailMap, novaEmpresa, novaRazaoSocial, novoNomeFantasia, novoCnpj, novoEndereco, novoIE, novoTelefone, novaCidade, novaUnidade, contratoInicio, contratoFim, itensTemporarios, desconto, parcelas, vencimento, vencimentosDatas, formaPagamento, editingLeadId, leads, supabase, fetchData]);
 
   // Precisa persistir — senão fechar o modal antes de mandar o link pro cliente faz o
   // progresso "consultor já assinou" sumir e a tela volta pro formulário inicial.
@@ -1657,6 +1674,7 @@ export default function DealsPage() {
       setNovoIE(c.inscricao_estadual || '');
       setNovoEndereco(c.endereco || '');
       setNovaRazaoSocial(c.razao_social || '');
+      setNovoNomeFantasia(c.nome_fantasia || '');
       // Abre "Detalhes adicionais" quando o cliente já tem dado fiscal/endereço — senão
       // fica preenchido escondido atrás de um acordeão fechado e parece que não puxou.
       if (c.cnpj || c.endereco || c.inscricao_estadual) setMostrarDetalhes(true);
@@ -1900,7 +1918,7 @@ export default function DealsPage() {
         // atual do cliente vinculado e sobrescreve o formulário com os dados mais recentes.
         if (lead.client_id) {
             supabase.from('clientes')
-                .select('telefone, cnpj, inscricao_estadual, endereco, cidade, razao_social')
+                .select('telefone, cnpj, inscricao_estadual, endereco, cidade, razao_social, nome_fantasia')
                 .eq('id', lead.client_id)
                 .single()
                 .then(({ data: clienteAtual }) => {
@@ -1911,12 +1929,14 @@ export default function DealsPage() {
                     if (clienteAtual.endereco) setNovoEndereco(clienteAtual.endereco);
                     if (clienteAtual.cidade) setNovaCidade(clienteAtual.cidade);
                     setNovaRazaoSocial(clienteAtual.razao_social || '');
+                    setNovoNomeFantasia(clienteAtual.nome_fantasia || '');
                 });
         }
     } else {
         setEditingLeadId(null);
         setNovaEmpresa('');
         setNovaRazaoSocial('');
+        setNovoNomeFantasia('');
         setNovoTelefone('');
         setNovaUnidade(perfil?.unidade || '');
         setNovaCidade('');

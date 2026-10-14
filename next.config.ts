@@ -31,12 +31,12 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/max/proposta': ['./docs/max/template-proposta.pptx'],
   },
-  // Endereço próprio do painel da apuração: qualquer domínio que comece com apuracao.,
-  // eleicao. ou eleicoes. (apontado pra este mesmo projeto na Vercel) abre direto em /eleicao.
+  // Endereço próprio do painel da apuração: qualquer domínio que comece com apuracao,
+  // eleicao ou eleicoes (ex: apuracao-demaisfm.vercel.app, apontado pra este projeto) abre em /eleicao.
   async rewrites() {
     return {
       beforeFiles: [
-        { source: '/', has: [{ type: 'host' as const, value: '(?:apuracao|eleicao|eleicoes)\\..+' }], destination: '/eleicao' },
+        { source: '/', has: [{ type: 'host' as const, value: '(?:apuracao|eleicao|eleicoes)[a-z0-9-]*\\..+' }], destination: '/eleicao' },
       ],
     };
   },

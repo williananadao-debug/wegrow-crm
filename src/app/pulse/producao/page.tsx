@@ -21,6 +21,8 @@ type Producao = {
   id: number; produto_final_id: number | null; produto_final_nome: string; quantidade_produzida: number; custo_total: number; created_at: string;
   status: StatusProducao; previsao_entrega: string | null; responsavel_id: string | null; lead_id: number | null;
   etapa_fabricacao_idx: number;
+  // Projeto personalizado sem venda ligada (importado da planilha) — nome do cliente só pra liderança.
+  cliente_avulso?: string | null;
   checklist_feito?: ChecklistFeito | null;
   // null = etapa atual aguardando a fábrica clicar em "Iniciar" (undefined = migration ainda
   // não rodou: trata como iniciada pra não travar ninguém).
@@ -107,7 +109,7 @@ function PulseProducaoContent() {
         ? supabase.from('servicos').select('*').order('nome', { ascending: true })
         : supabase.from('servicos').select('id, nome, preco, tipo, imagem_url, unidade').order('nome', { ascending: true }),
       // '*' traz checklist_feito sem quebrar antes da migration rodar.
-      supabase.from('pulse_producoes').select('*').order('created_at', { ascending: false }).limit(60),
+      supabase.from('pulse_producoes').select('*').order('created_at', { ascending: false }).limit(200),
       gestao
         ? supabase.from('pulse_fichas_tecnicas').select('id, produto_final_id, servico_id, quantidade_por_unidade')
         : Promise.resolve({ data: [] as { id: number; produto_final_id: number; servico_id: number; quantidade_por_unidade: number }[] }),
@@ -287,7 +289,7 @@ function PulseProducaoContent() {
     if (!p.lead_id) return;
     try {
       const json = await chamarNf2(p.lead_id, { verificar: true });
-      if (json.pronta) { setNf2Frete(9); setNf2Pendente({ leadId: p.lead_id, nome: `${p.produto_final_nome} · ${rotuloCliente(p.lead_id)}` }); }
+      if (json.pronta) { setNf2Frete(9); setNf2Pendente({ leadId: p.lead_id, nome: `${p.produto_final_nome} · ${rotuloCliente(p)}` }); }
       else if (json.ignorada) alert('Essa venda saiu com NF de venda normal — não tem NF de entrega separada.');
     } catch (err: any) {
       alert(`${prefixoErro}: ${err?.message || 'erro desconhecido'}.`);
@@ -560,8 +562,12 @@ function PulseProducaoContent() {
   // Diretoria vê os dois: o número é o que a fábrica fala, o nome é quem ela atende.
   const ocultarCliente = perfil?.cargo === 'producao';
   const numeroPedido = (leadId: number) => `Pedido LD-${String(leadId).padStart(4, '0')}`;
-  const rotuloCliente = (leadId: number | null) => {
-    if (!leadId) return 'Sem pedido (produção manual)';
+  const rotuloCliente = (p: { id: number; lead_id: number | null; cliente_avulso?: string | null } | null | undefined) => {
+    const leadId = p?.lead_id ?? null;
+    if (!leadId) {
+      if (!p?.cliente_avulso) return 'Sem pedido (produção manual)';
+      return ocultarCliente ? `Projeto #${p.id}` : `Projeto #${p.id} · ${p.cliente_avulso}`;
+    }
     if (ocultarCliente || !clientePorLead[leadId]) return numeroPedido(leadId);
     return `LD-${String(leadId).padStart(4, '0')} · ${clientePorLead[leadId]}`;
   };
@@ -703,7 +709,7 @@ function PulseProducaoContent() {
             <div className="flex flex-wrap gap-1.5">
               {paradas.map(p => (
                 <button key={p.id} onClick={() => setProcessoId(p.id)} className="text-[11px] font-bold text-red-200 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 rounded-lg px-2.5 py-1">
-                  {rotuloCliente(p.lead_id)} · {ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]} · {diasParado(p)}d
+                  {rotuloCliente(p)} · {ETAPAS_FABRICACAO[p.etapa_fabricacao_idx]} · {diasParado(p)}d
                 </button>
               ))}
             </div>
@@ -750,7 +756,7 @@ function PulseProducaoContent() {
                           {fotoCard && <img src={fotoCard} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0" />}
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] font-black uppercase tracking-wide text-[var(--cor-primaria)] truncate" title={p.lead_id && !ocultarCliente ? clientePorLead[p.lead_id] : undefined}>
-                              {rotuloCliente(p.lead_id)}
+                              {rotuloCliente(p)}
                             </p>
                             <p className="text-white font-bold text-sm truncate hover:underline">{p.produto_final_nome} <span className="text-slate-500 font-semibold">× {p.quantidade_produzida}</span></p>
                           </div>
@@ -886,7 +892,7 @@ function PulseProducaoContent() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {fotosPendentes.map(f => {
                     const prod = producoes.find(x => x.id === f.producao_id);
-                    const cliente = rotuloCliente(prod?.lead_id ?? null);
+                    const cliente = rotuloCliente(prod);
                     const ocupado = avaliandoFotos.includes(f.id);
                     return (
                       <div key={f.id} className="bg-black/30 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
@@ -919,7 +925,7 @@ function PulseProducaoContent() {
               <div className="min-w-0">
                 <p className="text-amber-400 font-black text-xs uppercase tracking-wide flex items-center gap-1.5"><ListChecks size={13} /> Processo</p>
                 <p className="text-white font-black text-sm truncate">{processoProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {processoProducao.quantidade_produzida}</span></p>
-                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{rotuloCliente(processoProducao.lead_id)}</p>
+                <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{rotuloCliente(processoProducao)}</p>
               </div>
               <button onClick={() => setProcessoId(null)} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
             </div>
@@ -996,7 +1002,7 @@ function PulseProducaoContent() {
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
               <div className="min-w-0">
-                <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao.lead_id)}</p>
+                <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao)}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
                 {isLideranca && detalheProducao.status === 'entregue' && detalheProducao.lead_id && (

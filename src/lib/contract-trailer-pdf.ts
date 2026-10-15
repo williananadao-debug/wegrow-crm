@@ -43,6 +43,9 @@ export type ContratoTrailerData = {
   parcelas_detalhe?: { data: string; valor: number }[];
   prazoFabricacaoDias: number | null;
   observacao?: string;
+  // Condições negociadas só pra ESTE contrato (ex.: cliente pediu data fixa e multa por atraso
+  // da fabricante). Sem isso, as cláusulas 3ª/4ª/rescisão saem no texto padrão de sempre.
+  condicoes?: CondicoesContratoTrailer;
   // Logo da empresa (bytes já baixados de empresas.logo_url pelo caller — pdfkit não aceita
   // URL direto em doc.image, só Buffer/path local) — opcional; sem ela, contrato sai sem
   // timbrado, como sempre saiu (não é regressão, é a mesma ausência de recurso de antes).
@@ -50,6 +53,18 @@ export type ContratoTrailerData = {
   // Cor de marca da empresa (empresas.cor_primaria, mesma usada no resto do app) — pinta a
   // faixa/onda do rodapé. Sem valor, cai no verde padrão do sistema (AuthContext usa o mesmo fallback).
   corPrimaria?: string;
+};
+
+export type CondicoesContratoTrailer = {
+  // Proteções do cliente: data limite de entrega + multa semanal por atraso injustificado +
+  // rescisão após N dias de atraso + devolução integral corrigida em N dias úteis.
+  dataLimiteEntrega?: string;          // YYYY-MM-DD
+  multaAtrasoSemanalPct?: number;      // ex.: 0.5
+  rescisaoAposDiasAtraso?: number;     // ex.: 30
+  devolucaoDiasUteis?: number;         // ex.: 10
+  // Última parcela do carnê paga no ato da entrega (e não na data do carnê).
+  ultimaParcelaNaEntrega?: boolean;
+  formaUltimaParcela?: string;         // ex.: 'pix'
 };
 
 const FORMAS_PAGAMENTO: Record<string, string> = {
@@ -76,6 +91,22 @@ function fmtData(d: string) {
   if (!d) return '___/___/______';
   try { return new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR'); } catch { return d; }
 }
+const pct = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const UNIDADES = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+const DEZENAS = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+// Número por extenso pros prazos do contrato (0–99; acima disso devolve o número mesmo).
+function extenso(n: number) {
+  if (n < 20) return UNIDADES[n] ?? String(n);
+  if (n < 100) { const d = Math.floor(n / 10), u = n % 10; return DEZENAS[d] + (u ? ` e ${UNIDADES[u]}` : ''); }
+  return String(n);
+}
+// 0,5 → "meio por cento"; 1 → "um por cento"; 1,5 → "um vírgula cinco por cento".
+function extensoPct(v: number) {
+  if (v === 0.5) return 'meio por cento';
+  const [int, dec] = String(v).split('.');
+  return `${extenso(Number(int))}${dec ? ` vírgula ${dec.split('').map(c => UNIDADES[Number(c)]).join(' ')}` : ''} por cento`;
+}
+
 function somarMeses(dataIso: string, meses: number) {
   const [y, m, d] = dataIso.split('-').map(Number);
   const dt = new Date(y, m - 1 + meses, d);
@@ -222,6 +253,11 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       );
       doc.moveDown(0.6);
 
+      const cond = data.condicoes;
+      const protecoes = !!(cond?.dataLimiteEntrega && cond?.multaAtrasoSemanalPct && cond.multaAtrasoSemanalPct > 0);
+      const diasRescisao = cond?.rescisaoAposDiasAtraso || 30;
+      const diasDevolucao = cond?.devolucaoDiasUteis || 10;
+
       // ── 3ª – DO VALOR E DA FORMA DE PAGAMENTO ─────────────────────────
       clausula('3ª', 'DO VALOR E DA FORMA DE PAGAMENTO');
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
@@ -240,8 +276,16 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       }
       if (Array.isArray(data.parcelas_detalhe) && data.parcelas_detalhe.length > 0) {
         // Carnê — cada parcela com seu valor e vencimento (não necessariamente iguais).
+        const qtdCarne = data.parcelas_detalhe.length;
         data.parcelas_detalhe.forEach((p, i) => {
-          linha(`Parcela ${i + 1}/${data.parcelas_detalhe!.length} — ${fmtData(p.data)}: `, fmt(p.valor));
+          const ultima = i === qtdCarne - 1 && cond?.ultimaParcelaNaEntrega;
+          if (ultima) {
+            const forma = cond?.formaUltimaParcela ? `, via ${FORMAS_PAGAMENTO[cond.formaUltimaParcela] || cond.formaUltimaParcela}` : '';
+            const ate = cond?.dataLimiteEntrega ? ` (prevista até ${fmtData(cond.dataLimiteEntrega)})` : '';
+            linha(`Parcela ${i + 1}/${qtdCarne} — no dia da entrega${ate}${forma}: `, fmt(p.valor));
+          } else {
+            linha(`Parcela ${i + 1}/${qtdCarne} — ${fmtData(p.data)}: `, fmt(p.valor));
+          }
         });
       } else {
         linha('Parcela(s): ', data.parcelas || '1');
@@ -256,7 +300,10 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       doc.moveDown(0.3);
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
         'Havendo pagamento parcelado ou saldo a pagar, a última parcela será obrigatoriamente quitada no ato da entrega do trailer, independentemente da data de vencimento indicada acima, sendo sua quitação condição para a retirada do bem. ' +
-        'A entrega definitiva e liberação do trailer ficam condicionadas à quitação integral do valor contratado, bem como de eventuais itens adicionais solicitados e previamente aprovados pelo CONTRATANTE. O atraso no pagamento de qualquer parcela poderá acarretar incidência de multa de 2% sobre o valor em atraso, acrescida de juros de 1% ao mês, calculados proporcionalmente ao período de atraso.',
+        'A entrega definitiva e liberação do trailer ficam condicionadas à quitação integral do valor contratado, bem como de eventuais itens adicionais solicitados e previamente aprovados pelo CONTRATANTE. O atraso no pagamento de qualquer parcela acarretará multa de 2% sobre o valor em atraso, acrescida de juros de 1% ao mês, calculados proporcionalmente ao período de atraso, e de correção monetária pelo IPCA.' +
+        (protecoes
+          ? ` Em caso de rescisão por descumprimento contratual da CONTRATADA, esta deverá restituir integralmente ao CONTRATANTE os valores recebidos, corrigidos monetariamente pelo IPCA, em até ${diasDevolucao} (${extenso(diasDevolucao)}) dias úteis contados da rescisão, sem prejuízo das penalidades previstas neste contrato.`
+          : ''),
         { align: 'justify' }
       );
       doc.moveDown(0.6);
@@ -264,7 +311,9 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       // ── 4ª – DO PRAZO DE FABRICAÇÃO E ENTREGA ─────────────────────────
       clausula('4ª', 'DO PRAZO DE FABRICAÇÃO E ENTREGA');
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
-        data.prazoFabricacaoDias
+        protecoes
+          ? `A CONTRATADA obriga-se a concluir e entregar o trailer até ${fmtData(cond!.dataLimiteEntrega!)}. Em caso de atraso injustificado, incidirá multa de ${pct(cond!.multaAtrasoSemanalPct!)}% (${extensoPct(cond!.multaAtrasoSemanalPct!)}) do valor total do contrato por semana de atraso; ultrapassados ${diasRescisao} (${extenso(diasRescisao)}) dias de atraso, o CONTRATANTE poderá rescindir o contrato, recebendo os valores pagos corrigidos monetariamente pelo IPCA, sem prejuízo das perdas e danos cabíveis. Não será considerado injustificado o atraso decorrente de caso fortuito ou força maior, de alterações solicitadas pelo CONTRATANTE ou de atraso em pagamentos, aprovações ou documentos de responsabilidade do CONTRATANTE, hipóteses em que o prazo fica prorrogado pelo período correspondente, mediante comunicação por escrito da CONTRATADA.`
+          : data.prazoFabricacaoDias
           ? `A previsão para conclusão e entrega é de ${data.prazoFabricacaoDias} dias corridos, contados a partir da assinatura deste contrato. Por se tratar de produto fabricado sob encomenda e de forma personalizada, o CONTRATANTE declara estar ciente de que o prazo poderá sofrer ajustes em situações decorrentes de fatores externos, indisponibilidade de componentes específicos, atrasos de fornecedores, alterações solicitadas pelo próprio CONTRATANTE, caso fortuito ou força maior. A CONTRATADA deverá comunicar ao CONTRATANTE eventual situação relevante que possa impactar significativamente a previsão de conclusão e entrega.`
           : 'A previsão de conclusão e entrega será acordada entre as partes. Por se tratar de produto fabricado sob encomenda e de forma personalizada, o CONTRATANTE declara estar ciente de que o prazo poderá sofrer ajustes em situações decorrentes de fatores externos, indisponibilidade de componentes específicos, atrasos de fornecedores, alterações solicitadas pelo próprio CONTRATANTE, caso fortuito ou força maior.',
         { align: 'justify' }
@@ -332,7 +381,9 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       // ── RESCISÃO ───────────────────────────────────────────────────
       clausula(`${nClausula(10)}ª`, 'DA RESCISÃO');
       doc.font('Helvetica').fontSize(8).fillColor('#000').text(
-        'Em caso de desistência ou rescisão por iniciativa do CONTRATANTE após o início da fabricação, deverão ser considerados os custos efetivamente assumidos pela CONTRATADA, incluindo materiais adquiridos, componentes encomendados, mão de obra empregada e demais despesas diretamente relacionadas à fabricação personalizada do trailer, sempre observada a legislação aplicável. Eventual rescisão deverá ser formalizada por escrito entre as partes.',
+        protecoes
+          ? `Em caso de desistência ou rescisão por iniciativa do CONTRATANTE após o início da fabricação, a CONTRATADA poderá reter apenas os custos efetivos, comprovados, razoáveis e não recuperáveis, diretamente relacionados à fabricação personalizada do trailer (materiais adquiridos, componentes encomendados e mão de obra empregada), quando legalmente cabíveis, mediante prestação de contas ao CONTRATANTE, restituindo-lhe o saldo dos valores pagos. Em caso de rescisão por culpa da CONTRATADA, inclusive por atraso na forma da Cláusula 4ª, a CONTRATADA restituirá integralmente os valores pagos, corrigidos monetariamente pelo IPCA, em até ${diasDevolucao} (${extenso(diasDevolucao)}) dias úteis contados da rescisão, sem prejuízo das penalidades previstas e das perdas e danos cabíveis. Eventual rescisão deverá ser formalizada por escrito.`
+          : 'Em caso de desistência ou rescisão por iniciativa do CONTRATANTE após o início da fabricação, deverão ser considerados os custos efetivamente assumidos pela CONTRATADA, incluindo materiais adquiridos, componentes encomendados, mão de obra empregada e demais despesas diretamente relacionadas à fabricação personalizada do trailer, sempre observada a legislação aplicável. Eventual rescisão deverá ser formalizada por escrito entre as partes.',
         { align: 'justify' }
       );
       doc.moveDown(0.6);

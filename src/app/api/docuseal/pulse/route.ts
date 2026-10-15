@@ -88,6 +88,7 @@ export async function POST(req: Request) {
         parcelas_detalhe: Array.isArray(venda.parcelas_detalhe) && venda.parcelas_detalhe.length > 0 ? venda.parcelas_detalhe : undefined,
         prazoFabricacaoDias: venda.prazoFabricacaoDias ?? null,
         observacao: venda.observacao || '',
+        condicoes: venda.condicoes && typeof venda.condicoes === 'object' ? venda.condicoes : undefined,
         logoBuffer,
         corPrimaria: empresa?.cor_primaria || undefined,
       });

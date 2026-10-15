@@ -96,6 +96,15 @@ function PulseNovaVendaContent() {
   // lá em cima) — este modal só lê de vendaAlvo, não edita nenhum desses campos.
   const [enviandoContrato, setEnviandoContrato] = useState(false);
   const [contratoErro, setContratoErro] = useState<string | null>(null);
+  // Condições negociadas só pra este contrato (data fixa + multa da fabricante, última parcela
+  // na entrega). Não ficam salvas na venda — refazer o contrato pede pra marcar de novo.
+  const [condProtecoes, setCondProtecoes] = useState(false);
+  const [condDataEntrega, setCondDataEntrega] = useState('');
+  const [condMulta, setCondMulta] = useState('0,5');
+  const [condDiasRescisao, setCondDiasRescisao] = useState('30');
+  const [condDiasDevolucao, setCondDiasDevolucao] = useState('10');
+  const [condUltimaNaEntrega, setCondUltimaNaEntrega] = useState(false);
+  const [condFormaUltima, setCondFormaUltima] = useState('pix');
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
 
   // NF de venda: normal (5101/5102) ou NF1 (entrega futura, CFOP 5922) — emitida na hora da venda. A NF2 (entrega, CFOP
@@ -762,12 +771,16 @@ function PulseNovaVendaContent() {
     setContratoTelefone(cliente?.telefone || venda?.telefone || '');
     setContratoErro(null);
     setContratoLinks(null);
+    setCondProtecoes(false); setCondDataEntrega(''); setCondMulta('0,5'); setCondDiasRescisao('30'); setCondDiasDevolucao('10');
+    setCondUltimaNaEntrega(false); setCondFormaUltima('pix');
     setContratoAberto(true);
   };
 
   const enviarContrato = async () => {
     if (!contratoEmail.trim()) { setContratoErro('Informe o e-mail do cliente — o Docuseal manda o link de assinatura por lá.'); return; }
     if (!vendaAlvo) return;
+    const multaNum = Number(condMulta.replace(',', '.'));
+    if (condProtecoes && (!condDataEntrega || !(multaNum > 0))) { setContratoErro('Nas condições negociadas, informe a data limite de entrega e a multa semanal.'); return; }
     setEnviandoContrato(true); setContratoErro(null);
     try {
       // Endereço completo do cliente (rua + número + bairro + CEP + cidade/UF) — só existe
@@ -810,6 +823,13 @@ function PulseNovaVendaContent() {
             forma_pagamento_entrada: vendaAlvo.forma_pagamento_entrada || undefined,
             parcelas_detalhe: Array.isArray(vendaAlvo.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 ? vendaAlvo.parcelas_detalhe : undefined,
             prazoFabricacaoDias: prazoFabricacaoDiasVenda, unidade: vendaAlvo.unidade || unidadeSel,
+            condicoes: (condProtecoes || condUltimaNaEntrega) ? {
+              ...(condProtecoes ? {
+                dataLimiteEntrega: condDataEntrega, multaAtrasoSemanalPct: multaNum,
+                rescisaoAposDiasAtraso: parseInt(condDiasRescisao, 10) || 30, devolucaoDiasUteis: parseInt(condDiasDevolucao, 10) || 10,
+              } : {}),
+              ...(condUltimaNaEntrega ? { ultimaParcelaNaEntrega: true, formaUltimaParcela: condFormaUltima, ...(condDataEntrega ? { dataLimiteEntrega: condDataEntrega } : {}) } : {}),
+            } : undefined,
           },
           signers: [{ name: vendaAlvo.empresa, email: contratoEmail.trim(), phone: contratoTelefone }],
           consultor: { nome: perfil?.nome || 'Vendedor', email: user?.email },
@@ -1110,6 +1130,48 @@ function PulseNovaVendaContent() {
                 <p className="text-slate-400 text-xs">{vendaAlvo?.parcelas || 1}x{vendaAlvo?.vencimento ? `, a partir de ${new Date(vendaAlvo.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''} — {vendaAlvo?.forma_pagamento || 'forma de pagamento não definida'}</p>
               )}
               <p className="text-slate-600 text-[9px] mt-1.5">Diferente do combinado? Feche este contrato, ajuste na tela da venda (Editar) e abra de novo.</p>
+              {Array.isArray(vendaAlvo?.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 && (
+                <div className="mt-2">
+                  <label className="flex items-center gap-2 text-xs text-slate-300 font-bold cursor-pointer">
+                    <input type="checkbox" checked={condUltimaNaEntrega} onChange={e => setCondUltimaNaEntrega(e.target.checked)} className="accent-purple-500" />
+                    Última parcela paga no dia da entrega
+                  </label>
+                  {condUltimaNaEntrega && (
+                    <select value={condFormaUltima} onChange={e => setCondFormaUltima(e.target.value)} className="mt-1.5 w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-white text-xs outline-none focus:border-purple-500">
+                      <option value="pix">via PIX</option><option value="transferencia">via Transferência</option><option value="boleto">via Boleto</option><option value="dinheiro">em Dinheiro</option>
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-white/5 pt-3">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer">
+                <input type="checkbox" checked={condProtecoes} onChange={e => setCondProtecoes(e.target.checked)} className="accent-purple-500" />
+                Condições negociadas com o cliente
+              </label>
+              {condProtecoes && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-slate-500 text-[10px] leading-snug">Só neste contrato: data fixa de entrega, multa da fabricante por atraso injustificado, rescisão por culpa da fabricante com devolução integral corrigida e retenção limitada a custos comprovados.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase mb-0.5 block">Entrega até</label>
+                      <input type="date" value={condDataEntrega} onChange={e => setCondDataEntrega(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase mb-0.5 block">Multa/semana (%)</label>
+                      <input value={condMulta} onChange={e => setCondMulta(e.target.value.replace(/[^\d,.]/g, ''))} inputMode="decimal" className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase mb-0.5 block">Rescinde após (dias)</label>
+                      <input value={condDiasRescisao} onChange={e => setCondDiasRescisao(e.target.value.replace(/\D/g, ''))} inputMode="numeric" className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase mb-0.5 block">Devolve em (dias úteis)</label>
+                      <input value={condDiasDevolucao} onChange={e => setCondDiasDevolucao(e.target.value.replace(/\D/g, ''))} inputMode="numeric" className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-2 text-white text-xs outline-none focus:border-purple-500" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
             <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">

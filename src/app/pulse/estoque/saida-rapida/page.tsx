@@ -183,7 +183,10 @@ export default function SaidaRapidaPage() {
     const { servico, varios } = acharServico(t);
     if (!servico) {
       tocar(false);
-      registrarLeitura({ nome: '—', sku: t, ok: false, mensagem: varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.' });
+      const msg = varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.';
+      registrarLeitura({ nome: '—', sku: t, ok: false, mensagem: msg });
+      // No modo Requisição o histórico de leituras não aparece — sem isso a leitura sumia calada.
+      setErro(`Lido: "${t}" — ${msg}${varios ? '' : ' Confira o SKU do produto e se ele tem controle de estoque ativo.'}`);
     } else if (modo === 'imediato') {
       await processarImediato(servico, t, qtdLeitura);
     } else {

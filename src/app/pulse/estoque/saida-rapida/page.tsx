@@ -117,6 +117,7 @@ export default function SaidaRapidaPage() {
       supabase.from('pulse_producoes').select('id, produto_final_nome').eq('empresa_id', perfil.empresa_id).eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
     ]).then(([s, p]) => {
       if (s.data) setServicos(ordenarPorNome(s.data as ServicoConfig[]));
+      if (s.error) setErro(`Erro ao carregar os produtos: ${s.error.message}`);
       if (p.data) setProducoes(p.data as { id: number; produto_final_nome: string }[]);
       setLoading(false);
     });
@@ -185,8 +186,9 @@ export default function SaidaRapidaPage() {
     // procura o SKU direto no banco antes de dizer que não existe.
     let semControle: string | null = null;
     if (!servico && !varios && perfil?.empresa_id) {
-      const { data: noBanco } = await supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao')
+      const { data: noBanco, error: erroBanco } = await supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao')
         .eq('empresa_id', perfil.empresa_id).ilike('sku', t).limit(1).maybeSingle();
+      if (erroBanco) console.error('[saida-rapida] busca por SKU', erroBanco);
       if (noBanco && noBanco.estoque == null) semControle = noBanco.nome;
       else if (noBanco) { servico = noBanco as ServicoConfig; setServicos(prev => prev.some(x => x.id === noBanco.id) ? prev : [...prev, noBanco as ServicoConfig]); }
     }
@@ -197,7 +199,7 @@ export default function SaidaRapidaPage() {
         : varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.';
       registrarLeitura({ nome: semControle || '—', sku: t, ok: false, mensagem: msg });
       // No modo Requisição o histórico de leituras não aparece — sem isso a leitura sumia calada.
-      setErro(`Lido: "${t}" — ${msg}${varios || semControle ? '' : ' Nenhum produto desta empresa tem esse SKU.'}`);
+      setErro(`Lido: "${t}" — ${msg}${varios || semControle ? '' : ` Nenhum produto desta empresa tem esse SKU (${servicos.length} produtos carregados).`}`);
     } else if (modo === 'imediato') {
       await processarImediato(servico, t, qtdLeitura);
     } else {

@@ -180,13 +180,24 @@ export default function SaidaRapidaPage() {
     if (!t || processando) return;
     if (loading) { setErro('Aguarde: ainda carregando os produtos…'); return; }
     setProcessando(true); setErro(null);
-    const { servico, varios } = acharServico(t);
+    let { servico, varios } = acharServico(t);
+    // Fora da lista carregada (passou do limite de 1.000 itens ou está sem controle de estoque):
+    // procura o SKU direto no banco antes de dizer que não existe.
+    let semControle: string | null = null;
+    if (!servico && !varios && perfil?.empresa_id) {
+      const { data: noBanco } = await supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao')
+        .eq('empresa_id', perfil.empresa_id).ilike('sku', t).limit(1).maybeSingle();
+      if (noBanco && noBanco.estoque == null) semControle = noBanco.nome;
+      else if (noBanco) { servico = noBanco as ServicoConfig; setServicos(prev => prev.some(x => x.id === noBanco.id) ? prev : [...prev, noBanco as ServicoConfig]); }
+    }
     if (!servico) {
       tocar(false);
-      const msg = varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.';
-      registrarLeitura({ nome: '—', sku: t, ok: false, mensagem: msg });
+      const msg = semControle
+        ? `${semControle} está sem controle de estoque — ative em Estoque (defina a quantidade atual) pra poder dar saída.`
+        : varios ? `${varios.length} itens parecidos — escolha na lista ou seja mais específico.` : 'Código/nome não encontrado no catálogo.';
+      registrarLeitura({ nome: semControle || '—', sku: t, ok: false, mensagem: msg });
       // No modo Requisição o histórico de leituras não aparece — sem isso a leitura sumia calada.
-      setErro(`Lido: "${t}" — ${msg}${varios ? '' : ' Confira o SKU do produto e se ele tem controle de estoque ativo.'}`);
+      setErro(`Lido: "${t}" — ${msg}${varios || semControle ? '' : ' Nenhum produto desta empresa tem esse SKU.'}`);
     } else if (modo === 'imediato') {
       await processarImediato(servico, t, qtdLeitura);
     } else {

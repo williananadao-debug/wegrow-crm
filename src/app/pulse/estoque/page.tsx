@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import JsBarcode from 'jsbarcode';
 import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
 import { ServicoConfig, alertarEstoqueBaixoSeCruzou, ehUsoConsumo } from '../shared';
 import dynamic from 'next/dynamic';
+import EtiquetaModal from './EtiquetaModal';
 
 // Modais de NF só carregam quando abertos — o de lançar puxa parser de XML/matching de
 // produto e pesava no carregamento inicial (Estoque estava em 55 no Speed Insights).
@@ -52,32 +52,12 @@ export default function PulseEstoquePage() {
   const [notaModalAberto, setNotaModalAberto] = useState(false);
   const [notaTipo, setNotaTipo] = useState<'entrada' | 'saida'>('entrada');
 
-  // Etiqueta de código de barras — clica no item, gera e já manda pra impressão, sem tela
-  // de seleção. Código de barras = SKU do produto (o mesmo lido na Saída Rápida). Abre numa
-  // janelinha só com a etiqueta em vez de esconder a página inteira via CSS de impressão
-  // (frágil — dependeria de conhecer o DOM completo do layout do app, navbar incluída).
+  // Etiqueta de código de barras (SKU, o mesmo lido na Saída Rápida) — abre a escolha de
+  // quantidade e do formato do rolo (colunas lado a lado) antes de imprimir.
+  const [etiquetaProduto, setEtiquetaProduto] = useState<{ nome: string; sku: string } | null>(null);
   const imprimirEtiqueta = (s: ServicoConfig) => {
     if (!s.sku) { alert('Esse produto não tem SKU cadastrado — não dá pra gerar código de barras.'); return; }
-    const canvas = document.createElement('canvas');
-    try {
-      JsBarcode(canvas, s.sku, { format: 'CODE128', width: 1.6, height: 38, fontSize: 11, margin: 4 });
-    } catch {
-      alert('SKU com caractere que o código de barras (CODE128) não aceita.');
-      return;
-    }
-    const dataUrl = canvas.toDataURL('image/png');
-    const win = window.open('', '_blank', 'width=320,height=220');
-    if (!win) { alert('O navegador bloqueou a janela de impressão — permite pop-up pra esse site.'); return; }
-    win.document.write(`<!DOCTYPE html><html><head><title>Etiqueta</title><style>
-      @page { size: 58mm auto; margin: 0; }
-      body { margin: 0; padding: 8px; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; width: 58mm; }
-      p { font-size: 9px; font-weight: 900; text-transform: uppercase; text-align: center; margin: 0 0 2px; }
-      img { max-width: 100%; }
-    </style></head><body>
-      <p>${s.nome.replace(/</g, '')}</p>
-      <img src="${dataUrl}" onload="window.print(); window.onafterprint = () => window.close();" />
-    </body></html>`);
-    win.document.close();
+    setEtiquetaProduto({ nome: s.nome, sku: s.sku });
   };
 
   const [historicoServico, setHistoricoServico] = useState<ServicoConfig | null>(null);
@@ -767,6 +747,7 @@ export default function PulseEstoquePage() {
       />}
 
       {verNotaId != null && <VerNotaFiscalModal aberto onFechar={() => setVerNotaId(null)} notaId={verNotaId} />}
+      {etiquetaProduto && <EtiquetaModal produto={etiquetaProduto} onClose={() => setEtiquetaProduto(null)} />}
     </div>
   );
 }

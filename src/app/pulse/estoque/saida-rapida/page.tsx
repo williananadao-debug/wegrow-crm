@@ -132,7 +132,11 @@ export default function SaidaRapidaPage() {
   // achar por SKU exato; se não for SKU, aceita nome (único resultado) — dá pra digitar sem leitor
   const acharServico = (texto: string): { servico?: ServicoConfig; varios?: ServicoConfig[] } => {
     const t = texto.trim().toLowerCase();
-    const porSku = servicos.find(s => (s.sku || '').toLowerCase() === t);
+    // Leitor configurado em teclado diferente do Windows (US × ABNT2) troca hífen, barra etc.
+    // Compara também só letras e números pra não perder a leitura por causa de um símbolo.
+    const soAlfa = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const porSku = servicos.find(s => (s.sku || '').toLowerCase() === t)
+      || (soAlfa(t) ? servicos.find(s => s.sku && soAlfa(s.sku) === soAlfa(t)) : undefined);
     if (porSku) return { servico: porSku };
     const porNome = servicos.filter(s => s.nome.toLowerCase().includes(t));
     if (porNome.length === 1) return { servico: porNome[0] };

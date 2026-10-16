@@ -41,15 +41,24 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
     const { largura, altura, colunas, espaco, margemEsq } = cfg;
     if (!(largura > 5 && altura > 5 && colunas >= 1 && colunas <= 6)) { setErro('Confira largura, altura e colunas.'); return; }
 
-    // SVG (vetor) sai mais nítido que PNG na térmica — esticado na largura da etiqueta.
+    // Cada barra precisa ter um número inteiro de pontos da térmica (203 dpi = 0,125 mm por
+    // ponto). Esticar o código pra caber na largura deixava barras de larguras desiguais e o
+    // leitor não lia. Aqui: 1 módulo = N pontos, o maior que cabe, mínimo 0,25 mm.
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     try {
-      JsBarcode(svg, produto.sku, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 0 });
+      JsBarcode(svg, produto.sku, { format: 'CODE128', width: 1, height: 60, displayValue: false, margin: 0 });
     } catch {
       setErro('SKU com caractere que o código de barras (CODE128) não aceita.');
       return;
     }
+    const modulos = Number(svg.getAttribute('width')) || 1;
+    const PONTO = 0.125;
+    const zonaQuieta = 2.5; // margem branca mínima de cada lado pro leitor achar o começo/fim
+    const disponivel = largura - 2 * zonaQuieta;
+    const modulo = Math.max(2 * PONTO, Math.floor(disponivel / modulos / PONTO) * PONTO);
+    const larguraCodigo = modulos * modulo;
     svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('shape-rendering', 'crispEdges');
     const codigo = svg.outerHTML;
 
     try { localStorage.setItem(CHAVE, JSON.stringify(cfg)); } catch { /* segue */ }
@@ -74,11 +83,11 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
       body { font-family: Arial, sans-serif; }
       .linha { width: ${larguraLinha}mm; height: ${altura}mm; padding-left: ${margemEsq}mm; display: flex; gap: ${espaco}mm; page-break-after: always; break-after: page; overflow: hidden; }
       .linha:last-child { page-break-after: auto; break-after: auto; }
-      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 2mm 3.5mm 2.5mm; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 2mm ${zonaQuieta}mm 2.5mm; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
       .et p { font-size: ${Math.max(6, Math.min(9, largura / 5))}pt; font-weight: 900; text-transform: uppercase; text-align: center; margin: 0 0 1mm; line-height: 1.1; max-height: 2.3em; overflow: hidden; }
-      .cb { flex: 1; min-height: 0; padding: 0 1mm; }
+      .cb { flex: 1; min-height: 0; display: flex; justify-content: center; }
       .sku { font-size: 7pt; text-align: center; letter-spacing: 0.5px; margin-top: 0.6mm; line-height: 1; }
-      .cb svg { width: 100%; height: 100%; display: block; }
+      .cb svg { width: ${larguraCodigo}mm; height: 100%; display: block; flex: none; }
     </style></head><body>${html}<script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script></body></html>`);
     win.document.close();
     onClose();

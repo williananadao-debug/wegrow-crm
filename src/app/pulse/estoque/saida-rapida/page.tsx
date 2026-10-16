@@ -35,6 +35,8 @@ function bip(ok: boolean) {
 //    confirma tudo de uma vez — sai um comprovante com código. Cada saída fica ligada à requisição.
 //  • Imediato: o antigo "1 bip = 1 unidade", pra bancada com item avulso; com desfazer.
 // Ajuste manual de quantidade exata continua só em /pulse/estoque (diretor/gerente).
+const COLUNAS_SERVICO = 'id, nome, sku, estoque, estoque_minimo, unidade';
+
 export default function SaidaRapidaPage() {
   const { authLoading, temPulse, user, perfil } = usePulseAccess();
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
@@ -116,7 +118,10 @@ export default function SaidaRapidaPage() {
       // Sem filtro explícito de empresa_id — igual à tela de Estoque, quem filtra é o RLS
       // (empresa do usuário no banco). Com o filtro, usuário ligado a mais de uma empresa via
       // o empresa_id do perfil carregado no app ≠ do RLS e a lista voltava vazia.
-      supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao').not('estoque', 'is', null),
+      // "localizacao" só existe depois da migration 20260922100000 — sem ela, a consulta inteira
+      // falhava e a lista vinha vazia. Tenta com, e se a coluna não existir busca sem.
+      supabase.from('servicos').select(`${COLUNAS_SERVICO}, localizacao`).not('estoque', 'is', null)
+        .then(r => (r.error && /localizacao/.test(r.error.message) ? supabase.from('servicos').select(COLUNAS_SERVICO).not('estoque', 'is', null) : r)),
       supabase.from('pulse_producoes').select('id, produto_final_nome').eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
     ]).then(([s, p]) => {
       if (s.data) setServicos(ordenarPorNome(s.data as ServicoConfig[]));
@@ -189,7 +194,7 @@ export default function SaidaRapidaPage() {
     // procura o SKU direto no banco antes de dizer que não existe.
     let semControle: string | null = null;
     if (!servico && !varios && perfil?.empresa_id) {
-      const { data: noBanco, error: erroBanco } = await supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao')
+      const { data: noBanco, error: erroBanco } = await supabase.from('servicos').select(COLUNAS_SERVICO)
         .ilike('sku', t).limit(1).maybeSingle();
       if (erroBanco) console.error('[saida-rapida] busca por SKU', erroBanco);
       if (noBanco && noBanco.estoque == null) semControle = noBanco.nome;

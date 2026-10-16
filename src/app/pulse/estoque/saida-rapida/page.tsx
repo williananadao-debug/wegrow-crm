@@ -113,8 +113,11 @@ export default function SaidaRapidaPage() {
     if (!perfil?.empresa_id) return;
     Promise.all([
       // Só o que a tela usa — '*' trazia histórico de preços etc. de centenas de insumos.
-      supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao').eq('empresa_id', perfil.empresa_id).not('estoque', 'is', null),
-      supabase.from('pulse_producoes').select('id, produto_final_nome').eq('empresa_id', perfil.empresa_id).eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
+      // Sem filtro explícito de empresa_id — igual à tela de Estoque, quem filtra é o RLS
+      // (empresa do usuário no banco). Com o filtro, usuário ligado a mais de uma empresa via
+      // o empresa_id do perfil carregado no app ≠ do RLS e a lista voltava vazia.
+      supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao').not('estoque', 'is', null),
+      supabase.from('pulse_producoes').select('id, produto_final_nome').eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
     ]).then(([s, p]) => {
       if (s.data) setServicos(ordenarPorNome(s.data as ServicoConfig[]));
       if (s.error) setErro(`Erro ao carregar os produtos: ${s.error.message}`);
@@ -187,7 +190,7 @@ export default function SaidaRapidaPage() {
     let semControle: string | null = null;
     if (!servico && !varios && perfil?.empresa_id) {
       const { data: noBanco, error: erroBanco } = await supabase.from('servicos').select('id, nome, sku, estoque, estoque_minimo, unidade, localizacao')
-        .eq('empresa_id', perfil.empresa_id).ilike('sku', t).limit(1).maybeSingle();
+        .ilike('sku', t).limit(1).maybeSingle();
       if (erroBanco) console.error('[saida-rapida] busca por SKU', erroBanco);
       if (noBanco && noBanco.estoque == null) semControle = noBanco.nome;
       else if (noBanco) { servico = noBanco as ServicoConfig; setServicos(prev => prev.some(x => x.id === noBanco.id) ? prev : [...prev, noBanco as ServicoConfig]); }

@@ -66,7 +66,9 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
     const win = window.open('', '_blank', 'width=420,height=320');
     if (!win) { setErro('O navegador bloqueou a janela de impressão — permita pop-up para este site.'); return; }
     win.document.write(`<!DOCTYPE html><html><head><title>Etiqueta</title><style>
-      @page { size: ${larguraLinha}mm ${altura}mm; margin: 0; }
+      /* Sem "size": página mais larga que alta o Chrome manda como paisagem e o driver da
+         térmica gira 90°. O tamanho do papel vem do driver (largura do rolo × altura da etiqueta). */
+      @page { margin: 0; }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; }
       body { font-family: Arial, sans-serif; }
@@ -106,7 +108,7 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
           <div><label className={rotulo}>Espaço entre colunas (mm)</label><input value={cfg.espaco} onChange={campo('espaco')} inputMode="decimal" className={input} /></div>
           <div className="col-span-2"><label className={rotulo}>Margem esquerda (mm) — se sair deslocado</label><input value={cfg.margemEsq} onChange={campo('margemEsq')} inputMode="decimal" className={input} /></div>
         </div>
-        <p className="text-slate-500 text-[10px] leading-snug mt-2">Meça com régua uma etiqueta e o vão entre as duas. Na janela de impressão: margens &quot;Nenhuma&quot; e escala 100%.</p>
+        <p className="text-slate-500 text-[10px] leading-snug mt-2">Meça com régua uma etiqueta e o vão entre as duas. Na janela de impressão: margens &quot;Nenhuma&quot; e escala 100%. No driver da impressora (Windows), o papel deve ser {cfg.margemEsq + cfg.colunas * cfg.largura + (cfg.colunas - 1) * cfg.espaco} × {cfg.altura} mm, orientação retrato.</p>
 
         {erro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl mt-3">{erro}</div>}
         <button onClick={imprimir} className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black uppercase text-xs tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2">

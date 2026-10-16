@@ -44,7 +44,7 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
     // SVG (vetor) sai mais nítido que PNG na térmica — esticado na largura da etiqueta.
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     try {
-      JsBarcode(svg, produto.sku, { format: 'CODE128', width: 2, height: 60, displayValue: true, fontSize: 16, margin: 0 });
+      JsBarcode(svg, produto.sku, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 0 });
     } catch {
       setErro('SKU com caractere que o código de barras (CODE128) não aceita.');
       return;
@@ -56,7 +56,7 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
 
     const larguraLinha = margemEsq + colunas * largura + (colunas - 1) * espaco;
     const linhas = Math.ceil(qtd / colunas);
-    const etiqueta = `<div class="et"><p>${escapar(produto.nome)}</p><div class="cb">${codigo}</div></div>`;
+    const etiqueta = `<div class="et"><p>${escapar(produto.nome)}</p><div class="cb">${codigo}</div><span class="sku">${escapar(produto.sku)}</span></div>`;
     let html = '';
     for (let l = 0; l < linhas; l++) {
       const nessa = Math.min(colunas, qtd - l * colunas);
@@ -74,9 +74,10 @@ export default function EtiquetaModal({ produto, onClose }: { produto: { nome: s
       body { font-family: Arial, sans-serif; }
       .linha { width: ${larguraLinha}mm; height: ${altura}mm; padding-left: ${margemEsq}mm; display: flex; gap: ${espaco}mm; page-break-after: always; break-after: page; overflow: hidden; }
       .linha:last-child { page-break-after: auto; break-after: auto; }
-      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 1.5mm 2mm; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 2mm 3.5mm 2.5mm; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
       .et p { font-size: ${Math.max(6, Math.min(9, largura / 5))}pt; font-weight: 900; text-transform: uppercase; text-align: center; margin: 0 0 1mm; line-height: 1.1; max-height: 2.3em; overflow: hidden; }
-      .cb { flex: 1; min-height: 0; }
+      .cb { flex: 1; min-height: 0; padding: 0 1mm; }
+      .sku { font-size: 7pt; text-align: center; letter-spacing: 0.5px; margin-top: 0.6mm; line-height: 1; }
       .cb svg { width: 100%; height: 100%; display: block; }
     </style></head><body>${html}<script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script></body></html>`);
     win.document.close();

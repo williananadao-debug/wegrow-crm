@@ -407,9 +407,22 @@ function PulseProducaoContent() {
     }
   };
 
+  // Previsão de entrega: o input de data dispara onChange a cada dígito do ano ("0002-…"),
+  // então só grava data completa e plausível. Fica no histórico da produção (de → para).
+  const fmtDia = (d: string | null) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : 'sem data');
   const atualizarPrazo = async (p: Producao, valor: string) => {
-    setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, previsao_entrega: valor || null } : x));
-    await supabase.from('pulse_producoes').update({ previsao_entrega: valor || null }).eq('id', p.id);
+    if (valor && !(/^\d{4}-\d{2}-\d{2}$/.test(valor) && Number(valor.slice(0, 4)) >= 2020 && Number(valor.slice(0, 4)) <= 2100)) return;
+    const novo = valor || null;
+    if (novo === p.previsao_entrega) return;
+    setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, previsao_entrega: novo } : x));
+    const { error } = await supabase.from('pulse_producoes').update({ previsao_entrega: novo }).eq('id', p.id);
+    if (error) {
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, previsao_entrega: p.previsao_entrega } : x));
+      alert('Não foi possível salvar a data de entrega: ' + mensagemErroRede(error));
+      return;
+    }
+    await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'comentario', texto: `Previsão de entrega alterada: ${fmtDia(p.previsao_entrega)} → ${fmtDia(novo)}.`, user_id: user?.id }]);
+    if (detalheId === p.id) carregarEventos(p.id);
   };
 
   const atualizarResponsavel = async (p: Producao, valor: string) => {
@@ -834,7 +847,7 @@ function PulseProducaoContent() {
                           ) : null
                         ) : (
                         <div className="grid grid-cols-2 gap-1.5 mt-2">
-                          <input type="date" value={p.previsao_entrega || ''} onChange={e => atualizarPrazo(p, e.target.value)}
+                          <input type="date" key={`${p.id}-${p.previsao_entrega || ''}`} defaultValue={p.previsao_entrega || ''} onBlur={e => atualizarPrazo(p, e.target.value)} title='Previsão de entrega'
                             className={`bg-black/30 border rounded-lg px-2 py-1 text-[10px] outline-none focus:border-[var(--cor-primaria)] ${atrasada ? 'border-red-500/40 text-red-400' : 'border-white/10 text-slate-300'}`} />
                           {isLideranca && Object.keys(usersMap).length > 0 ? (
                             <select value={p.responsavel_id || ''} onChange={e => atualizarResponsavel(p, e.target.value)}
@@ -1013,6 +1026,15 @@ function PulseProducaoContent() {
               </div>
               <button onClick={fecharDetalhe} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
             </div>
+
+            {!ocultarCliente && (
+              <div className="flex items-center justify-between gap-3 bg-black/20 border border-white/10 rounded-xl px-3 py-2 mb-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Previsão de entrega</span>
+                <input type="date" key={`det-${detalheProducao.id}-${detalheProducao.previsao_entrega || ''}`} defaultValue={detalheProducao.previsao_entrega || ''}
+                  onBlur={e => atualizarPrazo(detalheProducao, e.target.value)}
+                  className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[var(--cor-primaria)]" />
+              </div>
+            )}
 
             {detalheProducao.status === 'em_producao' && (
               <div className="px-5 py-3 border-b border-white/5 flex-shrink-0">

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Maximize2, Minimize2, Pause, Play } from 'lucide-react';
+import { ArrowLeft, Maximize2, Minimize2, Pause, Play, Vote } from 'lucide-react';
 import {
   montarMalha, montarContornos, corDoMunicipio, corDaFaixa, IBGE_UF,
   PALETAS, PALETAS_GOV, COR_SEM_DADOS, FAIXAS_LEGENDA, type Malha, type Paleta,
@@ -30,7 +30,7 @@ type RespMapa = {
 };
 type Topo = Parameters<typeof montarMalha>[0];
 
-const VERDE = '#22C55E'; // cor da marca Demais FM
+const VERDE = '#22C55E'; // destaque (ao vivo, % apurado)
 // Tons das linhas do gráfico: mesmos matizes do mapa, um passo mais claros pra ler no
 // fundo escuro (par validado: separação para daltonismo e contraste com o fundo).
 const LINHAS = ['#3B82F6', '#EF4444'];
@@ -335,8 +335,9 @@ export default function PainelEleicao() {
       <header className="sticky top-0 z-20 bg-[#070B14]/95 backdrop-blur border-b border-white/10">
         <div className="max-w-[1800px] mx-auto px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
           <div className="flex items-center gap-3 min-w-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-demais.png" alt="Demais FM" className="h-8 sm:h-10 w-auto" />
+            <span className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-none" style={{ background: 'rgba(34,197,94,0.15)', color: VERDE }}>
+              <Vote size={22} />
+            </span>
             <div className="min-w-0">
               <h1 className="text-base sm:text-xl font-black leading-tight uppercase tracking-tight">Apuração · 2º Turno 2026</h1>
               <p className="text-[11px] sm:text-xs text-slate-400">Dados oficiais do TSE · atualização automática</p>
@@ -545,7 +546,7 @@ export default function PainelEleicao() {
         )}
 
         <footer className="text-center text-[11px] text-slate-600 pt-2 pb-6">
-          Fonte: Tribunal Superior Eleitoral (resultados.tse.jus.br) · Mapa: IBGE · Demais FM
+          Fonte: Tribunal Superior Eleitoral (resultados.tse.jus.br) · Mapa: IBGE
         </footer>
       </main>
     </div>

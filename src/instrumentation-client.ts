@@ -11,7 +11,10 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV,
     // Operação cancelada pelo próprio navegador (saiu da página, trocou de aba, vídeo/requisição
     // interrompidos — comum no Safari do iPhone). Não é bug e não afeta o usuário: só ruído.
-    ignoreErrors: [/AbortError/, /The operation was aborted/, /The play\(\) request was interrupted/],
+    // "reading 'waiting'": workbox-window (registro do service worker do PWA) quando o navegador
+    // não devolve o registro — robô de pré-visualização de link (Chrome headless/Linux) abrindo o
+    // link da apuração. A página funciona igual; só o cache offline não é instalado.
+    ignoreErrors: [/AbortError/, /The operation was aborted/, /The play\(\) request was interrupted/, /reading 'waiting'/],
   });
 }
 

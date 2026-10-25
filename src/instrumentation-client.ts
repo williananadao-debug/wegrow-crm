@@ -14,7 +14,9 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     // "reading 'waiting'": workbox-window (registro do service worker do PWA) quando o navegador
     // não devolve o registro — robô de pré-visualização de link (Chrome headless/Linux) abrindo o
     // link da apuração. A página funciona igual; só o cache offline não é instalado.
-    ignoreErrors: [/AbortError/, /The operation was aborted/, /The play\(\) request was interrupted/, /reading 'waiting'/],
+    // "sw.js load failed": Safari não conseguiu baixar o service worker (rede caiu/oscilou no
+    // meio do registro). O arquivo existe em produção; o navegador tenta de novo na próxima visita.
+    ignoreErrors: [/AbortError/, /The operation was aborted/, /The play\(\) request was interrupted/, /reading 'waiting'/, /sw\.js load failed/],
   });
 }
 

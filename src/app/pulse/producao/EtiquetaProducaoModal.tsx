@@ -56,10 +56,10 @@ export default function EtiquetaProducaoModal({ producao, onClose }: {
       body { font-family: Arial, sans-serif; }
       .linha { width: ${larguraLinha}mm; height: ${altura}mm; padding-left: ${margemEsq}mm; display: flex; gap: ${espaco}mm; page-break-after: always; break-after: page; overflow: hidden; }
       .linha:last-child { page-break-after: auto; break-after: auto; }
-      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 1mm; display: flex; align-items: center; gap: 1mm; overflow: hidden; }
+      .et { width: ${largura}mm; height: ${altura}mm; flex: none; padding: 1mm; display: flex; align-items: center; justify-content: center; gap: 1.5mm; overflow: hidden; }
       .qr { width: ${lado}mm; height: ${lado}mm; flex: none; }
       .qr svg { width: 100%; height: 100%; display: block; }
-      .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+      .tx { flex: 0 1 auto; min-width: 0; max-width: ${largura - lado - 3.5}mm; display: flex; flex-direction: column; justify-content: center; }
       .num { font-size: ${Math.max(8, Math.min(14, largura / 3.5))}pt; font-weight: 900; line-height: 1.05; word-break: break-word; }
       .ped { font-size: 6pt; font-weight: 900; text-transform: uppercase; margin-top: 0.5mm; }
       .tx p { font-size: 6pt; font-weight: 700; text-transform: uppercase; margin: 1mm 0 0; line-height: 1.1; max-height: 3.3em; overflow: hidden; }
@@ -91,6 +91,7 @@ export default function EtiquetaProducaoModal({ producao, onClose }: {
           <div><label className={rotulo}>Altura da etiqueta (mm)</label><input value={cfg.altura} onChange={campo('altura')} inputMode="decimal" className={input} /></div>
           <div><label className={rotulo}>Colunas no rolo</label><input value={cfg.colunas} onChange={campo('colunas')} inputMode="numeric" className={input} /></div>
           <div><label className={rotulo}>Espaço entre colunas (mm)</label><input value={cfg.espaco} onChange={campo('espaco')} inputMode="decimal" className={input} /></div>
+          <div className="col-span-2"><label className={rotulo}>Margem esquerda (mm) — se sair deslocado</label><input value={cfg.margemEsq} onChange={campo('margemEsq')} inputMode="decimal" className={input} /></div>
         </div>
         <p className="text-slate-500 text-[10px] leading-snug mt-2">Quem ler o QR (botão &quot;Ler QR&quot; ou a câmera do celular) cai direto no processo dessa produção. Na janela de impressão: margens &quot;Nenhuma&quot; e escala 100%.</p>
 

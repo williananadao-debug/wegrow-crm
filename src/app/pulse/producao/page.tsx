@@ -425,10 +425,39 @@ function PulseProducaoContent() {
       <label key={item} className={`flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1.5 text-slate-200 ${habilitado && !ocupado ? 'hover:bg-white/5 cursor-pointer' : 'opacity-60'} ${classe}`}>
         {icone}<span className="flex-1">{item}</span>
         {habilitado && <span className="flex-shrink-0 flex items-center gap-1 text-[9px] font-black uppercase text-amber-400"><Camera size={12} /> foto</span>}
+        {!habilitado && <span className="flex-shrink-0 text-[9px] font-black uppercase text-slate-500">inicie a etapa</span>}
         <input type="file" accept="image/*" capture="environment" className="hidden" disabled={!habilitado || ocupado}
           onChange={e => { const f = e.target.files?.[0]; if (f) alternarItem(p, etapa, item, f); e.target.value = ''; }} />
       </label>
     );
+  };
+
+  // Voltar etapa: retrabalho ou etapa concluída sem a foto dos sub-processos. Liberado pra todos
+  // (inclusive o chão de fábrica). Volta já iniciada — quem volta é porque vai mexer agora.
+  const [voltandoEtapaId, setVoltandoEtapaId] = useState<number | null>(null);
+  const voltarEtapa = async (p: Producao) => {
+    if (p.etapa_fabricacao_idx <= 0) return;
+    const atual = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+    const anterior = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx - 1];
+    if (!confirm(`Voltar de "${atual}" para "${anterior}"?`)) return;
+    setVoltandoEtapaId(p.id);
+    try {
+      const novoIdx = p.etapa_fabricacao_idx - 1;
+      const agora = new Date().toISOString();
+      const iniciouColuna = p.etapa_iniciada_em !== undefined;
+      const { error } = await supabase.from('pulse_producoes')
+        .update(iniciouColuna ? { etapa_fabricacao_idx: novoIdx, etapa_iniciada_em: agora, etapa_iniciada_por: user?.id || null } : { etapa_fabricacao_idx: novoIdx })
+        .eq('id', p.id);
+      if (error) throw error;
+      await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'etapa', texto: `Etapa retornada: ${atual} → ${anterior}.`, user_id: user?.id }]);
+      setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, etapa_fabricacao_idx: novoIdx, ...(iniciouColuna ? { etapa_iniciada_em: agora } : {}) } : x));
+      setEtapaIniciadaEmPorProducao(prev => ({ ...prev, [p.id]: agora }));
+      if (detalheId === p.id) carregarEventos(p.id);
+    } catch (err: any) {
+      alert('Erro ao voltar etapa: ' + mensagemErroRede(err));
+    } finally {
+      setVoltandoEtapaId(null);
+    }
   };
 
   const concluirEtapa = async (p: Producao, original?: File) => {
@@ -1085,6 +1114,11 @@ function PulseProducaoContent() {
                         </label>
                       </div>
                     )}
+                    {atual && idx > 0 && (
+                      <button onClick={() => voltarEtapa(p)} disabled={voltandoEtapaId === p.id} className="mt-2 text-[10px] font-black text-slate-400 hover:text-white uppercase tracking-widest disabled:opacity-50">
+                        ← Voltar para {ETAPAS_FABRICACAO[idx - 1]}
+                      </button>
+                    )}
                     {atual && !naoIniciada && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Toque em cada item e tire a foto para validar. Com todos validados, a etapa pode ser concluída.</p>}
                     {atual && ultima && completa && <p className="text-[10px] text-emerald-400 font-bold mt-2">Última etapa completa — pode usar &quot;Marcar Concluída&quot; no card.</p>}
                   </div>
@@ -1151,8 +1185,18 @@ function PulseProducaoContent() {
                     <div className="mt-3">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest flex items-center gap-1.5"><ListChecks size={12} /> {etapa}{aguardandoInicio(p) ? ' · aguardando início' : ''}</p>
-                        <button onClick={() => setProcessoId(p.id)} className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest">Ver processo</button>
+                        <div className="flex items-center gap-3">
+                          {p.etapa_fabricacao_idx > 0 && (
+                            <button onClick={() => voltarEtapa(p)} disabled={voltandoEtapaId === p.id} className="text-[10px] font-black text-slate-400 hover:text-white uppercase tracking-widest disabled:opacity-50">Voltar etapa</button>
+                          )}
+                          <button onClick={() => setProcessoId(p.id)} className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest">Ver processo</button>
+                        </div>
                       </div>
+                      {aguardandoInicio(p) && (
+                        <button onClick={() => iniciarEtapa(p)} disabled={iniciandoId === p.id} className="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-[#0B1120] rounded-xl py-3 text-xs font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5">
+                          {iniciandoId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Hammer size={14} />} Iniciar etapa {etapa}
+                        </button>
+                      )}
                       {itens.length > 0 && (
                         <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-2">
                           {itens.map(item => itemChecklist(p, etapa, item, !aguardandoInicio(p), ''))}

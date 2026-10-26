@@ -906,7 +906,7 @@ function PulseProducaoContent() {
                                 </button>
                               );
                             })()}
-                            {isLideranca && (
+                            {!ocultarCliente && (
                               <button onClick={() => setEtiquetaId(p.id)} title="Imprimir etiqueta QR" className="flex items-center text-slate-400 hover:text-amber-300 flex-shrink-0 px-1 py-0.5 rounded-md border border-white/10 hover:border-amber-500/30">
                                 <QrCode size={11} />
                               </button>
@@ -1106,7 +1106,7 @@ function PulseProducaoContent() {
                 <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao)}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
-                {isLideranca && detalheProducao.status !== 'entregue' && (
+                {!ocultarCliente && detalheProducao.status !== 'entregue' && (
                   <button onClick={() => setEtiquetaId(detalheProducao.id)} className="mt-2 mr-1.5 inline-flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase">
                     <QrCode size={11} /> Etiqueta QR
                   </button>

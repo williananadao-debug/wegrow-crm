@@ -83,7 +83,8 @@ export function checklistsEtapasFabricacaoDe(modulos: Record<string, any> | null
   return mapa;
 }
 
-export type ChecklistFeito = Record<string, Record<string, { por?: string | null; em: string }>>;
+// foto = comprovação do sub-processo (obrigatória ao marcar; itens antigos ficaram sem).
+export type ChecklistFeito = Record<string, Record<string, { por?: string | null; em: string; foto?: string | null }>>;
 
 // avulso=true: item digitado na hora, fora do catálogo (ex: personalização de um projeto
 // sob medida — "teto elétrico extra", "revestimento premium"). servicoId nesse caso é só

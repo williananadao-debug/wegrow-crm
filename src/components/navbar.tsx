@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -129,6 +129,7 @@ export default function Navbar() {
       { name: 'Produção', icon: <Factory size={20} />, href: '/pulse/producao' },
       { name: 'Notas Fiscais', icon: <Receipt size={20} />, href: '/pulse/fiscal' },
       // Atalho do chão de fábrica (cargo Produção não vê a lista do estoque, só dá baixa).
+      perfil?.cargo === 'producao' ? { name: 'Ler QR', icon: <ScanLine size={20} />, href: '/pulse/producao/ler' } : null,
       perfil?.cargo === 'producao' ? { name: 'Saída do Estoque', icon: <PackageMinus size={20} />, href: '/pulse/estoque/saida-rapida' } : null,
       // "Minha Equipe" também mora no grupo CRM — empresa só-Pulse (modulos.crm === false,
       // caso da Trailer Travel) nunca via esse grupo, então o cadastro de usuário ficava

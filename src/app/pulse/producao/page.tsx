@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useMemo, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle, ListChecks, Square, CheckSquare } from 'lucide-react';
+import { Loader2, Factory, Plus, Trash2, Hammer, CheckCircle2, PackageCheck, ClipboardList, Settings2, ShoppingBag, X, MessageSquare, Camera, ChevronRight, Tv, AlertTriangle, ListChecks, Square, CheckSquare, QrCode, ScanLine } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { comprimirImagem } from '@/lib/comprimirImagem';
 import { usePulseAccess } from '../usePulseAccess';
 import { SeletorFrete, type FreteNf } from '@/components/SeletorTipoNf';
+import EtiquetaProducaoModal from './EtiquetaProducaoModal';
 import { ServicoConfig, FichaTecnicaItem, AditivoItem, PulseAditivo, aprovarAditivo, etapasFabricacaoDe, prazosEtapasFabricacaoDe, checklistsEtapasFabricacaoDe, type ChecklistFeito, ehMateriaPrima, ehUsoConsumo } from '../shared';
 
 // "Load failed" (Safari) / "Failed to fetch" (Chrome) = a internet caiu no meio do envio.
@@ -53,6 +54,7 @@ function PulseProducaoContent() {
   const CHECKLISTS = useMemo(() => checklistsEtapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const PRAZOS_ETAPA = useMemo(() => prazosEtapasFabricacaoDe(empresa?.modulos), [empresa?.modulos]);
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [producoes, setProducoes] = useState<Producao[]>([]);
@@ -164,6 +166,25 @@ function PulseProducaoContent() {
     if (configurar) { setAbaFicha(true); setFichaProdutoId(Number(configurar)); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Veio da etiqueta QR (?abrir=<id>, pelo "Ler QR" ou pela câmera do celular): abre só o
+  // processo daquela produção em tela cheia — o chão de fábrica não precisa achar o card no quadro.
+  const abrirParam = Number(searchParams.get('abrir')) || null;
+  const [foco, setFoco] = useState(false);
+  const [focoNaoAchado, setFocoNaoAchado] = useState<number | null>(null);
+  useEffect(() => {
+    if (!abrirParam || loading) return;
+    if (producoes.some(p => p.id === abrirParam)) { setProcessoId(abrirParam); setFoco(true); setFocoNaoAchado(null); }
+    else setFocoNaoAchado(abrirParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirParam, loading]);
+  const fecharProcesso = () => {
+    setProcessoId(null);
+    if (!foco) return;
+    setFoco(false);
+    router.replace(perfil?.cargo === 'producao' ? '/pulse/producao/ler' : '/pulse/producao');
+  };
+  const [etiquetaId, setEtiquetaId] = useState<number | null>(null);
 
   const servicoPorId = useMemo(() => new Map(servicos.map(s => [s.id, s])), [servicos]);
   const fichasPorProduto = useMemo(() => {
@@ -342,7 +363,10 @@ function PulseProducaoContent() {
     }
   };
 
-  const alternarItem = async (p: Producao, etapa: string, item: string) => {
+  // Sub-processo só é validado com foto: tocar no item abre a câmera, sobe a foto e aí marca. A
+  // foto também entra no histórico (tipo 'anexo'), na fila de aprovação pro Portal do Cliente.
+  // Desmarcar (engano) não pede foto; a foto antiga continua no histórico.
+  const alternarItem = async (p: Producao, etapa: string, item: string, original?: File) => {
     if (aguardandoInicio(p)) { alert('Inicie a etapa antes de marcar o checklist.'); return; }
     setMarcandoItem(`${p.id}|${etapa}|${item}`);
     try {
@@ -351,18 +375,60 @@ function PulseProducaoContent() {
       if (errLer) throw errLer;
       const mapa: ChecklistFeito = { ...((atual?.checklist_feito as ChecklistFeito) || {}) };
       const daEtapa = { ...(mapa[etapa] || {}) };
+      let fotoUrl: string | null = null;
       if (daEtapa[item]) delete daEtapa[item];
-      else daEtapa[item] = { por: user?.id || null, em: new Date().toISOString() };
+      else {
+        if (!original) return;
+        const file = await comprimirImagem(original);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `${perfil?.empresa_id}/producao-${p.id}-item-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('produtos').upload(path, file, { upsert: false, contentType: file.type || undefined });
+        if (upErr) throw upErr;
+        fotoUrl = supabase.storage.from('produtos').getPublicUrl(path).data.publicUrl;
+        daEtapa[item] = { por: user?.id || null, em: new Date().toISOString(), foto: fotoUrl };
+      }
       mapa[etapa] = daEtapa;
       const { error } = await supabase.from('pulse_producoes').update({ checklist_feito: mapa }).eq('id', p.id);
       if (error) throw error;
       setProducoes(prev => prev.map(x => x.id === p.id ? { ...x, checklist_feito: mapa } : x));
+      if (fotoUrl) {
+        const url = fotoUrl;
+        await supabase.from('pulse_producao_eventos').insert([{ producao_id: p.id, tipo: 'anexo', texto: `${etapa}: ${item} concluído.`, foto_url: url, user_id: user?.id }]);
+        setFotosPorProducao(prev => ({ ...prev, [p.id]: url }));
+        if (detalheId === p.id) carregarEventos(p.id);
+      }
     } catch (err: any) {
       const msg = String(err?.message || '');
       alert(/checklist_feito/.test(msg) ? 'Falta rodar a migration 20261009100000_producao_checklist.sql no Supabase.' : 'Erro ao marcar item: ' + mensagemErroRede(err));
     } finally {
       setMarcandoItem(null);
     }
+  };
+
+  // Item do checklist: feito = desmarca (com link pra foto); pendente = abre a câmera.
+  const itemChecklist = (p: Producao, etapa: string, item: string, habilitado: boolean, classe: string) => {
+    const marcado = p.checklist_feito?.[etapa]?.[item];
+    const chave = `${p.id}|${etapa}|${item}`;
+    const ocupado = marcandoItem === chave;
+    const icone = ocupado ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : marcado ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />;
+    if (marcado) {
+      return (
+        <div key={item} className={`flex items-start gap-2 text-xs rounded-lg px-2 py-1.5 text-slate-400 ${classe}`}>
+          <button disabled={!habilitado || ocupado} onClick={() => { if (confirm(`Desmarcar "${item}"?`)) alternarItem(p, etapa, item); }} className="flex items-start gap-2 text-left line-through flex-1 min-w-0">
+            {icone}<span>{item}</span>
+          </button>
+          {marcado.foto && <a href={marcado.foto} target="_blank" rel="noreferrer" className="flex-shrink-0 text-emerald-400 hover:text-emerald-300" title="Ver foto"><Camera size={13} /></a>}
+        </div>
+      );
+    }
+    return (
+      <label key={item} className={`flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1.5 text-slate-200 ${habilitado && !ocupado ? 'hover:bg-white/5 cursor-pointer' : 'opacity-60'} ${classe}`}>
+        {icone}<span className="flex-1">{item}</span>
+        {habilitado && <span className="flex-shrink-0 flex items-center gap-1 text-[9px] font-black uppercase text-amber-400"><Camera size={12} /> foto</span>}
+        <input type="file" accept="image/*" capture="environment" className="hidden" disabled={!habilitado || ocupado}
+          onChange={e => { const f = e.target.files?.[0]; if (f) alternarItem(p, etapa, item, f); e.target.value = ''; }} />
+      </label>
+    );
   };
 
   const concluirEtapa = async (p: Producao, original?: File) => {
@@ -610,8 +676,16 @@ function PulseProducaoContent() {
           </h1>
           <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Produção nasce sozinha na venda — acompanhe etapas e prazos aqui</p>
         </div>
+        {!isLideranca && (
+          <Link href="/pulse/producao/ler" className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-[#0B1120] px-5 py-3.5 rounded-xl font-black text-sm uppercase tracking-widest self-stretch md:self-auto">
+            <ScanLine size={18} /> Ler QR
+          </Link>
+        )}
         {isLideranca && (
           <div className="flex flex-wrap gap-2 self-start md:self-auto">
+            <Link href="/pulse/producao/ler" className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+              <ScanLine size={14} /> Ler QR
+            </Link>
             <button onClick={() => setFilaFotosAberta(true)} title="Fotos aguardando aprovação pra aparecer no Portal do Cliente" className={`inline-flex items-center gap-2 border px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${fotosPendentes.length ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white'}`}>
               <Camera size={14} /> Fotos p/ cliente{fotosPendentes.length ? ` (${fotosPendentes.length})` : ''}
             </button>
@@ -832,6 +906,11 @@ function PulseProducaoContent() {
                                 </button>
                               );
                             })()}
+                            {isLideranca && (
+                              <button onClick={() => setEtiquetaId(p.id)} title="Imprimir etiqueta QR" className="flex items-center text-slate-400 hover:text-amber-300 flex-shrink-0 px-1 py-0.5 rounded-md border border-white/10 hover:border-amber-500/30">
+                                <QrCode size={11} />
+                              </button>
+                            )}
                           </div>
                           );
                         })()}
@@ -931,8 +1010,20 @@ function PulseProducaoContent() {
         </div>
       )}
 
+      {focoNaoAchado && (
+        <div className="fixed inset-x-4 bottom-24 md:bottom-8 z-[60] max-w-md mx-auto bg-red-500/15 border border-red-500/30 text-red-300 rounded-2xl p-4 text-sm font-bold flex items-center justify-between gap-3">
+          <span>Produção #{focoNaoAchado} não encontrada (já entregue ou de outra empresa).</span>
+          <button onClick={() => { setFocoNaoAchado(null); router.replace('/pulse/producao/ler'); }} className="flex-shrink-0 bg-white/10 rounded-xl px-3 py-2 text-[10px] font-black uppercase">Ler outra</button>
+        </div>
+      )}
+
+      {etiquetaId && (() => {
+        const p = producoes.find(x => x.id === etiquetaId);
+        return p ? <EtiquetaProducaoModal producao={{ id: p.id, pedido: p.lead_id ? numeroPedido(p.lead_id) : null, nome: p.produto_final_nome }} onClose={() => setEtiquetaId(null)} /> : null;
+      })()}
+
       {processoProducao && (
-        <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" onClick={() => setProcessoId(null)}>
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 ${foco ? 'bg-[#0B1120]' : 'bg-black/70'}`} onClick={fecharProcesso}>
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
               <div className="min-w-0">
@@ -940,7 +1031,14 @@ function PulseProducaoContent() {
                 <p className="text-white font-black text-sm truncate">{processoProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {processoProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5 truncate">{rotuloCliente(processoProducao)}</p>
               </div>
-              <button onClick={() => setProcessoId(null)} className="text-slate-500 hover:text-white flex-shrink-0"><X size={18} /></button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {foco && (
+                  <button onClick={() => router.push('/pulse/producao/ler')} className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-[#0B1120] rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest">
+                    <ScanLine size={13} /> Ler outra
+                  </button>
+                )}
+                <button onClick={fecharProcesso} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {ETAPAS_FABRICACAO.map((etapa, idx) => {
@@ -963,17 +1061,7 @@ function PulseProducaoContent() {
                     </div>
                     {itens.length > 0 && (
                       <div className="mt-2.5 space-y-1">
-                        {itens.map(item => {
-                          const feito = !!marcados[item];
-                          const chave = `${p.id}|${etapa}|${item}`;
-                          return (
-                            <button key={item} disabled={!atual || naoIniciada || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
-                              className={`w-full flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1.5 ${atual ? 'hover:bg-white/5' : ''} ${feito ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
-                              {marcandoItem === chave ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : feito ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />}
-                              <span>{item}</span>
-                            </button>
-                          );
-                        })}
+                        {itens.map(item => itemChecklist(p, etapa, item, atual && !naoIniciada, 'w-full'))}
                       </div>
                     )}
                     {naoIniciada && (
@@ -997,7 +1085,7 @@ function PulseProducaoContent() {
                         </label>
                       </div>
                     )}
-                    {atual && !naoIniciada && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Marque todos os itens para liberar a conclusão da etapa.</p>}
+                    {atual && !naoIniciada && !completa && <p className="text-[10px] text-amber-400/80 font-bold mt-2">Toque em cada item e tire a foto para validar. Com todos validados, a etapa pode ser concluída.</p>}
                     {atual && ultima && completa && <p className="text-[10px] text-emerald-400 font-bold mt-2">Última etapa completa — pode usar &quot;Marcar Concluída&quot; no card.</p>}
                   </div>
                 );
@@ -1018,6 +1106,11 @@ function PulseProducaoContent() {
                 <p className="text-[var(--cor-primaria)] font-black text-xs uppercase tracking-wide truncate">{rotuloCliente(detalheProducao)}</p>
                 <p className="text-white font-black text-sm truncate">{detalheProducao.produto_final_nome} <span className="text-slate-500 font-semibold">× {detalheProducao.quantidade_produzida}</span></p>
                 <p className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">{COLUNAS.find(c => c.status === detalheProducao.status)?.label}</p>
+                {isLideranca && detalheProducao.status !== 'entregue' && (
+                  <button onClick={() => setEtiquetaId(detalheProducao.id)} className="mt-2 mr-1.5 inline-flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase">
+                    <QrCode size={11} /> Etiqueta QR
+                  </button>
+                )}
                 {isLideranca && detalheProducao.status === 'entregue' && detalheProducao.lead_id && (
                   <button onClick={() => abrirNf2(detalheProducao)} className="mt-2 inline-flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase">
                     <PackageCheck size={11} /> NF de entrega
@@ -1054,7 +1147,6 @@ function PulseProducaoContent() {
                   const p = detalheProducao;
                   const etapa = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
                   const itens = itensDaEtapa(etapa);
-                  const marcados = (etapa && p.checklist_feito?.[etapa]) || {};
                   return (
                     <div className="mt-3">
                       <div className="flex items-center justify-between gap-2">
@@ -1063,17 +1155,7 @@ function PulseProducaoContent() {
                       </div>
                       {itens.length > 0 && (
                         <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-2">
-                          {itens.map(item => {
-                            const feito = !!marcados[item];
-                            const chave = `${p.id}|${etapa}|${item}`;
-                            return (
-                              <button key={item} disabled={aguardandoInicio(p) || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
-                                className={`flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1 hover:bg-white/5 disabled:hover:bg-transparent ${feito ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
-                                {marcandoItem === chave ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : feito ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />}
-                                <span>{item}</span>
-                              </button>
-                            );
-                          })}
+                          {itens.map(item => itemChecklist(p, etapa, item, !aguardandoInicio(p), ''))}
                         </div>
                       )}
                     </div>

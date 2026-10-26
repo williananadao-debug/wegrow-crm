@@ -7,12 +7,12 @@ import { Tag, X } from 'lucide-react';
 // Rolo de etiqueta adesiva (Elgin/Bematech e afins): N colunas lado a lado por linha. Cada
 // "página" impressa = uma linha do rolo; o tamanho vem da configuração (guardada no navegador,
 // porque é da impressora daquele computador, não da empresa).
-type ConfigEtiqueta = { largura: number; altura: number; colunas: number; espaco: number; margemEsq: number };
+export type ConfigEtiqueta = { largura: number; altura: number; colunas: number; espaco: number; margemEsq: number };
 
-const PADRAO: ConfigEtiqueta = { largura: 40, altura: 25, colunas: 2, espaco: 3, margemEsq: 0 };
-const CHAVE = 'pulse_etiqueta_config';
+export const PADRAO: ConfigEtiqueta = { largura: 40, altura: 25, colunas: 2, espaco: 3, margemEsq: 0 };
+export const CHAVE = 'pulse_etiqueta_config';
 
-function lerConfig(): ConfigEtiqueta {
+export function lerConfig(): ConfigEtiqueta {
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE) || 'null');
     if (salvo && typeof salvo === 'object') return { ...PADRAO, ...salvo };
@@ -20,7 +20,7 @@ function lerConfig(): ConfigEtiqueta {
   return PADRAO;
 }
 
-function escapar(t: string) {
+export function escapar(t: string) {
   return t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 }
 

@@ -2,8 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { Loader2, Activity, ArrowLeft, ScanLine, CheckCircle2, XCircle, PackageMinus, Minus, Plus, Trash2, Printer, Undo2, Zap, ClipboardList, Volume2, VolumeX, Camera, X } from 'lucide-react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import type { IScannerControls } from '@zxing/browser';
+import { iniciarLeitorCamera } from '@/lib/leitorCamera';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
@@ -62,7 +61,7 @@ export default function SaidaRapidaPage() {
   const [scannerAberto, setScannerAberto] = useState(false);
   const [scannerErro, setScannerErro] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
   const ultimaLeituraRef = useRef<{ texto: string; hora: number }>({ texto: '', hora: 0 });
   const processarCodigoRef = useRef<((texto: string) => void) | null>(null);
   // Quantidade por leitura — item pequeno (parafuso, arruela) sai de vários de uma vez. Volta
@@ -72,14 +71,14 @@ export default function SaidaRapidaPage() {
   useEffect(() => {
     if (!scannerAberto) return;
     let cancelado = false;
-    const reader = new BrowserMultiFormatReader();
     setScannerErro(null);
-    reader.decodeFromConstraints(
-      { video: { facingMode: 'environment' } },
+    // Câmera em HD + leitor nativo do aparelho quando existe — na resolução padrão as barras da
+    // etiqueta de 40 mm ficavam finas demais e o celular não lia (ver lib/leitorCamera).
+    iniciarLeitorCamera(
       videoRef.current!,
-      (resultado) => {
-        if (cancelado || !resultado) return;
-        const texto = resultado.getText();
+      'barras',
+      (texto) => {
+        if (cancelado) return;
         const agora = Date.now();
         // Debounce: enquanto a câmera fica apontada pro mesmo código, cada frame decodifica
         // de novo — sem isso, um bip/leitura era registrado várias vezes por segundo.
@@ -88,7 +87,7 @@ export default function SaidaRapidaPage() {
         setCodigo(texto);
         processarCodigoRef.current?.(texto);
       },
-    ).then(controls => { if (!cancelado) scannerControlsRef.current = controls; else controls.stop(); })
+    ).then(stop => { if (!cancelado) scannerControlsRef.current = { stop }; else stop(); })
       .catch(err => setScannerErro(err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
         ? 'Permissão de câmera negada — habilite o acesso à câmera nas configurações do navegador.'
         : 'Não foi possível acessar a câmera neste dispositivo/navegador.'));

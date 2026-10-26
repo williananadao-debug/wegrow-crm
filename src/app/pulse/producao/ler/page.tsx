@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import type { IScannerControls } from '@zxing/browser';
+import { iniciarLeitorCamera } from '@/lib/leitorCamera';
 import { QrCode, ArrowLeft, X } from 'lucide-react';
 
 // Chão de fábrica: um botão, aponta a câmera pra etiqueta QR da produção e já cai no processo
@@ -23,37 +22,31 @@ export default function LerQrProducao() {
   const [erro, setErro] = useState<string | null>(null);
   const [digitado, setDigitado] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
 
   const abrir = (id: number) => router.push(`/pulse/producao?abrir=${id}`);
 
+  // Câmera em HD + leitor nativo do aparelho quando existe (ver lib/leitorCamera).
   useEffect(() => {
     if (!lendo) return;
     let cancelado = false;
+    let parar: (() => void) | null = null;
     setErro(null);
-    new BrowserMultiFormatReader().decodeFromConstraints(
-      { video: { facingMode: 'environment' } },
-      videoRef.current!,
-      (resultado) => {
-        if (cancelado || !resultado) return;
-        const id = idDoCodigo(resultado.getText());
-        if (!id) { setErro('Esse código não é uma etiqueta de produção.'); return; }
-        cancelado = true;
-        controlsRef.current?.stop();
-        abrir(id);
-      },
-    ).then(controls => { if (!cancelado) controlsRef.current = controls; else controls.stop(); })
+    iniciarLeitorCamera(videoRef.current!, 'qr', (texto) => {
+      if (cancelado) return;
+      const id = idDoCodigo(texto);
+      if (!id) { setErro('Esse código não é uma etiqueta de produção.'); return; }
+      cancelado = true;
+      parar?.();
+      abrir(id);
+    }).then(stop => { if (cancelado) stop(); else parar = stop; })
       .catch(err => {
+        if (cancelado) return;
         setLendo(false);
         setErro(err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
           ? 'Permissão de câmera negada — habilite o acesso à câmera nas configurações do navegador.'
           : 'Não foi possível acessar a câmera neste dispositivo/navegador.');
       });
-    return () => {
-      cancelado = true;
-      controlsRef.current?.stop();
-      controlsRef.current = null;
-    };
+    return () => { cancelado = true; parar?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lendo]);
 
@@ -74,7 +67,7 @@ export default function LerQrProducao() {
           <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
           <div className="absolute inset-10 border-4 border-amber-400/80 rounded-2xl pointer-events-none" />
           <button onClick={() => setLendo(false)} className="absolute top-3 right-3 bg-black/60 rounded-full p-2 text-white"><X size={18} /></button>
-          <p className="absolute bottom-3 inset-x-0 text-center text-xs font-bold text-white/90">Aponte para a etiqueta</p>
+          <p className="absolute bottom-3 inset-x-0 text-center text-xs font-bold text-white/90">Aponte para a etiqueta, a uns 10–15 cm</p>
         </div>
       ) : (
         <button onClick={() => setLendo(true)}

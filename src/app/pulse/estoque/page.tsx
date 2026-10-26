@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal } from 'lucide-react';
+import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
@@ -223,6 +223,26 @@ export default function PulseEstoquePage() {
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, ...patch } : x));
     setHistoricoServico(prev => prev && prev.id === s.id ? { ...prev, ...patch } : prev);
     await supabase.from('servicos').update(patch).eq('id', s.id);
+  };
+
+  // Excluir item: liderança e almoxarifado (função no banco, migration 20261026120000). Item com
+  // histórico de produção/ficha técnica/requisição não sai — o banco recusa (FK) e a mensagem explica.
+  const podeExcluirItem = isLideranca || perfil?.cargo === 'almoxarifado';
+  const [excluindoItem, setExcluindoItem] = useState(false);
+  const excluirItem = async (s: ServicoConfig) => {
+    if (!confirm(`Excluir "${s.nome}" do estoque? O histórico de movimentações dele também é apagado. Não dá pra desfazer.`)) return;
+    setExcluindoItem(true);
+    const { error } = await supabase.rpc('excluir_item_estoque', { p_id: Number(s.id) });
+    setExcluindoItem(false);
+    if (error) {
+      const msg = error.message || '';
+      if (/foreign key|violates|restrict/i.test(msg)) alert('Esse item já foi usado em produção, ficha técnica ou requisição e não pode ser excluído (o histórico depende dele). Zere o estoque dele com um ajuste.');
+      else if (/excluir_item_estoque/.test(msg) && /function|schema cache/i.test(msg)) alert('Falta rodar a migration 20261026120000_excluir_item_estoque.sql no Supabase.');
+      else alert('Erro ao excluir: ' + msg);
+      return;
+    }
+    setServicos(prev => prev.filter(x => x.id !== s.id));
+    setHistoricoServico(null);
   };
 
   const abrirAjuste = (s: ServicoConfig) => {
@@ -540,7 +560,14 @@ export default function PulseEstoquePage() {
                   <h3 className="font-black text-white uppercase italic text-lg flex items-center gap-2"><Package size={18} className="text-purple-400" /> Detalhe do produto</h3>
                   <p className="text-slate-500 text-xs font-bold truncate">{historicoServico.nome}</p>
                 </div>
-                <button onClick={() => setHistoricoServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {podeExcluirItem && (
+                    <button onClick={() => excluirItem(historicoServico)} disabled={excluindoItem} title="Excluir item do estoque" className="flex items-center gap-1 text-[10px] font-black uppercase text-red-400/80 hover:text-red-400 hover:bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1.5 disabled:opacity-50">
+                      {excluindoItem ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Excluir
+                    </button>
+                  )}
+                  <button onClick={() => setHistoricoServico(null)} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
+                </div>
               </div>
 
               <div className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-2xl p-3 my-4">

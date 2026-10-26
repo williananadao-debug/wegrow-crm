@@ -24,13 +24,13 @@ export function hasCustomShell(pathname: string): boolean {
 // Cargos restritos: só enxergam algumas telas do Pulse. Aplicado em AuthContext
 // (redireciona quem tentar entrar em outra rota direto pela URL) — o menu (navbar.tsx) só
 // espelha isso visualmente.
-// - almoxarifado: Estoque (e sub-rotas: movimentações, relatório, contagem, saída rápida) e
-//   Notas Fiscais.
+// - almoxarifado: Estoque (e sub-rotas: movimentações, relatório, contagem, saída rápida),
+//   Notas Fiscais e Produção (imprime a etiqueta QR de cada trailer na impressora do estoque).
 // - producao (chão de fábrica, ex.: Trailer Travel): Produção (inclui o painel de TV) e a
 //   Saída Rápida do estoque (dar baixa de material) — sem a lista do estoque (preço/custo),
 //   vendas, clientes, financeiro nem notas.
 const ROTAS_CARGO_RESTRITO: Record<string, string[]> = {
-  almoxarifado: ['/pulse/estoque', '/pulse/fiscal'],
+  almoxarifado: ['/pulse/estoque', '/pulse/fiscal', '/pulse/producao'],
   producao: ['/pulse/producao', '/pulse/estoque/saida-rapida'],
 };
 

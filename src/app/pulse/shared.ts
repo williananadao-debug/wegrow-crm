@@ -40,7 +40,7 @@ export const ehUsoConsumo = (s: Pick<ServicoConfig, 'tipo'>) => s.tipo === 'Uso 
 // (ficaria MRP completo, fora do escopo do Pulse hoje). Cobre o caso real de fábrica
 // (corte → estrutura → pintura → acabamento) sem virar um quadro Kanban por si só.
 // Padrão genérico — cada empresa pode ter seu próprio fluxo (ex: Trailer Travel usa
-// Chassi → ACM → Elétrica → Hidráulica → Suspensão → Marcenaria, bem diferente de uma
+// Chassi → Estrutura → ACM → Elétrica → Marcenaria, bem diferente de uma
 // oficina). Configurável em Configurações → Etapas de Produção, salvo em
 // empresas.modulos.pulse_etapas_fabricacao; isso aqui é só o valor de partida quando a
 // empresa ainda não personalizou.

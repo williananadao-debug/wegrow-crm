@@ -932,7 +932,7 @@ function PulseProducaoContent() {
       )}
 
       {processoProducao && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setProcessoId(null)}>
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" onClick={() => setProcessoId(null)}>
           <div className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3 p-5 border-b border-white/5 flex-shrink-0">
               <div className="min-w-0">
@@ -1043,9 +1043,42 @@ function PulseProducaoContent() {
                     <div key={et} className="flex-1 text-center">
                       <div className={`h-1.5 rounded-full mb-1 ${idx <= detalheProducao.etapa_fabricacao_idx ? 'bg-amber-400' : 'bg-white/10'}`} />
                       <span className={`text-[8px] font-black uppercase ${idx <= detalheProducao.etapa_fabricacao_idx ? 'text-amber-400' : 'text-slate-600'}`}>{et}</span>
+                      {itensDaEtapa(et).length > 0 && (
+                        <span className={`block text-[8px] font-bold ${idx <= detalheProducao.etapa_fabricacao_idx ? 'text-slate-400' : 'text-slate-600'}`}>{feitosDaEtapa(detalheProducao, et)}/{itensDaEtapa(et).length}</span>
+                      )}
                     </div>
                   ))}
                 </div>
+                {/* Sub-processos (checklist) da etapa atual — marcar direto daqui; o fluxo inteiro fica no "Processo". */}
+                {(() => {
+                  const p = detalheProducao;
+                  const etapa = ETAPAS_FABRICACAO[p.etapa_fabricacao_idx];
+                  const itens = itensDaEtapa(etapa);
+                  const marcados = (etapa && p.checklist_feito?.[etapa]) || {};
+                  return (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest flex items-center gap-1.5"><ListChecks size={12} /> {etapa}{aguardandoInicio(p) ? ' · aguardando início' : ''}</p>
+                        <button onClick={() => setProcessoId(p.id)} className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest">Ver processo</button>
+                      </div>
+                      {itens.length > 0 && (
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-2">
+                          {itens.map(item => {
+                            const feito = !!marcados[item];
+                            const chave = `${p.id}|${etapa}|${item}`;
+                            return (
+                              <button key={item} disabled={aguardandoInicio(p) || marcandoItem === chave} onClick={() => alternarItem(p, etapa, item)}
+                                className={`flex items-start gap-2 text-left text-xs rounded-lg px-2 py-1 hover:bg-white/5 disabled:hover:bg-transparent ${feito ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+                                {marcandoItem === chave ? <Loader2 size={14} className="animate-spin flex-shrink-0 mt-px" /> : feito ? <CheckSquare size={14} className="text-emerald-400 flex-shrink-0 mt-px" /> : <Square size={14} className="text-slate-500 flex-shrink-0 mt-px" />}
+                                <span>{item}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

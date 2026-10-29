@@ -306,7 +306,7 @@ export default function GoalsPage() {
       tipo: 'unidade',
       user_id: null,
       produto: null,
-    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
+    }, { onConflict: 'empresa_id,user_id,ano,mes,produto,unidade' });
     if (!error) {
       setToastMessage('Meta salva com sucesso! 🚀');
       setShowToast(true);
@@ -333,7 +333,7 @@ export default function GoalsPage() {
       produto: null,
     }));
 
-    await supabase.from('metas').upsert(novasMetas, { onConflict: 'user_id,ano,mes,produto,unidade' });
+    await supabase.from('metas').upsert(novasMetas, { onConflict: 'empresa_id,user_id,ano,mes,produto,unidade' });
     setToastMessage('Meta anual distribuída!');
     setShowToast(true);
     fetchMetasERealizadoUnidade();
@@ -352,7 +352,7 @@ export default function GoalsPage() {
       tipo: 'produto',
       produto,
       unidade: null,
-    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
+    }, { onConflict: 'empresa_id,user_id,ano,mes,produto,unidade' });
     setMetasProduto(prev => ({ ...prev, [produto]: valor }));
     setEditandoMetaProduto(null);
     setToastMessage(`Meta de "${produto}" salva!`);
@@ -372,7 +372,7 @@ export default function GoalsPage() {
       tipo: 'faturamento',
       produto: null,
       unidade: null,
-    }, { onConflict: 'user_id,ano,mes,produto,unidade' });
+    }, { onConflict: 'empresa_id,user_id,ano,mes,produto,unidade' });
 
     if (!error) {
       setToastMessage("Meta salva com sucesso! 🚀");
@@ -401,7 +401,7 @@ export default function GoalsPage() {
       unidade: null,
     }));
 
-    await supabase.from('metas').upsert(novasMetas, { onConflict: 'user_id,ano,mes,produto,unidade' });
+    await supabase.from('metas').upsert(novasMetas, { onConflict: 'empresa_id,user_id,ano,mes,produto,unidade' });
     setToastMessage("Meta anual distribuída!");
     setShowToast(true);
     fetchMetasERealizado();

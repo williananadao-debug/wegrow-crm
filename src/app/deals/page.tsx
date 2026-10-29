@@ -1268,7 +1268,6 @@ export default function DealsPage() {
                 <table class="pagina-tabela" style="width: 100%; border-collapse: collapse;">
                 <tbody><tr><td>
                 <div class="header" ${timbradoUrl ? 'style="margin-top: 130px;"' : ''}>
-                    ${timbradoUrl ? '' : `<img src="/logo-demais.png" alt="Logo da Rádio" onerror="this.style.display='none'" />`}
                     <h2>Contrato para Veiculação de Publicidade</h2>
                 </div>
 

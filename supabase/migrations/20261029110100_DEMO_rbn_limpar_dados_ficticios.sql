@@ -16,6 +16,9 @@ BEGIN
 
   -- Visitas demo (20261029130000) = as ligadas aos anunciantes demo; antes dos clientes (FK vira NULL).
   DELETE FROM visitas WHERE empresa_id = v_emp AND cliente_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED');
+  -- Tarefas demo (20261029140000) = as que citam um anunciante demo no título.
+  DELETE FROM tarefas t WHERE t.empresa_id = v_emp AND EXISTS (
+    SELECT 1 FROM clientes c WHERE c.empresa_id = v_emp AND c.observacao_risco = 'DEMO-SEED' AND t.titulo LIKE '%' || c.nome_empresa || '%');
   DELETE FROM jobs WHERE empresa_id = v_emp AND briefing LIKE '%DEMO-SEED%';
   DELETE FROM lancamentos WHERE empresa_id = v_emp AND nf_numero = 'DEMO';
   DELETE FROM leads WHERE empresa_id = v_emp AND origem = 'demo_seed';

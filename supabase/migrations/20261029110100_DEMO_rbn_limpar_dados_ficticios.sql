@@ -14,6 +14,8 @@ BEGIN
   IF v_count <> 1 THEN RAISE EXCEPTION 'Esperava 1 empresa com "RBN" no nome, achou %. Ajuste o filtro.', v_count; END IF;
   SELECT id INTO v_emp FROM empresas WHERE nome ILIKE '%rbn%';
 
+  -- Visitas demo (20261029130000) = as ligadas aos anunciantes demo; antes dos clientes (FK vira NULL).
+  DELETE FROM visitas WHERE empresa_id = v_emp AND cliente_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED');
   DELETE FROM jobs WHERE empresa_id = v_emp AND briefing LIKE '%DEMO-SEED%';
   DELETE FROM lancamentos WHERE empresa_id = v_emp AND nf_numero = 'DEMO';
   DELETE FROM leads WHERE empresa_id = v_emp AND origem = 'demo_seed';

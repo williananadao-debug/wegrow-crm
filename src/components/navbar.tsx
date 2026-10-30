@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
-  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine
+  Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
@@ -101,6 +101,17 @@ export default function Navbar() {
 
   const mostrarOpec = opecHabilitado && temJobLiberado;
 
+  // Login de um parceiro (revenda, ex.: YoungTech) ganha o atalho pro Portal do Parceiro.
+  // RLS de parceiro_usuarios só deixa cada um ler a própria linha (pelo e-mail do login).
+  const [ehParceiro, setEhParceiro] = useState(false);
+  useEffect(() => {
+    if (!auth.user?.email) { setEhParceiro(false); return; }
+    let ativo = true;
+    supabase.from('parceiro_usuarios').select('parceiro_id').limit(1)
+      .then(({ data }) => { if (ativo) setEhParceiro(Boolean(data && data.length > 0)); });
+    return () => { ativo = false; };
+  }, [auth.user?.email]);
+
   // Menu vira dois grupos macro (CRM / Nexus) — "Clientes" fica fora dos dois, é a base
   // compartilhada entre ambos (o Nexus pendura os arquivos no mesmo cadastro de cliente).
   const crmItems: any[] = [
@@ -153,6 +164,7 @@ export default function Navbar() {
   const redesSociaisItem = { name: 'Redes Sociais', icon: <TrendingUp size={20} />, href: '/marketing' };
   const financeiroItem = { name: 'Financeiro', icon: <DollarSign size={20} />, href: '/finance' };
   const advocaciaItem = { name: 'Advocacia', icon: <Scale size={20} />, href: '/advocacia' };
+  const parceiroItem = { name: 'Portal do Parceiro', icon: <Handshake size={20} />, href: '/parceiro' };
 
   const grupos: { key: string; label: string; icon: any; items: any[] }[] = [
       mostrarCRM         ? { key: 'crm',   label: 'CRM',           icon: <LayoutGrid size={16} />,   items: crmItems }        : null,
@@ -174,6 +186,7 @@ export default function Navbar() {
       ...(mostrarRedesSociais ? [redesSociaisItem] : []),
       ...(mostrarMidia ? [midiaItem] : []),
       ...(mostrarAdvocacia ? [advocaciaItem] : []),
+      ...(ehParceiro ? [parceiroItem] : []),
   ];
   // "Minha Equipe" existe nos grupos CRM e Pulse — na lista achatada (rail recolhido) ficava
   // duplicada com a mesma key do React, o que deixava ícones fantasma/sobrepostos no menu.
@@ -338,6 +351,12 @@ export default function Navbar() {
           {mostrarAdvocacia && (
             <Link href={advocaciaItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(advocaciaItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {advocaciaItem.icon} {advocaciaItem.name}
+            </Link>
+          )}
+
+          {ehParceiro && (
+            <Link href={parceiroItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(parceiroItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {parceiroItem.icon} {parceiroItem.name}
             </Link>
           )}
 
@@ -507,6 +526,13 @@ export default function Navbar() {
                     <Link href={advocaciaItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(advocaciaItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{advocaciaItem.icon}</div>
                       <span className="text-sm font-semibold">{advocaciaItem.name}</span>
+                    </Link>
+                  )}
+
+                  {ehParceiro && (
+                    <Link href={parceiroItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(parceiroItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{parceiroItem.icon}</div>
+                      <span className="text-sm font-semibold">{parceiroItem.name}</span>
                     </Link>
                   )}
                 </>

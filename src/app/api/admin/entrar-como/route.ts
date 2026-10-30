@@ -1,17 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin, gerarLinkEntrarComo } from '@/lib/acessoEmpresa';
 
 export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
-
-function supabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
 
 async function verificarAdmin(request: Request) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
@@ -35,38 +27,9 @@ export async function POST(request: Request) {
   const { empresa_id } = body;
   if (!empresa_id) return NextResponse.json({ erro: 'empresa_id obrigatório.' }, { status: 422 });
 
-  const db = supabaseAdmin();
+  const r = await gerarLinkEntrarComo(supabaseAdmin(), empresa_id);
+  if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });
 
-  const { data: profileDiretor } = await db.from('profiles')
-    .select('id').eq('empresa_id', empresa_id).eq('cargo', 'diretor').limit(1).maybeSingle();
-
-  let profileId = profileDiretor?.id as string | undefined;
-  if (!profileId) {
-    const { data: qualquerProfile } = await db.from('profiles')
-      .select('id').eq('empresa_id', empresa_id).limit(1).maybeSingle();
-    profileId = qualquerProfile?.id;
-  }
-
-  if (!profileId) {
-    return NextResponse.json({ erro: 'Nenhum usuário encontrado pra essa empresa — não dá pra entrar como ela.' }, { status: 404 });
-  }
-
-  const { data: userData, error: userError } = await db.auth.admin.getUserById(profileId);
-  if (userError || !userData?.user?.email) {
-    return NextResponse.json({ erro: 'Não consegui recuperar o e-mail do usuário dessa empresa.' }, { status: 500 });
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.wegrow.app.br';
-  const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
-    type: 'magiclink',
-    email: userData.user.email,
-    options: { redirectTo: `${appUrl}/` },
-  });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    return NextResponse.json({ erro: linkError?.message || 'Falha ao gerar o link de acesso.' }, { status: 500 });
-  }
-
-  console.log(`[admin/entrar-como] empresa=${empresa_id} email=${userData.user.email}`);
-  return NextResponse.json({ link: linkData.properties.action_link });
+  console.log(`[admin/entrar-como] empresa=${empresa_id} email=${r.email}`);
+  return NextResponse.json({ link: r.link });
 }

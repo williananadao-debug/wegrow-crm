@@ -47,6 +47,7 @@ export type Empresa = {
   cor_primaria?: string | null;
   canal_origem?: string | null;
   cancelado_em?: string | null;
+  parceiro_id?: string | null;
   billing: Billing | null;
 };
 

@@ -10,6 +10,7 @@ const CANAIS_ORIGEM = [
   { valor: 'nilton', label: 'Nilton' },
   { valor: 'organico', label: 'Orgânico' },
   { valor: 'indicacao', label: 'Indicação' },
+  { valor: 'parceiro', label: 'Parceiro (revenda)' },
   { valor: 'direto', label: 'Direto' },
 ];
 
@@ -28,6 +29,14 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
   const [gerandoCobranca, setGerandoCobranca] = useState<'BOLETO' | 'PIX' | null>(null);
   const [erroCobranca, setErroCobranca] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [parceiros, setParceiros] = useState<{ id: string; nome: string; comissao_pct: number }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/admin/parceiros', { headers: headersAuth(token) })
+      .then(r => r.ok ? r.json() : [])
+      .then(setParceiros)
+      .catch(() => setParceiros([]));
+  }, [token]);
 
   useEffect(() => {
     setForm({
@@ -63,6 +72,19 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       headers: headersAuth(token),
       body: JSON.stringify({ id: empresa.id, canal_origem: canal || null }),
     });
+    setSalvandoChurn(false);
+    onAtualizado();
+  };
+
+  // Parceiro (revenda) dono da carteira — a rádio aparece no Portal do Parceiro dele e conta na comissão.
+  const atualizarParceiro = async (parceiroId: string) => {
+    setSalvandoChurn(true);
+    const res = await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: headersAuth(token),
+      body: JSON.stringify({ id: empresa.id, parceiro_id: parceiroId || null, ...(parceiroId && !empresa.canal_origem ? { canal_origem: 'parceiro' } : {}) }),
+    });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.erro || 'Erro ao salvar o parceiro.'); }
     setSalvandoChurn(false);
     onAtualizado();
   };
@@ -188,6 +210,20 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       <button onClick={salvar} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase flex items-center gap-2">
         {saving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
       </button>
+
+      <div className="pt-3 border-t border-white/5">
+        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Parceiro (carteira)</label>
+        <select
+          value={empresa.parceiro_id || ''}
+          onChange={e => atualizarParceiro(e.target.value)}
+          disabled={salvandoChurn}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
+        >
+          <option value="" className="bg-[#0B1120]">Venda direta WeGrow (sem parceiro)</option>
+          {parceiros.map(p => <option key={p.id} value={p.id} className="bg-[#0B1120]">{p.nome} · {p.comissao_pct}% de comissão</option>)}
+        </select>
+        <p className="text-[9px] text-slate-600 mt-1 ml-1">A rádio aparece no Portal do Parceiro dele (suporte, senha, comissão). Gerencie em God Mode → Parceiros.</p>
+      </div>
 
       <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-3">
         <div>

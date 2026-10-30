@@ -69,15 +69,15 @@ export default function AbaUnidades({ empresa, token }: AbaProps) {
       </div>
 
       <form onSubmit={adicionar} className="border-t border-white/5 pt-5 space-y-3">
-        <p className="text-[10px] font-black uppercase text-slate-500">Nova Unidade</p>
-        <input required placeholder="Nome da unidade *" value={nome} onChange={e => setNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+        <p className="text-xs font-semibold text-slate-500">Nova Unidade</p>
+        <input required placeholder="Nome da unidade *" value={nome} onChange={e => setNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E]"/>
         <div className="grid grid-cols-2 gap-3">
           <input placeholder="Razão Social" value={razao} onChange={e => setRazao(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
           <input placeholder="CNPJ" value={cnpj} onChange={e => setCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
           <input placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
           <input placeholder="Endereço" value={endereco} onChange={e => setEndereco(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
         </div>
-        <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
+        <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-2">
           {saving ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>} Adicionar Unidade
         </button>
       </form>

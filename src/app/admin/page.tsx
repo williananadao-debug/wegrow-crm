@@ -397,7 +397,7 @@ export default function AdminPage() {
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-2xl overflow-hidden mb-6">
           <Kpi titulo="Receita recorrente (MRR)" valor={brl(mrr)} sub={`ARPU ${brl(arpu)}`} icone={<DollarSign size={15}/>} destaque/>
-          <Kpi titulo="Clientes operando" valor={String(contagemEstagio.cliente)} sub={`${contagemEstagio.teste} em teste · ${contagemEstagio.demo} demos`} icone={<Building2 size={15}/>}/>
+          <Kpi titulo="Clientes operando" valor={String(contagemEstagio.cliente)} sub={`${contagemEstagio.teste} em teste · ${contagemEstagio.demo} ${contagemEstagio.demo === 1 ? 'demo' : 'demos'}`} icone={<Building2 size={15}/>}/>
           <Kpi titulo="Usuários ativos (7d)" valor={String(atividade?.usuarios_ativos_7d ?? '—')} sub={usuariosTotais ? `de ${usuariosTotais} usuários em clientes` : 'logins nos últimos 7 dias'} icone={<Users size={15}/>}/>
           <Kpi titulo="Leads criados no mês" valor={String(atividade?.leads_mes ?? '—')} sub="em todas as empresas" icone={<TrendingUp size={15}/>}/>
         </div>
@@ -630,7 +630,7 @@ export default function AdminPage() {
                     <h2 className="text-lg font-semibold truncate">{empresaSelecionada.nome}</h2>
                     <div className="flex items-center gap-2 mt-1">
                       <PillEstagio est={estagioEmpresa(empresaSelecionada)}/>
-                      <span className="text-xs text-slate-500 capitalize">{empresaSelecionada.plano} · {empresaSelecionada.total_usuarios ?? 0} usuários</span>
+                      <span className="text-xs text-slate-500 capitalize">{empresaSelecionada.plano} · {empresaSelecionada.total_usuarios ?? 0} {(empresaSelecionada.total_usuarios ?? 0) === 1 ? 'usuário' : 'usuários'}</span>
                     </div>
                   </div>
                 </div>

@@ -34,7 +34,7 @@ export default function AbaMetricas({ empresa, token }: AbaProps) {
       </div>
 
       <div>
-        <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 mb-3"><Clock size={10}/> Último Acesso por Usuário</p>
+        <p className="text-xs font-semibold text-slate-500 flex items-center gap-1 mb-3"><Clock size={10}/> Último Acesso por Usuário</p>
         <div className="space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar">
           {[...(metrics.profiles || [])].sort((a: any, b: any) =>
             (b.ultimo_acesso || '').localeCompare(a.ultimo_acesso || '')

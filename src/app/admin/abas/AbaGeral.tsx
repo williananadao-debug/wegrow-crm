@@ -81,17 +81,17 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
   return (
     <div className="space-y-5">
       <div>
-        <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Nome da Empresa</label>
+        <label className="text-xs font-semibold text-slate-500 mb-1 block">Nome da Empresa</label>
         <input value={nome} onChange={e => setNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
       </div>
 
       <div>
-        <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Logo (aparece no menu lateral do cliente)</label>
+        <label className="text-xs font-semibold text-slate-500 mb-1 block">Logo (aparece no menu lateral do cliente)</label>
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
             {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain"/> : <ImageIcon size={18} className="text-slate-600"/>}
           </div>
-          <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black uppercase text-slate-400 hover:text-white cursor-pointer transition-all">
+          <label className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer transition-all">
             {uploadingLogo ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
             {uploadingLogo ? 'Enviando...' : 'Subir logo'}
             <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}/>
@@ -101,7 +101,7 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
       </div>
 
       <div>
-        <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block flex items-center gap-1.5">
+        <label className="text-xs font-semibold text-slate-500 mb-1 block flex items-center gap-1.5">
           <Palette size={11} /> Cor de marca (aplicada no menu do cliente)
         </label>
         <div className="flex items-center gap-3">
@@ -117,20 +117,20 @@ export default function AbaGeral({ empresa, token, onAtualizado }: AbaProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Plano</label>
+          <label className="text-xs font-semibold text-slate-500 mb-1 block">Plano</label>
           <select value={plano} onChange={e => setPlano(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
             {PLANOS.map(p => <option key={p} value={p} className="bg-[#0B1120] capitalize">{p}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-black uppercase text-slate-500 mb-1 block">Estágio</label>
+          <label className="text-xs font-semibold text-slate-500 mb-1 block">Estágio</label>
           <select value={status} onChange={e => setStatus(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
             {STATUS_OPTS.map(s => <option key={s} value={s} className="bg-[#0B1120]">{STATUS_LABEL[s] || s}</option>)}
           </select>
         </div>
       </div>
 
-      <button onClick={salvar} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase flex items-center gap-2">
+      <button onClick={salvar} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
         {saving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
       </button>
 

@@ -48,7 +48,7 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
         <button
           type="button"
           onClick={() => setModulo(chave, chave === 'crm' ? (ativo ? false : true) : !ativo)}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${ativo ? corAtivo : 'bg-white/5 border-white/10 text-slate-500'}`}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-semibold ${ativo ? corAtivo : 'bg-white/5 border-white/10 text-slate-500'}`}
         >
           {label}
           {ativo ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
@@ -78,7 +78,7 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
               key={mod}
               type="button"
               onClick={() => setModulo(mod, !modulos[mod])}
-              className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-black uppercase ${modulos[mod] ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
+              className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-semibold ${modulos[mod] ? 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-500'}`}
             >
               {mod.replace('_', ' ')}
               {modulos[mod] ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}

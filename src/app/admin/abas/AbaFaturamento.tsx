@@ -133,26 +133,26 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
     <div className="space-y-4">
       {erro && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-          <p className="text-red-400 font-black text-xs uppercase tracking-widest mb-2">Erro ao salvar — execute no Supabase:</p>
+          <p className="text-red-400 font-black text-xs uppercase mb-2">Erro ao salvar — execute no Supabase:</p>
           <pre className="text-[10px] text-green-400 font-mono bg-black/40 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap">{`alter table clientes_wegrow disable row level security;`}</pre>
           <p className="text-slate-500 text-[10px] mt-2 font-mono">{erro}</p>
         </div>
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <button onClick={registrarPagamento} disabled={registrandoPgto} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
+        <button onClick={registrarPagamento} disabled={registrandoPgto} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-50">
           {registrandoPgto ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>} Pgto recebido
         </button>
-        <button onClick={() => gerarCobranca('BOLETO')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
+        <button onClick={() => gerarCobranca('BOLETO')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-50">
           {gerandoCobranca === 'BOLETO' ? <Loader2 size={11} className="animate-spin"/> : <Receipt size={11}/>} Gerar boleto
         </button>
-        <button onClick={() => gerarCobranca('PIX')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all disabled:opacity-50">
+        <button onClick={() => gerarCobranca('PIX')} disabled={gerandoCobranca !== null} className="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-3 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-50">
           {gerandoCobranca === 'PIX' ? <Loader2 size={11} className="animate-spin"/> : <QrCode size={11}/>} Gerar Pix
         </button>
         {empresa.billing?.whatsapp && (
           <a href={`https://wa.me/55${empresa.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${empresa.billing.contato ? ' ' + empresa.billing.contato : ''}!${empresa.billing?.ultima_cobranca_url ? ` Segue o link pra pagar a assinatura WeGrow: ${empresa.billing.ultima_cobranca_url}` : ` Segue o Pix para renovação da assinatura WeGrow — R$ ${(empresa.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês.`} Vencimento: ${fmtData(empresa.billing.proximo_vencimento)}.`)}`}
             target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">
+            className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-xl font-semibold text-xs transition-all">
             <MessageCircle size={11}/> Cobrar
           </a>
         )}
@@ -167,7 +167,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       {empresa.billing?.ultima_cobranca_url && (
         <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Última cobrança gerada ({empresa.billing.ultima_cobranca_tipo})</p>
+            <p className="text-xs font-medium text-slate-400">Última cobrança gerada ({empresa.billing.ultima_cobranca_tipo})</p>
             <p className="text-slate-400 text-[10px] truncate">{empresa.billing.ultima_cobranca_em ? fmtData(empresa.billing.ultima_cobranca_em.substring(0, 10)) : ''} · status: {empresa.billing.ultima_cobranca_status || '—'}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -184,40 +184,40 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Valor mensal (R$)</label>
-          <input type="number" value={form.valor_mensal} onChange={e => setForm(f => ({ ...f, valor_mensal: e.target.value }))} placeholder="497" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Valor mensal (R$)</label>
+          <input type="number" value={form.valor_mensal} onChange={e => setForm(f => ({ ...f, valor_mensal: e.target.value }))} placeholder="497" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         </div>
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Próx. vencimento</label>
-          <input type="date" value={form.proximo_vencimento} onChange={e => setForm(f => ({ ...f, proximo_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors"/>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Próx. vencimento</label>
+          <input type="date" value={form.proximo_vencimento} onChange={e => setForm(f => ({ ...f, proximo_vencimento: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors"/>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Contato</label>
-          <input value={form.contato} onChange={e => setForm(f => ({ ...f, contato: e.target.value }))} placeholder="Nome" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Contato</label>
+          <input value={form.contato} onChange={e => setForm(f => ({ ...f, contato: e.target.value }))} placeholder="Nome" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         </div>
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">WhatsApp</label>
-          <input value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} placeholder="(47) 99999-9999" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">WhatsApp</label>
+          <input value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} placeholder="(47) 99999-9999" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         </div>
       </div>
       <div>
-        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Observação</label>
+        <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Observação</label>
         <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} placeholder="Notas internas..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>
       </div>
 
-      <button onClick={salvar} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase flex items-center gap-2">
+      <button onClick={salvar} disabled={saving} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2">
         {saving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
       </button>
 
       <div className="pt-3 border-t border-white/5">
-        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Parceiro (carteira)</label>
+        <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Parceiro (carteira)</label>
         <select
           value={empresa.parceiro_id || ''}
           onChange={e => atualizarParceiro(e.target.value)}
           disabled={salvandoChurn}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
         >
           <option value="" className="bg-[#0B1120]">Venda direta WeGrow (sem parceiro)</option>
           {parceiros.map(p => <option key={p.id} value={p.id} className="bg-[#0B1120]">{p.nome} · {p.comissao_pct}% de comissão</option>)}
@@ -227,19 +227,19 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
 
       <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Canal de origem</label>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Canal de origem</label>
           <select
             value={empresa.canal_origem || ''}
             onChange={e => atualizarCanalOrigem(e.target.value)}
             disabled={salvandoChurn}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors disabled:opacity-50"
           >
             {CANAIS_ORIGEM.map(c => <option key={c.valor} value={c.valor} className="bg-[#0B1120]">{c.label}</option>)}
           </select>
           <p className="text-[9px] text-slate-600 mt-1 ml-1">Alimenta conversão e CAC por canal em Indicadores.</p>
         </div>
         <div>
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Status de churn</label>
+          <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Status de churn</label>
           {empresa.cancelado_em ? (
             <div className="flex items-center gap-2">
               <span className="flex-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-xs font-bold">Cancelado em {fmtData(empresa.cancelado_em.substring(0, 10))}</span>
@@ -248,7 +248,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
               </button>
             </div>
           ) : (
-            <button onClick={() => marcarCancelado(true)} disabled={salvandoChurn} className="w-full bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50">
+            <button onClick={() => marcarCancelado(true)} disabled={salvandoChurn} className="w-full bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl px-4 py-3 text-xs font-semibold transition-all disabled:opacity-50">
               Marcar como cancelado
             </button>
           )}

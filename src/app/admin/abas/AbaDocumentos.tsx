@@ -93,7 +93,7 @@ function StatusEAssinatura({ empresa, token, tipo, onAtualizado }: AbaProps & { 
 
   return (
     <div className="space-y-3">
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[11px] font-black uppercase tracking-widest ${cfg.cor}`}>
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[11px] font-semibold ${cfg.cor}`}>
         {cfg.icon} {cfg.label}
       </div>
 
@@ -105,7 +105,7 @@ function StatusEAssinatura({ empresa, token, tipo, onAtualizado }: AbaProps & { 
         <div className="flex items-center gap-2">
           <input value={linkRascunho} onChange={e => setLinkRascunho(e.target.value)} placeholder="Cola aqui o link de assinatura gerado no Docuseal"
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-          <button onClick={marcarEnviado} disabled={salvando || !linkRascunho.trim()} className="shrink-0 flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50">
+          <button onClick={marcarEnviado} disabled={salvando || !linkRascunho.trim()} className="shrink-0 flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50">
             {salvando ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
           </button>
         </div>
@@ -182,7 +182,7 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
 
   return (
     <div className="space-y-3">
-      <p className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2"><PenLine size={13} className="text-[#22C55E]"/> Contrato de prestação de serviço</p>
+      <p className="text-white font-black text-xs uppercase flex items-center gap-2"><PenLine size={13} className="text-[#22C55E]"/> Contrato de prestação de serviço</p>
 
       {erro && <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 text-red-400 text-xs font-bold">{erro}</div>}
 
@@ -221,14 +221,14 @@ function ContratoBloco({ empresa, token, onAtualizado }: AbaProps) {
 
           <div className="flex gap-2">
             {editando && (
-              <button onClick={() => setEditando(false)} className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+              <button onClick={() => setEditando(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
                 Cancelar
               </button>
             )}
             <button
               onClick={gerar}
               disabled={gerando || !signerNome.trim() || !signerEmail.trim() || !form.razao_social.trim() || !form.cnpj.trim() || !form.endereco.trim()}
-              className="flex-1 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {gerando ? <Loader2 size={13} className="animate-spin"/> : <PenLine size={13}/>}
               {editando ? 'Gerar contrato atualizado' : 'Gerar contrato (PDF)'}
@@ -280,7 +280,7 @@ function CronogramaBloco({ empresa, token, onAtualizado }: AbaProps) {
 
   return (
     <div className="space-y-3">
-      <p className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2"><CalendarClock size={13} className="text-[#22C55E]"/> Cronograma de implantação</p>
+      <p className="text-white font-black text-xs uppercase flex items-center gap-2"><CalendarClock size={13} className="text-[#22C55E]"/> Cronograma de implantação</p>
 
       {erro && <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 text-red-400 text-xs font-bold">{erro}</div>}
 
@@ -289,7 +289,7 @@ function CronogramaBloco({ empresa, token, onAtualizado }: AbaProps) {
           <p className="text-slate-400 text-xs">Sobe o PDF do cronograma já pronto (esse não é gerado automaticamente pelo sistema, é o documento que você já preparou com o cliente).</p>
           <input ref={inputRef} type="file" accept="application/pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) enviarArquivo(f); }}/>
           <button onClick={() => inputRef.current?.click()} disabled={enviando}
-            className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {enviando ? <Loader2 size={13} className="animate-spin"/> : <Upload size={13}/>}
             {enviando ? 'Enviando...' : 'Subir PDF do cronograma'}
           </button>

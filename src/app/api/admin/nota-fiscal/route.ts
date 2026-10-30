@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
-import { asaasWegrow, carregarConfigNf, emitirNfWegrow, sincronizarNfWegrow, sincronizarPendentesNfWegrow } from '@/lib/nfWegrow';
+import { asaasWegrow, ambienteAsaasWegrow, carregarConfigNf, emitirNfWegrow, sincronizarNfWegrow, sincronizarPendentesNfWegrow } from '@/lib/nfWegrow';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,6 +41,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     config,
     fiscal,
+    ambiente: ambienteAsaasWegrow(),
     notas: (notas || []).map(n => ({ ...n, empresa_nome: nomes.get(n.empresa_id)?.nome || '—', empresa_logo: nomes.get(n.empresa_id)?.logo_url || null })),
   });
 }

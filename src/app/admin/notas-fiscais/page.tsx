@@ -42,6 +42,7 @@ export default function NotasFiscaisPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [fiscal, setFiscal] = useState<{ configurado: boolean; detalhe?: string; dados?: any } | null>(null);
   const [notas, setNotas] = useState<Nota[]>([]);
+  const [ambiente, setAmbiente] = useState<'sandbox' | 'producao' | null>(null);
   const [loading, setLoading] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -74,7 +75,7 @@ export default function NotasFiscaisPage() {
       const res = await fetch('/api/admin/nota-fiscal', { headers: headers() });
       const json = await res.json();
       if (!res.ok) { setErroCarga(json.erro || 'Erro ao carregar.'); return; }
-      setConfig(json.config); setFiscal(json.fiscal); setNotas(json.notas);
+      setConfig(json.config); setFiscal(json.fiscal); setNotas(json.notas); setAmbiente(json.ambiente);
     } catch (err: any) {
       setErroCarga(err?.message || 'Erro ao carregar.');
     } finally { setLoading(false); }
@@ -138,7 +139,14 @@ export default function NotasFiscaisPage() {
   );
 
   const passos = [
-    { ok: !!fiscal?.configurado, titulo: 'Conta Asaas habilitada para NFS-e', texto: fiscal?.configurado ? 'Dados fiscais encontrados no Asaas da WeGrow.' : 'No Asaas: Notas fiscais → Configurações (Curitiba, Simples Nacional, certificado A1).' },
+    {
+      ok: !!fiscal?.configurado,
+      titulo: `Conta Asaas habilitada para NFS-e${ambiente === 'sandbox' ? ' (sandbox)' : ''}`,
+      texto: fiscal?.configurado ? 'Dados fiscais encontrados no Asaas da WeGrow.'
+        : /chave de api|api key|invalid/i.test(fiscal?.detalhe || '') ? 'O Asaas recusou a ASAAS_API_KEY da Vercel — gere uma chave nova no Asaas da WeGrow (Integrações → Chave de API) e troque na Vercel.'
+        : !ambiente ? 'ASAAS_API_KEY não configurada na Vercel.'
+        : 'No Asaas: Notas fiscais → Configurações (Curitiba, Simples Nacional, certificado A1).',
+    },
     { ok: !!config?.municipal_service_code && !!config?.descricao, titulo: 'Modelo da nota', texto: config ? `Serviço ${config.municipal_service_code} — ${config.municipal_service_name}` : '—' },
     { ok: !!config?.ativo, titulo: 'Emissão automática', texto: config?.ativo ? 'Emite quando o pagamento é recebido e envia por e-mail.' : 'Desligada — só emite pelo botão "Emitir nota".' },
   ];
@@ -259,7 +267,7 @@ export default function NotasFiscaisPage() {
               <div className="lg:col-span-2 space-y-4">
                 <div className="bg-white text-slate-800 rounded-2xl overflow-hidden shadow-2xl">
                   <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-600">DANFSe · prévia</span>
+                    <span className="text-[11px] font-bold text-slate-600">Prévia dos dados da nota</span>
                     <span className="text-[11px] text-slate-500">Curitiba / PR</span>
                   </div>
                   <div className="p-5 space-y-4 text-[12px]">

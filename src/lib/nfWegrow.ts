@@ -7,13 +7,24 @@
 // diário ou abrir a tela de Notas fiscais) pega o número/PDF e manda o e-mail uma única vez.
 import { SupabaseClient } from '@supabase/supabase-js';
 
-const ASAAS_BASE = 'https://api.asaas.com/v3';
+// Chave de sandbox do Asaas começa com "$aact_hmlg_" — e só funciona no endereço de sandbox
+// (no de produção volta "chave de API inválida"). Escolhe o endereço pela própria chave.
+function asaasBase(chave: string) {
+  return chave.startsWith('$aact_hmlg_') ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3';
+}
+
+export function ambienteAsaasWegrow(): 'sandbox' | 'producao' | null {
+  const chave = (process.env.ASAAS_API_KEY || '').trim();
+  if (!chave) return null;
+  return chave.startsWith('$aact_hmlg_') ? 'sandbox' : 'producao';
+}
 
 export async function asaasWegrow(method: string, path: string, body?: any) {
-  if (!process.env.ASAAS_API_KEY) throw new Error('ASAAS_API_KEY não configurada no servidor.');
-  const res = await fetch(`${ASAAS_BASE}${path}`, {
+  const chave = (process.env.ASAAS_API_KEY || '').trim();
+  if (!chave) throw new Error('ASAAS_API_KEY não configurada no servidor.');
+  const res = await fetch(`${asaasBase(chave)}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', access_token: process.env.ASAAS_API_KEY, 'User-Agent': 'WeGrow-Admin/1.0' },
+    headers: { 'Content-Type': 'application/json', access_token: chave, 'User-Agent': 'WeGrow-Admin/1.0' },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

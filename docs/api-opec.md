@@ -205,6 +205,10 @@ Resposta: **array** de objetos. Cada objeto representa um pacote de dados de um 
 
 > ⚠️ Note que o campo `cliente` aparece duas vezes no payload: uma vez como string simples no nível raiz (nome do cliente, compatível com o gabarito legado da OPEC) e outra vez como objeto detalhado dentro de `cliente` (bloco novo). Isso é intencional — o segundo `cliente` sobrescreve a chave no JSON (JS mantém apenas a última). Se for consumido em JS/TS, o array final tem `cliente` como **objeto**, não como string. Times consumindo em linguagens estritas (ex: parseando o JSON literal e comparando ordem de chaves) devem tratar a chave `cliente` como o objeto detalhado.
 
+> O nome do cliente em texto também vai na raiz em `cliente_nome` (adicionado em 30/10/2026), para quem precisa do formato do gabarito legado.
+>
+> Cada item traz `valor_total` (valor do item já líquido de desconto/valor negociado — a soma dos itens bate com o `valor_total` do contrato) e `valor_bruto` (quantidade × preço de tabela). Itens de bonificação, doação ou permuta vão com valor 0.
+
 ### Respostas possíveis
 
 | Situação | Status | Corpo |

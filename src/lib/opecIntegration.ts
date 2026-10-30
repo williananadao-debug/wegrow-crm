@@ -22,16 +22,29 @@ const CONFIG_EMISSORAS: Record<string, any> = {
   }
 };
 
+// Nome da unidade comparado sem caixa, acento, espaço e ponto/vírgula ("Demais FM 104.7" = "DEMAIS FM 104,7")
+const chaveUnidade = (s: any) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[\s.,]/g, '');
+const acharEmissora = (mapa: Record<string, any>, unidade: any) => {
+  if (mapa[unidade]) return mapa[unidade];
+  const k = chaveUnidade(unidade);
+  const nome = Object.keys(mapa).find(n => chaveUnidade(n) === k);
+  return nome ? mapa[nome] : null;
+};
+
+// Item de bonificação/doação/permuta não tem valor (mesma regra do total do funil em /deals)
+const itemEspecial = (item: any) => !!(item?.tipoEspecial || item?.bonificacao);
+
 // 2. MOTOR PRINCIPAL: GERA O GABARITO JSON EXATO DA OPEC
 export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, configEmissoras?: Record<string, any>) => {
   const emissorasAtivas = (configEmissoras && Object.keys(configEmissoras).length > 0) ? configEmissoras : CONFIG_EMISSORAS;
-  // Puxa a emissora baseada na unidade do Lead (com fallback de segurança)
-  const emissoraBase = emissorasAtivas[lead.unidade] || Object.values(emissorasAtivas)[0] || {};
+  // Emissora pela unidade do lead. Sem casar o nome NÃO cai na primeira unidade da lista: isso
+  // mandava a venda com o mercado/CNPJ de outra rádio. Melhor sair vazio e a validação apontar.
+  const emissoraBase = acharEmissora(emissorasAtivas, lead.unidade) || {};
   // config_opec da unidade pode existir com campos em branco (validação 21/09/2026: todos os
   // itens saíam com mercado_* vazio e fatura sem CNPJ). CNPJ e descrição não mudam, então cai
   // no dicionário fixo campo a campo. mercado_id/mercado_codigo NÃO são preenchidos por
   // fallback (os do dicionário são provisórios) — precisam estar corretos em /settings.
-  const emissoraFixa = CONFIG_EMISSORAS[lead.unidade] || {};
+  const emissoraFixa = acharEmissora(CONFIG_EMISSORAS, lead.unidade) || {};
   const emissora = {
     ...emissoraBase,
     mercado_cnpj: emissoraBase.mercado_cnpj || emissoraFixa.mercado_cnpj || '',
@@ -51,10 +64,27 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
   const distribuicaoMapeada: any[] = [];
   const faturasFormatadas: any[] = [];
 
+  // Valor de cada item: o bruto (quantidade × preço) ajustado na proporção pro total bater com o
+  // valor do contrato, que já vem líquido do desconto ou com o valor fechado à mão no funil.
+  // Antes os itens iam brutos e a soma não batia com valor_total/faturas (validação 30/10/2026).
+  const valorContrato = Number(lead.valor_total) || 0;
+  const brutos = itensContrato.map((item: any) => itemEspecial(item) ? 0 : (Number(item.quantidade) || 0) * (Number(item.precoUnitario) || 0));
+  const somaBrutos = brutos.reduce((a: number, b: number) => a + b, 0);
+  const fator = somaBrutos > 0 && valorContrato > 0 ? valorContrato / somaBrutos : 1;
+  const ultimoPago = brutos.reduce((u: number, b: number, i: number) => (b > 0 ? i : u), -1);
+  let alocado = 0;
+  const valoresItens = brutos.map((b: number, i: number) => {
+      if (b <= 0) return 0;
+      if (i === ultimoPago && fator !== 1) return Math.round((valorContrato - alocado) * 100) / 100;
+      const v = Math.round(b * fator * 100) / 100;
+      alocado += v;
+      return v;
+  });
+
   // --- MOTOR DE DISTRIBUIÇÃO DIÁRIA E ITENS ---
   itensContrato.forEach((item: any, index: number) => {
       const idItemGerado = `ITEM_${lead.id}_${index + 1}`;
-      const valorItemTotal = (item.quantidade || 0) * (item.precoUnitario || 0);
+      const valorItemTotal = valoresItens[index] || 0;
 
       // Tratamento da Duração (Ex: transforma 30" em "spot 30")
       let tempoLimpo = String(item.tempo || '30"').replace('"', '').trim();
@@ -74,7 +104,8 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
           horario_inicial: `${item.horario_inicial || '06:00'}:00`,
           horario_final: `${item.horario_final || '20:00'}:00`,
           quantidade: String(item.quantidade || 1),
-          valor_total: valorItemTotal.toFixed(2).replace('.', ',')
+          valor_total: valorItemTotal.toFixed(2).replace('.', ','),
+          valor_bruto: brutos[index].toFixed(2).replace('.', ',')
       });
 
       // Lógica de Distribuição Linear por Mês (Bloco 3)
@@ -142,11 +173,14 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
   const valorParcela = valorTotalBruto / qtdParcelas;
   
   let vencimentoBase = new Date(lead.vencimento || lead.contrato_inicio || new Date());
+  // Datas de vencimento escolhidas parcela a parcela no funil têm prioridade sobre "+1 mês"
+  const datasEscolhidas: string[] = Array.isArray(lead.vencimentos_datas) ? lead.vencimentos_datas : [];
 
   for (let i = 1; i <= qtdParcelas; i++) {
+      const dataEscolhida = /^\d{4}-\d{2}-\d{2}/.test(String(datasEscolhidas[i - 1] || '')) ? String(datasEscolhidas[i - 1]).slice(0, 10) : null;
       faturasFormatadas.push({
           cnpj_faturamento: emissora.mercado_cnpj,
-          vencimento: vencimentoBase.toISOString().split('T')[0],
+          vencimento: dataEscolhida || vencimentoBase.toISOString().split('T')[0],
           valor: valorParcela.toFixed(2),
           parcela: `${i}/${qtdParcelas}`
       });
@@ -164,8 +198,9 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
       // Dados do Cliente
       cliente: clienteFull?.nome_empresa || lead.empresa || "CLIENTE NÃO INFORMADO",
       cnpj_cliente: clienteFull?.cnpj || lead.cnpj || "",
-      inscricao_estadual_cliente: clienteFull?.inscricao_estadual || "ISENTO",
-      endereco_cliente: clienteFull?.endereco || "",
+      // O funil grava endereço e IE no próprio contrato (lead) — antes só o cadastro do cliente era lido
+      inscricao_estadual_cliente: clienteFull?.inscricao_estadual || lead.inscricao_estadual || "ISENTO",
+      endereco_cliente: clienteFull?.endereco || lead.endereco || "",
       cidade_cliente: clienteFull?.cidade || lead.cidade || "",
       uf_cliente: clienteFull?.estado || "SC",
       

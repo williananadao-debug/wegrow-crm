@@ -85,10 +85,17 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
         }
 
         // CPF do vendedor (o gabarito exige; antes ia sempre o placeholder 000.000.000-00)
-        const { data: perfisData } = await supabaseAdmin.from('profiles').select('nome, cpf').eq('empresa_id', codigoEmissora);
-        const norm = (t: string) => (t || '').trim().toLowerCase();
+        // Primeiro pelo dono do contrato (leads.user_id); o nome digitado no job/lead nem sempre bate
+        // com o nome do perfil (validação 30/10/2026), então o nome fica só como segunda tentativa.
+        const { data: perfisData } = await supabaseAdmin.from('profiles').select('id, nome, cpf').eq('empresa_id', codigoEmissora);
+        const norm = (t: string) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
         const cpfPorNome: Record<string, string> = {};
-        (perfisData || []).forEach((pf: any) => { if (pf.nome && pf.cpf) cpfPorNome[norm(pf.nome)] = pf.cpf; });
+        const cpfPorId: Record<string, string> = {};
+        (perfisData || []).forEach((pf: any) => {
+            if (!pf.cpf) return;
+            cpfPorId[pf.id] = pf.cpf;
+            if (pf.nome) cpfPorNome[norm(pf.nome)] = pf.cpf;
+        });
 
         if (clientIds.length > 0) {
             const [{ data: leadsData }, { data: clientesData }] = await Promise.all([
@@ -119,14 +126,25 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                  // identificar a emissora em TODOS os jobs dele, mesmo os de outra rádio.
                  // job.unidade é o dado certo (é do próprio job), tem prioridade aqui.
                  if (leadData) {
-                     const leadParaOpec = { ...leadData, unidade: job.unidade || leadData.unidade };
+                     // Período: o do contrato, ou o do job quando o contrato ficou sem datas (senão os
+                     // itens saíam sem distribuição de spots)
+                     const leadParaOpec = {
+                         ...leadData,
+                         unidade: job.unidade || leadData.unidade,
+                         contrato_inicio: leadData.contrato_inicio || job.data_inicio || null,
+                         contrato_fim: leadData.contrato_fim || job.data_fim || null,
+                     };
                      const nomeVendedor = job.vendedor_nome || leadData.vendedor_nome;
-                     opecData = gerarJsonOpec(leadParaOpec, clienteData || {}, { nome: nomeVendedor, cpf: cpfPorNome[norm(nomeVendedor)] }, finalConfig);
+                     const cpfVendedor = cpfPorId[leadData.user_id] || cpfPorNome[norm(nomeVendedor)];
+                     opecData = gerarJsonOpec(leadParaOpec, clienteData || {}, { nome: nomeVendedor, cpf: cpfVendedor }, finalConfig);
                  }
             } catch(e) { console.error('[opec] gerarJsonOpec error:', e); }
             
             const pacoteFinal = {
                 ...opecData[0],
+                // "cliente" da raiz é sobrescrito pelo bloco detalhado abaixo (contrato documentado em
+                // docs/api-opec.md) — o nome em texto do gabarito legado segue em cliente_nome.
+                ...(opecData[0]?.cliente ? { cliente_nome: opecData[0].cliente } : {}),
                 // Job sem lead vinculado não tem contrato pra montar o gabarito — sinaliza em vez
                 // de entregar um pacote sem os campos raiz sem explicação.
                 ...(leadData ? {} : { dados_incompletos: true, aviso: temRef ? `Contrato LD-${String(refId).padStart(4, '0')} referenciado no briefing não existe mais — campos do gabarito OPEC indisponíveis.` : 'Job sem contrato (lead) vinculado — campos do gabarito OPEC indisponíveis.' }),

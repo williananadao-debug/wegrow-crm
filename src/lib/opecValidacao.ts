@@ -41,8 +41,8 @@ export function validarPacote(r: any): ResultadoContrato {
     return base;
   }
 
+  // "cliente" na raiz vai como objeto de propósito (docs/api-opec.md); o nome em texto segue em cliente_nome
   for (const k of ROOT) if (!(k in r)) erro(k, `Campo "${k}" ausente no pacote.`);
-  if (r.cliente && typeof r.cliente === 'object') aviso('cliente', 'Na raiz, "cliente" vai como objeto (o gabarito legado pede texto) — confirmar com a OPEC como consomem.');
 
   // Cliente
   const cnpj = soDigitos(r.cnpj_cliente);
@@ -50,13 +50,13 @@ export function validarPacote(r: any): ResultadoContrato {
   else if (cnpj.length !== 11 && cnpj.length !== 14) erro('cnpj_cliente', `CNPJ/CPF com ${cnpj.length} dígitos (esperado 11 ou 14).`);
   if (!r.endereco_cliente) aviso('endereco_cliente', 'Endereço do cliente vazio.');
   if (!r.cidade_cliente) aviso('cidade_cliente', 'Cidade do cliente vazia (UF sai como SC por padrão).');
-  if (r.inscricao_estadual_cliente === 'ISENTO') aviso('inscricao_estadual_cliente', 'Inscrição estadual não cadastrada — vai como "ISENTO" por padrão.');
+  if (r.inscricao_estadual_cliente === 'ISENTO' && cnpj.length === 14) aviso('inscricao_estadual_cliente', 'Inscrição estadual não cadastrada — vai como "ISENTO" por padrão.');
 
   // Contrato
   if (!r.data_inicio || !r.data_fim) erro('data_inicio/data_fim', 'Datas de início/fim do contrato vazias — os itens saem sem distribuição de spots.');
   if (r.cpf_vendedor === '000.000.000-00') aviso('cpf_vendedor', 'CPF do vendedor não cadastrado — vai o placeholder 000.000.000-00.');
   if (!r.vendedor || /n[aã]o informado/i.test(r.vendedor)) aviso('vendedor', 'Vendedor não informado.');
-  if (!r.num_pi) aviso('num_pi', 'Número do PI vazio (só é obrigatório se for venda por agência).');
+  if (r.agencia && !r.num_pi) erro('num_pi', 'Venda por agência sem número do PI.');
   if (r.agencia && !r.cnpj_agencia) erro('cnpj_agencia', 'Venda por agência sem CNPJ da agência.');
   if (r.veiculacao?.tabela_unidade === 'Não informada' || r.veiculacao?.tabela_unidade === '—') erro('unidade', 'Unidade/tabela da emissora não informada no contrato.');
 
@@ -65,14 +65,14 @@ export function validarPacote(r: any): ResultadoContrato {
   if (itens.length === 0) erro('itens', 'Contrato sem itens de mídia.');
   let somaItens = 0;
   for (const it of itens) {
+    const vazio = (k: string) => it[k] === undefined || it[k] === null || it[k] === '';
+    const mercadoFaltando = ITEM.filter(k => k.startsWith('mercado_') && vazio(k));
+    if (mercadoFaltando.length > 0) {
+      const msg = `Emissora sem ${mercadoFaltando.join(' / ')} da OPEC — preencher em Configurações → Unidades com os códigos que a OPEC usa.`;
+      if (!problemas.some(p => p.campo === 'mercado' && p.mensagem === msg)) erro('mercado', msg);
+    }
     for (const k of ITEM) {
-      if (it[k] === undefined || it[k] === null || it[k] === '') {
-        const campo = k.startsWith('mercado_') ? 'mercado' : k;
-        const msg = k.startsWith('mercado_')
-          ? 'Emissora sem configuração OPEC (mercado_id/código/CNPJ/descrição em branco) — preencher em Configurações → Unidades.'
-          : `Item sem "${k}".`;
-        if (!problemas.some(p => p.campo === campo && p.mensagem === msg)) erro(campo, msg);
-      }
+      if (!k.startsWith('mercado_') && vazio(k) && !problemas.some(p => p.campo === k)) erro(k, `Item sem "${k}".`);
     }
     if (String(it.codigo || '').toUpperCase() === 'SPOT INDETERMINADO') aviso('itens', 'Item sem nome de serviço ("SPOT INDETERMINADO").');
     somaItens += num(it.valor_total) ?? 0;

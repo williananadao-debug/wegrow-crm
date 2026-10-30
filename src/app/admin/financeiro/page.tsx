@@ -198,19 +198,16 @@ export default function FinanceiroPage() {
   const maxSerie = Math.max(1, ...serie6meses.flatMap(m => [m.entradas, m.saidas]));
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-white">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="text-white">
+      <div className="max-w-5xl mx-auto pt-4 pb-8">
 
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
-              <ArrowLeft size={16} className="text-slate-400"/>
-            </Link>
             <div>
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
+              <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2.5">
                 <Wallet size={22} className="text-[#22C55E]"/> Financeiro
               </h1>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Fluxo de caixa da própria WeGrow · não é dado de cliente</p>
+              <p className="text-slate-400 text-sm mt-1">Fluxo de caixa da própria WeGrow · não é dado de cliente</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

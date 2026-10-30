@@ -192,7 +192,7 @@ export default function IndicadoresPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-white">
+    <div className="text-white">
       <div className="max-w-4xl mx-auto px-4 py-10">
 
         {/* Título só aparece impresso/exportado — a navegação normal fica escondida no print */}
@@ -203,14 +203,11 @@ export default function IndicadoresPage() {
 
         <div className="flex items-center justify-between mb-8 print:hidden">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
-              <ArrowLeft size={16} className="text-slate-400"/>
-            </Link>
             <div>
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
+              <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2.5">
                 <BarChart2 size={22} className="text-[#22C55E]"/> Indicadores
               </h1>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Plano de negócio · painel interno</p>
+              <p className="text-slate-400 text-sm mt-1">Plano de negócio · painel interno</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

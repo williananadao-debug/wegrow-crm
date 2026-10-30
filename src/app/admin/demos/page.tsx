@@ -128,19 +128,16 @@ export default function DemosPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-white">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="text-white">
+      <div className="max-w-4xl mx-auto pt-4 pb-8">
 
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors">
-              <ArrowLeft size={16} className="text-slate-400"/>
-            </Link>
             <div>
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-2">
+              <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2.5">
                 <Sparkles size={22} className="text-purple-400"/> Modelos de demo
               </h1>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Empresas fake de apresentação · não são clientes nem testes reais. Empresas em teste ficam no <Link href="/admin" className="underline hover:text-white">God Mode</Link></p>
+              <p className="text-slate-400 text-sm mt-1">Empresas fake de apresentação · não são clientes nem testes reais. Empresas em teste ficam no <Link href="/admin" className="underline hover:text-white">God Mode</Link></p>
             </div>
           </div>
           <div className="flex items-center gap-2">

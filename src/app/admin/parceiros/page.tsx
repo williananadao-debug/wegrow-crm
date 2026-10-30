@@ -65,12 +65,11 @@ export default function AdminParceirosPage() {
   );
 
   return (
-    <div className="text-white p-4 md:p-8 pb-20">
+    <div className="text-white pt-4 pb-20">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6 gap-4">
           <div>
-            <Link href="/admin" className="text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2"><ArrowLeft size={12}/> God Mode</Link>
-            <h1 className="text-2xl md:text-3xl font-black uppercase italic flex items-center gap-3"><Handshake className="text-[#22C55E]" size={30}/> Parceiros</h1>
+            <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2.5"><Handshake className="text-[#22C55E]" size={22}/> Parceiros</h1>
             <p className="text-slate-500 text-xs mt-1">Revendas que vendem, dão suporte e treinam. Cada uma vê só a própria carteira em <span className="text-slate-300 font-bold">/parceiro</span>.</p>
           </div>
           <form onSubmit={async e => { e.preventDefault(); if (await acao('novo', { acao: 'criar', nome: novoNome, comissao_pct: 40 })) setNovoNome(''); }} className="flex items-center gap-2">

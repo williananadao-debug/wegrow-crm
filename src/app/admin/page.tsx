@@ -22,17 +22,6 @@ import AbaDocumentos from './abas/AbaDocumentos';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
-const COR_STATUS: Record<string, string> = {
-  ativa: 'bg-green-500/20 text-green-400 border-green-500/30',
-  trial: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  suspensa: 'bg-red-500/20 text-red-400 border-red-500/30',
-};
-const COR_PLANO: Record<string, string> = {
-  essencial: 'text-slate-300',
-  pro: 'text-blue-400',
-  enterprise: 'text-purple-400',
-};
-
 const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 function tempoRelativo(iso: string): string {
@@ -48,20 +37,20 @@ function tempoRelativo(iso: string): string {
 
 type Aba = 'geral' | 'modulos' | 'unidades' | 'faturamento' | 'portais' | 'documentos' | 'metricas';
 const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
-  { id: 'geral', label: 'Geral', icon: <Edit2 size={13}/> },
-  { id: 'modulos', label: 'Módulos', icon: <Package size={13}/> },
-  { id: 'unidades', label: 'Unidades', icon: <Building2 size={13}/> },
-  { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={13}/> },
-  { id: 'portais', label: 'Portais', icon: <Globe size={13}/> },
-  { id: 'documentos', label: 'Documentos', icon: <PenLine size={13}/> },
-  { id: 'metricas', label: 'Métricas', icon: <BarChart2 size={13}/> },
+  { id: 'geral', label: 'Geral', icon: <Edit2 size={14}/> },
+  { id: 'modulos', label: 'Módulos', icon: <Package size={14}/> },
+  { id: 'unidades', label: 'Unidades', icon: <Building2 size={14}/> },
+  { id: 'faturamento', label: 'Faturamento', icon: <DollarSign size={14}/> },
+  { id: 'portais', label: 'Portais', icon: <Globe size={14}/> },
+  { id: 'documentos', label: 'Documentos', icon: <PenLine size={14}/> },
+  { id: 'metricas', label: 'Métricas', icon: <BarChart2 size={14}/> },
 ];
 
 const STATUS_PGTO_CFG = {
-  ativo:        { label: 'Em dia',         cor: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/30',    icon: <CheckCircle2 size={10}/> },
-  vencendo:     { label: 'Vence em breve', cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: <Clock size={10}/> },
-  inadimplente: { label: 'Vencido',        cor: 'bg-red-500/20 text-red-400 border-red-500/30',           icon: <AlertTriangle size={10}/> },
-  sem_dados:    { label: 'Sem faturamento',cor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',    icon: <XCircle size={10}/> },
+  ativo:        { label: 'Em dia',          cor: 'bg-[#22C55E]/10 text-[#4ADE80] border-[#22C55E]/25',    icon: <CheckCircle2 size={11}/> },
+  vencendo:     { label: 'Vence em breve',  cor: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/25', icon: <Clock size={11}/> },
+  inadimplente: { label: 'Vencido',         cor: 'bg-red-500/10 text-red-300 border-red-500/25',          icon: <AlertTriangle size={11}/> },
+  sem_dados:    { label: 'Sem faturamento', cor: 'bg-slate-500/10 text-slate-400 border-slate-500/25',    icon: <XCircle size={11}/> },
 };
 
 export default function AdminPage() {
@@ -89,6 +78,7 @@ export default function AdminPage() {
 
   const [modoLista, setModoLista] = useState<'empresas' | 'cobranca'>('empresas');
   const [busca, setBusca] = useState('');
+  const [filtroEstagio, setFiltroEstagio] = useState<'todas' | Estagio>('todas');
   const [convertendoId, setConvertendoId] = useState<string | null>(null);
   const [registrandoPgtoId, setRegistrandoPgtoId] = useState<string | null>(null);
 
@@ -104,6 +94,15 @@ export default function AdminPage() {
   const [credenciaisCopiadas, setCredenciaisCopiadas] = useState(false);
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
+
+  // Esc fecha o painel lateral da empresa (os modais por cima dele têm prioridade).
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape' && !excluindoEmpresa && !senhaResetada && !showNovaEmpresa) setEmpresaSelecionada(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [excluindoEmpresa, senhaResetada, showNovaEmpresa]);
 
   // Vindo de /admin/prospeccao ("Criar empresa em teste"): abre o formulário já preenchido.
   // Empresa nasce em teste (status trial) — vira cliente só no botão "Converter em cliente".
@@ -335,548 +334,552 @@ export default function AdminPage() {
     : empresas;
   const listaFiltrada = listaBase.filter(e => !busca.trim() || e.nome.toLowerCase().includes(busca.toLowerCase()));
 
+  // Uso por empresa (usuários ativos, leads, último acesso) vem de /api/admin/atividade.
+  const usoPorEmpresa = new Map((atividade?.por_empresa || []).map(p => [p.id, p]));
+  const contagemFiltro: Record<'todas' | Estagio, number> = { todas: empresas.length, ...contagemEstagio };
+  const linhas = listaFiltrada
+    .filter(e => modoLista === 'cobranca' || filtroEstagio === 'todas' || estagioEmpresa(e) === filtroEstagio)
+    .sort((a, b) => modoLista === 'cobranca' ? 0 : ORDEM_ESTAGIO[estagioEmpresa(a)] - ORDEM_ESTAGIO[estagioEmpresa(b)] || (b.billing?.valor_mensal ?? 0) - (a.billing?.valor_mensal ?? 0) || a.nome.localeCompare(b.nome));
+
+  const hoje = new Date();
+  const meses6 = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+    const count = empresas.filter(e => {
+      const c = new Date(e.created_at);
+      return c.getFullYear() === d.getFullYear() && c.getMonth() === d.getMonth();
+    }).length;
+    return { label: MESES_PT[d.getMonth()], count };
+  });
+  const maxMes = Math.max(1, ...meses6.map(m => m.count));
+  const novasNoMes = meses6[5].count;
+  const usuariosTotais = (atividade?.por_empresa || []).filter(p => idsClientes.has(p.id)).reduce((s, p) => s + p.total_usuarios, 0);
+
   return (
-    <div className="text-white p-4 md:p-8 pb-20">
+    <div className="text-white pb-20">
       <div className="max-w-7xl mx-auto">
 
-        {/* Título só aparece impresso/exportado — o resto do header fica escondido no print */}
+        {/* Título só aparece impresso/exportado */}
         <div className="hidden print:block mb-8">
-          <div className="text-xl font-black uppercase italic tracking-tighter">Wegrow · Visão geral</div>
-          <p className="text-xs font-bold">{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+          <div className="text-xl font-semibold">WeGrow · Visão geral</div>
+          <p className="text-xs">{hoje.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6 print:hidden">
+        {/* Cabeçalho da página */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-4 mb-6 print:hidden">
           <div>
-            <h1 className="text-2xl md:text-3xl font-black uppercase italic flex items-center gap-3">
-              <ShieldAlert className="text-[#22C55E]" size={32}/> God Mode
-            </h1>
-            <p className="hidden md:block text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Painel de controle do sistema</p>
+            <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight">Visão geral</h1>
+            <p className="text-sm text-slate-400 mt-1">
+              {hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · {empresas.length} empresas na plataforma
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-xs text-slate-500 font-bold">{empresas.length} empresas</p>
-              <p className="text-xs text-[#22C55E] font-black">
-                {contagemEstagio.cliente} clientes · {contagemEstagio.teste} em teste
-              </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => carregarEmpresas()} title="Atualizar" className={BTN_SEC}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>
+            </button>
+            <button onClick={() => window.print()} title="Gerar apresentação (imprimir / salvar PDF)" className={BTN_SEC}>
+              <Printer size={15}/> <span className="hidden sm:inline">Exportar</span>
+            </button>
+            <button onClick={() => setShowNovaEmpresa(true)} className={BTN_PRI}>
+              <Plus size={15}/> Nova empresa
+            </button>
+          </div>
+        </div>
+
+        {erroCarregamento && !loading && (
+          <div className="bg-red-500/[0.08] border border-red-500/20 rounded-xl p-4 mb-6 flex items-center justify-between gap-3">
+            <p className="text-red-300 text-sm flex items-center gap-2"><AlertTriangle size={15} className="shrink-0"/> {erroCarregamento}</p>
+            <button onClick={() => carregarEmpresas(true)} className="shrink-0 flex items-center gap-1.5 text-red-300 hover:text-red-200 text-sm font-medium">
+              <RefreshCw size={13}/> Tentar de novo
+            </button>
+          </div>
+        )}
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-2xl overflow-hidden mb-6">
+          <Kpi titulo="Receita recorrente (MRR)" valor={brl(mrr)} sub={`ARPU ${brl(arpu)}`} icone={<DollarSign size={15}/>} destaque/>
+          <Kpi titulo="Clientes operando" valor={String(contagemEstagio.cliente)} sub={`${contagemEstagio.teste} em teste · ${contagemEstagio.demo} demos`} icone={<Building2 size={15}/>}/>
+          <Kpi titulo="Usuários ativos (7d)" valor={String(atividade?.usuarios_ativos_7d ?? '—')} sub={usuariosTotais ? `de ${usuariosTotais} usuários em clientes` : 'logins nos últimos 7 dias'} icone={<Users size={15}/>}/>
+          <Kpi titulo="Leads criados no mês" valor={String(atividade?.leads_mes ?? '—')} sub="em todas as empresas" icone={<TrendingUp size={15}/>}/>
+        </div>
+
+        {/* Crescimento + saúde financeira + atividade */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+          <Card titulo="Novas empresas" acao={<span className="text-xs text-slate-500">últimos 6 meses</span>}>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-3xl font-semibold tabular-nums">{novasNoMes}</span>
+              <span className="text-sm text-slate-400">neste mês</span>
             </div>
-            <button
-              onClick={() => window.print()}
-              title="Gerar apresentação (imprimir / salvar PDF) — só a Visão geral"
-              className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 rounded-xl transition-colors"
-            >
-              <Printer size={14}/>
-            </button>
-            <Link
-              href="/admin/prospeccao"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <Target size={14}/> Prospecção
-            </Link>
-            <Link
-              href="/admin/financeiro"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <DollarSign size={14}/> Financeiro
-            </Link>
-            <Link
-              href="/admin/demos"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <Sparkles size={14}/> Demos
-            </Link>
-            <Link
-              href="/admin/parceiros"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <Handshake size={14}/> Parceiros
-            </Link>
-            <Link
-              href="/admin/opec"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <Radio size={14}/> OPEC
-            </Link>
-            <Link
-              href="/admin/indicadores"
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
-            >
-              <BarChart2 size={14}/> Indicadores
-            </Link>
-            <button
-              onClick={() => setShowNovaEmpresa(true)}
-              className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all"
-            >
-              <Plus size={14}/> Nova Empresa
-            </button>
-          </div>
-        </div>
-
-        {/* Visão geral */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Clientes operando</p>
-            <p className="text-xl font-black text-white">{contagemEstagio.cliente}</p>
-            <p className="text-[10px] text-slate-500 mt-1">{contagemEstagio.teste} em teste · {contagemEstagio.demo} demos</p>
-          </div>
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Usuários ativos (7d)</p>
-            <p className="text-xl font-black text-[#22C55E]">{atividade?.usuarios_ativos_7d ?? '—'}</p>
-          </div>
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Leads criados (mês)</p>
-            <p className="text-xl font-black text-white">{atividade?.leads_mes ?? '—'}</p>
-          </div>
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-4">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Em teste (funil)</p>
-            <p className="text-xl font-black text-yellow-400">{contagemEstagio.teste}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
-          {/* Novas empresas por mês */}
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Activity size={12}/> Novas empresas por mês</p>
-            {(() => {
-              const hoje = new Date();
-              const meses6 = Array.from({ length: 6 }).map((_, i) => {
-                const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
-                return { ano: d.getFullYear(), mes: d.getMonth(), label: `${MESES_PT[d.getMonth()]}/${String(d.getFullYear()).slice(2)}` };
-              });
-              const porMes = meses6.map(m => ({
-                ...m,
-                count: empresas.filter(e => {
-                  const d = new Date(e.created_at);
-                  return d.getFullYear() === m.ano && d.getMonth() === m.mes;
-                }).length,
-              }));
-              const max = Math.max(1, ...porMes.map(m => m.count));
-              return (
-                <div className="space-y-2">
-                  {porMes.map((m, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-[10px] font-black text-slate-500 uppercase w-10 shrink-0">{m.label}</span>
-                      <div className="flex-1 h-2.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#22C55E] rounded-full transition-all" style={{ width: `${(m.count / max) * 100}%` }}/>
-                      </div>
-                      <span className="text-xs font-black text-white w-5 text-right shrink-0">{m.count}</span>
-                    </div>
-                  ))}
+            <div className="flex items-end gap-2 h-28">
+              {meses6.map((m, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                  <span className="text-[11px] text-slate-400 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">{m.count}</span>
+                  <div className={`w-full rounded-md transition-all ${i === 5 ? 'bg-[#22C55E]' : 'bg-white/10 group-hover:bg-white/20'}`} style={{ height: `${Math.max(4, (m.count / maxMes) * 100)}%` }}/>
+                  <span className="text-[11px] text-slate-500 capitalize">{m.label}</span>
                 </div>
-              );
-            })()}
-          </div>
+              ))}
+            </div>
+          </Card>
 
-          {/* Atividade recente */}
-          <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Clock size={12}/> Atividade recente</p>
-            {!atividade || atividade.ultimos_logins.length === 0 ? (
-              <p className="text-slate-600 text-xs py-4 text-center">Sem logins recentes.</p>
+          <Card titulo="Saúde financeira" acao={<button onClick={() => setModoLista('cobranca')} className="text-xs text-[#22C55E] hover:underline print:hidden">Ver cobrança</button>}>
+            <div className="space-y-3">
+              <Linha label="Lucro líquido estimado" valor={brl(lucroLiquido)} cor={lucroLiquido >= 0 ? 'text-[#22C55E]' : 'text-red-400'}/>
+              <Linha label="Custo de ferramentas" valor={brl(custoFerramentas)}/>
+              <div className="h-px bg-white/[0.06]"/>
+              <Linha label="Em dia" valor={String(empresasAtivas.length - vencendoBreve.length - inadimplentes.length - semDados.length)} ponto="bg-[#22C55E]"/>
+              <Linha label="Vencem em até 7 dias" valor={String(vencendoBreve.length)} ponto="bg-yellow-400"/>
+              <Linha label="Vencidos" valor={String(inadimplentes.length)} ponto="bg-red-400" cor={inadimplentes.length ? 'text-red-400' : undefined}/>
+              <Linha label="Sem faturamento cadastrado" valor={String(semDados.length)} ponto="bg-slate-500"/>
+            </div>
+          </Card>
+
+          <Card titulo="Atividade recente" acao={<span className="text-xs text-slate-500">últimos logins</span>}>
+            {!atividade ? (
+              <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-8 bg-white/[0.03] rounded-lg animate-pulse"/>)}</div>
+            ) : atividade.ultimos_logins.length === 0 ? (
+              <p className="text-slate-500 text-sm py-8 text-center">Sem logins recentes.</p>
             ) : (
-              <div className="space-y-2.5">
-                {atividade.ultimos_logins.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                    <div className="min-w-0">
-                      <span className="text-white font-bold">{l.nome}</span>
-                      <span className="text-slate-500"> · {l.empresa}</span>
+              <div className="space-y-3">
+                {atividade.ultimos_logins.slice(0, 6).map((l, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-[11px] font-semibold text-slate-300 shrink-0">{iniciais(l.nome)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium truncate">{l.nome}</p>
+                      <p className="text-xs text-slate-500 truncate">{l.empresa}</p>
                     </div>
-                    <span className="text-slate-600 shrink-0">{tempoRelativo(l.ultimo_acesso)}</span>
+                    <span className="text-xs text-slate-500 shrink-0 tabular-nums">{tempoRelativo(l.ultimo_acesso)}</span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Atividade por empresa ativa */}
-        <div className="bg-[#0F172A] border border-white/5 rounded-2xl p-5 mb-6">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Building2 size={12}/> Atividade por empresa ativa</p>
-          {!atividade ? (
-            <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-slate-600"/></div>
-          ) : (
+        {/* Empresas */}
+        <div className="bg-[#0F172A]/60 border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div className="p-4 md:px-5 border-b border-white/[0.06] flex flex-col lg:flex-row lg:items-center gap-3 justify-between print:hidden">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-base font-semibold">{modoLista === 'empresas' ? 'Empresas' : 'Cobrança'}</h2>
+              <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-lg p-0.5">
+                {(['empresas', 'cobranca'] as const).map(m => (
+                  <button key={m} onClick={() => setModoLista(m)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${modoLista === m ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                    {m === 'empresas' ? 'Todas as empresas' : 'Cobrança'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {modoLista === 'empresas' && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {(['todas', 'cliente', 'teste', 'demo', 'suspensa'] as const).map(f => (
+                    <button key={f} onClick={() => setFiltroEstagio(f)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filtroEstagio === f ? 'bg-white text-[#0B1120] border-white' : 'border-white/10 text-slate-400 hover:text-white hover:border-white/20'}`}>
+                      {f === 'todas' ? 'Todas' : ESTAGIO_CFG[f].plural} <span className={filtroEstagio === f ? 'text-slate-500' : 'text-slate-600'}>{contagemFiltro[f]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center bg-white/[0.04] border border-white/[0.08] focus-within:border-[#22C55E]/50 rounded-lg px-3 py-1.5 gap-2 w-full sm:w-56 transition-colors">
+                <Search size={14} className="text-slate-500"/>
+                <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa" className="flex-1 bg-transparent outline-none text-sm text-white placeholder:text-slate-500 min-w-0"/>
+              </div>
+            </div>
+          </div>
+
+          {modoLista === 'cobranca' && (inadimplentes.length > 0 || vencendoBreve.length > 0) && (
+            <div className="px-4 md:px-5 py-3 border-b border-white/[0.06] flex flex-wrap gap-x-6 gap-y-1 text-xs print:hidden">
+              {inadimplentes.length > 0 && <span className="text-red-300 flex items-center gap-1.5"><AlertTriangle size={13}/> Vencidos: {inadimplentes.map(c => c.nome).join(', ')}</span>}
+              {vencendoBreve.length > 0 && <span className="text-yellow-300 flex items-center gap-1.5"><Clock size={13}/> Vencem em breve: {vencendoBreve.map(c => `${c.nome} (${diasParaVencer(c.billing?.proximo_vencimento ?? null)}d)`).join(', ')}</span>}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-12 bg-white/[0.03] rounded-lg animate-pulse"/>)}</div>
+          ) : linhas.length === 0 ? (
+            <p className="text-slate-500 text-sm text-center py-14">Nenhuma empresa encontrada.</p>
+          ) : modoLista === 'empresas' ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5">
-                    <th className="text-left py-2 pr-3">Empresa</th>
-                    <th className="text-right py-2 px-3">Usuários ativos (7d)</th>
-                    <th className="text-right py-2 px-3">Leads (mês)</th>
-                    <th className="text-right py-2 px-3">Leads (total)</th>
-                    <th className="text-right py-2 pl-3">Último acesso</th>
+                  <tr className="text-xs text-slate-500 border-b border-white/[0.06]">
+                    <th className="text-left font-medium py-2.5 pl-4 md:pl-5 pr-3">Empresa</th>
+                    <th className="text-left font-medium py-2.5 px-3">Estágio</th>
+                    <th className="text-right font-medium py-2.5 px-3 hidden md:table-cell">Usuários ativos</th>
+                    <th className="text-right font-medium py-2.5 px-3 hidden lg:table-cell">Leads (mês)</th>
+                    <th className="text-right font-medium py-2.5 px-3">MRR</th>
+                    <th className="text-right font-medium py-2.5 px-3 hidden md:table-cell">Último acesso</th>
+                    <th className="w-24 print:hidden"/>
                   </tr>
                 </thead>
                 <tbody>
-                  {atividade.por_empresa.filter(e => idsClientes.has(e.id)).map(e => (
-                    <tr key={e.id} className="border-b border-white/5 last:border-0">
-                      <td className="py-2.5 pr-3 font-bold text-white truncate max-w-[200px]">{e.nome}</td>
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        <span className={e.usuarios_ativos_7d > 0 ? 'text-[#22C55E] font-bold' : 'text-slate-600'}>{e.usuarios_ativos_7d}</span>
-                        <span className="text-slate-600"> / {e.total_usuarios}</span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">{e.leads_mes}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-500">{e.leads_total}</td>
-                      <td className="py-2.5 pl-3 text-right text-slate-500">{e.ultimo_acesso ? tempoRelativo(e.ultimo_acesso) : '—'}</td>
-                    </tr>
-                  ))}
-                  {atividade.por_empresa.filter(e => idsClientes.has(e.id)).length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-6 text-slate-600">Nenhum cliente operando.</td></tr>
-                  )}
+                  {linhas.map(e => {
+                    const est = estagioEmpresa(e);
+                    const uso = usoPorEmpresa.get(e.id);
+                    const recente = uso?.ultimo_acesso && Date.now() - new Date(uso.ultimo_acesso).getTime() < 3 * 86400000;
+                    return (
+                      <tr key={e.id} onClick={() => abrirEmpresa(e)}
+                        className={`group border-b border-white/[0.04] last:border-0 cursor-pointer transition-colors ${empresaSelecionada?.id === e.id ? 'bg-[#22C55E]/[0.06]' : 'hover:bg-white/[0.025]'}`}>
+                        <td className="py-3 pl-4 md:pl-5 pr-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <LogoEmpresa e={e}/>
+                            <div className="min-w-0">
+                              <p className="font-medium text-white truncate max-w-[220px]">{e.nome}</p>
+                              <p className="text-xs text-slate-500 capitalize">{e.plano}{e.parceiro_id ? ' · via parceiro' : ''}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3"><PillEstagio est={est}/></td>
+                        <td className="py-3 px-3 text-right tabular-nums hidden md:table-cell">
+                          <span className={uso?.usuarios_ativos_7d ? 'text-white' : 'text-slate-500'}>{uso?.usuarios_ativos_7d ?? 0}</span>
+                          <span className="text-slate-600"> / {uso?.total_usuarios ?? e.total_usuarios ?? 0}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums text-slate-300 hidden lg:table-cell">{uso?.leads_mes ?? 0}</td>
+                        <td className="py-3 px-3 text-right tabular-nums">
+                          {est === 'cliente' && e.billing?.valor_mensal ? <span className="text-white font-medium">{brl(e.billing.valor_mensal)}</span> : <span className="text-slate-600">—</span>}
+                        </td>
+                        <td className="py-3 px-3 text-right hidden md:table-cell">
+                          <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
+                            {uso?.ultimo_acesso && <span className={`w-1.5 h-1.5 rounded-full ${recente ? 'bg-[#22C55E]' : 'bg-slate-600'}`}/>}
+                            {uso?.ultimo_acesso ? tempoRelativo(uso.ultimo_acesso) : '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 md:pr-5 print:hidden" onClick={ev => ev.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                            {est === 'teste' && (
+                              <button onClick={() => converterEmCliente(e)} disabled={convertendoId === e.id} title="Converter em cliente" className={BTN_ICONE + ' hover:text-[#22C55E]'}>
+                                {convertendoId === e.id ? <Loader2 size={15} className="animate-spin"/> : <CheckCircle2 size={15}/>}
+                              </button>
+                            )}
+                            <button onClick={() => { setExcluindoEmpresa(e); setConfirmarNomeExcluir(''); setErroExcluir(null); }} title="Excluir empresa" className={BTN_ICONE + ' hover:text-red-400'}>
+                              <Trash2 size={15}/>
+                            </button>
+                            <ChevronRight size={15} className="text-slate-600 ml-1"/>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-slate-500 border-b border-white/[0.06]">
+                    <th className="text-left font-medium py-2.5 pl-4 md:pl-5 pr-3">Empresa</th>
+                    <th className="text-left font-medium py-2.5 px-3">Situação</th>
+                    <th className="text-right font-medium py-2.5 px-3">Vencimento</th>
+                    <th className="text-right font-medium py-2.5 px-3">Mensalidade</th>
+                    <th className="print:hidden"/>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map(e => {
+                    const cfg = STATUS_PGTO_CFG[statusPgto(e.billing)];
+                    const dias = diasParaVencer(e.billing?.proximo_vencimento ?? null);
+                    return (
+                      <tr key={e.id} onClick={() => abrirEmpresa(e, 'faturamento')} className="border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.025] transition-colors">
+                        <td className="py-3 pl-4 md:pl-5 pr-3">
+                          <div className="flex items-center gap-3"><LogoEmpresa e={e}/><span className="font-medium truncate max-w-[220px]">{e.nome}</span></div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.cor}`}>{cfg.icon} {cfg.label}</span>
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums">
+                          <span className="text-slate-300">{fmtData(e.billing?.proximo_vencimento ?? null)}</span>
+                          {dias !== null && dias < 0 && <span className="block text-xs text-red-400">há {Math.abs(dias)} dias</span>}
+                          {dias !== null && dias >= 0 && dias <= 7 && <span className="block text-xs text-yellow-400">em {dias} dias</span>}
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums font-medium">{brl(e.billing?.valor_mensal ?? 0)}</td>
+                        <td className="py-3 pr-4 md:pr-5 print:hidden" onClick={ev => ev.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => registrarPagamentoRapido(e)} disabled={registrandoPgtoId === e.id}
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#22C55E] bg-[#22C55E]/10 hover:bg-[#22C55E]/15 border border-[#22C55E]/20 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                              {registrandoPgtoId === e.id ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>} Pagamento recebido
+                            </button>
+                            {e.billing?.whatsapp && (
+                              <a href={`https://wa.me/55${e.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${e.billing.contato ? ' ' + e.billing.contato : ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${(e.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(e.billing.proximo_vencimento)}.`)}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 px-2.5 py-1.5 rounded-lg transition-colors">
+                                <MessageCircle size={12}/> Cobrar
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 print:hidden">
-
-          {/* Lista de Empresas */}
-          <div className={`${modoLista === 'empresas' && !empresaSelecionada ? 'lg:col-span-5' : 'lg:col-span-2'} space-y-3`}>
-
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-1">
-              <button onClick={() => setModoLista('empresas')} className={`flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${modoLista === 'empresas' ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>Empresas</button>
-              <button onClick={() => setModoLista('cobranca')} className={`flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${modoLista === 'cobranca' ? 'bg-[#22C55E] text-[#0B1120]' : 'text-slate-400 hover:text-white'}`}>Cobrança</button>
-            </div>
-
-            <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl px-3 py-2 gap-2">
-              <Search size={14} className="text-slate-500"/>
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa..." className="flex-1 bg-transparent outline-none text-sm text-white"/>
-            </div>
-
-            {modoLista === 'cobranca' && (
-              <>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
-                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">MRR</p>
-                    <p className="text-sm font-black text-[#22C55E]">R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
-                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">ARPU</p>
-                    <p className="text-sm font-black text-white">R$ {arpu.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="bg-[#0F172A] border border-white/5 rounded-xl p-3">
-                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Lucro líq.</p>
-                    <p className={`text-sm font-black ${lucroLiquido >= 0 ? 'text-[#22C55E]' : 'text-red-400'}`}>R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      {/* Painel lateral da empresa selecionada */}
+      {empresaSelecionada && (
+        <div className="fixed inset-0 z-40 flex justify-end print:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={() => setEmpresaSelecionada(null)}/>
+          <div className="relative w-full max-w-3xl h-full bg-[#0B1120] border-l border-white/[0.08] shadow-2xl flex flex-col animate-[slideIn_.2s_ease-out]">
+            <div className="p-5 md:p-6 border-b border-white/[0.06]">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <LogoEmpresa e={empresaSelecionada} grande/>
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold truncate">{empresaSelecionada.nome}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <PillEstagio est={estagioEmpresa(empresaSelecionada)}/>
+                      <span className="text-xs text-slate-500 capitalize">{empresaSelecionada.plano} · {empresaSelecionada.total_usuarios ?? 0} usuários</span>
+                    </div>
                   </div>
                 </div>
-                {vencendoBreve.length > 0 && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-start gap-2">
-                    <Clock size={12} className="text-yellow-400 shrink-0 mt-0.5"/>
-                    <p className="text-slate-300 text-[11px]">{vencendoBreve.map(c => `${c.nome} (${diasParaVencer(c.billing?.proximo_vencimento ?? null)}d)`).join(' · ')}</p>
-                  </div>
+                <button onClick={() => setEmpresaSelecionada(null)} title="Fechar (Esc)" className={BTN_ICONE}><X size={18}/></button>
+              </div>
+              <div className="flex items-center gap-2 mt-5 flex-wrap">
+                {estagioEmpresa(empresaSelecionada) === 'teste' && (
+                  <button onClick={() => converterEmCliente(empresaSelecionada)} disabled={convertendoId === empresaSelecionada.id} className={BTN_PRI + ' disabled:opacity-50'}>
+                    {convertendoId === empresaSelecionada.id ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>} Converter em cliente
+                  </button>
                 )}
-                {inadimplentes.length > 0 && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2">
-                    <AlertTriangle size={12} className="text-red-400 shrink-0 mt-0.5"/>
-                    <p className="text-slate-300 text-[11px]">{inadimplentes.map(c => c.nome).join(' · ')}</p>
-                  </div>
-                )}
-                {semDados.length > 0 && (
-                  <p className="text-slate-500 text-[10px] px-1">{semDados.map(c => c.nome).join(', ')} — sem dados de faturamento.</p>
-                )}
-              </>
-            )}
-
-            {erroCarregamento && !loading && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-3 flex items-center justify-between gap-3">
-                <p className="text-red-300 text-xs font-bold flex items-center gap-2"><AlertTriangle size={14} className="shrink-0"/> {erroCarregamento}</p>
-                <button onClick={() => carregarEmpresas(true)} className="shrink-0 flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-                  <RefreshCw size={11}/> Tentar de novo
+                <button onClick={() => entrarComoEmpresa(empresaSelecionada.id)} disabled={entrandoComoId === empresaSelecionada.id} className={BTN_SEC + ' disabled:opacity-50'}>
+                  {entrandoComoId === empresaSelecionada.id ? <Loader2 size={14} className="animate-spin"/> : <LogIn size={14}/>} Entrar como
+                </button>
+                <button onClick={() => resetarSenha(empresaSelecionada.id)} disabled={resetandoSenhaId === empresaSelecionada.id} className={BTN_SEC + ' disabled:opacity-50'}>
+                  {resetandoSenhaId === empresaSelecionada.id ? <Loader2 size={14} className="animate-spin"/> : <KeyRound size={14}/>} Gerar nova senha
+                </button>
+                <button onClick={() => { setExcluindoEmpresa(empresaSelecionada); setConfirmarNomeExcluir(''); setErroExcluir(null); }}
+                  className="ml-auto inline-flex items-center gap-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors">
+                  <Trash2 size={14}/> Excluir
                 </button>
               </div>
-            )}
-
-            {loading ? (
-              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-white/[0.03] border border-white/5 rounded-2xl animate-pulse"/>)}</div>
-            ) : modoLista === 'empresas' ? (
-              (() => {
-                const ativos = listaFiltrada.filter(e => estagioEmpresa(e) === 'cliente');
-                const prospeccao = listaFiltrada.filter(e => estagioEmpresa(e) === 'teste');
-                const outros = listaFiltrada.filter(e => ['demo', 'suspensa'].includes(estagioEmpresa(e)));
-
-                const cardEmpresa = (e: Empresa) => {
-                  const est = estagioEmpresa(e);
-                  return (
-                    <div key={e.id} className={`group bg-[#0F172A] border rounded-2xl transition-all hover:border-white/20 flex items-stretch ${empresaSelecionada?.id === e.id ? 'border-[#22C55E]/50 bg-[#22C55E]/5' : 'border-white/5'}`}>
-                      <button onClick={() => abrirEmpresa(e)} className="flex-1 min-w-0 text-left p-4 flex items-center gap-3">
-                        <div className="w-11 h-11 bg-white/5 rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
-                          {e.logo_url
-                            ? <img src={e.logo_url} alt={e.nome} className="w-full h-full object-contain p-1" />
-                            : <Building2 size={18} className="text-slate-500"/>}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-black text-sm truncate">{e.nome}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={`text-[9px] font-black uppercase ${COR_PLANO[e.plano]}`}>{e.plano}</span>
-                            {est !== 'cliente' && est !== 'teste' && (
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${ESTAGIO_CFG[est].cor}`}>{ESTAGIO_CFG[est].label}</span>
-                            )}
-                            <span className="text-slate-500 text-[10px] flex items-center gap-1"><Users size={10}/>{e.total_usuarios}</span>
-                          </div>
-                        </div>
-                        {est === 'cliente' && e.billing?.valor_mensal ? (
-                          <span className="text-[#22C55E] text-[11px] font-black shrink-0">R$ {e.billing.valor_mensal.toLocaleString('pt-BR')}<span className="text-slate-600 font-bold">/mês</span></span>
-                        ) : null}
-                      </button>
-                      <div className="flex flex-col justify-center gap-1 pr-2 shrink-0">
-                        {est === 'teste' && (
-                          <button onClick={() => converterEmCliente(e)} disabled={convertendoId === e.id} title="Converter em cliente"
-                            className="p-2 rounded-lg text-slate-500 hover:text-[#22C55E] hover:bg-[#22C55E]/10 transition-colors disabled:opacity-50">
-                            {convertendoId === e.id ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>}
-                          </button>
-                        )}
-                        <button onClick={() => { setExcluindoEmpresa(e); setConfirmarNomeExcluir(''); setErroExcluir(null); }} title="Excluir empresa"
-                          className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                          <Trash2 size={14}/>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                };
-
-                const coluna = (titulo: string, ajuda: string, lista: Empresa[], cor: string, vazio: string) => (
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex items-baseline justify-between px-1">
-                      <h3 className={`text-[11px] font-black uppercase tracking-widest ${cor}`}>{titulo} <span className="text-slate-600">{lista.length}</span></h3>
-                      <span className="text-[10px] text-slate-600 hidden md:inline">{ajuda}</span>
-                    </div>
-                    {lista.map(cardEmpresa)}
-                    {lista.length === 0 && <p className="text-slate-600 text-xs text-center py-6 border border-dashed border-white/10 rounded-2xl">{vazio}</p>}
-                  </div>
-                );
-
-                return (
-                  <>
-                    <div className={`grid grid-cols-1 ${empresaSelecionada ? '' : 'md:grid-cols-2'} gap-6`}>
-                      {coluna('Ativos', 'Fechados e operando', ativos, 'text-[#22C55E]', 'Nenhum cliente ativo.')}
-                      {coluna('Prospecção', 'Em teste / primeiro contato', prospeccao, 'text-yellow-400', 'Nenhuma empresa em teste.')}
-                    </div>
-                    {outros.length > 0 && (
-                      <details className="pt-2">
-                        <summary className="cursor-pointer text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-white px-1 py-2">Demos e suspensas ({outros.length})</summary>
-                        <div className={`grid grid-cols-1 ${empresaSelecionada ? '' : 'md:grid-cols-2'} gap-2 mt-2`}>{outros.map(cardEmpresa)}</div>
-                      </details>
-                    )}
-                  </>
-                );
-              })()
-            ) : (
-              listaFiltrada.map(e => {
-                const sp = statusPgto(e.billing);
-                const cfg = STATUS_PGTO_CFG[sp];
-                const dias = diasParaVencer(e.billing?.proximo_vencimento ?? null);
-                return (
-                  <div key={e.id} className={`bg-[#0F172A] border rounded-2xl p-4 transition-all ${sp === 'vencendo' ? 'border-yellow-500/30' : sp === 'inadimplente' ? 'border-red-500/30' : 'border-white/5'}`}>
-                    <button onClick={() => abrirEmpresa(e, 'faturamento')} className="w-full text-left mb-3">
-                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                        <h3 className="font-black text-white text-sm truncate">{e.nome}</h3>
-                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.cor}`}>{cfg.icon} {cfg.label}</span>
-                        {dias !== null && dias >= 0 && dias <= 7 && <span className="text-[9px] font-black text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full uppercase">Vence em {dias}d</span>}
-                        {dias !== null && dias < 0 && <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase">Vencido há {Math.abs(dias)}d</span>}
-                      </div>
-                      <p className="text-[11px] text-slate-500">Vence {fmtData(e.billing?.proximo_vencimento ?? null)} · R$ {(e.billing?.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</p>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => registrarPagamentoRapido(e)} disabled={registrandoPgtoId === e.id} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-1.5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all disabled:opacity-50">
-                        {registrandoPgtoId === e.id ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle2 size={10}/>} Pgto recebido
-                      </button>
-                      {e.billing?.whatsapp && (
-                        <a href={`https://wa.me/55${e.billing.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá${e.billing.contato ? ' ' + e.billing.contato : ''}! Segue o Pix para renovação da assinatura WeGrow — R$ ${(e.billing.valor_mensal ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês. Vencimento: ${fmtData(e.billing.proximo_vencimento)}.`)}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white px-3 py-1.5 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all">
-                          <MessageCircle size={10}/> Cobrar
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Painel da empresa selecionada */}
-          {empresaSelecionada && (
-            <div className="lg:col-span-3">
-              <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
-                <div className="flex items-center justify-between p-6 border-b border-white/10">
-                  <h2 className="font-black uppercase text-sm flex items-center gap-2">
-                    <Edit2 size={14} className="text-[#22C55E]"/> {empresaSelecionada.nome}
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${ESTAGIO_CFG[estagioEmpresa(empresaSelecionada)].cor}`}>{ESTAGIO_CFG[estagioEmpresa(empresaSelecionada)].label}</span>
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    {estagioEmpresa(empresaSelecionada) === 'teste' && (
-                      <button onClick={() => converterEmCliente(empresaSelecionada)} disabled={convertendoId === empresaSelecionada.id}
-                        className="bg-[#22C55E] text-[#0B1120] px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50">
-                        {convertendoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>} Converter em cliente
-                      </button>
-                    )}
-                    <button onClick={() => resetarSenha(empresaSelecionada.id)} disabled={resetandoSenhaId === empresaSelecionada.id}
-                      className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
-                      {resetandoSenhaId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <KeyRound size={12}/>} Gerar nova senha
-                    </button>
-                    <button onClick={() => entrarComoEmpresa(empresaSelecionada.id)} disabled={entrandoComoId === empresaSelecionada.id}
-                      className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all disabled:opacity-50">
-                      {entrandoComoId === empresaSelecionada.id ? <Loader2 size={12} className="animate-spin"/> : <LogIn size={12}/>} Entrar como
-                    </button>
-                    <button onClick={() => { setExcluindoEmpresa(empresaSelecionada); setConfirmarNomeExcluir(''); setErroExcluir(null); }}
-                      className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all">
-                      <Trash2 size={12}/> Excluir
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex border-b border-white/10 overflow-x-auto">
-                  {ABAS.map(a => (
-                    <button key={a.id} onClick={() => setAbaAtiva(a.id)}
-                      className={`flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap ${abaAtiva === a.id ? 'border-[#22C55E] text-[#22C55E]' : 'border-transparent text-slate-500 hover:text-white'}`}>
-                      {a.icon} {a.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="p-6">
-                  {abaAtiva === 'geral' && <AbaGeral empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'modulos' && <AbaModulos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'unidades' && <AbaUnidades empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'faturamento' && <AbaFaturamento empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'portais' && <AbaPortais empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'documentos' && <AbaDocumentos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                  {abaAtiva === 'metricas' && <AbaMetricas empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
-                </div>
-              </div>
             </div>
-          )}
+
+            <div className="flex px-3 md:px-4 border-b border-white/[0.06] overflow-x-auto [scrollbar-width:none]">
+              {ABAS.map(a => (
+                <button key={a.id} onClick={() => setAbaAtiva(a.id)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${abaAtiva === a.id ? 'border-[#22C55E] text-white' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                  {a.icon} {a.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 md:p-6">
+              {abaAtiva === 'geral' && <AbaGeral empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'modulos' && <AbaModulos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'unidades' && <AbaUnidades empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'faturamento' && <AbaFaturamento empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'portais' && <AbaPortais empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'documentos' && <AbaDocumentos empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+              {abaAtiva === 'metricas' && <AbaMetricas empresa={empresaSelecionada} token={token} onAtualizado={carregarEmpresas}/>}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal Excluir Empresa */}
       {excluindoEmpresa && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-red-500/30 rounded-3xl p-6 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-black uppercase text-sm flex items-center gap-2 text-red-400"><Trash2 size={14}/> Excluir empresa</h3>
-              <button onClick={() => setExcluindoEmpresa(null)} className="text-slate-500 hover:text-white"><X size={16}/></button>
-            </div>
-            <div className="space-y-3">
-              <p className="text-sm text-slate-300">Isso apaga <span className="font-black text-white">{excluindoEmpresa.nome}</span> e todos os logins vinculados a ela — <span className="text-red-400 font-bold">sem volta</span>. Dados que já existirem em outras tabelas (leads, clientes etc.) não são varridos, mas ficam inacessíveis pra sempre já que ninguém mais loga nessa empresa.</p>
-              <p className="text-[11px] text-slate-500">Digite <span className="font-black text-white">{excluindoEmpresa.nome}</span> pra confirmar:</p>
-              <input value={confirmarNomeExcluir} onChange={e => setConfirmarNomeExcluir(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-red-500/50"/>
-              {erroExcluir && (
-                <div className="text-xs font-bold p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">{erroExcluir}</div>
-              )}
-              <button
-                onClick={confirmarExclusao}
-                disabled={excluindo || confirmarNomeExcluir.trim() !== excluindoEmpresa.nome}
-                className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 transition-all"
-              >
-                {excluindo ? <Loader2 size={13} className="animate-spin"/> : <Trash2 size={13}/>}
-                {excluindo ? 'Excluindo...' : 'Excluir de verdade'}
-              </button>
-            </div>
+        <Dialogo titulo="Excluir empresa" icone={<Trash2 size={16} className="text-red-400"/>} onFechar={() => setExcluindoEmpresa(null)} perigo>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-300 leading-relaxed">Isso apaga <span className="font-semibold text-white">{excluindoEmpresa.nome}</span> e todos os logins vinculados a ela — <span className="text-red-400 font-medium">sem volta</span>. Dados em outras tabelas (leads, clientes etc.) não são varridos, mas ficam inacessíveis pra sempre já que ninguém mais loga nessa empresa.</p>
+            <p className="text-xs text-slate-500">Digite <span className="font-semibold text-white">{excluindoEmpresa.nome}</span> pra confirmar:</p>
+            <input value={confirmarNomeExcluir} onChange={e => setConfirmarNomeExcluir(e.target.value)} className={INPUT + ' focus:border-red-500/50'}/>
+            {erroExcluir && <div className="text-sm p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">{erroExcluir}</div>}
+            <button onClick={confirmarExclusao} disabled={excluindo || confirmarNomeExcluir.trim() !== excluindoEmpresa.nome}
+              className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors">
+              {excluindo ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>}
+              {excluindo ? 'Excluindo...' : 'Excluir de verdade'}
+            </button>
           </div>
-        </div>
+        </Dialogo>
       )}
 
       {/* Modal Senha Resetada */}
       {senhaResetada && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-black uppercase text-sm flex items-center gap-2"><KeyRound size={14} className="text-[#22C55E]"/> Nova senha gerada</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Login</p>
-                <p className="text-sm font-bold text-white break-all">{senhaResetada.email}</p>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest pt-2">Nova senha</p>
-                <p className="text-lg font-black text-[#22C55E] font-mono tracking-wide">{senhaResetada.senha}</p>
-              </div>
-              <p className="text-[10px] text-slate-500">Essa senha só aparece agora — copia antes de fechar. A senha anterior parou de funcionar. Também já ficou salva na aba <span className="text-slate-300 font-bold">Faturamento → Observação</span> dessa empresa.</p>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`Login: ${senhaResetada.email}\nSenha: ${senhaResetada.senha}`);
-                  setSenhaResetadaCopiada(true);
-                  setTimeout(() => setSenhaResetadaCopiada(false), 2500);
-                }}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl font-black uppercase text-xs transition-all"
-              >
-                {senhaResetadaCopiada ? 'Copiado!' : 'Copiar login e senha'}
-              </button>
-              <button onClick={() => setSenhaResetada(null)} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
-                Continuar
-              </button>
-            </div>
+        <Dialogo titulo="Nova senha gerada" icone={<KeyRound size={16} className="text-[#22C55E]"/>}>
+          <div className="space-y-3">
+            <Credencial email={senhaResetada.email} senha={senhaResetada.senha} rotuloSenha="Nova senha"/>
+            <p className="text-xs text-slate-500">Essa senha só aparece agora — copie antes de fechar. A senha anterior parou de funcionar. Também ficou salva em <span className="text-slate-300">Faturamento → Observação</span> dessa empresa.</p>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`Login: ${senhaResetada.email}\nSenha: ${senhaResetada.senha}`);
+                setSenhaResetadaCopiada(true);
+                setTimeout(() => setSenhaResetadaCopiada(false), 2500);
+              }}
+              className={BTN_SEC + ' w-full justify-center'}
+            >
+              {senhaResetadaCopiada ? 'Copiado!' : 'Copiar login e senha'}
+            </button>
+            <button onClick={() => setSenhaResetada(null)} className={BTN_PRI + ' w-full justify-center'}>Continuar</button>
           </div>
-        </div>
+        </Dialogo>
       )}
 
       {/* Modal Nova Empresa */}
       {showNovaEmpresa && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-black uppercase text-sm">{novaEmpresaCredenciais ? 'Empresa criada' : 'Nova Empresa'}</h3>
-              {!novaEmpresaCredenciais && (
-                <button onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); }} className="text-slate-500 hover:text-white"><X size={16}/></button>
+        <Dialogo titulo={novaEmpresaCredenciais ? 'Empresa criada' : 'Nova empresa'} icone={<Building2 size={16} className="text-[#22C55E]"/>}
+          onFechar={novaEmpresaCredenciais ? undefined : () => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); }}>
+          {novaEmpresaCredenciais ? (
+            <div className="space-y-3">
+              {novaEmpresaFeedback?.tipo === 'erro' && (
+                <div className="text-sm p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">{novaEmpresaFeedback.msg}</div>
               )}
+              <Credencial email={novaEmpresaCredenciais.email} senha={novaEmpresaCredenciais.senha} rotuloSenha="Senha temporária"/>
+              <p className="text-xs text-slate-500">Essa senha só aparece agora — copie antes de fechar. Também ficou salva em <span className="text-slate-300">Faturamento → Observação</span>, e o botão <span className="text-slate-300">Entrar como</span> dispensa senha.</p>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`Login: ${novaEmpresaCredenciais.email}\nSenha temporária: ${novaEmpresaCredenciais.senha}`);
+                  setCredenciaisCopiadas(true);
+                  setTimeout(() => setCredenciaisCopiadas(false), 2500);
+                }}
+                className={BTN_SEC + ' w-full justify-center'}
+              >
+                {credenciaisCopiadas ? 'Copiado!' : 'Copiar login e senha'}
+              </button>
+              <button onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); setNovaEmpresaCredenciais(null); }} className={BTN_PRI + ' w-full justify-center'}>
+                Continuar
+              </button>
             </div>
-
-            {novaEmpresaCredenciais ? (
-              <div className="space-y-3">
-                {novaEmpresaFeedback?.tipo === 'erro' && (
-                  <div className="text-xs font-bold p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
-                    {novaEmpresaFeedback.msg}
-                  </div>
-                )}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Login</p>
-                  <p className="text-sm font-bold text-white break-all">{novaEmpresaCredenciais.email}</p>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest pt-2">Senha temporária</p>
-                  <p className="text-lg font-black text-[#22C55E] font-mono tracking-wide">{novaEmpresaCredenciais.senha}</p>
+          ) : (
+            <form onSubmit={criarEmpresa} className="space-y-3">
+              <CampoAdmin label="Nome da empresa"><input required value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className={INPUT}/></CampoAdmin>
+              <CampoAdmin label="CNPJ" opcional><input value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className={INPUT}/></CampoAdmin>
+              <div className="pt-3 border-t border-white/[0.06]">
+                <p className="text-xs text-slate-400 mb-3">Primeiro diretor — obrigatório, sem ele a empresa fica invisível.</p>
+                <div className="space-y-3">
+                  <CampoAdmin label="Nome do diretor"><input required value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className={INPUT}/></CampoAdmin>
+                  <CampoAdmin label="E-mail do diretor"><input required type="email" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className={INPUT}/></CampoAdmin>
                 </div>
-                <p className="text-[10px] text-slate-500">Essa senha só aparece agora — copia antes de fechar. Também já ficou salva na aba <span className="text-slate-300 font-bold">Faturamento → Observação</span> dessa empresa, e o botão <span className="text-slate-300 font-bold">Entrar como</span> dispensa senha completamente.</p>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`Login: ${novaEmpresaCredenciais.email}\nSenha temporária: ${novaEmpresaCredenciais.senha}`);
-                    setCredenciaisCopiadas(true);
-                    setTimeout(() => setCredenciaisCopiadas(false), 2500);
-                  }}
-                  className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl font-black uppercase text-xs transition-all"
-                >
-                  {credenciaisCopiadas ? 'Copiado!' : 'Copiar login e senha'}
-                </button>
-                <button
-                  onClick={() => { setShowNovaEmpresa(false); setNovaEmpresaFeedback(null); setNovaEmpresaCredenciais(null); }}
-                  className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs"
-                >
-                  Continuar
-                </button>
               </div>
-            ) : (
-              <form onSubmit={criarEmpresa} className="space-y-3">
-                <input required placeholder="Nome da empresa *" value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                <input placeholder="CNPJ" value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
-                <div className="border-t border-white/10 pt-3 mt-1">
-                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Primeiro diretor (obrigatório — sem isso a empresa fica invisível)</p>
-                  <input required placeholder="Nome do diretor *" value={novaEmpresaDiretorNome} onChange={e => setNovaEmpresaDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E] mb-3"/>
-                  <input required type="email" placeholder="E-mail do diretor *" value={novaEmpresaDiretorEmail} onChange={e => setNovaEmpresaDiretorEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[#22C55E]"/>
+              <label className="flex items-start gap-2.5 py-1 cursor-pointer">
+                <input type="checkbox" checked={novaEmpresaDemo} onChange={e => setNovaEmpresaDemo(e.target.checked)} className="w-4 h-4 mt-0.5 accent-purple-400"/>
+                <span className="text-sm text-slate-300">Empresa demo <span className="block text-xs text-slate-500">Dado fake, uso comercial — não é cliente pagante.</span></span>
+              </label>
+              {novaEmpresaFeedback && (
+                <div className={`text-sm p-3 rounded-lg ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
+                  {novaEmpresaFeedback.msg}
                 </div>
-                <label className="flex items-center gap-2.5 px-1 py-1 cursor-pointer">
-                  <input type="checkbox" checked={novaEmpresaDemo} onChange={e => setNovaEmpresaDemo(e.target.checked)} className="w-4 h-4 accent-purple-400"/>
-                  <span className="text-[11px] font-bold text-slate-400">Empresa demo <span className="text-slate-600 font-normal">(dado fake, uso comercial — não é cliente pagante)</span></span>
-                </label>
-                {novaEmpresaFeedback && (
-                  <div className={`text-xs font-bold p-3 rounded-xl ${novaEmpresaFeedback.tipo === 'sucesso' ? 'bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
-                    {novaEmpresaFeedback.msg}
-                  </div>
-                )}
-                <button type="submit" disabled={saving} className="w-full bg-[#22C55E] text-[#0B1120] py-3 rounded-xl font-black uppercase text-xs">
-                  {saving ? 'Criando...' : 'Criar Empresa'}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
+              )}
+              <button type="submit" disabled={saving} className={BTN_PRI + ' w-full justify-center disabled:opacity-60'}>
+                {saving ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} {saving ? 'Criando...' : 'Criar empresa'}
+              </button>
+            </form>
+          )}
+        </Dialogo>
       )}
+    </div>
+  );
+}
+
+const BTN_PRI = 'inline-flex items-center gap-2 bg-[#22C55E] hover:bg-[#2BD468] text-[#0B1120] px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors shadow-[0_0_0_1px_rgba(34,197,94,.4),0_4px_14px_-4px_rgba(34,197,94,.5)]';
+const BTN_SEC = 'inline-flex items-center gap-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 hover:text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors';
+const BTN_ICONE = 'p-1.5 rounded-md text-slate-500 hover:bg-white/[0.06] transition-colors disabled:opacity-50';
+const INPUT = 'w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#22C55E]/60 focus:ring-2 focus:ring-[#22C55E]/15 transition';
+const ORDEM_ESTAGIO: Record<Estagio, number> = { cliente: 0, teste: 1, demo: 2, suspensa: 3 };
+
+function brl(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function iniciais(nome: string) {
+  return nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
+}
+
+const COR_PILL: Record<Estagio, string> = {
+  cliente: 'bg-[#22C55E]/10 text-[#4ADE80] ring-[#22C55E]/25',
+  teste: 'bg-yellow-500/10 text-yellow-300 ring-yellow-500/25',
+  demo: 'bg-purple-500/10 text-purple-300 ring-purple-400/25',
+  suspensa: 'bg-red-500/10 text-red-300 ring-red-500/25',
+};
+
+function PillEstagio({ est }: { est: Estagio }) {
+  return <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ring-1 ring-inset ${COR_PILL[est]}`}>{ESTAGIO_CFG[est].label}</span>;
+}
+
+function LogoEmpresa({ e, grande }: { e: Empresa; grande?: boolean }) {
+  const tam = grande ? 'w-12 h-12 rounded-xl text-sm' : 'w-9 h-9 rounded-lg text-[11px]';
+  if (e.logo_url) return (
+    <div className={`${tam} bg-white flex items-center justify-center shrink-0 overflow-hidden`}>
+      <img src={e.logo_url} alt={e.nome} className="w-full h-full object-contain p-1"/>
+    </div>
+  );
+  return (
+    <div className={`${tam} flex items-center justify-center shrink-0 font-semibold text-white ring-1 ring-inset ring-white/10`}
+      style={{ background: `linear-gradient(135deg, ${e.cor_primaria || '#334155'}, ${e.cor_primaria || '#334155'}55)` }}>
+      {iniciais(e.nome)}
+    </div>
+  );
+}
+
+function Kpi({ titulo, valor, sub, icone, destaque }: { titulo: string; valor: string; sub: string; icone: React.ReactNode; destaque?: boolean }) {
+  return (
+    <div className="bg-[#0F172A] p-5 relative overflow-hidden">
+      {destaque && <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#22C55E]/15 blur-3xl pointer-events-none"/>}
+      <div className="relative flex items-center justify-between">
+        <p className="text-[13px] text-slate-400">{titulo}</p>
+        <span className={`w-7 h-7 rounded-md flex items-center justify-center ${destaque ? 'bg-[#22C55E]/15 text-[#22C55E]' : 'bg-white/[0.05] text-slate-400'}`}>{icone}</span>
+      </div>
+      <p className="relative text-2xl md:text-[28px] font-semibold tracking-tight tabular-nums mt-3">{valor}</p>
+      <p className="relative text-xs text-slate-500 mt-1 truncate">{sub}</p>
+    </div>
+  );
+}
+
+function Card({ titulo, acao, children }: { titulo: string; acao?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-[#0F172A]/60 border border-white/[0.06] rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold">{titulo}</h3>
+        {acao}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Linha({ label, valor, cor, ponto }: { label: string; valor: string; cor?: string; ponto?: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-slate-400 flex items-center gap-2">{ponto && <span className={`w-1.5 h-1.5 rounded-full ${ponto}`}/>}{label}</span>
+      <span className={`tabular-nums font-medium ${cor || 'text-white'}`}>{valor}</span>
+    </div>
+  );
+}
+
+function Dialogo({ titulo, icone, onFechar, perigo, children }: { titulo: string; icone: React.ReactNode; onFechar?: () => void; perigo?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className={`bg-[#0F172A] border rounded-2xl p-6 w-full max-w-md shadow-2xl ${perigo ? 'border-red-500/30' : 'border-white/10'}`}>
+        <div className="flex justify-between items-center mb-5">
+          <h3 className="font-semibold text-base flex items-center gap-2">{icone} {titulo}</h3>
+          {onFechar && <button onClick={onFechar} className={BTN_ICONE}><X size={16}/></button>}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CampoAdmin({ label, opcional, children }: { label: string; opcional?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[13px] text-slate-300 mb-1.5 block">{label} {opcional && <span className="text-slate-500">(opcional)</span>}</span>
+      {children}
+    </label>
+  );
+}
+
+function Credencial({ email, senha, rotuloSenha }: { email: string; senha: string; rotuloSenha: string }) {
+  return (
+    <div className="bg-white/[0.03] border border-white/10 rounded-xl divide-y divide-white/[0.06]">
+      <div className="p-3.5">
+        <p className="text-xs text-slate-500">Login</p>
+        <p className="text-sm font-medium text-white break-all mt-0.5">{email}</p>
+      </div>
+      <div className="p-3.5">
+        <p className="text-xs text-slate-500">{rotuloSenha}</p>
+        <p className="text-lg font-semibold text-[#22C55E] font-mono tracking-wide mt-0.5">{senha}</p>
+      </div>
     </div>
   );
 }

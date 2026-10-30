@@ -110,3 +110,9 @@ body {
 @media (max-width: 767px) {
   .texto-gradiente { animation: none; background-position: 0% 50%; }
 }
+
+/* Painel lateral do console (God Mode) entrando pela direita */
+@keyframes slideIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

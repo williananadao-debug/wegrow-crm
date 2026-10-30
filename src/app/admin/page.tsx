@@ -630,7 +630,7 @@ export default function AdminPage() {
                     <h2 className="text-lg font-semibold truncate">{empresaSelecionada.nome}</h2>
                     <div className="flex items-center gap-2 mt-1">
                       <PillEstagio est={estagioEmpresa(empresaSelecionada)}/>
-                      <span className="text-xs text-slate-500 capitalize">{empresaSelecionada.plano} · {empresaSelecionada.total_usuarios ?? 0} {(empresaSelecionada.total_usuarios ?? 0) === 1 ? 'usuário' : 'usuários'}</span>
+                      <span className="text-xs text-slate-500"><span className="capitalize">{empresaSelecionada.plano}</span> · {empresaSelecionada.total_usuarios ?? 0} {(empresaSelecionada.total_usuarios ?? 0) === 1 ? 'usuário' : 'usuários'}</span>
                     </div>
                   </div>
                 </div>

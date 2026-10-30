@@ -5,6 +5,7 @@ export type Billing = {
   whatsapp: string | null;
   contato: string | null;
   observacao: string | null;
+  email_financeiro?: string | null;
   razao_social?: string | null;
   cnpj?: string | null;
   endereco?: string | null;
@@ -108,3 +109,22 @@ export const ESTAGIO_CFG: Record<Estagio, { label: string; plural: string; cor: 
   demo:     { label: 'Demo',      plural: 'Demos',     cor: 'bg-purple-500/10 text-purple-300 border-dashed border-purple-400/40', ajuda: 'Dado fake de apresentação' },
   suspensa: { label: 'Suspensa',  plural: 'Suspensas', cor: 'bg-red-500/20 text-red-400 border-red-500/30',           ajuda: 'Pausada ou cancelada' },
 };
+
+// Emite a NFS-e da mensalidade (conta Asaas da WeGrow) — usado logo depois de "Pagamento
+// recebido" (origem pagamento_recebido: só emite se a automação estiver ligada em Notas
+// fiscais) e pelo botão "Emitir NF" (manual: emite sempre). Devolve uma frase pra mostrar.
+export async function emitirNfMensalidade(token: string, empresaId: string, competencia: string, origem: 'manual' | 'pagamento_recebido'): Promise<{ ok: boolean; msg: string }> {
+  try {
+    const res = await fetch('/api/admin/nota-fiscal', {
+      method: 'POST', headers: headersAuth(token),
+      body: JSON.stringify({ acao: 'emitir', empresa_id: empresaId, competencia, origem }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, msg: json.erro || 'Erro ao emitir a nota.' };
+    const [a, m] = competencia.split('-');
+    if (json.jaExistia) return { ok: true, msg: `Já existe nota da competência ${m}/${a} — nada foi emitido de novo.` };
+    return { ok: true, msg: `Nota da competência ${m}/${a} enviada ao Asaas — vai por e-mail assim que a prefeitura autorizar.` };
+  } catch (err: any) {
+    return { ok: false, msg: err?.message || 'Erro de rede ao emitir a nota.' };
+  }
+}

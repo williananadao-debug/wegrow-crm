@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Save, MessageCircle, CheckCircle2, RefreshCw, Receipt, QrCode, ExternalLink, Copy } from 'lucide-react';
-import { AbaProps, headersAuth, fmtData, proximoMes, BILLING_VAZIO } from './types';
+import { AbaProps, headersAuth, fmtData, proximoMes, BILLING_VAZIO, emitirNfMensalidade } from './types';
 
 const CANAIS_ORIGEM = [
   { valor: '', label: 'Não definido' },
@@ -20,6 +20,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
     proximo_vencimento: empresa.billing?.proximo_vencimento ?? '',
     whatsapp: empresa.billing?.whatsapp ?? '',
     contato: empresa.billing?.contato ?? '',
+    email_financeiro: empresa.billing?.email_financeiro ?? '',
     observacao: empresa.billing?.observacao ?? '',
   });
   const [saving, setSaving] = useState(false);
@@ -29,6 +30,8 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
   const [gerandoCobranca, setGerandoCobranca] = useState<'BOLETO' | 'PIX' | null>(null);
   const [erroCobranca, setErroCobranca] = useState<string | null>(null);
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [nf, setNf] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [emitindoNf, setEmitindoNf] = useState(false);
   const [parceiros, setParceiros] = useState<{ id: string; nome: string; comissao_pct: number }[]>([]);
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       proximo_vencimento: empresa.billing?.proximo_vencimento ?? '',
       whatsapp: empresa.billing?.whatsapp ?? '',
       contato: empresa.billing?.contato ?? '',
+      email_financeiro: empresa.billing?.email_financeiro ?? '',
       observacao: empresa.billing?.observacao ?? '',
     });
     setErro(null);
@@ -57,6 +61,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       proximo_vencimento: form.proximo_vencimento || null,
       whatsapp: form.whatsapp || null,
       contato: form.contato || null,
+      email_financeiro: form.email_financeiro.trim().toLowerCase() || null,
       observacao: form.observacao || null,
     };
     const { error } = await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
@@ -125,8 +130,19 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       { ...BILLING_VAZIO(empresa.id), ...(empresa.billing ?? {}), empresa_id: empresa.id, proximo_vencimento: proximoMes(atual) },
       { onConflict: 'empresa_id' }
     );
+    // Mensalidade paga → NFS-e da competência que acabou de ser quitada (se a automação estiver ligada).
+    const r = await emitirNfMensalidade(token, empresa.id, atual.substring(0, 7), 'pagamento_recebido');
+    setNf(r.ok || !r.msg.includes('desligada') ? r : null);
     setRegistrandoPgto(false);
     onAtualizado();
+  };
+
+  const emitirNf = async () => {
+    const alvo = prompt('Competência da nota (AAAA-MM):', new Date().toISOString().substring(0, 7)) || '';
+    if (!/^\d{4}-\d{2}$/.test(alvo)) { if (alvo) alert('Use o formato AAAA-MM.'); return; }
+    setEmitindoNf(true);
+    setNf(await emitirNfMensalidade(token, empresa.id, alvo, 'manual'));
+    setEmitindoNf(false);
   };
 
   return (
@@ -156,7 +172,17 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
             <MessageCircle size={11}/> Cobrar
           </a>
         )}
+        <button onClick={emitirNf} disabled={emitindoNf} className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-3 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-50">
+          {emitindoNf ? <Loader2 size={11} className="animate-spin"/> : <Receipt size={11}/>} Emitir NF
+        </button>
       </div>
+
+      {nf && (
+        <div className={`rounded-xl p-3 text-xs flex items-start justify-between gap-3 ${nf.ok ? 'bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#4ADE80]' : 'bg-red-500/10 border border-red-500/20 text-red-300'}`}>
+          <span>{nf.msg}</span>
+          <a href="/admin/notas-fiscais" className="shrink-0 underline opacity-80 hover:opacity-100">Notas fiscais</a>
+        </div>
+      )}
 
       {erroCobranca && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
@@ -201,6 +227,11 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
           <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">WhatsApp</label>
           <input value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} placeholder="(47) 99999-9999" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         </div>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">E-mail financeiro (recebe a nota fiscal)</label>
+        <input type="email" value={form.email_financeiro} onChange={e => setForm(f => ({ ...f, email_financeiro: e.target.value }))} placeholder={empresa.billing?.contrato_signer_email || 'financeiro@cliente.com.br'} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+        {!form.email_financeiro && empresa.billing?.contrato_signer_email && <p className="text-[11px] text-slate-500 mt-1 ml-1">Vazio = vai para quem assinou o contrato ({empresa.billing.contrato_signer_email}).</p>}
       </div>
       <div>
         <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Observação</label>

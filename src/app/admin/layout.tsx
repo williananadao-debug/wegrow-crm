@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { LayoutDashboard, Target, Wallet, BarChart2, Handshake, Sparkles, Radio } from 'lucide-react';
+import { LayoutDashboard, Target, Wallet, BarChart2, Handshake, Sparkles, Radio, Receipt } from 'lucide-react';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
@@ -10,6 +10,7 @@ const ITENS = [
   { href: '/admin', label: 'Visão geral', icon: LayoutDashboard },
   { href: '/admin/prospeccao', label: 'Prospecção', icon: Target },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
+  { href: '/admin/notas-fiscais', label: 'Notas fiscais', icon: Receipt },
   { href: '/admin/indicadores', label: 'Indicadores', icon: BarChart2 },
   { href: '/admin/parceiros', label: 'Parceiros', icon: Handshake },
   { href: '/admin/demos', label: 'Demos', icon: Sparkles },

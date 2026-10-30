@@ -33,6 +33,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/nf-wegrow",
+      "schedule": "30 12 * * *"
+    },
+    {
       "path": "/api/cron/financeiro-vencimentos",
       "schedule": "0 11 * * *"
     },

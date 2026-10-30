@@ -11,7 +11,7 @@ import {
   CheckCircle2, KeyRound, Trash2, Sparkles, Radio, RefreshCw, Handshake,
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
-import { Empresa, Estagio, estagioEmpresa, ESTAGIO_CFG, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO } from './abas/types';
+import { Empresa, Estagio, estagioEmpresa, ESTAGIO_CFG, headersAuth, diasParaVencer, fmtData, proximoMes, statusPgto, BILLING_VAZIO, emitirNfMensalidade } from './abas/types';
 import AbaGeral from './abas/AbaGeral';
 import AbaModulos from './abas/AbaModulos';
 import AbaUnidades from './abas/AbaUnidades';
@@ -294,6 +294,9 @@ export default function AdminPage() {
       { ...BILLING_VAZIO(e.id), ...(e.billing ?? {}), empresa_id: e.id, proximo_vencimento: proximoMes(atual) },
       { onConflict: 'empresa_id' }
     );
+    // Mensalidade paga → NFS-e da competência quitada (só se a automação estiver ligada em Notas fiscais).
+    const nf = await emitirNfMensalidade(token, e.id, atual.substring(0, 7), 'pagamento_recebido');
+    if (!nf.ok && !nf.msg.includes('desligada')) alert(`Pagamento registrado, mas a nota fiscal não saiu: ${nf.msg}`);
     setRegistrandoPgtoId(null);
     carregarEmpresas();
   };

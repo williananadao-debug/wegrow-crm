@@ -68,6 +68,8 @@ const downloadFile = (content: string, fileName: string) => {
     link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 };
 
+const LIMITE_LINHAS = 20000;
+
 export default function ReportsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
@@ -112,6 +114,20 @@ export default function ReportsPage() {
   // no valor (nome de unidade é texto livre) pra não quebrar o parser do PostgREST
   // inteiro, e isso já derrubou o Kanban do Fábio duas vezes. .eq() não tem esse risco
   // porque o supabase-js parametriza o valor sozinho.
+  // O Supabase entrega no máximo 1000 linhas por consulta, mesmo com .limit(5000) — o resto
+  // sumia calado (mês com venda faltando, cidade de cliente "não informada"). Busca em páginas
+  // de 1000 até acabar; montar() precisa devolver uma query nova a cada chamada.
+  async function paginar(montar: () => any, max = LIMITE_LINHAS) {
+    const todos: any[] = [];
+    for (let de = 0; de < max; de += 1000) {
+      const { data, error } = await montar().range(de, de + 999);
+      if (error) return { data: todos, error };
+      todos.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    return { data: todos, error: null };
+  }
+
   async function mesclarQueries(queries: any[], limite: number) {
     const results = await Promise.all(queries);
     const erro = results.find((r: any) => r.error)?.error || null;
@@ -145,30 +161,30 @@ export default function ReportsPage() {
         .gte(campo, ini)
         .lte(campo, fim)
         .order(campo, { ascending: false })
-        .limit(3000);
+        .order('id');
       if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
       return q;
     };
-    const ambos = (f: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => [f(base('created_at')), f(base('fechado_em'))];
+    const ambos = (f: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => [paginar(() => f(base('created_at'))), paginar(() => f(base('fechado_em')))];
     // Gerente também precisa ver os próprios leads mesmo quando abertos pra outra
     // unidade, senão eles somem do relatório dele.
-    if (isGerente && perfil?.unidade) return mesclarQueries([...ambos(q => q.eq('unidade', perfil.unidade)), ...ambos(q => q.eq('user_id', user?.id)), ...ambos(q => q.eq('criado_por', user?.id))], 6000);
-    if (!isDirector) return mesclarQueries(ambos(q => q.eq('user_id', user?.id)), 6000);
-    return mesclarQueries(ambos(q => q), 6000);
+    if (isGerente && perfil?.unidade) return mesclarQueries([...ambos(q => q.eq('unidade', perfil.unidade)), ...ambos(q => q.eq('user_id', user?.id)), ...ambos(q => q.eq('criado_por', user?.id))], LIMITE_LINHAS);
+    if (!isDirector) return mesclarQueries(ambos(q => q.eq('user_id', user?.id)), LIMITE_LINHAS);
+    return mesclarQueries(ambos(q => q), LIMITE_LINHAS);
   }
 
   function buildVisitasQuery() {
     const base = () => {
-      let q = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at')
+      let q = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at, cidade')
         .gte('created_at', dataInicio + 'T00:00:00')
         .lte('created_at', dataFim + 'T23:59:59')
-        .limit(3000);
+        .order('id');
       if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
       return q;
     };
-    if (isGerente && perfil?.unidade) return mesclarQueries([base().eq('unidade', perfil.unidade), base().eq('user_id', user?.id)], 3000);
-    if (!isDirector) return base().eq('user_id', user?.id);
-    return base();
+    if (isGerente && perfil?.unidade) return mesclarQueries([paginar(() => base().eq('unidade', perfil.unidade)), paginar(() => base().eq('user_id', user?.id))], LIMITE_LINHAS);
+    if (!isDirector) return paginar(() => base().eq('user_id', user?.id));
+    return paginar(base);
   }
 
   // premissas, profiles, clientes e o gráfico do ano NÃO dependem do filtro de data —
@@ -179,22 +195,31 @@ export default function ReportsPage() {
     try {
       const inicioAno = getLocalYYYYMMDD(new Date(new Date().getFullYear(), 0, 1));
       const hoje = getLocalYYYYMMDD(new Date());
-      const baseGrafico = () => {
-        // Gráfico do ano: venda no mês em que foi ganha (fechado_em).
+      // Gráfico do ano: venda no mês em que foi ganha (fechado_em). Venda antiga sem fechado_em
+      // entra pela data de criação — mesmo critério do diaReferenciaLead e da Evolução Mensal
+      // do Dashboard, senão os totais dos meses não batem entre as duas telas.
+      const ini = new Date(inicioAno + 'T00:00:00').toISOString();
+      const fim = new Date(hoje + 'T23:59:59.999').toISOString();
+      const baseGrafico = (campo: 'fechado_em' | 'created_at') => {
         let q = supabase.from('leads').select('id, valor_total, status, created_at, fechado_em, user_id, vendedor_nome, unidade')
-          .gte('fechado_em', new Date(inicioAno + 'T00:00:00').toISOString())
-          .lte('fechado_em', new Date(hoje + 'T23:59:59.999').toISOString())
-          .eq('status', 'ganho')
-          .limit(5000);
+          .eq('status', 'ganho').gte(campo, ini).lte(campo, fim).order('id');
+        if (campo === 'created_at') q = q.is('fechado_em', null);
         if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
         return q;
       };
-      const graficoQuery = isGerente && perfil?.unidade
-        ? mesclarQueries([baseGrafico().eq('unidade', perfil.unidade), baseGrafico().eq('user_id', user?.id)], 5000)
-        : (!isDirector ? baseGrafico().eq('user_id', user?.id) : baseGrafico());
+      const doisCampos = (f: (q: ReturnType<typeof baseGrafico>) => ReturnType<typeof baseGrafico>) => [paginar(() => f(baseGrafico('fechado_em'))), paginar(() => f(baseGrafico('created_at')))];
+      const graficoQuery = mesclarQueries(
+        isGerente && perfil?.unidade ? [...doisCampos(q => q.eq('unidade', perfil.unidade)), ...doisCampos(q => q.eq('user_id', user?.id))]
+          : !isDirector ? doisCampos(q => q.eq('user_id', user?.id)) : doisCampos(q => q),
+        LIMITE_LINHAS);
 
-      let clientesQuery = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false }).limit(2000);
-      if (perfil?.empresa_id) clientesQuery = clientesQuery.eq('empresa_id', perfil.empresa_id);
+      // Todos os clientes (não só os 2000 mais novos): o mapa de cidades busca a cidade da venda
+      // no cadastro do cliente, e cliente antigo fora do corte caía em "não informada".
+      const clientesQuery = paginar(() => {
+        let q = supabase.from('clientes').select('id, nome_empresa, nome_fantasia, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false });
+        if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+        return q;
+      });
 
       const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes, visitasRes] = await Promise.all([
         buildLeadsQuery(),
@@ -222,7 +247,10 @@ export default function ReportsPage() {
   const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
       const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
       const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
-      const clientesNormalizados = rawClientes.map(c => ({ ...c, normName: normalizeString(c.nome_empresa) })).filter(c => c.normName);
+      const clientesNormalizados = rawClientes.flatMap(c => [c.nome_empresa, c.nome_fantasia].map(n => ({ ...c, normName: normalizeString(n || '') }))).filter(c => c.normName);
+      // Cidade registrada pelo GPS na visita que virou o lead — último recurso pro mapa de cidades
+      const cidadePorLeadVisita: Record<number, string> = {};
+      rawVisitas.forEach((v: any) => { if (v.lead_id && v.cidade && !cidadePorLeadVisita[v.lead_id]) cidadePorLeadVisita[v.lead_id] = v.cidade; });
 
       const baseFiltrada = rawLeads.filter(lead => {
           // Já veio filtrado no nível do banco (buildLeadsQuery) — aqui só reforça pro
@@ -264,8 +292,11 @@ export default function ReportsPage() {
               const rawLeadName = lead.empresa || ''; const cleanLeadName = normalizeString(rawLeadName as string);
               if (cleanLeadName && cleanLeadName.length >= 3) { const clienteEncontrado = clientesNormalizados.find(c => c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)); if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro; }
           }
-          if (!rawCity) rawCity = 'NÃO INFORMADA';
-          let cleanCity = String(rawCity).split('/')[0].split('-')[0].trim().toUpperCase(); cleanCity = cleanCity.normalize("NFD").replace(/[̀-ͯ]/g, "");
+          if (!rawCity) rawCity = cidadePorLeadVisita[lead.id];
+          if (!rawCity || !String(rawCity).trim()) rawCity = '';
+          // "Rio do Sul/SC", "Rio do Sul - SC", "RIO DO SUL SC", "rio do sul" → RIO DO SUL
+          let cleanCity = String(rawCity).split('/')[0].split(' - ')[0].split(',')[0].trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+          cleanCity = cleanCity.replace(/\s+(SC|PR|RS|SP|RJ|MG)$/, '').replace(/\s+/g, ' ').trim() || 'NÃO INFORMADA'; // sem acento quebrava o destaque vermelho lá embaixo
           if (!acc[cleanCity]) acc[cleanCity] = { nome: cleanCity, total: 0, count: 0 };
           acc[cleanCity].total += Number(lead.valor_total || 0); acc[cleanCity].count += 1; return acc;
       }, {});
@@ -443,10 +474,10 @@ export default function ReportsPage() {
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
 
-      {rawLeads.length >= 2800 && (
+      {rawLeads.length >= LIMITE_LINHAS - 500 && (
         <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl px-4 py-3 text-yellow-400 text-xs font-bold">
           <AlertCircle size={16} className="shrink-0" />
-          Atenção: o período selecionado retornou {rawLeads.length.toLocaleString('pt-BR')} registros — próximo do limite de 3.000. Reduza o período para garantir que todos os dados estão sendo considerados.
+          Atenção: o período selecionado retornou {rawLeads.length.toLocaleString('pt-BR')} registros — próximo do limite de {LIMITE_LINHAS.toLocaleString('pt-BR')}. Reduza o período para garantir que todos os dados estão sendo considerados.
         </div>
       )}
 

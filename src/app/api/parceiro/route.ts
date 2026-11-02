@@ -18,12 +18,13 @@ async function parceiroDaRequisicao(request: Request, db: SupabaseClient): Promi
 
   const pedido = new URL(request.url).searchParams.get('parceiro_id');
   if (pedido && ADMIN_EMAILS.includes(user.email)) {
-    const { data } = await db.from('parceiros').select('id, nome, logo_url, comissao_pct, asaas_wallet_id').eq('id', pedido).maybeSingle();
+    // '*' (e não a lista de colunas): funciona antes e depois das migrations de cobrança/marca
+    const { data } = await db.from('parceiros').select('*').eq('id', pedido).maybeSingle();
     return data ? { id: data.id, nome: data.nome, logo_url: data.logo_url, comissao_pct: Number(data.comissao_pct), recebe_split: !!data.asaas_wallet_id } : null;
   }
 
   const { data: vinculo } = await db.from('parceiro_usuarios')
-    .select('parceiro:parceiro_id(id, nome, logo_url, comissao_pct, ativo, asaas_wallet_id)')
+    .select('parceiro:parceiro_id(*)')
     .eq('email', user.email.toLowerCase()).limit(1).maybeSingle();
   const p = (vinculo as any)?.parceiro;
   if (!p || !p.ativo) return null;
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
   if (!parceiro) return NextResponse.json({ erro: 'Acesso restrito a parceiros WeGrow.' }, { status: 403 });
 
   const { data: empresas } = await db.from('empresas')
-    .select('id, nome, cnpj, plano, status, modulos, logo_url, cor_primaria, created_at, cancelado_em, bloqueio_cobranca_em')
+    .select('*')
     .eq('parceiro_id', parceiro.id);
   const ids = (empresas || []).map(e => e.id);
   if (ids.length === 0) return NextResponse.json({ parceiro, empresas: [], extrato: [] });
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
   const desde = new Date(Date.now() - 185 * 86400_000).toISOString().substring(0, 10);
   const [{ data: profiles }, { data: billings }, { data: leadsStats }, { data: authData }, { data: pagamentos }] = await Promise.all([
     db.from('profiles').select('id, nome, cargo, empresa_id').in('empresa_id', ids),
-    db.from('clientes_wegrow').select('empresa_id, valor_mensal, proximo_vencimento, contato, whatsapp, assinatura_status, em_atraso_desde').in('empresa_id', ids),
+    db.from('clientes_wegrow').select('*').in('empresa_id', ids), // só campos de cobrança saem na resposta (observação tem senha)
     db.rpc('admin_leads_stats'),
     db.auth.admin.listUsers({ perPage: 1000 }),
     db.from('wegrow_pagamentos').select('asaas_payment_id, empresa_id, competencia, vencimento, valor, status, pago_em, split_valor, split_status')

@@ -9,42 +9,47 @@
 --
 -- Pode rodar de novo sem problema.
 
+-- Uma policy por vez, cada uma no seu bloco: se a tabela estiver ocupada (sistema em uso) ela
+-- espera no máximo 3 s e é PULADA em vez de travar tudo (o 1º teste deu deadlock em profiles).
+-- Rode de novo até a conferência do fim voltar 0 linhas.
 do $$
 declare
   p record;
   nova_qual text;
   novo_check text;
-  padrao_emp   constant text := '(?<!SELECT )(public\.)?meu_empresa_id\(\)';
-  padrao_cargo constant text := '(?<!SELECT )(public\.)?meu_cargo\(\)';
-  padrao_uid   constant text := '(?<!SELECT )auth\.uid\(\)';
+  feitas int := 0;
+  puladas text := '';
+  -- funções sem argumento que as policies chamam: meu_empresa_id(), meu_cargo(),
+  -- get_user_empresa() e afins + auth.uid()/auth.jwt()/auth.role()
+  padrao_pub  constant text := '(?<!SELECT )(public\.)?((meu|get)_[a-z_]+)\(\)';
+  padrao_auth constant text := '(?<!SELECT )auth\.(uid|jwt|role)\(\)';
 begin
+  perform set_config('lock_timeout', '3s', true);
   for p in
     select schemaname, tablename, policyname, qual, with_check
       from pg_policies
      where schemaname = 'public'
-       and (coalesce(qual, '') ~ '(meu_empresa_id|meu_cargo)\(\)|auth\.uid\(\)'
-         or coalesce(with_check, '') ~ '(meu_empresa_id|meu_cargo)\(\)|auth\.uid\(\)')
+       and (coalesce(qual, '') ~ padrao_pub or coalesce(qual, '') ~ padrao_auth
+         or coalesce(with_check, '') ~ padrao_pub or coalesce(with_check, '') ~ padrao_auth)
   loop
-    nova_qual := p.qual;
-    novo_check := p.with_check;
-    if nova_qual is not null then
-      nova_qual := regexp_replace(nova_qual, padrao_emp, '(SELECT public.meu_empresa_id())', 'g');
-      nova_qual := regexp_replace(nova_qual, padrao_cargo, '(SELECT public.meu_cargo())', 'g');
-      nova_qual := regexp_replace(nova_qual, padrao_uid, '(SELECT auth.uid())', 'g');
-    end if;
-    if novo_check is not null then
-      novo_check := regexp_replace(novo_check, padrao_emp, '(SELECT public.meu_empresa_id())', 'g');
-      novo_check := regexp_replace(novo_check, padrao_cargo, '(SELECT public.meu_cargo())', 'g');
-      novo_check := regexp_replace(novo_check, padrao_uid, '(SELECT auth.uid())', 'g');
-    end if;
-    if nova_qual is distinct from p.qual then
-      execute format('alter policy %I on %I.%I using (%s)', p.policyname, p.schemaname, p.tablename, nova_qual);
-    end if;
-    if novo_check is distinct from p.with_check then
-      execute format('alter policy %I on %I.%I with check (%s)', p.policyname, p.schemaname, p.tablename, novo_check);
-    end if;
+    nova_qual := regexp_replace(regexp_replace(p.qual, padrao_pub, '(SELECT public.\2())', 'g'), padrao_auth, '(SELECT auth.\1())', 'g');
+    novo_check := regexp_replace(regexp_replace(p.with_check, padrao_pub, '(SELECT public.\2())', 'g'), padrao_auth, '(SELECT auth.\1())', 'g');
+    begin
+      if nova_qual is distinct from p.qual then
+        execute format('alter policy %I on %I.%I using (%s)', p.policyname, p.schemaname, p.tablename, nova_qual);
+      end if;
+      if novo_check is distinct from p.with_check then
+        execute format('alter policy %I on %I.%I with check (%s)', p.policyname, p.schemaname, p.tablename, novo_check);
+      end if;
+      feitas := feitas + 1;
+    exception when lock_not_available or deadlock_detected then
+      puladas := puladas || p.tablename || '.' || p.policyname || '  ';
+    end;
   end loop;
+  raise notice 'Policies ajustadas: %. Puladas (tabela ocupada, rode de novo): %', feitas, coalesce(nullif(puladas, ''), 'nenhuma');
 end $$;
+
+set lock_timeout = '10s';
 
 -- Leads: dashboard, relatório, pipeline e metas filtram por empresa + data/status
 create index if not exists leads_empresa_created_idx  on public.leads (empresa_id, created_at desc);
@@ -71,9 +76,9 @@ analyze public.leads;
 analyze public.visitas;
 analyze public.clientes;
 
--- Conferência: nenhuma policy deve sobrar chamando a função sem SELECT (deve voltar 0 linhas)
+-- Conferência: policies que ainda chamam a função por linha (deve voltar 0 linhas)
 select tablename, policyname
   from pg_policies
  where schemaname = 'public'
-   and (coalesce(qual, '') ~ '(?<!SELECT )(public\.)?meu_empresa_id\(\)'
-     or coalesce(with_check, '') ~ '(?<!SELECT )(public\.)?meu_empresa_id\(\)');
+   and (coalesce(qual, '') ~ '(?<!SELECT )(public\.)?((meu|get)_[a-z_]+)\(\)' or coalesce(qual, '') ~ '(?<!SELECT )auth\.(uid|jwt|role)\(\)'
+     or coalesce(with_check, '') ~ '(?<!SELECT )(public\.)?((meu|get)_[a-z_]+)\(\)' or coalesce(with_check, '') ~ '(?<!SELECT )auth\.(uid|jwt|role)\(\)');

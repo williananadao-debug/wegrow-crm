@@ -33,15 +33,17 @@ Authorization: Bearer <TOKEN_INTEGRACAO_OPEC>
 | `codigo_emissora` | **Sim** | UUID da empresa (tenant) no CRM. Sem ele a API recusa a requisição. Identifica de qual emissora/cliente WeGrow os dados devem vir. |
 | `id` | Não | ID de um job de produção específico. Se enviado, ignora os demais filtros de data/status. |
 | `numero_contrato` | Não | ID do lead/contrato. Se enviado, retorna **todos os jobs** vinculados àquele contrato (tem prioridade sobre `id`, `status`, `data_inicial`, `data_final`). Aceita apenas dígitos (a API limpa caracteres não numéricos). |
-| `status` | Não | Filtra jobs pelo estágio (`stage`). **Padrão: `entregue`**. Só é aplicado quando `id` e `numero_contrato` não são enviados. |
-| `data_inicial` | Não | Filtra jobs criados a partir dessa data (`created_at >=`). Formato `YYYY-MM-DD`. Só é aplicado no modo de filtro por status. |
-| `data_final` | Não | Filtra jobs criados até essa data (inclusive, até 23:59:59). Formato `YYYY-MM-DD`. Só é aplicado no modo de filtro por status. |
+| `status` | Não | **Padrão: `ganho`** (desde 02/11/2026) — devolve os contratos assim que o lead é marcado como ganho, sem esperar a produção. Qualquer outro valor (`entregue`, `aprovacao`, …) filtra pelo estágio do job, como antes. Só é aplicado quando `id` e `numero_contrato` não são enviados. |
+| `data_inicial` | Não | Com `status=ganho`: contratos fechados a partir dessa data (`fechado_em`, horário de Brasília). Nos outros status: jobs criados a partir dessa data (`created_at`). Formato `YYYY-MM-DD`. |
+| `data_final` | Não | Mesmo critério de `data_inicial`, até essa data (inclusive). Formato `YYYY-MM-DD`. |
 
 ### Ordem de precedência dos filtros
 
 1. Se `numero_contrato` for enviado → busca por contrato (ignora `id`, `status`, datas).
 2. Senão, se `id` for enviado → busca o job exato por ID.
-3. Senão → filtra por `status` (padrão `entregue`) + intervalo de datas, se informado.
+3. Senão → filtra por `status` (padrão `ganho`) + intervalo de datas, se informado.
+
+No modo `ganho` vem **um pacote por contrato**. Se a produção ainda não criou o job, o bloco `producao` vem com `id_job: null` — os dados do gabarito (cliente, itens, distribuição, faturas) vêm do contrato. O bloco `comercial` traz também `status_contrato`, `data_fechamento` e `contrato_assinado`.
 
 O resultado é sempre limitado a **100 registros**, ordenados do mais recente para o mais antigo.
 
@@ -233,7 +235,7 @@ Também em 25/03/2026 o token deixou de ser fixo no código (`WEGROW_OPEC_2026_M
 3. **`codigo_emissora` informado e é um UUID válido?** Sem esse parâmetro a API sempre retorna 400, mesmo com token correto. Não é o nome da emissora — é o UUID da empresa.
 4. **Método é `GET`?** A rota não aceita `POST`/outros métodos.
 5. **URL base correta?** `https://wegrow-crm.vercel.app/api/opec` (confirmar se não estão usando um domínio de preview antigo/expirado do Vercel).
-6. **Resultado veio vazio (`[]`)?** Verificar se `status` bate com o estágio real do job (padrão é `entregue`) e se o intervalo de datas cobre os jobs esperados.
+6. **Resultado veio vazio (`[]`)?** No padrão (`ganho`) o filtro de datas é pela data de fechamento do contrato; nos outros status, verificar se `status` bate com o estágio real do job e se o intervalo de datas cobre os jobs esperados.
 
 ## Configuração dependente (lado WeGrow)
 

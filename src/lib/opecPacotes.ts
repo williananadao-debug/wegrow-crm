@@ -9,15 +9,37 @@ export type FiltrosOpec = {
   idJob?: string | null; numeroContrato?: string | null;
 };
 
+// status 'ganho' (padrão desde 02/11/2026): o contrato vai pra OPEC assim que o lead é marcado
+// como ganho, sem esperar o job de produção chegar em "entregue". Qualquer outro status segue o
+// modo antigo — filtra pelo estágio do job (stage).
+export const STATUS_PADRAO_OPEC = 'ganho';
+
+const COLS_JOB = 'id, titulo, stage, prioridade, deadline, created_at, audio_url, briefing, client_id, empresa_id, vendedor_nome, unidade, num_pi, data_inicio, data_fim, hora_inicio, hora_fim, itens_opec, agencia, cliente';
+const refDoJob = (j: { briefing?: string | null }) => Number(/Ref:\s*LD-0*(\d+)/i.exec(j.briefing || '')?.[1]);
+
 export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: FiltrosOpec): Promise<any[]> {
     const codigoEmissora = f.codigoEmissora;
-    const status = f.status || 'entregue';
+    const status = f.status || STATUS_PADRAO_OPEC;
     const dataInicial = f.dataInicial || null;
     const dataFinal = f.dataFinal || null;
     const idJob = f.idJob || null;
     const numeroContrato = f.numeroContrato || null;
 
-        let query = supabaseAdmin.from('jobs').select('id, titulo, stage, prioridade, deadline, created_at, audio_url, briefing, client_id, empresa_id, vendedor_nome, unidade, num_pi, data_inicio, data_fim, hora_inicio, hora_fim, itens_opec, agencia, cliente');
+        // Modo "ganho": parte dos contratos ganhos (data = fechado_em) e acha o job de cada um pelo
+        // "Ref: LD-####" do briefing. Contrato ganho ainda sem job sai do mesmo jeito, com o bloco
+        // producao vazio — o que a OPEC precisa (cliente, itens, faturas) vem do lead.
+        const modoGanho = !numeroContrato && !idJob && status === 'ganho';
+        let leadsGanhos: any[] = [];
+        if (modoGanho) {
+            let ql = supabaseAdmin.from('leads').select('*').eq('empresa_id', codigoEmissora).eq('status', 'ganho');
+            if (dataInicial) ql = ql.gte('fechado_em', `${dataInicial}T00:00:00-03:00`);
+            if (dataFinal) ql = ql.lte('fechado_em', `${dataFinal}T23:59:59.999-03:00`);
+            const { data } = await ql.order('fechado_em', { ascending: false, nullsFirst: false }).limit(100);
+            leadsGanhos = data || [];
+            if (leadsGanhos.length === 0) return [];
+        }
+
+        let query = supabaseAdmin.from('jobs').select(COLS_JOB);
         query = query.eq('empresa_id', codigoEmissora);
 
         // 🚦 LÓGICA DE FILTROS INTELIGENTES
@@ -38,17 +60,42 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
         else if (idJob) {
             query = query.eq('id', idJob);
         } 
+        else if (modoGanho) {
+            const clientesGanhos = [...new Set(leadsGanhos.map(l => l.client_id).filter(Boolean))];
+            if (clientesGanhos.length === 0) query = query.eq('id', -1); // nenhum job possível; os contratos saem sem produção
+            else query = query.in('client_id', clientesGanhos);
+        }
         else {
             query = query.eq('stage', status);
             if (dataInicial) query = query.gte('created_at', dataInicial);
             if (dataFinal) query = query.lte('created_at', `${dataFinal}T23:59:59`);
         }
 
-        const { data: jobsProntos } = await query
+        const { data: jobsBuscados } = await query
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(modoGanho ? 1000 : 100);
 
-        if (!jobsProntos || jobsProntos.length === 0) {
+        let jobsProntos: any[] = jobsBuscados || [];
+        // No modo ganho cada contrato vira 1 pacote: o job dele (o mais recente com a Ref) ou um
+        // job "vazio" montado do próprio lead quando a produção ainda não tem job.
+        let leadForcado: Map<any, any> | null = null;
+        if (modoGanho) {
+            const jobPorLead = new Map<number, any>();
+            jobsProntos.forEach(j => { const r = refDoJob(j); if (r > 0 && !jobPorLead.has(r)) jobPorLead.set(r, j); });
+            leadForcado = new Map();
+            jobsProntos = leadsGanhos.map(l => {
+                const job = jobPorLead.get(l.id) || {
+                    id: null, titulo: null, stage: null, prioridade: null, deadline: null, created_at: null, audio_url: null,
+                    briefing: null, client_id: l.client_id, empresa_id: l.empresa_id, vendedor_nome: l.vendedor_nome,
+                    unidade: l.unidade, num_pi: l.num_pi, data_inicio: l.contrato_inicio, data_fim: l.contrato_fim,
+                    hora_inicio: null, hora_fim: null, itens_opec: null, agencia: null, cliente: null,
+                };
+                leadForcado!.set(job, l);
+                return job;
+            });
+        }
+
+        if (jobsProntos.length === 0) {
             return [];
         }
 
@@ -76,7 +123,7 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
         // outro contrato pra cliente com mais de uma venda (validação 21/09/2026: 34 de 88 jobs
         // entregues vinham com o contrato errado). O lead mais recente segue como fallback.
         const idsRef = [...new Set(jobsProntos
-            .map(j => Number(/Ref:\s*LD-0*(\d+)/i.exec(j.briefing || '')?.[1]))
+            .map(refDoJob)
             .filter(n => Number.isFinite(n) && n > 0))];
         const leadPorRef: Record<number, any> = {};
         if (idsRef.length > 0) {
@@ -111,12 +158,12 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
         }
 
         for (const job of jobsProntos) {
-            const refId = Number(/Ref:\s*LD-0*(\d+)/i.exec(job.briefing || '')?.[1]);
+            const refId = leadForcado?.get(job)?.id ?? refDoJob(job);
             // Briefing aponta pra um contrato (Ref: LD-####) que não existe mais: NÃO cai no "lead mais
             // recente do cliente" — isso entregava os dados de OUTRO contrato como se fossem desse job.
             // Só usa o fallback quando o briefing não tem referência (jobs antigos/manuais).
             const temRef = Number.isFinite(refId) && refId > 0;
-            const leadData = temRef ? (leadPorRef[refId] || null) : (job.client_id ? (leadsMap[job.client_id] || null) : null);
+            const leadData = leadForcado?.get(job) || (temRef ? (leadPorRef[refId] || null) : (job.client_id ? (leadsMap[job.client_id] || null) : null));
             const clienteData = job.client_id ? (clientesMap[job.client_id] || null) : null;
 
             let opecData: any[] = [{}];
@@ -182,6 +229,9 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                     desconto_aplicado: leadData?.desconto || 0,
                     parcelas: leadData?.parcelas || 1,
                     primeiro_vencimento: leadData?.vencimento || null,
+                    status_contrato: leadData?.status || null,
+                    data_fechamento: leadData?.fechado_em || null,
+                    contrato_assinado: Boolean(leadData?.docuseal_assinado || leadData?.contrato_manual_url),
                 },
                 cliente: {
                     id_cliente: clienteData?.id || job.client_id || null,

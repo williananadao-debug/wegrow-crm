@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { montarPacotesOpec } from '@/lib/opecPacotes';
+import { montarPacotesOpec, STATUS_PADRAO_OPEC } from '@/lib/opecPacotes';
 import { validarPacotes } from '@/lib/opecValidacao';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const pacotes = await montarPacotesOpec(db(), {
-      codigoEmissora: empresa, status: sp.get('status') || 'entregue',
+      codigoEmissora: empresa, status: sp.get('status') || STATUS_PADRAO_OPEC,
       dataInicial: sp.get('data_inicial'), dataFinal: sp.get('data_final'),
       idJob: sp.get('id'), numeroContrato: sp.get('numero_contrato'),
     });

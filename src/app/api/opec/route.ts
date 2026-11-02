@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { montarPacotesOpec } from '@/lib/opecPacotes';
+import { montarPacotesOpec, STATUS_PADRAO_OPEC } from '@/lib/opecPacotes';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     // 🔍 Capturando os filtros da OPEC
     const dataInicial = searchParams.get('data_inicial'); 
     const dataFinal = searchParams.get('data_final');     
-    const status = searchParams.get('status') || 'entregue'; 
+    const status = searchParams.get('status') || STATUS_PADRAO_OPEC; // 'ganho' = contrato fechado; outro valor = estágio do job
     const idJob = searchParams.get('id');
     const numeroContrato = searchParams.get('numero_contrato'); 
     

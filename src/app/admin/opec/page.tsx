@@ -8,7 +8,7 @@ import { ArrowLeft, ShieldAlert, Loader2, Radio, CheckCircle2, AlertTriangle, XC
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
 const STATUS_OPTS = [
-  { v: 'entregue', l: 'Entregue' }, { v: 'aprovacao', l: 'OPEC / No Ar' }, { v: 'gravacao', l: 'Locução / Gravação' },
+  { v: 'ganho', l: 'Contrato ganho (padrão)' }, { v: 'entregue', l: 'Entregue' }, { v: 'aprovacao', l: 'OPEC / No Ar' }, { v: 'gravacao', l: 'Locução / Gravação' },
   { v: 'roteiro', l: 'Roteiro / Copy' }, { v: 'aguardando_assinatura', l: 'Aguardando assinatura' },
 ];
 
@@ -25,7 +25,7 @@ export default function OpecValidacaoPage() {
   const [token, setToken] = useState('');
   const [empresas, setEmpresas] = useState<{ id: string; nome: string }[]>([]);
   const [empresa, setEmpresa] = useState('');
-  const [status, setStatus] = useState('entregue');
+  const [status, setStatus] = useState('ganho');
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
   const [numeroContrato, setNumeroContrato] = useState('');

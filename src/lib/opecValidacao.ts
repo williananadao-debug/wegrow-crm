@@ -31,7 +31,7 @@ export function validarPacote(r: any): ResultadoContrato {
     id_job: r?.producao?.id_job ?? null,
     cliente: typeof r?.cliente === 'object' ? (r.cliente?.nome_fantasia || '—') : (r?.cliente || '—'),
     unidade: r?.veiculacao?.tabela_unidade || '—',
-    status: r?.producao?.status || '—',
+    status: r?.producao?.status || (r?.comercial?.status_contrato === 'ganho' ? 'ganho (sem job)' : '—'),
     problemas,
   };
 

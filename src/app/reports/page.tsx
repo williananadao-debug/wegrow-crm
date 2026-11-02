@@ -130,7 +130,15 @@ export default function ReportsPage() {
     // no período (ganho/perdido contam no mês do fechamento — lead de setembro ganho em
     // outubro é venda de outubro). O recorte final por período é feito no useMemo via
     // diaReferenciaLead.
-    const ini = new Date(dataInicio + 'T00:00:00').toISOString();
+    // Começa no início do período ANTERIOR (mesmo tamanho, logo antes) — o useMemo compara o
+    // período atual com ele; buscando só o período atual o anterior vinha vazio e todo card
+    // mostrava +100%. Mesma conta de datas do useMemo (pastStart).
+    const hojeStr = getLocalYYYYMMDD(new Date());
+    const inicioSel = new Date(dataInicio + 'T12:00:00');
+    const fimEfetivo = new Date((dataFim > hojeStr ? hojeStr : dataFim) + 'T12:00:00');
+    const dias = Math.max(Math.round((fimEfetivo.getTime() - inicioSel.getTime()) / 86400000), 0);
+    const inicioAnterior = new Date(inicioSel); inicioAnterior.setDate(inicioSel.getDate() - 1 - dias);
+    const ini = new Date(getLocalYYYYMMDD(inicioAnterior) + 'T00:00:00').toISOString();
     const fim = new Date(dataFim + 'T23:59:59.999').toISOString();
     const base = (campo: 'created_at' | 'fechado_em') => {
       let q = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, fechado_em, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
@@ -339,7 +347,7 @@ export default function ReportsPage() {
 
       // Inadimplência: contratos vencidos (ganho + contrato_fim < hoje)
       const hoje2 = getLocalYYYYMMDD(new Date());
-      const inadimplentes = baseFiltrada.filter(l =>
+      const inadimplentes = currentLeads.filter(l =>
           l.status === 'ganho' && l.contrato_fim && l.contrato_fim.substring(0, 10) < hoje2
       ).map(l => ({
           empresa: l.empresa,

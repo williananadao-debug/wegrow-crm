@@ -75,14 +75,14 @@ export default function DashboardPage() {
     else setRefreshing(true);
 
     try {
-        let leadsQuery = supabase
-          .from('leads')
-          .select('id, user_id, vendedor_nome, unidade, status, created_at, fechado_em, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
-
-        if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
-        if (!isDirector) {
-            leadsQuery = leadsQuery.eq('user_id', user?.id);
-        }
+        const leadsQuery = () => {
+            let q = supabase
+              .from('leads')
+              .select('id, user_id, vendedor_nome, unidade, status, created_at, fechado_em, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
+            if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+            if (!isDirector) q = q.eq('user_id', user?.id);
+            return q;
+        };
 
         let perfisQuery = supabase.from('profiles').select('id, nome');
         if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id) as any;
@@ -94,8 +94,21 @@ export default function DashboardPage() {
         if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id) as any;
         if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id) as any;
 
+        // O Supabase devolve no máximo 1000 linhas por consulta e, sem ordem, quais 1000 vêm é
+        // aleatório — com mais leads que isso a Evolução Mensal perdia meses inteiros (ex.: abr–jul
+        // quase zerados). Busca em páginas ordenadas por id até acabar.
+        const buscarTodosLeads = async () => {
+            const todos: any[] = [];
+            for (let de = 0; ; de += 1000) {
+                const { data, error } = await leadsQuery().order('id').range(de, de + 999);
+                if (error) return { data: todos.length ? todos : null, error };
+                todos.push(...(data || []));
+                if (!data || data.length < 1000) return { data: todos, error: null };
+            }
+        };
+
         const [leadsRes, perfisRes, jobsRes, finRes, visitasRes] = await Promise.all([
-            leadsQuery,
+            buscarTodosLeads(),
             perfisQuery,
             jobsQuery,
             supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago'),

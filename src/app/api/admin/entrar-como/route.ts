@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { supabaseAdmin, gerarLinkEntrarComo } from '@/lib/acessoEmpresa';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,8 @@ async function verificarAdmin(request: Request) {
 // gambiarra de URL. É uma sessão real do usuário real (não bypassa RLS, não precisa
 // de tabela de override).
 export async function POST(request: Request) {
-  if (!await verificarAdmin(request))
+  const admin = await verificarAdmin(request);
+  if (!admin)
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   let body: any;
@@ -27,8 +29,10 @@ export async function POST(request: Request) {
   const { empresa_id } = body;
   if (!empresa_id) return NextResponse.json({ erro: 'empresa_id obrigatório.' }, { status: 422 });
 
-  const r = await gerarLinkEntrarComo(supabaseAdmin(), empresa_id);
+  const db = supabaseAdmin();
+  const r = await gerarLinkEntrarComo(db, empresa_id);
   if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });
+  await registrarAuditoria(db, { ator: admin.email, acao: 'suporte.entrar_como', empresaId: empresa_id, detalhe: { como: r.email } });
 
   console.log(`[admin/entrar-como] empresa=${empresa_id} email=${r.email}`);
   return NextResponse.json({ link: r.link });

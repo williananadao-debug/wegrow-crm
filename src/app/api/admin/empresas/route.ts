@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { salvarAssinatura } from '@/lib/cobrancaWegrow';
 import { supabaseAdmin, criarEmpresaComDiretor } from '@/lib/acessoEmpresa';
 
@@ -69,7 +70,8 @@ export async function GET(request: Request) {
 // com o Portal do Parceiro). Diretor obrigatório: sem um profile a empresa nunca aparece
 // na lista deste admin (GET acima monta a partir de profiles).
 export async function POST(request: Request) {
-  if (!await verificarAdmin(request))
+  const admin = await verificarAdmin(request);
+  if (!admin)
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   let body: any;
@@ -83,12 +85,14 @@ export async function POST(request: Request) {
 
   const r = await criarEmpresaComDiretor(supabaseAdmin(), { nome, cnpj, plano, status, modulos, diretorNome, diretorEmail, parceiroId: parceiro_id || null });
   if ('erro' in r) return NextResponse.json({ erro: r.erro, ...(r.empresa ? { empresa: r.empresa } : {}) }, { status: r.status });
+  await registrarAuditoria(supabaseAdmin(), { ator: admin.email, acao: 'empresa.criar', empresaId: r.empresa.id, parceiroId: parceiro_id || null, detalhe: { nome, diretor: r.diretorEmail, setor: modulos?.setor || null } });
   return NextResponse.json({ ...r.empresa, diretorEmail: r.diretorEmail, senhaTemp: r.senhaTemp, emailErro: r.emailErro }, { status: 201 });
 }
 
 // PATCH — upsert por id (cria registro na tabela empresas se ainda não existir para esse tenant)
 export async function PATCH(request: Request) {
-  if (!await verificarAdmin(request))
+  const admin = await verificarAdmin(request);
+  if (!admin)
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   let body: any;
@@ -122,6 +126,7 @@ export async function PATCH(request: Request) {
       console.error('[admin/empresas] PATCH (update) error:', error);
       return NextResponse.json({ erro: error.message }, { status: 500 });
     }
+    await registrarAuditoria(db, { ator: admin.email, acao: 'empresa.alterar', empresaId: id, detalhe: patch });
     // Trocou de parceiro: a assinatura passa a dividir (ou deixa de dividir) com o novo
     if ('parceiro_id' in patch && process.env.ASAAS_API_KEY) {
       const { data: billing } = await db.from('clientes_wegrow').select('assinatura_status').eq('empresa_id', id).maybeSingle();

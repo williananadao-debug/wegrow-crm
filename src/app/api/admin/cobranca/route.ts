@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { asaasWegrow } from '@/lib/nfWegrow';
 import { cancelarAssinatura, carregarConfigCobranca, salvarAssinatura, sincronizarAssinatura, hojeBR, STATUS_PAGOS } from '@/lib/cobrancaWegrow';
@@ -54,7 +55,8 @@ export async function GET(request: Request) {
 //      { acao: 'salvar_config', ...regras }                         → régua de cobrança
 //      { empresa_id, tipo: 'BOLETO' | 'PIX' } (sem acao)            → cobrança avulsa (legado)
 export async function POST(request: Request) {
-  if (!await verificarAdmin(request)) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
+  const admin = await verificarAdmin(request);
+  if (!admin) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
   let body: any;
   try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
   const db = supabaseAdmin();
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
     if ('dias_suspensao' in patch && patch.dias_suspensao < 5) return NextResponse.json({ erro: 'A suspensão precisa de pelo menos 5 dias de atraso.' }, { status: 422 });
     const { error } = await db.from('wegrow_cobranca_config').update(patch).eq('id', 1);
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    await registrarAuditoria(db, { ator: admin.email, acao: 'cobranca.regras', detalhe: patch });
     return NextResponse.json({ ok: true });
   }
 
@@ -77,10 +80,12 @@ export async function POST(request: Request) {
     if (acao === 'assinatura') {
       const forma = ['BOLETO', 'PIX', 'CREDIT_CARD', 'UNDEFINED'].includes(body.forma) ? body.forma : undefined;
       const r = await salvarAssinatura(db, empresa_id, { forma, proximoVencimento: body.proximo_vencimento || null });
+      await registrarAuditoria(db, { ator: admin.email, acao: 'cobranca.assinatura', empresaId: empresa_id, detalhe: { assinatura: r.assinatura.id, forma: forma || null } });
       return NextResponse.json({ ok: true, assinatura_id: r.assinatura.id, pagamentos: r.pagamentos, split: r.splitParceiro });
     }
     if (acao === 'cancelar_assinatura') {
       await cancelarAssinatura(db, empresa_id);
+      await registrarAuditoria(db, { ator: admin.email, acao: 'cobranca.cancelar_assinatura', empresaId: empresa_id });
       return NextResponse.json({ ok: true });
     }
     if (acao === 'sincronizar') {
@@ -89,6 +94,7 @@ export async function POST(request: Request) {
     }
     if (acao === 'liberar_acesso') {
       await db.from('empresas').update({ bloqueio_cobranca_em: null }).eq('id', empresa_id);
+      await registrarAuditoria(db, { ator: admin.email, acao: 'cobranca.liberar_acesso', empresaId: empresa_id });
       return NextResponse.json({ ok: true });
     }
   } catch (err: any) {

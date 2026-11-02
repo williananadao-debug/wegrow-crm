@@ -3,10 +3,29 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio, Wallet, Palette, Upload } from 'lucide-react';
+import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio, Wallet, Palette, Upload, History } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
+
+type RegistroAuditoria = {
+  id: number; criado_em: string; ator_email: string | null; ator_tipo: string; acao: string;
+  empresa_nome: string | null; parceiro_nome: string | null; detalhe: Record<string, unknown> | null;
+};
+
+const ACOES: Record<string, string> = {
+  'suporte.entrar_como': 'Entrou na conta (suporte)',
+  'senha.gerar': 'Gerou nova senha',
+  'empresa.criar': 'Criou empresa',
+  'empresa.alterar': 'Alterou empresa',
+  'cobranca.assinatura': 'Ativou/atualizou assinatura',
+  'cobranca.cancelar_assinatura': 'Cancelou assinatura',
+  'cobranca.liberar_acesso': 'Liberou acesso suspenso',
+  'cobranca.regras': 'Mudou a régua de cobrança',
+  'parceiro.alterar': 'Alterou parceiro',
+  'parceiro.logo_marca': 'Trocou o logo da marca',
+  'parceiro.usuarios': 'Mudou acessos do portal',
+};
 
 type Parceiro = {
   id: string; nome: string; logo_url: string | null; comissao_pct: number; ativo: boolean;
@@ -47,6 +66,16 @@ export default function AdminParceirosPage() {
   }, [user]);
 
   useEffect(() => { if (token) carregar(); }, [token]);
+
+  const [registros, setRegistros] = useState<RegistroAuditoria[] | null>(null);
+  const [avisoAuditoria, setAvisoAuditoria] = useState<string | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/admin/auditoria?limite=60', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { registros: [] })
+      .then(j => { setRegistros(j.registros || []); setAvisoAuditoria(j.aviso || null); })
+      .catch(() => setRegistros([]));
+  }, [token, parceiros]);
 
   const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` });
 
@@ -238,6 +267,34 @@ export default function AdminParceirosPage() {
             ))}
           </div>
         )}
+
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3"><History size={15} className="text-[#22C55E]"/> Registro de ações <span className="text-slate-500 font-normal">· quem fez o quê</span></h2>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl overflow-hidden">
+            {registros === null ? (
+              <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-600"/></div>
+            ) : registros.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-10">{avisoAuditoria || 'Nenhuma ação registrada ainda.'}</p>
+            ) : (
+              <ul className="divide-y divide-white/5">
+                {registros.map(r => (
+                  <li key={r.id} className="px-5 py-3 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-sm">
+                    <span className="text-xs text-slate-500 tabular-nums md:w-32 shrink-0">{new Date(r.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="font-semibold">{ACOES[r.acao] || r.acao}</span>
+                      {r.empresa_nome && <span className="text-slate-400"> · {r.empresa_nome}</span>}
+                      {r.parceiro_nome && <span className="text-slate-500"> · {r.parceiro_nome}</span>}
+                    </span>
+                    <span className="text-xs text-slate-500 truncate md:max-w-[240px]">
+                      <span className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${r.ator_tipo === 'parceiro' ? 'bg-sky-500/10 text-sky-300' : 'bg-white/5 text-slate-400'}`}>{r.ator_tipo === 'parceiro' ? 'Parceiro' : 'WeGrow'}</span>
+                      {r.ator_email || '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

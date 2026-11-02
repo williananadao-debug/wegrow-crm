@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin, criarEmpresaComDiretor, gerarLinkEntrarComo, resetarSenhaDiretor } from '@/lib/acessoEmpresa';
 import { modulosDoSetor } from '@/lib/catalogo';
+import { registrarAuditoria } from '@/lib/auditoria';
 
 export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
 type Parceiro = { id: string; nome: string; logo_url: string | null; comissao_pct: number; recebe_split: boolean };
+
+// E-mail de quem fez a requisição (pra auditoria) — guardado à parte pra não ir no JSON do portal
+const atorDaRequisicao = new WeakMap<Request, string>();
+
+const tipoAtor = (request: Request) => (ADMIN_EMAILS.includes(atorDaRequisicao.get(request) || '') ? 'wegrow' as const : 'parceiro' as const);
 
 // Quem chama é usuário de um parceiro (parceiro_usuarios.email) — ou admin da plataforma
 // abrindo o portal de um parceiro específico (?parceiro_id=) pra ver o que eles veem.
@@ -16,6 +22,7 @@ async function parceiroDaRequisicao(request: Request, db: SupabaseClient): Promi
   if (!token) return null;
   const { data: { user } } = await db.auth.getUser(token);
   if (!user?.email) return null;
+  atorDaRequisicao.set(request, user.email);
 
   const pedido = new URL(request.url).searchParams.get('parceiro_id');
   if (pedido && ADMIN_EMAILS.includes(user.email)) {
@@ -133,6 +140,7 @@ export async function POST(request: Request) {
     await db.from('empresas').update({ canal_origem: 'parceiro' }).eq('id', r.empresa.id);
     await anotarCredencial(db, r.empresa.id, `Criada pelo parceiro ${parceiro.nome} em ${hoje}. Login inicial: ${r.diretorEmail} · Senha temporária: ${r.senhaTemp}`);
     console.log(`[parceiro/criar] parceiro=${parceiro.nome} empresa=${r.empresa.id} nome=${nome}`);
+    await registrarAuditoria(db, { ator: atorDaRequisicao.get(request), tipo: tipoAtor(request), acao: 'empresa.criar', empresaId: r.empresa.id, parceiroId: parceiro.id, detalhe: { nome, diretor: r.diretorEmail } });
     return NextResponse.json({ id: r.empresa.id, nome: r.empresa.nome, email: r.diretorEmail, senha: r.senhaTemp, emailErro: r.emailErro }, { status: 201 });
   }
 
@@ -146,6 +154,7 @@ export async function POST(request: Request) {
       const r = await gerarLinkEntrarComo(db, empresa_id);
       if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });
       console.log(`[parceiro/entrar-como] parceiro=${parceiro.nome} empresa=${empresa_id} email=${r.email}`);
+      await registrarAuditoria(db, { ator: atorDaRequisicao.get(request), tipo: tipoAtor(request), acao: 'suporte.entrar_como', empresaId: empresa_id, parceiroId: parceiro.id, detalhe: { como: r.email } });
       return NextResponse.json({ link: r.link });
     }
 
@@ -153,6 +162,7 @@ export async function POST(request: Request) {
     if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });
     await anotarCredencial(db, empresa_id, `Senha resetada pelo parceiro ${parceiro.nome} em ${hoje}: ${r.email} · Nova senha: ${r.senha}`);
     console.log(`[parceiro/senha] parceiro=${parceiro.nome} empresa=${empresa_id}`);
+    await registrarAuditoria(db, { ator: atorDaRequisicao.get(request), tipo: tipoAtor(request), acao: 'senha.gerar', empresaId: empresa_id, parceiroId: parceiro.id });
     return NextResponse.json({ email: r.email, senha: r.senha });
   }
 

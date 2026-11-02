@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { supabaseAdmin, resetarSenhaDiretor } from '@/lib/acessoEmpresa';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,8 @@ async function verificarAdmin(request: Request) {
 // recuperar — isso dá um jeito de sempre conseguir voltar a logar numa empresa qualquer,
 // mesmo criada antes desse cuidado existir.
 export async function POST(request: Request) {
-  if (!await verificarAdmin(request))
+  const admin = await verificarAdmin(request);
+  if (!admin)
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   let body: any;
@@ -28,7 +30,9 @@ export async function POST(request: Request) {
   const { empresa_id } = body;
   if (!empresa_id) return NextResponse.json({ erro: 'empresa_id obrigatório.' }, { status: 422 });
 
-  const r = await resetarSenhaDiretor(supabaseAdmin(), empresa_id);
+  const db = supabaseAdmin();
+  const r = await resetarSenhaDiretor(db, empresa_id);
   if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });
+  await registrarAuditoria(db, { ator: admin.email, acao: 'senha.gerar', empresaId: empresa_id, detalhe: { login: r.email } });
   return NextResponse.json({ email: r.email, senha: r.senha });
 }

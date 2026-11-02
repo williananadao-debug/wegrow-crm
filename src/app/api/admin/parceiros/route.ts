@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { reaplicarSplitCarteira } from '@/lib/cobrancaWegrow';
 
@@ -46,7 +47,8 @@ export async function GET(request: Request) {
 //      { acao: 'logo_marca', id, imagemBase64, extensao }   → logo do produto do parceiro (marca dupla)
 //      { acao: 'add_usuario' | 'remover_usuario', id, email }
 export async function POST(request: Request) {
-  if (!await verificarAdmin(request))
+  const admin = await verificarAdmin(request);
+  if (!admin)
     return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
 
   let body: any;
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
     }
     const { error } = await db.from('parceiros').update(patch).eq('id', body.id);
     if (error) return NextResponse.json({ erro: error.code === '23505' ? 'Esse endereço já é usado por outro parceiro.' : error.message }, { status: 500 });
+    await registrarAuditoria(db, { ator: admin.email, acao: 'parceiro.alterar', parceiroId: body.id, detalhe: patch });
     // Comissão, carteira, base ou pausa mudaram → as assinaturas da carteira passam a dividir do jeito novo
     if (['comissao_pct', 'asaas_wallet_id', 'split_base', 'ativo'].some(c => c in patch) && process.env.ASAAS_API_KEY) {
       const r = await reaplicarSplitCarteira(db, body.id);
@@ -107,6 +110,7 @@ export async function POST(request: Request) {
     const { data: urlData } = db.storage.from('empresa-logos').getPublicUrl(path);
     const { error } = await db.from('parceiros').update({ marca_logo_url: urlData.publicUrl }).eq('id', body.id);
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    await registrarAuditoria(db, { ator: admin.email, acao: 'parceiro.logo_marca', parceiroId: body.id });
     return NextResponse.json({ ok: true, logoUrl: urlData.publicUrl });
   }
 
@@ -116,12 +120,14 @@ export async function POST(request: Request) {
   if (body.acao === 'add_usuario') {
     const { error } = await db.from('parceiro_usuarios').upsert({ parceiro_id: body.id, email }, { onConflict: 'parceiro_id,email' });
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    await registrarAuditoria(db, { ator: admin.email, acao: 'parceiro.usuarios', parceiroId: body.id, detalhe: { adicionou: email } });
     return NextResponse.json({ ok: true });
   }
 
   if (body.acao === 'remover_usuario') {
     const { error } = await db.from('parceiro_usuarios').delete().eq('parceiro_id', body.id).eq('email', email);
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    await registrarAuditoria(db, { ator: admin.email, acao: 'parceiro.usuarios', parceiroId: body.id, detalhe: { removeu: email } });
     return NextResponse.json({ ok: true });
   }
 

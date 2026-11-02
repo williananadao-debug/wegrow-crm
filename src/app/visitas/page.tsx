@@ -6,7 +6,7 @@ import {
   Navigation, Building2, Phone,
   Calendar, Search, Camera, Image as ImageIcon,
   Map, User, Sparkles, TrendingUp, AlertTriangle, ShieldAlert, Trash2,
-  SkipForward, Route, Tags, Download, FileText
+  SkipForward, Route, Tags, Download, FileText, Radar
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +20,8 @@ import { normalizarTexto, parsePalavrasChave, textoBuscavel, destacar } from './
 const RelatorioVisitas = dynamic(() => import('./RelatorioVisitas'), { ssr: false });
 
 const RotaMapa = dynamic(() => import('@/components/RotaMapa'), { ssr: false });
+const ProspeccaoMapa = dynamic(() => import('@/components/ProspeccaoMapa'), { ssr: false });
+const FichaClienteVisita = dynamic(() => import('./FichaClienteVisita'), { ssr: false });
 
 type Visita = {
   id: number;
@@ -490,6 +492,19 @@ export default function VisitasPage() {
     );
   }
 
+  // Prospecção ao redor: mapa com os comércios em volta do vendedor (carteira × não cadastrados).
+  // "Registrar visita" de lá abre o modal de visita já preenchido com o comércio escolhido.
+  const [prospeccaoAberta, setProspeccaoAberta] = useState(false);
+  function registrarVisitaDaProspeccao(d: { nome: string; telefone: string; cidade: string; clienteId: number | null }) {
+    setProspeccaoAberta(false);
+    setIsRotaModalOpen(false);
+    abrirModalNovaVisita();
+    setEmpresaVisita(d.nome);
+    setTelefone(d.telefone);
+    if (d.cidade) setCidade(d.cidade);
+    if (d.clienteId) { setClienteVisitaSelecionado(d.nome); setClienteVisitaSelecionadoId(d.clienteId); }
+  }
+
   function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -770,6 +785,13 @@ export default function VisitasPage() {
 
         {/* No celular: secundários só com ícone e o "Registrar" ocupando o resto da linha */}
         <div className="flex gap-2">
+          <button
+            onClick={() => setProspeccaoAberta(true)}
+            title="Comércios ao seu redor: quem já é cliente e quem ainda não está cadastrado"
+            className="flex items-center justify-center gap-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+          >
+            <Radar size={14} /> <span className="hidden md:inline">Ao redor</span>
+          </button>
           {temPulse && (
             <button
               onClick={abrirRotaDoDia}
@@ -1270,7 +1292,7 @@ export default function VisitasPage() {
       {/* MODAL: DETALHE DA VISITA */}
       {visitaDetalhe && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" onClick={() => setVisitaDetalhe(null)}>
-          <div className="bg-[#0B1120] border border-white/10 w-full max-w-md rounded-[28px] shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90dvh]" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#0B1120] border border-white/10 w-full max-w-xl rounded-[28px] shadow-2xl flex flex-col animate-in zoom-in-95 max-h-[90dvh]" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-white/10 flex justify-between items-start bg-blue-500/5 rounded-t-[28px] flex-shrink-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-black text-white">{visitaDetalhe.empresa}</h2>
@@ -1334,6 +1356,8 @@ export default function VisitasPage() {
                   </div>
                 )}
               </div>
+
+              <FichaClienteVisita visita={visitaDetalhe} empresaId={perfil?.empresa_id} nomesMap={nomesMap} />
 
               {visitaDetalhe.observacao && (
                 <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4">
@@ -1502,6 +1526,23 @@ export default function VisitasPage() {
         </div>
       )}
 
+      {prospeccaoAberta && perfil?.empresa_id && user?.id && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-2 md:p-4" onClick={() => setProspeccaoAberta(false)}>
+          <div className="bg-[#0B1120] border border-white/10 rounded-3xl w-full max-w-3xl shadow-2xl max-h-[94dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-white/10 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-black uppercase italic tracking-tighter text-white flex items-center gap-2"><Radar size={18} className="text-orange-400" /> Prospecção ao redor</h2>
+                <p className="text-[10px] text-slate-500 font-bold uppercase">Quem já é cliente, quem ainda não está cadastrado e o segmento de cada um</p>
+              </div>
+              <button onClick={() => setProspeccaoAberta(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="p-4 md:p-5 overflow-y-auto custom-scrollbar flex-1">
+              <ProspeccaoMapa empresaId={perfil.empresa_id} userId={user.id} onRegistrarVisita={registrarVisitaDaProspeccao} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {isRotaModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4" onClick={() => setIsRotaModalOpen(false)}>
           <div className="bg-[#0B1120] border border-white/10 rounded-3xl w-full max-w-lg sm:max-w-xl md:max-w-3xl shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1514,7 +1555,10 @@ export default function VisitasPage() {
                   {rotaDiaId ? 'Gerada pela liderança — acompanhe e ajuste aqui' : 'Nenhuma rota gerada ainda — busque clientes pra montar a sua'}
                 </p>
               </div>
-              <button onClick={() => setIsRotaModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setProspeccaoAberta(true)} title="Comércios ao seu redor" className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"><Radar size={12} /> Ao redor</button>
+                <button onClick={() => setIsRotaModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 space-y-4">

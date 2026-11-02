@@ -110,7 +110,8 @@ export default function CustomersPage() {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
-  const [busca, setBusca] = useState('');
+  // ?busca= vem da ficha do cliente na tela de Visitas ("Abrir cadastro completo")
+  const [busca, setBusca] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('busca') || '');
   const [statusFilter, setStatusFilter] = useState<'todos' | 'ativo' | 'inativo'>('ativo');
   const [riscoFilter, setRiscoFilter] = useState<'todos' | 'aprovado' | 'risco_moderado' | 'reprovado' | 'em_analise'>('todos');
   

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin, criarEmpresaComDiretor, gerarLinkEntrarComo, resetarSenhaDiretor } from '@/lib/acessoEmpresa';
+import { modulosDoSetor } from '@/lib/catalogo';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
     if (!diretorNome?.trim() || !diretorEmail?.trim()) return NextResponse.json({ erro: 'Nome e e-mail do responsável são obrigatórios.' }, { status: 422 });
 
     const r = await criarEmpresaComDiretor(db, {
-      nome: nome.trim(), cnpj: cnpj?.trim() || null, status: 'trial',
+      nome: nome.trim(), cnpj: cnpj?.trim() || null, status: 'trial', modulos: modulosDoSetor('radio'),
       diretorNome: diretorNome.trim(), diretorEmail: diretorEmail.trim().toLowerCase(), parceiroId: parceiro.id,
     });
     if ('erro' in r) return NextResponse.json({ erro: r.erro }, { status: r.status });

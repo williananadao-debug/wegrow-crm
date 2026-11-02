@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { AbaProps, headersAuth } from './types';
+import { SETORES, Setor, aplicarSetor } from '@/lib/catalogo';
 
 // "crm" é o macro-toggle: liga/desliga o produto inteiro de pipeline/vendas de uma vez.
 // Ausente no JSON (empresas criadas antes disso existir) conta como ligado — só desliga
@@ -41,6 +42,22 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
     }
   };
 
+  // Modelo de setor: liga o pacote de módulos do setor e desliga os de outros setores
+  // (add-ons comprados à parte, como assinatura e financeiro, ficam como estão).
+  const aplicarModelo = async (setor: Setor) => {
+    if (!confirm(`Aplicar o modelo "${SETORES[setor].nome}" em ${empresa.nome}? Módulos de outros setores serão desligados.`)) return;
+    const novo = aplicarSetor(empresa.modulos || {}, setor);
+    setModulos(novo);
+    setSalvando(true);
+    try {
+      const res = await fetch('/api/admin/empresas', { method: 'PATCH', headers: headersAuth(token), body: JSON.stringify({ id: empresa.id, modulos: novo }) });
+      if (!res.ok) { const json = await res.json().catch(() => ({})); alert(json.erro || 'Erro ao aplicar o modelo.'); }
+    } finally {
+      setSalvando(false);
+      onAtualizado();
+    }
+  };
+
   const Toggle = ({ label, chave, corAtivo, sufixo }: { label: string; chave: string; corAtivo: string; sufixo?: React.ReactNode }) => {
     const ativo = chave === 'crm' ? modulos.crm !== false : Boolean(modulos[chave]);
     return (
@@ -63,6 +80,16 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
       <div className="flex items-center justify-between">
         <p className="text-slate-400 text-xs">Clique pra ativar ou desativar. Salva em tempo real.</p>
         {salvando && <Loader2 size={14} className="animate-spin text-slate-500"/>}
+      </div>
+
+      <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+        <label className="text-xs font-medium text-slate-400 mb-1.5 block">Modelo de setor</label>
+        <select value={String(modulos.setor || '')} onChange={e => e.target.value && aplicarModelo(e.target.value as Setor)}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none">
+          <option value="" className="bg-[#0B1120]">Sem modelo (módulos avulsos)</option>
+          {(Object.keys(SETORES) as Setor[]).map(s => <option key={s} value={s} className="bg-[#0B1120]">{SETORES[s].nome} — {SETORES[s].descricao}</option>)}
+        </select>
+        <p className="text-[11px] text-slate-500 mt-1.5">Define o que a empresa enxerga (menus, cargos, funil). Os módulos abaixo continuam ajustáveis um a um.</p>
       </div>
 
       {/* Só marca o badge "Demo" na lista — não é módulo de produto, é rótulo interno.

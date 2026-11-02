@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Edit2, X, ShieldAlert, Plus, Loader2, Fingerprint, KeyRound, Search, Mail, MapPin, UserX, UserCheck, Factory, Printer, Upload } from 'lucide-react';
+import { temRecurso } from '@/lib/catalogo';
 import { loginCurto, slugLogin } from '@/lib/loginSemEmail';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
@@ -21,9 +22,12 @@ export default function TeamPage() {
   const perfil = auth.perfil;
   
   const isDirector = perfil?.cargo === 'diretor';
-  // Acessos sem e-mail e o cargo de almoxarifado são da operação de fábrica (Pulse) — numa empresa
-  // só de CRM não fazem sentido e confundiam o cadastro da equipe.
-  const temPulse = Boolean(auth.empresa?.modulos?.pulse);
+  // O que a equipe pode ter depende dos módulos da empresa (lib/catalogo): acessos sem e-mail e
+  // almoxarifado são da fábrica (Pulse), OPEC é da rádio — numa empresa só de CRM não aparecem.
+  const modulosEmpresa = auth.empresa?.modulos;
+  const temPulse = temRecurso(modulosEmpresa, 'equipe.acessos_sem_email');
+  const podeProducao = temRecurso(modulosEmpresa, 'equipe.cargo_producao');
+  const podeOpec = temRecurso(modulosEmpresa, 'equipe.cargo_opec');
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   const [members, setMembers] = useState<any[]>([]);
@@ -426,11 +430,11 @@ export default function TeamPage() {
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-1 mb-1 block">Cargo</label>
                             <select className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold" value={editCargo} onChange={e => setEditCargo(e.target.value)}>
                                 <option value="vendedor">Vendedor</option>
-                                <option value="producao">Produção</option>
-                                {(temPulse || editCargo === 'almoxarifado') && <option value="almoxarifado">Almoxarifado</option>}
+                                {(podeProducao || editCargo === 'producao') && <option value="producao">Produção</option>}
+                                {(temRecurso(modulosEmpresa, 'equipe.cargo_almoxarifado') || editCargo === 'almoxarifado') && <option value="almoxarifado">Almoxarifado</option>}
                                 <option value="gerente">Gerente</option>
                                 <option value="diretor">Diretor (Admin)</option>
-                                <option value="opec">Opec</option>
+                                {(podeOpec || editCargo === 'opec') && <option value="opec">Opec</option>}
                             </select>
                         </div>
                         <div>

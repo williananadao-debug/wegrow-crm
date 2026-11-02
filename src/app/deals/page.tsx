@@ -12,6 +12,7 @@ import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
 import ItensFabrica from './ItensFabrica';
+import { temRecurso } from '@/lib/catalogo';
 import { CDL } from '@/lib/cdl-config';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -259,7 +260,7 @@ export default function DealsPage() {
   const isCDL = Boolean(empresa?.modulos?.cdl);
   const isVeiculos = Boolean(empresa?.modulos?.veiculos);
   // Empresa com Pulse + CRM = fábrica: catálogo com foto/opcionais e funil técnico.
-  const modoFabrica = !isCDL && Boolean(empresa?.modulos?.pulse) && empresa?.modulos?.crm !== false;
+  const modoFabrica = !isCDL && temRecurso(empresa?.modulos, 'vendas.funil_fabrica');
   const ACTIVE_STAGES = isCDL ? CDL_STAGES : modoFabrica ? FABRICA_STAGES : STAGES;
 
   const [leads, setLeads] = useState<Lead[]>([]);

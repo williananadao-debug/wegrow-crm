@@ -19,6 +19,7 @@ import AbaMetricas from './abas/AbaMetricas';
 import AbaFaturamento from './abas/AbaFaturamento';
 import AbaPortais from './abas/AbaPortais';
 import AbaDocumentos from './abas/AbaDocumentos';
+import { SETORES, Setor, modulosDoSetor } from '@/lib/catalogo';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
@@ -89,6 +90,7 @@ export default function AdminPage() {
   const [novaEmpresaDiretorNome, setNovaEmpresaDiretorNome] = useState('');
   const [novaEmpresaDiretorEmail, setNovaEmpresaDiretorEmail] = useState('');
   const [novaEmpresaDemo, setNovaEmpresaDemo] = useState(false);
+  const [novaEmpresaSetor, setNovaEmpresaSetor] = useState<Setor>('comercio_servicos');
   const [novaEmpresaFeedback, setNovaEmpresaFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
   const [novaEmpresaCredenciais, setNovaEmpresaCredenciais] = useState<{ email: string; senha: string } | null>(null);
   const [credenciaisCopiadas, setCredenciaisCopiadas] = useState(false);
@@ -193,7 +195,7 @@ export default function AdminPage() {
         headers: headers(),
         body: JSON.stringify({
           nome: novaEmpresaNome, cnpj: novaEmpresaCnpj, diretorNome: novaEmpresaDiretorNome, diretorEmail: novaEmpresaDiretorEmail,
-          modulos: novaEmpresaDemo ? { demo: true } : undefined,
+          modulos: modulosDoSetor(novaEmpresaSetor, novaEmpresaDemo ? { demo: true } : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -747,6 +749,11 @@ export default function AdminPage() {
             <form onSubmit={criarEmpresa} className="space-y-3">
               <CampoAdmin label="Nome da empresa"><input required value={novaEmpresaNome} onChange={e => setNovaEmpresaNome(e.target.value)} className={INPUT}/></CampoAdmin>
               <CampoAdmin label="CNPJ" opcional><input value={novaEmpresaCnpj} onChange={e => setNovaEmpresaCnpj(e.target.value)} className={INPUT}/></CampoAdmin>
+              <CampoAdmin label="Setor (modelo)">
+                <select value={novaEmpresaSetor} onChange={e => setNovaEmpresaSetor(e.target.value as Setor)} className={INPUT}>
+                  {(Object.keys(SETORES) as Setor[]).map(s => <option key={s} value={s} className="bg-[#0B1120]">{SETORES[s].nome} — {SETORES[s].descricao}</option>)}
+                </select>
+              </CampoAdmin>
               <div className="pt-3 border-t border-white/[0.06]">
                 <p className="text-xs text-slate-400 mb-3">Primeiro diretor — obrigatório, sem ele a empresa fica invisível.</p>
                 <div className="space-y-3">

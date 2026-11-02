@@ -99,11 +99,14 @@ export default function DashboardPage() {
         // quase zerados). Busca em páginas ordenadas por id até acabar.
         const buscarTodosLeads = async () => {
             const todos: any[] = [];
-            for (let de = 0; ; de += 1000) {
-                const { data, error } = await leadsQuery().order('id').range(de, de + 999);
-                if (error) return { data: todos.length ? todos : null, error };
-                todos.push(...(data || []));
-                if (!data || data.length < 1000) return { data: todos, error: null };
+            for (let de = 0; ; de += 4000) {
+                // 4 páginas em paralelo por vez — uma a uma deixava o painel lento
+                const lote = await Promise.all([0, 1, 2, 3].map(i => leadsQuery().order('id').range(de + i * 1000, de + i * 1000 + 999)));
+                for (const { data, error } of lote) {
+                    if (error) return { data: todos.length ? todos : null, error };
+                    todos.push(...(data || []));
+                    if (!data || data.length < 1000) return { data: todos, error: null };
+                }
             }
         };
 
@@ -146,7 +149,8 @@ export default function DashboardPage() {
   const vendedoresDisponiveis = useMemo(() => rawPerfis.filter((p: any) => p.nome).sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')), [rawPerfis]);
 
   const { ranking, statsComercial, previsaoFechamento, contratosVencendo, followupsHoje, followupsAtrasados } = useMemo(() => {
-      const nomesMap = rawPerfis.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
+      const nomesMap: Record<string, string> = {};
+      for (const p of rawPerfis) nomesMap[p.id] = p.nome;
       const leadsFiltrados = rawLeads.filter(lead => {
           if (filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
           if (vendedorSelecionado && vendedorSelecionado !== 'Todos') {

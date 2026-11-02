@@ -117,13 +117,16 @@ export default function ReportsPage() {
   // O Supabase entrega no máximo 1000 linhas por consulta, mesmo com .limit(5000) — o resto
   // sumia calado (mês com venda faltando, cidade de cliente "não informada"). Busca em páginas
   // de 1000 até acabar; montar() precisa devolver uma query nova a cada chamada.
+  // As páginas vêm de 4 em 4 em paralelo (uma a uma deixava o relatório lento).
   async function paginar(montar: () => any, max = LIMITE_LINHAS) {
     const todos: any[] = [];
-    for (let de = 0; de < max; de += 1000) {
-      const { data, error } = await montar().range(de, de + 999);
-      if (error) return { data: todos, error };
-      todos.push(...(data || []));
-      if (!data || data.length < 1000) break;
+    for (let de = 0; de < max; de += 4000) {
+      const lote = await Promise.all([0, 1, 2, 3].map(i => montar().range(de + i * 1000, de + i * 1000 + 999)));
+      for (const { data, error } of lote) {
+        if (error) return { data: todos, error };
+        todos.push(...(data || []));
+        if (!data || data.length < 1000) return { data: todos, error: null };
+      }
     }
     return { data: todos, error: null };
   }
@@ -221,18 +224,21 @@ export default function ReportsPage() {
         return q;
       });
 
-      const [leadsRes, graficoRes, premissasRes, profilesRes, clientesRes, visitasRes] = await Promise.all([
+      // Clientes só completam o mapa de cidades e a exportação: chegam em segundo plano, sem
+      // segurar a tela.
+      clientesQuery.then(r => setRawClientes(r.data || [])).catch(e => console.error('[reports] clientes', e));
+
+      const [leadsRes, graficoRes, premissasRes, profilesRes, visitasRes] = await Promise.all([
         buildLeadsQuery(),
         graficoQuery,
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         perfil?.empresa_id
           ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
           : supabase.from('profiles').select('id, nome'),
-        clientesQuery,
         buildVisitasQuery(),
       ]);
 
-      setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawClientes(clientesRes.data || []); setRawVisitas(visitasRes.data || []);
+      setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawVisitas(visitasRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
   }
 
@@ -244,10 +250,30 @@ export default function ReportsPage() {
     } catch (error) { console.error("Erro ao buscar dados do período:", error); } finally { setLoading(false); }
   }
 
+  // Índices dos clientes montados uma vez por carga (não a cada troca de filtro). Antes era um
+  // reduce com spread ({...acc}) — O(n²): com todos os clientes carregados (milhares) travava a
+  // aba inteira, inclusive o menu.
+  const indiceClientes = useMemo(() => {
+    const cidadePorId: Record<number, string> = {};
+    const porNome = new Map<string, string>();
+    const nomes: { normName: string; cidade: string }[] = [];
+    for (const c of rawClientes) {
+      const cidade = c.cidade || c.bairro || '';
+      if (cidade) cidadePorId[c.id] = cidade;
+      for (const n of [c.nome_empresa, c.nome_fantasia]) {
+        const normName = normalizeString(n || '');
+        if (!normName || !cidade) continue;
+        if (!porNome.has(normName)) porNome.set(normName, cidade);
+        if (normName.length >= 4) nomes.push({ normName, cidade });
+      }
+    }
+    return { cidadePorId, porNome, nomes };
+  }, [rawClientes]);
+
   const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
-      const nomesMap = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
-      const cidadesById = rawClientes.reduce((acc: any, c) => ({ ...acc, [c.id]: (c.cidade || c.bairro) }), {});
-      const clientesNormalizados = rawClientes.flatMap(c => [c.nome_empresa, c.nome_fantasia].map(n => ({ ...c, normName: normalizeString(n || '') }))).filter(c => c.normName);
+      const nomesMap: Record<string, string> = {};
+      for (const p of rawProfiles) nomesMap[p.id] = p.nome;
+      const cidadesById = indiceClientes.cidadePorId;
       // Cidade registrada pelo GPS na visita que virou o lead — último recurso pro mapa de cidades
       const cidadePorLeadVisita: Record<number, string> = {};
       rawVisitas.forEach((v: any) => { if (v.lead_id && v.cidade && !cidadePorLeadVisita[v.lead_id]) cidadePorLeadVisita[v.lead_id] = v.cidade; });
@@ -290,7 +316,10 @@ export default function ReportsPage() {
           let rawCity = lead.cidade; if (!rawCity && lead.client_id) rawCity = cidadesById[lead.client_id];
           if (!rawCity) { 
               const rawLeadName = lead.empresa || ''; const cleanLeadName = normalizeString(rawLeadName as string);
-              if (cleanLeadName && cleanLeadName.length >= 3) { const clienteEncontrado = clientesNormalizados.find(c => c.normName === cleanLeadName || c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName)); if (clienteEncontrado) rawCity = clienteEncontrado.cidade || clienteEncontrado.bairro; }
+              if (cleanLeadName && cleanLeadName.length >= 3) {
+                  rawCity = indiceClientes.porNome.get(cleanLeadName)
+                    || indiceClientes.nomes.find(c => c.normName.includes(cleanLeadName) || cleanLeadName.includes(c.normName))?.cidade;
+              }
           }
           if (!rawCity) rawCity = cidadePorLeadVisita[lead.id];
           if (!rawCity || !String(rawCity).trim()) rawCity = '';
@@ -415,10 +444,11 @@ export default function ReportsPage() {
         : 0;
 
       return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral };
-  }, [rawLeads, rawPremissas, rawProfiles, rawClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
+  }, [rawLeads, rawPremissas, rawProfiles, indiceClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
 
   const graficoMensal = useMemo(() => {
-    const nomesMapGraf = rawProfiles.reduce((acc: any, p) => ({ ...acc, [p.id]: p.nome }), {});
+    const nomesMapGraf: Record<string, string> = {};
+    for (const p of rawProfiles) nomesMapGraf[p.id] = p.nome;
     const filtrado = rawLeadsGrafico.filter(lead => {
       if (!isGerente && filtroUnidade !== 'Todas' && lead.unidade !== filtroUnidade) return false;
       if (filtroVendedor !== 'Todos' && lead.user_id !== filtroVendedor && lead.vendedor_nome !== nomesMapGraf[filtroVendedor]) return false;
@@ -469,7 +499,9 @@ export default function ReportsPage() {
 
   const getGrowth = (current: number, last: number) => { if (last === 0) return current > 0 ? 100 : 0; return ((current - last) / last) * 100; };
 
-  if (loading && !rawLeads.length) return <SkeletonPage />;
+  // Só os blocos que dependem da carga principal esperam; filtros e o material semanal (que
+  // busca a própria semana) aparecem na hora.
+  const carregandoInicial = loading && !rawLeads.length;
 
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
@@ -560,6 +592,7 @@ export default function ReportsPage() {
 
       <MaterialSemanal />
 
+      {carregandoInicial ? <SkeletonPage /> : <>
       {/* COMPARATIVOS KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
 
@@ -1190,6 +1223,7 @@ export default function ReportsPage() {
             </div>
         </div>
       )}
+      </>}
 
     </div>
   );

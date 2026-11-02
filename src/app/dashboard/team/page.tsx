@@ -21,6 +21,9 @@ export default function TeamPage() {
   const perfil = auth.perfil;
   
   const isDirector = perfil?.cargo === 'diretor';
+  // Acessos sem e-mail e o cargo de almoxarifado são da operação de fábrica (Pulse) — numa empresa
+  // só de CRM não fazem sentido e confundiam o cadastro da equipe.
+  const temPulse = Boolean(auth.empresa?.modulos?.pulse);
   const { unidades } = useUnidades(perfil?.empresa_id);
 
   const [members, setMembers] = useState<any[]>([]);
@@ -319,9 +322,11 @@ export default function TeamPage() {
           </div>
           {isDirector && (
               <div className="flex flex-wrap gap-2">
+                  {temPulse && (
                   <button onClick={abrirLote} title="Cria vários acessos sem e-mail (login + senha) — pra equipe de fábrica" className="bg-white/5 border border-white/10 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2">
                       <Factory size={16}/> Acessos da fábrica
                   </button>
+                  )}
                   <button onClick={abrirModalNovo} className="bg-[#22C55E] text-[#0B1120] px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-2">
                       <Plus size={16}/> Adicionar Membro
                   </button>
@@ -422,7 +427,7 @@ export default function TeamPage() {
                             <select className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm font-bold" value={editCargo} onChange={e => setEditCargo(e.target.value)}>
                                 <option value="vendedor">Vendedor</option>
                                 <option value="producao">Produção</option>
-                                <option value="almoxarifado">Almoxarifado</option>
+                                {(temPulse || editCargo === 'almoxarifado') && <option value="almoxarifado">Almoxarifado</option>}
                                 <option value="gerente">Gerente</option>
                                 <option value="diretor">Diretor (Admin)</option>
                                 <option value="opec">Opec</option>

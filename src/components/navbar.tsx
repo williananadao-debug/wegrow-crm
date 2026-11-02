@@ -121,6 +121,7 @@ export default function Navbar() {
       (isDirector || isManager) ? { name: 'Relatórios', icon: <BarChart3 size={20} />, href: '/reports' } : null,
       { name: 'Metas',      icon: <Target size={20} />,          href: '/goals' },
       { name: isCDL ? 'Prospecção' : 'Vendas', icon: <Zap size={20} />, href: '/deals' },
+      opecHabilitado ? { name: 'Audiência', icon: <Radio size={20} />, href: '/audiencia' } : null,
       mostrarOpec ? { name: 'Produção',   icon: <Briefcase size={20} />,  href: '/jobs' }     : null,
       isCDL ? { name: 'Base CDL', icon: <UsersRound size={20} />, href: '/associados' } : null,
       (isDirector || isManager) ? { name: 'Minha Equipe', icon: <ShieldCheck size={20} />, href: '/dashboard/team' } : null,

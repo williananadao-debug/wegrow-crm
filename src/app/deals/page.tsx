@@ -21,6 +21,7 @@ import { localDb } from '@/lib/localDb';
 import { syncOfflineDataToCloud } from '@/lib/syncService';
 import { useUnidades } from '@/lib/useUnidades';
 import dynamic from 'next/dynamic';
+import PainelAudienciaPlano from './PainelAudienciaPlano';
 
 const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
@@ -2658,6 +2659,9 @@ export default function DealsPage() {
                               </div>
                             </div>
                           </div>
+                        )}
+                        {!modoFabrica && Boolean(empresa?.modulos?.opec) && novaUnidade && itensTemporarios.length > 0 && (
+                          <PainelAudienciaPlano empresaId={perfil?.empresa_id} unidade={novaUnidade} itens={itensTemporarios} valorTotal={valorTotalOverride !== null ? valorTotalOverride : totalModalCalculado} />
                         )}
                     </div>
 

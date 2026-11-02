@@ -33,6 +33,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/cobranca-wegrow",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/nf-wegrow",
       "schedule": "30 12 * * *"
     },

@@ -9,14 +9,29 @@ import {
 } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
-type Parceiro = { id: string; nome: string; logo_url: string | null; comissao_pct: number };
+type Parceiro = { id: string; nome: string; logo_url: string | null; comissao_pct: number; recebe_split?: boolean };
 type Emissora = {
   id: string; nome: string; cnpj: string | null; plano: string; status: string; demo: boolean;
   logo_url: string | null; cor_primaria: string | null; created_at: string; cancelado_em: string | null;
   total_usuarios: number; usuarios_ativos_7d: number; ultimo_acesso: string | null;
   leads_mes: number; leads_total: number; diretor_nome: string | null; diretor_email: string | null;
   valor_mensal: number; proximo_vencimento: string | null;
+  assinatura_ativa?: boolean; em_atraso_desde?: string | null; suspensa?: boolean;
 };
+type LinhaExtrato = {
+  asaas_payment_id: string; empresa_id: string; empresa_nome: string; competencia: string | null; vencimento: string | null;
+  valor: number; status: string; pago_em: string | null; split_valor: number | null; split_status: string | null;
+};
+
+const PAGO = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+const dataCurta = (d: string | null) => (d ? d.substring(0, 10).split('-').reverse().join('/') : '—');
+function situacaoRepasse(l: LinhaExtrato): { label: string; cor: string } {
+  if (l.status === 'REFUNDED') return { label: 'Estornado', cor: 'text-amber-300' };
+  if (!PAGO.includes(l.status)) return l.status === 'OVERDUE' ? { label: 'Cliente em atraso', cor: 'text-red-400' } : { label: 'Aguardando pagamento', cor: 'text-slate-400' };
+  if (l.split_status === 'DONE') return { label: 'Na sua conta', cor: 'text-[#22C55E]' };
+  if (l.split_valor != null) return { label: 'A creditar', cor: 'text-sky-300' };
+  return { label: 'Pago (sem split)', cor: 'text-slate-400' };
+}
 type Filtro = 'todas' | 'ativa' | 'trial' | 'suspensa';
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -74,6 +89,7 @@ export default function PortalParceiroPage() {
   const [token, setToken] = useState('');
   const [parceiro, setParceiro] = useState<Parceiro | null>(null);
   const [radios, setRadios] = useState<Emissora[]>([]);
+  const [extrato, setExtrato] = useState<LinhaExtrato[]>([]);
   const [loading, setLoading] = useState(true);
   const [semAcesso, setSemAcesso] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -118,6 +134,7 @@ export default function PortalParceiroPage() {
       if (!res.ok) { setErro(json.erro || 'Erro ao carregar a carteira.'); return; }
       setParceiro(json.parceiro);
       setRadios(json.empresas);
+      setExtrato(json.extrato || []);
     } catch (err: any) {
       setErro(err?.message === 'Failed to fetch' ? 'Não consegui carregar — confira sua conexão e tente de novo.' : (err?.message || 'Erro ao carregar.'));
     } finally {
@@ -190,9 +207,13 @@ export default function PortalParceiroPage() {
       .map(r => ({ r, tipo: 'teste' as const, texto: `Em teste há ${diasDesde(r.created_at)} dias — hora de fechar` })),
     ...carteira.filter(r => r.status !== 'suspensa' && (diasDesde(r.ultimo_acesso) ?? 99) > 7)
       .map(r => ({ r, tipo: 'parada' as const, texto: r.ultimo_acesso ? `Ninguém entra há ${diasDesde(r.ultimo_acesso)} dias` : 'Equipe ainda não acessou' })),
-    ...ativas.filter(r => r.proximo_vencimento && r.proximo_vencimento < hoje)
-      .map(r => ({ r, tipo: 'pagamento' as const, texto: 'Mensalidade em atraso' })),
+    ...ativas.filter(r => r.suspensa || r.em_atraso_desde || (!r.assinatura_ativa && r.proximo_vencimento && r.proximo_vencimento < hoje))
+      .map(r => ({ r, tipo: 'pagamento' as const, texto: r.suspensa ? 'Acesso suspenso por falta de pagamento' : r.em_atraso_desde ? `Mensalidade em atraso desde ${dataCurta(r.em_atraso_desde)}` : 'Mensalidade em atraso' })),
   ];
+
+  const mesAtual = hoje.substring(0, 7);
+  const recebidoMes = extrato.filter(l => PAGO.includes(l.status) && (l.pago_em || '').startsWith(mesAtual)).reduce((s, l) => s + Number(l.split_valor || 0), 0);
+  const aReceber = extrato.filter(l => l.status === 'PENDING' || l.status === 'OVERDUE').reduce((s, l) => s + Number(l.split_valor || 0), 0);
 
   const contagem: Record<Filtro, number> = { todas: carteira.length, ativa: ativas.length, trial: emTeste.length, suspensa: carteira.filter(r => r.status === 'suspensa').length };
   const lista = radios
@@ -405,6 +426,7 @@ export default function PortalParceiroPage() {
                 { icone: <GraduationCap size={14}/>, titulo: 'Treinamento', texto: 'Acompanhe o “Uso da equipe” — rádio parada é sinal de treinamento pendente.' },
                 { icone: <Headphones size={14}/>, titulo: 'Suporte', texto: 'O botão Suporte abre a conta da rádio como o responsável, para ver exatamente o que ele vê.' },
                 { icone: <Handshake size={14}/>, titulo: 'Fechamento', texto: 'Quando a rádio fechar, avise a WeGrow — ela vira cliente e entra na sua comissão.' },
+                { icone: <Wallet size={14}/>, titulo: 'Comissão', texto: 'Cada mensalidade paga já cai dividida: a sua parte vai direto para a sua conta Asaas. Emita a nota da comissão para a WeGrow todo mês.' },
               ].map((p, i) => (
                 <div key={i} className="flex gap-3">
                   <span className="w-8 h-8 rounded-xl bg-white/5 text-slate-300 flex items-center justify-center shrink-0">{p.icone}</span>
@@ -417,6 +439,54 @@ export default function PortalParceiroPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Extrato da comissão */}
+      <div className="bg-[#0F172A] border border-white/5 rounded-3xl p-5 md:p-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
+          <div>
+            <p className="text-[10px] font-black text-[#22C55E] uppercase tracking-widest flex items-center gap-1.5"><CircleDollarSign size={12}/> Extrato da comissão</p>
+            <p className="text-xs text-slate-500 mt-1">Mensalidades das suas rádios nos últimos 6 meses e a sua parte de cada uma.</p>
+          </div>
+          <div className="flex gap-6">
+            <div><p className="text-[10px] text-slate-500 font-bold uppercase">Recebido no mês</p><p className="text-lg font-black text-[#22C55E]">{brl(recebidoMes)}</p></div>
+            <div><p className="text-[10px] text-slate-500 font-bold uppercase">A receber</p><p className="text-lg font-black">{brl(aReceber)}</p></div>
+          </div>
+        </div>
+        {parceiro && parceiro.recebe_split === false && (
+          <p className="text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-4 py-3 mb-4">Sua conta Asaas ainda não foi informada à WeGrow. Envie o seu walletId (app do Asaas → Minha conta → Integrações) para a comissão cair sozinha a cada pagamento.</p>
+        )}
+        {extrato.length === 0 ? (
+          <p className="text-sm text-slate-500 text-center py-8 border border-dashed border-white/10 rounded-2xl">Nenhuma mensalidade ainda. Quando uma rádio da sua carteira virar cliente com assinatura, os pagamentos aparecem aqui.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-slate-500 uppercase tracking-widest text-left border-b border-white/5">
+                  <th className="font-black py-2.5 pr-3">Rádio</th>
+                  <th className="font-black py-2.5 pr-3">Vencimento</th>
+                  <th className="font-black py-2.5 pr-3 text-right">Mensalidade</th>
+                  <th className="font-black py-2.5 pr-3 text-right">Sua comissão</th>
+                  <th className="font-black py-2.5">Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {extrato.map(l => {
+                  const s = situacaoRepasse(l);
+                  return (
+                    <tr key={l.asaas_payment_id} className="border-b border-white/[0.04] last:border-0">
+                      <td className="py-3 pr-3 font-bold">{l.empresa_nome}</td>
+                      <td className="py-3 pr-3 text-slate-400 tabular-nums">{dataCurta(l.vencimento)}</td>
+                      <td className="py-3 pr-3 text-right tabular-nums">{brl(Number(l.valor))}</td>
+                      <td className="py-3 pr-3 text-right font-black tabular-nums">{l.split_valor != null ? brl(Number(l.split_valor)) : '—'}</td>
+                      <td className={`py-3 text-xs font-bold ${s.cor}`}>{s.label}{PAGO.includes(l.status) && l.pago_em ? <span className="text-slate-600 font-normal"> · pago {dataCurta(l.pago_em)}</span> : null}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Modal Nova rádio */}

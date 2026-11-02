@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { salvarAssinatura } from '@/lib/cobrancaWegrow';
 import { supabaseAdmin, criarEmpresaComDiretor } from '@/lib/acessoEmpresa';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,7 @@ export async function GET(request: Request) {
       canal_origem: emp?.canal_origem || null,
       parceiro_id: emp?.parceiro_id || null,
       cancelado_em: emp?.cancelado_em || null,
+      bloqueio_cobranca_em: emp?.bloqueio_cobranca_em || null,
       total_usuarios: t.total,
       configurado: !!emp,
     };
@@ -119,6 +121,14 @@ export async function PATCH(request: Request) {
     if (error) {
       console.error('[admin/empresas] PATCH (update) error:', error);
       return NextResponse.json({ erro: error.message }, { status: 500 });
+    }
+    // Trocou de parceiro: a assinatura passa a dividir (ou deixa de dividir) com o novo
+    if ('parceiro_id' in patch && process.env.ASAAS_API_KEY) {
+      const { data: billing } = await db.from('clientes_wegrow').select('assinatura_status').eq('empresa_id', id).maybeSingle();
+      if (billing?.assinatura_status === 'ativa') {
+        try { await salvarAssinatura(db, id, {}); }
+        catch (err) { console.error('[admin/empresas] split da assinatura não atualizado', err); }
+      }
     }
     return NextResponse.json(data);
   }

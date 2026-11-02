@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 
 const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 const GlobalSearch = dynamic(() => import('@/components/GlobalSearch'), { ssr: false });
+const PendenciaCobranca = dynamic(() => import('@/components/PendenciaCobranca'), { ssr: false });
 
 interface LayoutWrapperProps {
   children: ReactNode;
@@ -23,8 +24,9 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   // próprio (ex: Argus) — os dois pulam o Navbar/Topbar padrão, por motivos
   // diferentes; o gate de autenticação de verdade continua em AuthContext/RLS,
   // isso aqui só decide qual casca visual desenhar.
-  if (isPublicPage(pathname) || hasCustomShell(pathname)) {
-    return <>{children}</>;
+  if (isPublicPage(pathname)) return <>{children}</>;
+  if (hasCustomShell(pathname)) {
+    return <>{children}<PendenciaCobranca /></>;
   }
 
   return (
@@ -49,6 +51,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
         <OnboardingTour />
         {/* Busca global mostra leads/clientes — fora do alcance de cargos restritos (fábrica, almoxarifado). */}
         {!ehCargoRestrito(auth.perfil?.cargo) && <GlobalSearch />}
+        <PendenciaCobranca />
       </div>
     </div>
   );

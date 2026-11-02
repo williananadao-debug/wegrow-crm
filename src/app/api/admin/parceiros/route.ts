@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
+import { reaplicarSplitCarteira } from '@/lib/cobrancaWegrow';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
 }
 
 // POST { acao: 'criar', nome, comissao_pct }
-//      { acao: 'atualizar', id, nome?, comissao_pct?, ativo?, logo_url? }
+//      { acao: 'atualizar', id, nome?, comissao_pct?, ativo?, logo_url?, asaas_wallet_id?, split_base? }
 //      { acao: 'add_usuario' | 'remover_usuario', id, email }
 export async function POST(request: Request) {
   if (!await verificarAdmin(request))
@@ -61,7 +63,9 @@ export async function POST(request: Request) {
 
   if (body.acao === 'atualizar') {
     const patch: Record<string, any> = {};
-    for (const campo of ['nome', 'comissao_pct', 'ativo', 'logo_url']) if (campo in body) patch[campo] = body[campo];
+    for (const campo of ['nome', 'comissao_pct', 'ativo', 'logo_url', 'asaas_wallet_id', 'split_base']) if (campo in body) patch[campo] = body[campo];
+    if ('asaas_wallet_id' in patch) patch.asaas_wallet_id = String(patch.asaas_wallet_id || '').trim() || null;
+    if ('split_base' in patch && !['bruto', 'liquido'].includes(patch.split_base)) return NextResponse.json({ erro: 'Base do split inválida.' }, { status: 422 });
     if ('comissao_pct' in patch) {
       const pct = Number(patch.comissao_pct);
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) return NextResponse.json({ erro: 'Comissão precisa estar entre 0 e 100%.' }, { status: 422 });
@@ -69,6 +73,11 @@ export async function POST(request: Request) {
     }
     const { error } = await db.from('parceiros').update(patch).eq('id', body.id);
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    // Comissão, carteira, base ou pausa mudaram → as assinaturas da carteira passam a dividir do jeito novo
+    if (['comissao_pct', 'asaas_wallet_id', 'split_base', 'ativo'].some(c => c in patch) && process.env.ASAAS_API_KEY) {
+      const r = await reaplicarSplitCarteira(db, body.id);
+      return NextResponse.json({ ok: true, assinaturas_atualizadas: r.atualizadas, erros: r.erros });
+    }
     return NextResponse.json({ ok: true });
   }
 

@@ -3,13 +3,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio } from 'lucide-react';
+import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio, Wallet } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
 type Parceiro = {
   id: string; nome: string; logo_url: string | null; comissao_pct: number; ativo: boolean;
+  asaas_wallet_id: string | null; split_base: 'bruto' | 'liquido';
   usuarios: string[]; radios_ativas: number; radios_teste: number;
 };
 
@@ -22,6 +23,7 @@ export default function AdminParceirosPage() {
   const [emailNovo, setEmailNovo] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState('');
+  const [split, setSplit] = useState<Record<string, { wallet: string; base: 'bruto' | 'liquido' }>>({});
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -49,6 +51,10 @@ export default function AdminParceirosPage() {
       const res = await fetch('/api/admin/parceiros', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { alert(json.erro || `Erro (HTTP ${res.status}).`); return false; }
+      if (json.assinaturas_atualizadas || json.erros?.length) {
+        const falhas = json.erros?.length ? `\n\nNão atualizadas:\n${json.erros.join('\n')}` : '';
+        alert(`${json.assinaturas_atualizadas || 0} assinatura(s) da carteira atualizada(s) no Asaas.${falhas}`);
+      }
       await carregar();
       return true;
     } finally { setSalvando(null); }
@@ -117,6 +123,35 @@ export default function AdminParceirosPage() {
                     </a>
                   </div>
                 </div>
+
+                {(() => {
+                  const s = split[p.id] ?? { wallet: p.asaas_wallet_id || '', base: p.split_base || 'bruto' };
+                  const mudou = s.wallet.trim() !== (p.asaas_wallet_id || '') || s.base !== (p.split_base || 'bruto');
+                  return (
+                    <div className="mt-5 pt-5 border-t border-white/5">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Recebimento da comissão (split no Asaas)</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 flex-1 min-w-[260px]">
+                          <Wallet size={13} className="text-slate-500 shrink-0"/>
+                          <input value={s.wallet} onChange={e => setSplit(m => ({ ...m, [p.id]: { ...s, wallet: e.target.value } }))} placeholder="walletId da conta Asaas do parceiro"
+                            className="bg-transparent py-2 text-xs font-mono outline-none w-full"/>
+                        </div>
+                        <select value={s.base} onChange={e => setSplit(m => ({ ...m, [p.id]: { ...s, base: e.target.value as any } }))}
+                          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold outline-none">
+                          <option value="bruto" className="bg-[#0B1120]">{p.comissao_pct}% do valor cheio</option>
+                          <option value="liquido" className="bg-[#0B1120]">{p.comissao_pct}% do valor após a tarifa do Asaas</option>
+                        </select>
+                        {mudou && (
+                          <button onClick={async () => { if (await acao(p.id + ':split', { acao: 'atualizar', id: p.id, asaas_wallet_id: s.wallet, split_base: s.base })) setSplit(m => { const n = { ...m }; delete n[p.id]; return n; }); }}
+                            className="bg-[#22C55E] text-[#0B1120] px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5">
+                            {salvando === p.id + ':split' ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-600 mt-2">{p.asaas_wallet_id ? 'A comissão de cada mensalidade paga cai direto na carteira Asaas do parceiro, sem repasse manual.' : 'Sem carteira: as assinaturas da carteira dele não separam comissão. O parceiro acha o walletId no app do Asaas em Minha conta → Integrações.'} Mudar aqui atualiza as assinaturas ativas da carteira.</p>
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-5 pt-5 border-t border-white/5">
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Quem acessa o portal (login do WeGrow)</p>

@@ -33,6 +33,10 @@ export type Billing = {
   ultima_cobranca_url?: string | null;
   ultima_cobranca_status?: string | null;
   ultima_cobranca_em?: string | null;
+  asaas_subscription_id?: string | null;
+  assinatura_status?: string | null; // ativa | cancelada
+  forma_pagamento?: string | null;   // BOLETO | PIX | CREDIT_CARD | UNDEFINED
+  em_atraso_desde?: string | null;
 };
 
 export type Empresa = {
@@ -49,6 +53,7 @@ export type Empresa = {
   canal_origem?: string | null;
   cancelado_em?: string | null;
   parceiro_id?: string | null;
+  bloqueio_cobranca_em?: string | null;
   billing: Billing | null;
 };
 

@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { emitirNfWegrow, sincronizarNfWegrow } from '@/lib/nfWegrow';
+import { registrarPagamento } from '@/lib/cobrancaWegrow';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // Webhook da conta Asaas da PRÓPRIA WeGrow (cobrança das mensalidades, /api/admin/cobranca).
 // Diferente de /api/financeiro/webhook, que recebe das contas Asaas de cada tenant.
+//  - PAYMENT_*                            → espelha o pagamento em wegrow_pagamentos (extrato, atraso,
+//                                           libera acesso suspenso — ver lib/cobrancaWegrow)
 //  - PAYMENT_RECEIVED / PAYMENT_CONFIRMED → emite a NFS-e da mensalidade (se a automação estiver ligada)
 //  - INVOICE_*                            → atualiza a nota e, autorizada, manda o e-mail pro cliente
 // Configurar no Asaas (Integrações → Webhooks) com o token em ASAAS_WEBHOOK_TOKEN_WEGROW.
@@ -22,14 +25,16 @@ export async function POST(request: Request) {
   const { event, payment, invoice } = body;
   const db = supabaseAdmin();
 
-  if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(event) && payment?.externalReference) {
-    const empresaId = payment.externalReference;
-    const { data: billing } = await db.from('clientes_wegrow').select('empresa_id').eq('empresa_id', empresaId).maybeSingle();
-    if (!billing) return NextResponse.json({ ok: true, skipped: true });
+  if (String(event || '').startsWith('PAYMENT_') && payment?.id) {
+    // Assinatura (payment.subscription) ou cobrança avulsa (externalReference = empresa_id)
+    const linha = await registrarPagamento(db, event === 'PAYMENT_DELETED' ? { ...payment, deleted: true } : payment);
+    if (!linha) return NextResponse.json({ ok: true, skipped: true });
+    const empresaId = linha.empresa_id as string;
 
-    await db.from('clientes_wegrow').update({ ultima_cobranca_status: payment.status }).eq('empresa_id', empresaId).eq('ultima_cobranca_id', payment.id);
-    const r = await emitirNfWegrow(db, { empresaId, paymentId: payment.id, competencia: String(payment.dueDate || '').substring(0, 7) || undefined, origem: 'webhook' });
-    console.log(`[admin/asaas-webhook] ${event} empresa=${empresaId}`, r.ok ? 'nf ok' : r.erro);
+    if (['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'].includes(event)) {
+      const r = await emitirNfWegrow(db, { empresaId, paymentId: payment.id, competencia: String(payment.dueDate || '').substring(0, 7) || undefined, origem: 'webhook' });
+      console.log(`[admin/asaas-webhook] ${event} empresa=${empresaId}`, r.ok ? 'nf ok' : r.erro);
+    }
     return NextResponse.json({ ok: true });
   }
 

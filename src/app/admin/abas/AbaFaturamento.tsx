@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Save, MessageCircle, CheckCircle2, RefreshCw, Receipt, QrCode, ExternalLink, Copy } from 'lucide-react';
 import { AbaProps, headersAuth, fmtData, proximoMes, BILLING_VAZIO, emitirNfMensalidade } from './types';
+import AssinaturaRecorrente from './AssinaturaRecorrente';
 
 const CANAIS_ORIGEM = [
   { valor: '', label: 'Não definido' },
@@ -32,7 +33,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [nf, setNf] = useState<{ ok: boolean; msg: string } | null>(null);
   const [emitindoNf, setEmitindoNf] = useState(false);
-  const [parceiros, setParceiros] = useState<{ id: string; nome: string; comissao_pct: number }[]>([]);
+  const [parceiros, setParceiros] = useState<{ id: string; nome: string; comissao_pct: number; asaas_wallet_id?: string | null; split_base?: string; ativo?: boolean }[]>([]);
 
   useEffect(() => {
     fetch('/api/admin/parceiros', { headers: headersAuth(token) })
@@ -65,8 +66,14 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       observacao: form.observacao || null,
     };
     const { error } = await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
+    if (error) { setSaving(false); setErro(error.message); return; }
+    // Com assinatura ativa, valor novo vale também no Asaas (inclusive mensalidades em aberto)
+    const mudouValor = Number(empresa.billing?.valor_mensal || 0) !== payload.valor_mensal;
+    if (mudouValor && empresa.billing?.assinatura_status === 'ativa') {
+      const res = await fetch('/api/admin/cobranca', { method: 'POST', headers: headersAuth(token), body: JSON.stringify({ acao: 'assinatura', empresa_id: empresa.id }) });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErroCobranca(`Valor salvo, mas a assinatura no Asaas não foi atualizada: ${j.erro || res.status}`); }
+    }
     setSaving(false);
-    if (error) { setErro(error.message); return; }
     onAtualizado();
   };
 
@@ -155,6 +162,9 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
         </div>
       )}
 
+      <AssinaturaRecorrente empresa={empresa} token={token} parceiros={parceiros} onAtualizado={onAtualizado} />
+
+      <p className="text-[11px] text-slate-500 -mb-1 ml-1">Sem assinatura: cobrança avulsa ou pagamento recebido por fora (Pix direto na conta).</p>
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={registrarPagamento} disabled={registrandoPgto} className="flex items-center gap-1.5 bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] px-3 py-2 rounded-xl font-semibold text-xs transition-all disabled:opacity-50">
           {registrandoPgto ? <Loader2 size={11} className="animate-spin"/> : <CheckCircle2 size={11}/>} Pgto recebido

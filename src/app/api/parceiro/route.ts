@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
-type Parceiro = { id: string; nome: string; logo_url: string | null; comissao_pct: number };
+type Parceiro = { id: string; nome: string; logo_url: string | null; comissao_pct: number; recebe_split: boolean };
 
 // Quem chama é usuário de um parceiro (parceiro_usuarios.email) — ou admin da plataforma
 // abrindo o portal de um parceiro específico (?parceiro_id=) pra ver o que eles veem.
@@ -18,16 +18,16 @@ async function parceiroDaRequisicao(request: Request, db: SupabaseClient): Promi
 
   const pedido = new URL(request.url).searchParams.get('parceiro_id');
   if (pedido && ADMIN_EMAILS.includes(user.email)) {
-    const { data } = await db.from('parceiros').select('id, nome, logo_url, comissao_pct').eq('id', pedido).maybeSingle();
-    return data as Parceiro | null;
+    const { data } = await db.from('parceiros').select('id, nome, logo_url, comissao_pct, asaas_wallet_id').eq('id', pedido).maybeSingle();
+    return data ? { id: data.id, nome: data.nome, logo_url: data.logo_url, comissao_pct: Number(data.comissao_pct), recebe_split: !!data.asaas_wallet_id } : null;
   }
 
   const { data: vinculo } = await db.from('parceiro_usuarios')
-    .select('parceiro:parceiro_id(id, nome, logo_url, comissao_pct, ativo)')
+    .select('parceiro:parceiro_id(id, nome, logo_url, comissao_pct, ativo, asaas_wallet_id)')
     .eq('email', user.email.toLowerCase()).limit(1).maybeSingle();
   const p = (vinculo as any)?.parceiro;
   if (!p || !p.ativo) return null;
-  return { id: p.id, nome: p.nome, logo_url: p.logo_url, comissao_pct: Number(p.comissao_pct) };
+  return { id: p.id, nome: p.nome, logo_url: p.logo_url, comissao_pct: Number(p.comissao_pct), recebe_split: !!p.asaas_wallet_id };
 }
 
 // GET — carteira do parceiro: as rádios dele com uso (usuários ativos, leads, último acesso)
@@ -38,17 +38,21 @@ export async function GET(request: Request) {
   if (!parceiro) return NextResponse.json({ erro: 'Acesso restrito a parceiros WeGrow.' }, { status: 403 });
 
   const { data: empresas } = await db.from('empresas')
-    .select('id, nome, cnpj, plano, status, modulos, logo_url, cor_primaria, created_at, cancelado_em')
+    .select('id, nome, cnpj, plano, status, modulos, logo_url, cor_primaria, created_at, cancelado_em, bloqueio_cobranca_em')
     .eq('parceiro_id', parceiro.id);
   const ids = (empresas || []).map(e => e.id);
-  if (ids.length === 0) return NextResponse.json({ parceiro, empresas: [] });
+  if (ids.length === 0) return NextResponse.json({ parceiro, empresas: [], extrato: [] });
 
   const ha7dias = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const [{ data: profiles }, { data: billings }, { data: leadsStats }, { data: authData }] = await Promise.all([
+  // Extrato da comissão: mensalidades das rádios da carteira nos últimos 6 meses (split do Asaas)
+  const desde = new Date(Date.now() - 185 * 86400_000).toISOString().substring(0, 10);
+  const [{ data: profiles }, { data: billings }, { data: leadsStats }, { data: authData }, { data: pagamentos }] = await Promise.all([
     db.from('profiles').select('id, nome, cargo, empresa_id').in('empresa_id', ids),
-    db.from('clientes_wegrow').select('empresa_id, valor_mensal, proximo_vencimento, contato, whatsapp').in('empresa_id', ids),
+    db.from('clientes_wegrow').select('empresa_id, valor_mensal, proximo_vencimento, contato, whatsapp, assinatura_status, em_atraso_desde').in('empresa_id', ids),
     db.rpc('admin_leads_stats'),
     db.auth.admin.listUsers({ perPage: 1000 }),
+    db.from('wegrow_pagamentos').select('asaas_payment_id, empresa_id, competencia, vencimento, valor, status, pago_em, split_valor, split_status')
+      .eq('parceiro_id', parceiro.id).gte('vencimento', desde).neq('status', 'DELETED').order('vencimento', { ascending: false }),
   ]);
 
   const authMap = new Map((authData?.users || []).map(u => [u.id, u]));
@@ -83,10 +87,15 @@ export async function GET(request: Request) {
       diretor_email: diretor ? authMap.get(diretor.id)?.email ?? null : null,
       valor_mensal: Number(b?.valor_mensal ?? 0),
       proximo_vencimento: b?.proximo_vencimento ?? null,
+      assinatura_ativa: b?.assinatura_status === 'ativa',
+      em_atraso_desde: b?.em_atraso_desde ?? null,
+      suspensa: !!e.bloqueio_cobranca_em,
     };
   });
 
-  return NextResponse.json({ parceiro, empresas: resultado });
+  const nomes = new Map((empresas || []).map(e => [e.id, e.nome]));
+  const extrato = (pagamentos || []).map(p => ({ ...p, empresa_nome: nomes.get(p.empresa_id) || '—' }));
+  return NextResponse.json({ parceiro, empresas: resultado, extrato });
 }
 
 // Anota a credencial gerada na observação de faturamento (só o God Mode lê) — a senha

@@ -41,7 +41,9 @@ export async function GET(request: Request) {
 }
 
 // POST { acao: 'criar', nome, comissao_pct }
-//      { acao: 'atualizar', id, nome?, comissao_pct?, ativo?, logo_url?, asaas_wallet_id?, split_base? }
+//      { acao: 'atualizar', id, nome?, comissao_pct?, ativo?, logo_url?, asaas_wallet_id?, split_base?,
+//                          marca_produto?, marca_slug?, marca_ativa? }
+//      { acao: 'logo_marca', id, imagemBase64, extensao }   → logo do produto do parceiro (marca dupla)
 //      { acao: 'add_usuario' | 'remover_usuario', id, email }
 export async function POST(request: Request) {
   if (!await verificarAdmin(request))
@@ -63,8 +65,19 @@ export async function POST(request: Request) {
 
   if (body.acao === 'atualizar') {
     const patch: Record<string, any> = {};
-    for (const campo of ['nome', 'comissao_pct', 'ativo', 'logo_url', 'asaas_wallet_id', 'split_base']) if (campo in body) patch[campo] = body[campo];
+    for (const campo of ['nome', 'comissao_pct', 'ativo', 'logo_url', 'asaas_wallet_id', 'split_base', 'marca_produto', 'marca_slug', 'marca_ativa']) if (campo in body) patch[campo] = body[campo];
     if ('asaas_wallet_id' in patch) patch.asaas_wallet_id = String(patch.asaas_wallet_id || '').trim() || null;
+    if ('marca_produto' in patch) patch.marca_produto = String(patch.marca_produto || '').trim() || null;
+    if ('marca_slug' in patch) {
+      patch.marca_slug = String(patch.marca_slug || '').trim().toLowerCase() || null;
+      if (patch.marca_slug && !/^[a-z0-9-]{2,40}$/.test(patch.marca_slug)) return NextResponse.json({ erro: 'O endereço só aceita letras minúsculas, números e hífen (ex.: manager).' }, { status: 422 });
+    }
+    if (patch.marca_ativa === true) {
+      const { data: atual } = await db.from('parceiros').select('*').eq('id', body.id).maybeSingle();
+      if (!(patch.marca_produto ?? atual?.marca_produto) || !(patch.marca_slug ?? atual?.marca_slug)) {
+        return NextResponse.json({ erro: 'Preencha o nome do produto e o endereço antes de ligar a marca.' }, { status: 422 });
+      }
+    }
     if ('split_base' in patch && !['bruto', 'liquido'].includes(patch.split_base)) return NextResponse.json({ erro: 'Base do split inválida.' }, { status: 422 });
     if ('comissao_pct' in patch) {
       const pct = Number(patch.comissao_pct);
@@ -72,13 +85,29 @@ export async function POST(request: Request) {
       patch.comissao_pct = pct;
     }
     const { error } = await db.from('parceiros').update(patch).eq('id', body.id);
-    if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ erro: error.code === '23505' ? 'Esse endereço já é usado por outro parceiro.' : error.message }, { status: 500 });
     // Comissão, carteira, base ou pausa mudaram → as assinaturas da carteira passam a dividir do jeito novo
     if (['comissao_pct', 'asaas_wallet_id', 'split_base', 'ativo'].some(c => c in patch) && process.env.ASAAS_API_KEY) {
       const r = await reaplicarSplitCarteira(db, body.id);
       return NextResponse.json({ ok: true, assinaturas_atualizadas: r.atualizadas, erros: r.erros });
     }
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.acao === 'logo_marca') {
+    const { imagemBase64, extensao } = body;
+    if (!imagemBase64) return NextResponse.json({ erro: 'Imagem obrigatória.' }, { status: 422 });
+    const buffer = Buffer.from(String(imagemBase64).replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
+    if (buffer.length > 2 * 1024 * 1024) return NextResponse.json({ erro: 'Logo maior que 2 MB.' }, { status: 422 });
+    const ext = String(extensao || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const path = `parceiros/${body.id}/${Date.now()}.${ext}`;
+    const contentType = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    const { error: upErr } = await db.storage.from('empresa-logos').upload(path, buffer, { contentType, upsert: false });
+    if (upErr) return NextResponse.json({ erro: upErr.message }, { status: 500 });
+    const { data: urlData } = db.storage.from('empresa-logos').getPublicUrl(path);
+    const { error } = await db.from('parceiros').update({ marca_logo_url: urlData.publicUrl }).eq('id', body.id);
+    if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, logoUrl: urlData.publicUrl });
   }
 
   const email = String(body.email || '').trim().toLowerCase();

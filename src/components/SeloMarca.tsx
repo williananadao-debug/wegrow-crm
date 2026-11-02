@@ -1,0 +1,66 @@
+"use client";
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/contexts/AuthContext';
+
+export type MarcaParceiro = { slug: string; produto: string; logo_url: string | null; parceiro: string };
+
+const CHAVE = 'wg_marca_parceiro';
+const VALIDADE_MS = 60 * 60 * 1000;
+
+// Marca dupla da empresa logada (empresa da carteira de um parceiro com marca ativa, ex.:
+// "WeGrow for Manager" pras rádios da YoungTech). Cache de 1h no navegador.
+export function useMarcaParceiro(): MarcaParceiro | null {
+  const { user } = useAuth() || {};
+  const [registro, setRegistro] = useState<{ userId: string; em: number; marca: MarcaParceiro | null } | null>(() => {
+    try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (registro && registro.userId === user.id && Date.now() - registro.em < VALIDADE_MS) return;
+    let vivo = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.access_token) return;
+      const res = await fetch('/api/conta/marca', { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null);
+      const json = res?.ok ? await res.json().catch(() => null) : null;
+      if (!vivo || !json) return;
+      const novo = { userId: user.id, em: Date.now(), marca: json.marca || null };
+      setRegistro(novo);
+      try {
+        localStorage.setItem(CHAVE, JSON.stringify(novo));
+        // A tela de login lembra a marca dupla de quem já entrou por ela
+        if (novo.marca?.slug) localStorage.setItem('wg_marca_login', novo.marca.slug);
+      } catch { /* sem cache */ }
+    });
+    return () => { vivo = false; };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return registro && user && registro.userId === user.id ? registro.marca : null;
+}
+
+// Selo "WeGrow for <produto>" no rodapé do menu. compacto = menu recolhido (só os logos).
+export default function SeloMarca({ compacto = false }: { compacto?: boolean }) {
+  const marca = useMarcaParceiro();
+  if (!marca) return null;
+  if (compacto) {
+    return (
+      <div className="flex justify-center" title={`WeGrow for ${marca.produto}`}>
+        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden">
+          {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-1"/> : <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-3 py-2.5">
+      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
+        {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-1"/> : <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>}
+      </div>
+      <div className="min-w-0 leading-tight">
+        <p className="text-[13px] font-semibold text-white truncate">WeGrow <span className="text-slate-500 font-normal">for</span> {marca.produto}</p>
+        <p className="text-[10px] text-slate-500 truncate">com {marca.parceiro}</p>
+      </div>
+    </div>
+  );
+}

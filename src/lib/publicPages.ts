@@ -1,7 +1,8 @@
 const PUBLIC_EXACT = ['/', '/login', '/portal', '/reset-password'];
 // /acompanhar = Portal do Cliente (login próprio por link no e-mail, não usa a sessão da equipe).
 // /eleicao = painel público da apuração (TV da rádio, celular de ouvinte) — link avulso, sem login.
-const PUBLIC_PREFIXES = ['/solicitar', '/portal-cdl', '/proposta-cdl', '/carteirinha', '/p/', '/acompanhar', '/eleicao'];
+// /entrar/<slug> = login com a marca dupla do parceiro (redireciona pro /login?marca=).
+const PUBLIC_PREFIXES = ['/solicitar', '/portal-cdl', '/proposta-cdl', '/carteirinha', '/p/', '/acompanhar', '/eleicao', '/entrar/'];
 
 export function isPublicPage(pathname: string): boolean {
   return PUBLIC_EXACT.includes(pathname) || PUBLIC_PREFIXES.some(p => pathname.startsWith(p));

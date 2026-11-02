@@ -9,6 +9,7 @@ import {
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
 } from 'lucide-react';
+import SeloMarca from '@/components/SeloMarca';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
 
@@ -361,6 +362,7 @@ export default function Navbar() {
           )}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
+            <SeloMarca />
             {isDirector && (
               <Link href="/settings" onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === '/settings' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                 <Settings size={20} /> Configurações
@@ -540,6 +542,7 @@ export default function Navbar() {
             </nav>
 
             <div className="pt-4 border-t border-white/5 space-y-2 mt-2 shrink-0">
+              <SeloMarca compacto={isCollapsed} />
               {isDirector && (
                 <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <Settings size={20} />

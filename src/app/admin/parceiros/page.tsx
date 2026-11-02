@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio, Wallet } from 'lucide-react';
+import { Handshake, ShieldAlert, ArrowLeft, Plus, Loader2, X, Save, ExternalLink, Mail, Radio, Wallet, Palette, Upload } from 'lucide-react';
 import { SkeletonPage } from '@/components/Skeleton';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
@@ -11,6 +11,7 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 type Parceiro = {
   id: string; nome: string; logo_url: string | null; comissao_pct: number; ativo: boolean;
   asaas_wallet_id: string | null; split_base: 'bruto' | 'liquido';
+  marca_produto: string | null; marca_slug: string | null; marca_logo_url: string | null; marca_ativa: boolean;
   usuarios: string[]; radios_ativas: number; radios_teste: number;
 };
 
@@ -24,6 +25,17 @@ export default function AdminParceirosPage() {
   const [salvando, setSalvando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState('');
   const [split, setSplit] = useState<Record<string, { wallet: string; base: 'bruto' | 'liquido' }>>({});
+  const [marca, setMarca] = useState<Record<string, { produto: string; slug: string }>>({});
+
+  const subirLogoMarca = async (p: Parceiro, file: File) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    await acao(p.id + ':logo', { acao: 'logo_marca', id: p.id, imagemBase64: base64, extensao: file.name.split('.').pop() || 'png' });
+  };
 
   const isAdmin = !authLoading && user && ADMIN_EMAILS.includes(user.email || '');
 
@@ -149,6 +161,53 @@ export default function AdminParceirosPage() {
                         )}
                       </div>
                       <p className="text-[10px] text-slate-600 mt-2">{p.asaas_wallet_id ? 'A comissão de cada mensalidade paga cai direto na carteira Asaas do parceiro, sem repasse manual.' : 'Sem carteira: as assinaturas da carteira dele não separam comissão. O parceiro acha o walletId no app do Asaas em Minha conta → Integrações.'} Mudar aqui atualiza as assinaturas ativas da carteira.</p>
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  const m = marca[p.id] ?? { produto: p.marca_produto || '', slug: p.marca_slug || '' };
+                  const mudou = m.produto.trim() !== (p.marca_produto || '') || m.slug.trim().toLowerCase() !== (p.marca_slug || '');
+                  const origem = typeof window !== 'undefined' ? window.location.origin : '';
+                  return (
+                    <div className="mt-5 pt-5 border-t border-white/5">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Marca dupla (co-branding)</p>
+                      <div className="flex flex-col md:flex-row gap-4">
+                        <label className="w-full md:w-48 h-24 shrink-0 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] hover:bg-white/[0.06] flex items-center justify-center cursor-pointer overflow-hidden relative">
+                          {p.marca_logo_url
+                            ? <img src={p.marca_logo_url} alt={p.marca_produto || ''} className="max-h-full max-w-full object-contain p-3"/>
+                            : <span className="text-[10px] font-bold text-slate-500 flex flex-col items-center gap-1.5"><Upload size={16}/> Logo do produto</span>}
+                          {salvando === p.id + ':logo' && <span className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 size={16} className="animate-spin"/></span>}
+                          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) subirLogoMarca(p, f); e.target.value = ''; }}/>
+                        </label>
+                        <div className="flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                              <span className="text-slate-500 text-xs font-black pl-3">WeGrow for</span>
+                              <input value={m.produto} onChange={e => setMarca(s => ({ ...s, [p.id]: { ...m, produto: e.target.value } }))} placeholder="Manager" className="w-32 bg-transparent px-2 py-2 text-sm font-black outline-none"/>
+                            </div>
+                            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                              <span className="text-slate-500 text-xs font-mono pl-3">/entrar/</span>
+                              <input value={m.slug} onChange={e => setMarca(s => ({ ...s, [p.id]: { ...m, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') } }))} placeholder="manager" className="w-28 bg-transparent px-1 py-2 text-sm font-mono outline-none"/>
+                            </div>
+                            {mudou && (
+                              <button onClick={async () => { if (await acao(p.id + ':marca', { acao: 'atualizar', id: p.id, marca_produto: m.produto, marca_slug: m.slug })) setMarca(s => { const n = { ...s }; delete n[p.id]; return n; }); }}
+                                className="bg-[#22C55E] text-[#0B1120] px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5">
+                                {salvando === p.id + ':marca' ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Salvar
+                              </button>
+                            )}
+                            <button onClick={() => acao(p.id + ':marca_ativa', { acao: 'atualizar', id: p.id, marca_ativa: !p.marca_ativa })}
+                              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 border ${p.marca_ativa ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}>
+                              {salvando === p.id + ':marca_ativa' ? <Loader2 size={12} className="animate-spin"/> : <Palette size={12}/>} {p.marca_ativa ? 'Marca ligada' : 'Ligar marca'}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-600">
+                            {p.marca_ativa
+                              ? <>As rádios da carteira veem o selo “WeGrow for {p.marca_produto}” no menu. Login com as duas marcas: <a href={`${origem}/entrar/${p.marca_slug}`} target="_blank" rel="noopener noreferrer" className="text-slate-300 underline">{origem.replace(/^https?:\/\//, '')}/entrar/{p.marca_slug}</a></>
+                              : 'Desligada: ninguém vê a marca do parceiro. Suba o logo, confira o nome e ligue.'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { paraEmailDeLogin } from '@/lib/loginSemEmail';
@@ -14,6 +14,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Marca dupla do parceiro (ex.: "WeGrow for Manager"): vem de /entrar/<slug> (?marca=) ou da
+  // última vez que a pessoa entrou por ela neste aparelho.
+  const [marca, setMarca] = useState<{ produto: string; logo_url: string | null; parceiro: string } | null>(null);
+
+  useEffect(() => {
+    let slug = new URLSearchParams(window.location.search).get('marca');
+    try {
+      if (slug) localStorage.setItem('wg_marca_login', slug);
+      else slug = localStorage.getItem('wg_marca_login');
+    } catch { /* sem storage */ }
+    if (!slug) return;
+    let vivo = true;
+    fetch(`/api/marca?slug=${encodeURIComponent(slug)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (vivo && j?.marca) setMarca(j.marca); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,12 +84,26 @@ export default function LoginPage() {
         {/* EFEITO DE FUNDO */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#22C55E] to-transparent opacity-50"></div>
 
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
-             Acesso Restrito
-          </p>
-        </div>
+        {marca ? (
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-[#0F172A] border border-white/10 flex items-center justify-center"><img src="/logo.png" alt="WeGrow" className="w-9 h-9 object-contain"/></div>
+              <span className="text-slate-600 text-lg font-light">×</span>
+              <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center overflow-hidden">
+                {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-1.5"/> : <span className="text-[#0B1120] font-black">{marca.produto.charAt(0)}</span>}
+              </div>
+            </div>
+            <h1 className="text-2xl font-semibold text-white tracking-tight">WeGrow <span className="text-slate-500 font-normal">for</span> {marca.produto}</h1>
+            <p className="text-slate-500 text-xs mt-1.5">Gestão comercial integrada · {marca.parceiro}</p>
+          </div>
+        ) : (
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
+               Acesso Restrito
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleAuth} className="space-y-4">
           

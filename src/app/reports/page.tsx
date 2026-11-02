@@ -216,18 +216,6 @@ export default function ReportsPage() {
           : !isDirector ? doisCampos(q => q.eq('user_id', user?.id)) : doisCampos(q => q),
         LIMITE_LINHAS);
 
-      // Todos os clientes (não só os 2000 mais novos): o mapa de cidades busca a cidade da venda
-      // no cadastro do cliente, e cliente antigo fora do corte caía em "não informada".
-      const clientesQuery = paginar(() => {
-        let q = supabase.from('clientes').select('id, nome_empresa, nome_fantasia, cidade, bairro, telefone, email, cnpj, status').order('id', { ascending: false });
-        if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
-        return q;
-      });
-
-      // Clientes só completam o mapa de cidades e a exportação: chegam em segundo plano, sem
-      // segurar a tela.
-      clientesQuery.then(r => setRawClientes(r.data || [])).catch(e => console.error('[reports] clientes', e));
-
       const [leadsRes, graficoRes, premissasRes, profilesRes, visitasRes] = await Promise.all([
         buildLeadsQuery(),
         graficoQuery,
@@ -239,7 +227,25 @@ export default function ReportsPage() {
       ]);
 
       setRawLeads(leadsRes.data || []); setRawLeadsGrafico(graficoRes.data || []); setRawPremissas(premissasRes.data || []); setRawProfiles(profilesRes.data || []); setRawVisitas(visitasRes.data || []);
+      carregarClientesDasVendas(leadsRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados:", error); } finally { setLoading(false); }
+  }
+
+  // Cidade das vendas sem cidade no lead: busca SÓ os clientes dessas vendas (por id, ou pelo
+  // nome quando o lead não tem cliente vinculado) — nunca o cadastro inteiro.
+  async function carregarClientesDasVendas(leads: any[]) {
+    const semCidade = leads.filter(l => l.status === 'ganho' && !l.cidade);
+    const ids = [...new Set(semCidade.map(l => l.client_id).filter(Boolean))];
+    const nomes = [...new Set(semCidade.filter(l => !l.client_id && l.empresa).map(l => String(l.empresa).trim().toLocaleUpperCase('pt-BR')))];
+    const cols = 'id, nome_empresa, nome_fantasia, cidade, bairro';
+    const blocos = <T,>(arr: T[]) => Array.from({ length: Math.ceil(arr.length / 150) }, (_, i) => arr.slice(i * 150, i * 150 + 150));
+    try {
+      const res = await Promise.all([
+        ...blocos(ids).map(b => supabase.from('clientes').select(cols).in('id', b)),
+        ...blocos(nomes).map(b => { let q = supabase.from('clientes').select(cols).in('nome_empresa', b); if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id); return q; }),
+      ]);
+      setRawClientes(res.flatMap(r => r.data || []));
+    } catch (e) { console.error('[reports] clientes das vendas', e); }
   }
 
   async function fetchDadosDoPeriodo() {
@@ -247,6 +253,7 @@ export default function ReportsPage() {
     try {
       const [leadsRes, visitasRes] = await Promise.all([buildLeadsQuery(), buildVisitasQuery()]);
       setRawLeads(leadsRes.data || []); setRawVisitas(visitasRes.data || []);
+      carregarClientesDasVendas(leadsRes.data || []);
     } catch (error) { console.error("Erro ao buscar dados do período:", error); } finally { setLoading(false); }
   }
 
@@ -472,7 +479,9 @@ export default function ReportsPage() {
           if (exportType === 'leads') {
               dataToExport = currentLeadsBase.map(l => ({ ID_Venda: l.id, Data_Criacao: l.created_at ? new Date(l.created_at).toLocaleDateString('pt-BR') : '', Cliente: l.empresa || 'Sem nome', Valor_Total: Number(l.valor_total || 0).toFixed(2).replace('.', ','), Status: l.status || '', Fase_Funil: l.etapa || 0, Origem: l.origem || 'Manual', Unidade: l.unidade || 'Não informada', Vendedor: l.vendedor_nome || rawProfiles.find(p => p.id === l.user_id)?.nome || 'Sem dono', Inicio_Contrato: l.contrato_inicio ? new Date(l.contrato_inicio).toLocaleDateString('pt-BR') : '', Fim_Contrato: l.contrato_fim ? new Date(l.contrato_fim).toLocaleDateString('pt-BR') : '' }));
           } else if (exportType === 'clientes') {
-              dataToExport = rawClientes.map(c => ({ ID_Cliente: c.id, Nome_Fantasia: c.nome_empresa || '', CNPJ: c.cnpj || '', Telefone: c.telefone || '', Email: c.email || '', Cidade: c.cidade || '', Bairro: c.bairro || '', Status: c.status || 'Ativo' }));
+              // Cadastro inteiro só aqui, quando a pessoa pede a exportação
+              const { data: todosClientes } = await paginar(() => { let q = supabase.from('clientes').select('id, nome_empresa, cidade, bairro, telefone, email, cnpj, status').order('id'); if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id); return q; });
+              dataToExport = todosClientes.map((c: any) => ({ ID_Cliente: c.id, Nome_Fantasia: c.nome_empresa || '', CNPJ: c.cnpj || '', Telefone: c.telefone || '', Email: c.email || '', Cidade: c.cidade || '', Bairro: c.bairro || '', Status: c.status || 'Ativo' }));
           } else if (exportType === 'jobs') {
               let allJobs: any[] = []; let page = 0; let fetchMore = true;
               while(fetchMore) { const { data } = await supabase.from('jobs').select('id, created_at, titulo, stage, prioridade, deadline, aprovado_cliente').range(page * 1000, (page + 1) * 1000 - 1); if (data && data.length > 0) { allJobs = [...allJobs, ...data]; page++; } else { fetchMore = false; } }

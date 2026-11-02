@@ -497,7 +497,8 @@ export default function DealsPage() {
         perfisQuery,
         metaQuery,
         perfil?.empresa_id
-            ? supabase.from('clientes').select('id, status_risco').eq('status', 'ativo').eq('empresa_id', perfil.empresa_id)
+            // Só quem tem risco marcado (sem registro = verde no card) — não a carteira inteira
+            ? supabase.from('clientes').select('id, status_risco').eq('status', 'ativo').eq('empresa_id', perfil.empresa_id).not('status_risco', 'is', null).not('status_risco', 'in', '(verde,Verde)').limit(1000)
             : Promise.resolve(null),
         supabase.from('servicos').select('*').order('id', { ascending: true }),
     ]);
@@ -1987,8 +1988,14 @@ export default function DealsPage() {
     const leadId = params.get('leadId');
     const etapa = params.get('etapa');
     if (leadId) {
+      deepLinkAplicadoRef.current = true;
       const lead = leads.find(l => String(l.id) === leadId);
-      if (lead) { abrirModal(lead); deepLinkAplicadoRef.current = true; return; }
+      if (lead) { abrirModal(lead); return; }
+      // Lead fora do recorte carregado (ex.: ganho em outro mês, vindo de Visitas): busca só ele
+      supabase.from('leads').select('*').eq('id', Number(leadId)).maybeSingle().then(({ data }) => {
+        if (data) abrirModal(data as Lead);
+      });
+      return;
     }
     if (etapa) {
       setTimeout(() => {

@@ -1048,7 +1048,7 @@ export default function VisitasPage() {
               <div className="flex items-center gap-2 flex-shrink-0">
                 {visita.lead_id ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); router.push('/deals'); }}
+                    onClick={(e) => { e.stopPropagation(); router.push(`/deals?leadId=${visita.lead_id}`); }}
                     className="flex items-center gap-1.5 px-3 py-2 bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] transition-colors"
                   >
                     <Zap size={12} /> Ver Pipeline
@@ -1381,7 +1381,7 @@ export default function VisitasPage() {
             <div className="p-6 border-t border-white/10 flex gap-3 flex-shrink-0">
               {visitaDetalhe.lead_id ? (
                 <button
-                  onClick={() => { setVisitaDetalhe(null); router.push('/deals'); }}
+                  onClick={() => { const id = visitaDetalhe.lead_id; setVisitaDetalhe(null); router.push(`/deals?leadId=${id}`); }}
                   className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/30%)] text-[var(--cor-primaria)] hover:bg-[rgb(var(--cor-primaria-rgb)/20%)] transition-all flex items-center justify-center gap-2"
                 >
                   <Zap size={14} /> Ver Pipeline

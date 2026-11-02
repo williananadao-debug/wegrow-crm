@@ -67,7 +67,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const r = await fetch(`/api/prospeccao/proximos?lat=${pos.lat}&lng=${pos.lng}&raio=${raio}`, { headers: { Authorization: `Bearer ${session?.access_token}` } });
-        const j = await r.json();
+        const j = await r.json().catch(() => ({ erro: r.status === 504 ? 'O mapa demorou demais para responder. Tente de novo ou diminua o raio.' : 'Falha ao buscar comércios. Tente de novo.' }));
         if (!r.ok) throw new Error(j.erro || 'Falha ao buscar comércios.');
         if (!cancelado) setDados(j);
       } catch (e: any) { if (!cancelado) setErro(e.message); }

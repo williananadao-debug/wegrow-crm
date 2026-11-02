@@ -1,24 +1,101 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
-import { distanciaMetros, mesmoNegocio, normalizarNome, queryOverpass, segmentoDasTags } from '@/lib/prospeccaoOsm';
+import { distanciaMetros, ehNegocioOsm, GRUPOS_GOOGLE, mesmoNegocio, normalizarNome, queryOverpass, segmentoDasTags, segmentoGoogle } from '@/lib/prospeccaoOsm';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+type Lugar = {
+  id: string; nome: string; lat: number; lng: number; segmento: string; endereco: string | null; bairro: string | null;
+  cidade: string | null; telefone: string | null; site: string | null; instagram: string | null; horario: string | null;
+};
 
-async function buscarOverpass(query: string) {
-  for (const url of OVERPASS) {
-    try {
-      const r = await fetch(url, {
-        method: 'POST', body: 'data=' + encodeURIComponent(query),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'WeGrow-CRM/1.0 (prospeccao)' },
-        signal: AbortSignal.timeout(20000),
-      });
-      if (r.ok) return (await r.json()).elements as any[];
-    } catch { /* tenta o próximo espelho */ }
+// Cache por região (≈100 m) e raio: o vendedor abre o mapa várias vezes no mesmo lugar e o
+// provedor de mapa é a parte lenta/paga. Vive enquanto a instância da função estiver quente.
+const CACHE = new Map<string, { em: number; lugares: Lugar[] }>();
+const CACHE_MS = 6 * 3600_000;
+
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+
+// OpenStreetMap (grátis): pergunta aos espelhos ao mesmo tempo e usa o primeiro que responder.
+async function lugaresOsm(lat: number, lng: number, raio: number): Promise<Lugar[]> {
+  const query = queryOverpass(lat, lng, raio);
+  const elementos: any[] = await Promise.any(OVERPASS.map(async url => {
+    const r = await fetch(url, {
+      method: 'POST', body: 'data=' + encodeURIComponent(query),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'WeGrow-CRM/1.0 (prospeccao)' },
+      signal: AbortSignal.timeout(14000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    return (await r.json()).elements;
+  }));
+  return elementos.filter(el => el.tags?.name && ehNegocioOsm(el.tags)).map(el => {
+    const t = el.tags;
+    return {
+      id: `osm:${el.type}/${el.id}`, nome: t.name, lat: el.lat ?? el.center?.lat, lng: el.lon ?? el.center?.lon,
+      segmento: segmentoDasTags(t), endereco: [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ') || null,
+      bairro: t['addr:suburb'] || null, cidade: t['addr:city'] || null, telefone: t.phone || t['contact:phone'] || null,
+      site: t.website || t['contact:website'] || null, instagram: t['contact:instagram'] || null, horario: t.opening_hours || null,
+    };
+  }).filter(l => l.lat !== undefined);
+}
+
+// Google Places (pago, cobertura completa) quando GOOGLE_PLACES_API_KEY estiver configurada.
+// Só campos do nível "Pro" (sem telefone/site) pra manter o custo baixo.
+async function lugaresGoogle(lat: number, lng: number, raio: number, chave: string): Promise<Lugar[]> {
+  const respostas = await Promise.all(GRUPOS_GOOGLE.map(async tipos => {
+    const r = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST', signal: AbortSignal.timeout(10000),
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': chave, 'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.primaryType,places.types,places.shortFormattedAddress' },
+      body: JSON.stringify({ includedTypes: tipos, maxResultCount: 20, rankPreference: 'DISTANCE', languageCode: 'pt-BR', locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: raio } } }),
+    });
+    if (!r.ok) throw new Error(`Google Places ${r.status}`);
+    return ((await r.json()).places || []) as any[];
+  }));
+  const vistos = new Set<string>();
+  return respostas.flat().filter(p => !vistos.has(p.id) && vistos.add(p.id)).map(p => ({
+    id: `g:${p.id}`, nome: p.displayName?.text || '', lat: p.location.latitude, lng: p.location.longitude,
+    segmento: segmentoGoogle(p.primaryType, p.types), endereco: p.shortFormattedAddress || null, bairro: null, cidade: null,
+    telefone: null, site: null, instagram: null, horario: null,
+  })).filter(l => l.nome);
+}
+
+// Nomes da carteira pra casar com o mapa — só id/nomes/segmento, páginas em paralelo e cache
+// curto por empresa (abrir o mapa de novo não refaz a busca).
+const CACHE_CLIENTES = new Map<string, { em: number; lista: any[] }>();
+async function nomesClientes(db: ReturnType<typeof supabaseAdmin>, empresaId: string): Promise<any[]> {
+  const c = CACHE_CLIENTES.get(empresaId);
+  if (c && Date.now() - c.em < 120_000) return c.lista;
+  const lista: any[] = [];
+  for (let de = 0; de < 40000; de += 4000) {
+    const lote = await Promise.all([0, 1, 2, 3].map(i => db.from('clientes').select('id, nome_empresa, nome_fantasia, razao_social, segmento')
+      .eq('empresa_id', empresaId).is('deleted_at', null).order('id').range(de + i * 1000, de + i * 1000 + 999)));
+    let fim = false;
+    for (const { data } of lote) { lista.push(...(data || [])); if (!data || data.length < 1000) { fim = true; break; } }
+    if (fim) break;
   }
-  throw new Error('Mapa de comércios indisponível agora. Tente de novo em instantes.');
+  CACHE_CLIENTES.set(empresaId, { em: Date.now(), lista });
+  return lista;
+}
+
+async function buscarLugares(lat: number, lng: number, raio: number): Promise<Lugar[]> {
+  const chave = process.env.GOOGLE_PLACES_API_KEY;
+  const id = `${chave ? 'g' : 'o'}|${lat.toFixed(3)}|${lng.toFixed(3)}|${raio}`;
+  const c = CACHE.get(id);
+  if (c && Date.now() - c.em < CACHE_MS) return c.lugares;
+  let lugares: Lugar[];
+  try {
+    lugares = chave ? await lugaresGoogle(lat, lng, raio, chave) : await lugaresOsm(lat, lng, raio);
+  } catch (e) {
+    if (!chave) throw e;
+    lugares = await lugaresOsm(lat, lng, raio); // Google falhou: tenta o mapa aberto
+  }
+  if (CACHE.size > 300) CACHE.delete(CACHE.keys().next().value!);
+  CACHE.set(id, { em: Date.now(), lugares });
+  return lugares;
 }
 
 // GET ?lat=&lng=&raio= (metros, 200–3000) → comércios em volta do vendedor, cada um marcado como
@@ -44,23 +121,15 @@ export async function GET(request: Request) {
   // Caixa em volta do ponto pra filtrar as visitas no banco antes da distância exata
   const dLat = raio / 111320, dLng = raio / (111320 * Math.cos(lat * Math.PI / 180));
 
-  let elementos: any[];
+  let lugares: Lugar[];
   try {
-    elementos = await buscarOverpass(queryOverpass(lat, lng, raio));
-  } catch (e: any) {
-    return NextResponse.json({ erro: e.message }, { status: 502 });
+    lugares = await buscarLugares(lat, lng, raio);
+  } catch {
+    return NextResponse.json({ erro: 'O serviço de mapa de comércios não respondeu agora. Tente de novo em 1 minuto ou diminua o raio.' }, { status: 503 });
   }
 
   const [clientesTodos, { data: visitasRaio }] = await Promise.all([
-    (async () => {
-      const todos: any[] = [];
-      for (let de = 0; ; de += 1000) {
-        const { data } = await db.from('clientes').select('id, nome_empresa, nome_fantasia, razao_social, segmento, cidade, telefone')
-          .eq('empresa_id', empresaId).is('deleted_at', null).order('id').range(de, de + 999);
-        todos.push(...(data || []));
-        if (!data || data.length < 1000) return todos;
-      }
-    })(),
+    nomesClientes(db, empresaId),
     db.from('visitas').select('id, empresa, cliente_id, lead_id, latitude, longitude, created_at, user_id')
       .eq('empresa_id', empresaId)
       .gte('latitude', lat - dLat).lte('latitude', lat + dLat)
@@ -80,34 +149,21 @@ export async function GET(request: Request) {
   };
 
   const vistos = new Set<string>();
-  const comercios = elementos.map(el => {
-    const t = el.tags || {};
-    const pLat = el.lat ?? el.center?.lat, pLng = el.lon ?? el.center?.lon;
-    if (!t.name || pLat === undefined) return null;
-    const chave = `${normalizarNome(t.name)}|${Math.round(pLat * 2000)}|${Math.round(pLng * 2000)}`;
+  const comercios = lugares.map(l => {
+    const chave = `${normalizarNome(l.nome)}|${Math.round(l.lat * 2000)}|${Math.round(l.lng * 2000)}`;
     if (vistos.has(chave)) return null;
     vistos.add(chave);
-    const cliente = acharCliente(t.name);
-    const visita = ultimaVisita(t.name, cliente?.id ?? null);
-    const rua = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ');
+    const cliente = acharCliente(l.nome);
+    const visita = ultimaVisita(l.nome, cliente?.id ?? null);
     return {
-      osm_id: `${el.type}/${el.id}`,
-      nome: t.name as string,
-      segmento: cliente?.segmento || segmentoDasTags(t),
-      segmento_osm: segmentoDasTags(t),
-      lat: pLat, lng: pLng,
-      distancia_m: distanciaMetros(lat, lng, pLat, pLng),
-      endereco: rua || null,
-      bairro: t['addr:suburb'] || null,
-      cidade: t['addr:city'] || null,
-      telefone: t.phone || t['contact:phone'] || null,
-      site: t.website || t['contact:website'] || null,
-      instagram: t['contact:instagram'] || null,
-      horario: t.opening_hours || null,
+      osm_id: l.id, nome: l.nome,
+      segmento: cliente?.segmento || l.segmento, segmento_osm: l.segmento,
+      lat: l.lat, lng: l.lng, distancia_m: distanciaMetros(lat, lng, l.lat, l.lng),
+      endereco: l.endereco, bairro: l.bairro, cidade: l.cidade, telefone: l.telefone, site: l.site, instagram: l.instagram, horario: l.horario,
       cliente: cliente ? { id: cliente.id, nome: cliente.nome_empresa, segmento: cliente.segmento || null } : null,
       ultima_visita: visita ? { id: visita.id, em: visita.created_at, lead_id: visita.lead_id } : null,
     };
-  }).filter(Boolean) as any[];
+  }).filter(c => c && c.distancia_m <= raio) as any[];
 
   // Status comercial dos clientes encontrados: anunciante ativo (contrato vigente), já comprou,
   // negociação aberta.

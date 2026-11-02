@@ -61,16 +61,44 @@ export function segmentoDasTags(tags: Tags): string {
   return 'Outro';
 }
 
-// Consulta Overpass: tudo que tem nome e cara de negócio num raio (m) em volta do ponto.
+// Consulta Overpass enxuta: um filtro só por chave (shop/office/amenity/...), o recorte fino de
+// amenity fica no segmentoDasTags. Bem mais leve que um bloco por tipo.
 export function queryOverpass(lat: number, lng: number, raio: number): string {
-  const around = `(around:${Math.round(raio)},${lat},${lng})`;
-  const filtros = [
-    'shop', 'office', 'craft', 'healthcare',
-    'amenity~"^(restaurant|fast_food|cafe|bar|pub|nightclub|pharmacy|clinic|dentist|doctors|veterinary|hospital|school|college|university|language_school|driving_school|car_wash|fuel|bank|ice_cream|food_court)$"',
-    'leisure~"^(fitness_centre|sports_centre)$"', 'tourism~"^(hotel|motel|guest_house)$"',
-  ];
-  const partes = filtros.flatMap(f => [`node[name][${f}]${around};`, `way[name][${f}]${around};`]);
-  return `[out:json][timeout:25];(${partes.join('')});out center tags 400;`;
+  return `[out:json][timeout:12];nwr[name][~"^(shop|office|craft|healthcare|amenity|leisure|tourism)$"~"."](around:${Math.round(raio)},${lat},${lng});out center tags 500;`;
+}
+
+// amenity que não é comércio (banco de praça, lixeira, estacionamento...) — fica de fora do mapa
+const AMENITY_NEGOCIO = new Set(['restaurant', 'fast_food', 'cafe', 'bar', 'pub', 'nightclub', 'pharmacy', 'clinic', 'dentist', 'doctors', 'veterinary', 'hospital', 'school', 'college', 'university', 'language_school', 'driving_school', 'car_wash', 'fuel', 'bank', 'ice_cream', 'food_court', 'townhall', 'community_centre', 'marketplace', 'car_rental']);
+export function ehNegocioOsm(t: Tags): boolean {
+  if (t.amenity) return AMENITY_NEGOCIO.has(t.amenity);
+  if (t.leisure) return ['fitness_centre', 'sports_centre'].includes(t.leisure);
+  if (t.tourism) return ['hotel', 'motel', 'guest_house'].includes(t.tourism);
+  return true;
+}
+
+// Google Places (New) — tipos agrupados por chamada (cada chamada devolve no máximo 20 lugares)
+export const GRUPOS_GOOGLE: string[][] = [
+  ['supermarket', 'grocery_store', 'convenience_store', 'butcher_shop', 'bakery', 'market'],
+  ['restaurant', 'cafe', 'bar', 'meal_takeaway', 'ice_cream_shop', 'pizza_restaurant'],
+  ['pharmacy', 'drugstore', 'dentist', 'doctor', 'hospital', 'medical_lab', 'physiotherapist', 'gym', 'beauty_salon', 'hair_salon'],
+  ['clothing_store', 'shoe_store', 'jewelry_store', 'furniture_store', 'home_goods_store', 'electronics_store', 'book_store', 'pet_store', 'store'],
+  ['car_dealer', 'car_repair', 'auto_parts_store', 'gas_station', 'car_wash', 'hardware_store', 'home_improvement_store'],
+  ['accounting', 'lawyer', 'insurance_agency', 'real_estate_agency', 'travel_agency', 'school', 'university', 'veterinary_care', 'hotel', 'bank'],
+];
+const POR_TIPO_GOOGLE: Record<string, string> = {
+  supermarket: 'Supermercado / Mercado', grocery_store: 'Supermercado / Mercado', convenience_store: 'Supermercado / Mercado', butcher_shop: 'Supermercado / Mercado', market: 'Supermercado / Mercado',
+  bakery: 'Padaria / Confeitaria', restaurant: 'Restaurante / Lanchonete', cafe: 'Restaurante / Lanchonete', meal_takeaway: 'Restaurante / Lanchonete', ice_cream_shop: 'Restaurante / Lanchonete', pizza_restaurant: 'Restaurante / Lanchonete',
+  bar: 'Bar / Casa Noturna', pharmacy: 'Farmácia / Drogaria', drugstore: 'Farmácia / Drogaria', dentist: 'Clínica Médica / Odontológica', doctor: 'Clínica Médica / Odontológica', physiotherapist: 'Clínica Médica / Odontológica',
+  hospital: 'Hospital / Laboratório', medical_lab: 'Hospital / Laboratório', gym: 'Academia / Estética / Bem-estar', beauty_salon: 'Academia / Estética / Bem-estar', hair_salon: 'Academia / Estética / Bem-estar',
+  clothing_store: 'Loja de Roupas / Vestuário', shoe_store: 'Loja de Roupas / Vestuário', jewelry_store: 'Loja de Roupas / Vestuário', furniture_store: 'Loja de Móveis e Decoração', home_goods_store: 'Loja de Móveis e Decoração',
+  electronics_store: 'Loja de Móveis e Decoração', book_store: 'Papelaria / Livraria', pet_store: 'Petshop', veterinary_care: 'Petshop', car_dealer: 'Concessionária / Loja de Veículos', car_repair: 'Oficina Mecânica / Auto Center',
+  car_wash: 'Oficina Mecânica / Auto Center', auto_parts_store: 'Autopeças', gas_station: 'Autopeças', hardware_store: 'Construção Civil / Materiais de Construção', home_improvement_store: 'Construção Civil / Materiais de Construção',
+  accounting: 'Contabilidade', lawyer: 'Advocacia / Jurídico', insurance_agency: 'Consultoria', real_estate_agency: 'Consultoria', travel_agency: 'Consultoria', bank: 'Consultoria',
+  school: 'Educação / Escola / Curso', university: 'Educação / Escola / Curso',
+};
+export function segmentoGoogle(primario: string | undefined, tipos: string[] = []): string {
+  for (const t of [primario, ...tipos]) if (t && POR_TIPO_GOOGLE[t]) return POR_TIPO_GOOGLE[t];
+  return primario ? `Outro (${primario.replace(/_/g, ' ')})` : 'Outro';
 }
 
 // Nome comparável: sem acento, sem pontuação e sem sufixos societários/palavras genéricas.

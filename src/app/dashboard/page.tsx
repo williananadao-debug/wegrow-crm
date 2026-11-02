@@ -62,12 +62,28 @@ export default function DashboardPage() {
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
-  const [rawJobs, setRawJobs] = useState<any[]>([]);
-  const [rawLancamentos, setRawLancamentos] = useState<any[]>([]);
   const [rawVisitas, setRawVisitas] = useState<any[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
   const temMidia = Boolean(empresa?.modulos?.midia);
+
+  // Janela de dados: do início do ano (Evolução Mensal) ou do período anterior ao filtrado
+  // (comparativo), o que vier antes, até hoje/fim do filtro. Antes o painel baixava TODOS os
+  // leads e visitas da empresa desde sempre — milhares de linhas a cada abertura e a cada
+  // refresh de 5 min. Só muda (e recarrega) se o filtro sair dessa janela.
+  const janela = useMemo(() => {
+    const hoje = getLocalYYYYMMDD(new Date());
+    const inicioAno = `${new Date().getFullYear()}-01-01`;
+    let inicio = inicioAno;
+    if (dataInicio) {
+      const fimRef = dataFim && dataFim < hoje ? dataFim : hoje;
+      const dias = Math.max(Math.round((new Date(fimRef + 'T12:00:00').getTime() - new Date(dataInicio + 'T12:00:00').getTime()) / 86400000), 0) + 1;
+      const anterior = getLocalYYYYMMDD(new Date(new Date(dataInicio + 'T12:00:00').getTime() - dias * 86400000));
+      if (anterior < inicio) inicio = anterior;
+    }
+    const fim = dataFim && dataFim > hoje ? dataFim : hoje;
+    return { inicio, fim };
+  }, [dataInicio, dataFim]);
 
   // 👇 FUNÇÃO DE CARREGAMENTO BLINDADA 👇
   const carregarDadosOtimizado = useCallback(async (isAutoRefresh = false) => {
@@ -75,6 +91,10 @@ export default function DashboardPage() {
     else setRefreshing(true);
 
     try {
+        const iniIso = new Date(janela.inicio + 'T00:00:00').toISOString();
+        const fimIso = new Date(janela.fim + 'T23:59:59.999').toISOString();
+        const hoje = getLocalYYYYMMDD(new Date());
+        const em30 = getLocalYYYYMMDD(new Date(Date.now() + 30 * 86400000));
         const leadsQuery = () => {
             let q = supabase
               .from('leads')
@@ -84,45 +104,46 @@ export default function DashboardPage() {
             return q;
         };
 
+        // Páginas de 1000 (teto do Supabase) em paralelo; cada recorte abaixo já é pequeno.
+        const paginar = async (montar: () => any) => {
+            const todos: any[] = [];
+            for (let de = 0; de < 20000; de += 4000) {
+                const lote = await Promise.all([0, 1, 2, 3].map(i => montar().order('id').range(de + i * 1000, de + i * 1000 + 999)));
+                for (const { data, error } of lote) {
+                    if (error) throw error;
+                    todos.push(...(data || []));
+                    if (!data || data.length < 1000) return todos;
+                }
+            }
+            return todos;
+        };
+
         let perfisQuery = supabase.from('profiles').select('id, nome');
         if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id) as any;
 
-        let jobsQuery = supabase.from('jobs').select('stage, deadline');
-        if (perfil?.empresa_id) jobsQuery = jobsQuery.eq('empresa_id', perfil.empresa_id) as any;
-
-        let visitasQuery = supabase.from('visitas').select('id, user_id, unidade, created_at, lead_id');
-        if (perfil?.empresa_id) visitasQuery = visitasQuery.eq('empresa_id', perfil.empresa_id) as any;
-        if (!isDirector) visitasQuery = visitasQuery.eq('user_id', user?.id) as any;
-
-        // O Supabase devolve no máximo 1000 linhas por consulta e, sem ordem, quais 1000 vêm é
-        // aleatório — com mais leads que isso a Evolução Mensal perdia meses inteiros (ex.: abr–jul
-        // quase zerados). Busca em páginas ordenadas por id até acabar.
-        const buscarTodosLeads = async () => {
-            const todos: any[] = [];
-            for (let de = 0; ; de += 4000) {
-                // 4 páginas em paralelo por vez — uma a uma deixava o painel lento
-                const lote = await Promise.all([0, 1, 2, 3].map(i => leadsQuery().order('id').range(de + i * 1000, de + i * 1000 + 999)));
-                for (const { data, error } of lote) {
-                    if (error) return { data: todos.length ? todos : null, error };
-                    todos.push(...(data || []));
-                    if (!data || data.length < 1000) return { data: todos, error: null };
-                }
-            }
+        const visitasQuery = () => {
+            let q = supabase.from('visitas').select('id, user_id, unidade, created_at, lead_id').gte('created_at', iniIso).lte('created_at', fimIso);
+            if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+            if (!isDirector) q = q.eq('user_id', user?.id);
+            return q;
         };
 
-        const [leadsRes, perfisRes, jobsRes, finRes, visitasRes] = await Promise.all([
-            buscarTodosLeads(),
+        // Leads = criados na janela + fechados na janela + pipeline aberto (previsão e follow-ups)
+        // + contratos vencendo nos próximos 30 dias. Mesclados por id.
+        const [criados, fechados, abertos, vencendo, perfisRes, visitas] = await Promise.all([
+            paginar(() => leadsQuery().gte('created_at', iniIso).lte('created_at', fimIso)),
+            paginar(() => leadsQuery().gte('fechado_em', iniIso).lte('fechado_em', fimIso)),
+            paginar(() => leadsQuery().eq('status', 'aberto')),
+            paginar(() => leadsQuery().eq('status', 'ganho').gte('contrato_fim', hoje).lte('contrato_fim', em30)),
             perfisQuery,
-            jobsQuery,
-            supabase.from('lancamentos').select('valor, tipo').eq('status', 'pago'),
-            visitasQuery,
+            paginar(visitasQuery),
         ]);
+        const porId = new Map<number, any>();
+        for (const l of [...criados, ...fechados, ...abertos, ...vencendo]) porId.set(l.id, l);
 
-        setRawLeads(leadsRes.data || []);
+        setRawLeads(Array.from(porId.values()));
         setRawPerfis(perfisRes.data || []);
-        setRawJobs(jobsRes.data || []);
-        setRawLancamentos(finRes.data || []);
-        setRawVisitas(visitasRes.data || []);
+        setRawVisitas(visitas);
 
     } catch (error) {
         console.error("Erro no refresh do dashboard:", error);
@@ -130,7 +151,7 @@ export default function DashboardPage() {
         setLoading(false);
         setRefreshing(false);
     }
-  }, [isDirector, user?.id, perfil?.empresa_id]);
+  }, [isDirector, user?.id, perfil?.empresa_id, janela]);
 
   // 👇 O CORAÇÃO DO MODO TV (AUTO-REFRESH 5 MINUTOS) 👇
   useEffect(() => {
@@ -287,10 +308,6 @@ export default function DashboardPage() {
           })
         : leadsFiltrados;
       leadsParaVendasPorDia.forEach(l => { if (l.status === 'ganho') { const leadData = diaReferenciaLead(l); const slot = vendasPorDiaArray.find(v => v.dataIso === leadData); if (slot) slot.valor += (Number(l.valor_total) || 0); } });
-      const prod = { roteiro: 0, gravacao: 0, edicao: 0, opec: 0 };
-      rawJobs.forEach((j: any) => { if (j.stage === 'roteiro') prod.roteiro++; if (j.stage === 'gravacao') prod.gravacao++; if (j.stage === 'edicao') prod.edicao++; if (j.stage === 'opec') prod.opec++; });
-      const ent = rawLancamentos.filter(l => l.tipo === 'entrada').reduce((acc, l) => acc + l.valor, 0);
-      const sai = rawLancamentos.filter(l => l.tipo === 'saida').reduce((acc, l) => acc + l.valor, 0);
 
       // Previsão de fechamento = já ganho no período (fat, 100%) + pipeline ainda aberto,
       // ponderado pela probabilidade da etapa. O pipeline aberto não é filtrado por data
@@ -320,14 +337,12 @@ export default function DashboardPage() {
       return {
           ranking: rankingFinal,
           statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitasRegistradas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal, totalDesconto },
-          statsProducao: prod,
-          statsFinanceiro: { saldo: ent - sai, entradas: ent, saidas: sai },
           previsaoFechamento: Math.round(previsaoFechamento),
           contratosVencendo,
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
           followupsAtrasados: rawLeads.filter(l => l.followup_em && l.followup_em < getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
-  }, [rawLeads, rawPerfis, rawJobs, rawLancamentos, rawVisitas, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
+  }, [rawLeads, rawPerfis, rawVisitas, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   useEffect(() => {
     if (!contratosVencendo.length || !user?.id) return;

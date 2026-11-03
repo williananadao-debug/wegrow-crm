@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonPage } from '@/components/Skeleton';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { MaterialSemanal } from './MaterialSemanal';
+import RelatoriosGerenciais, { RELATORIOS, type Ctx as CtxRelatorio } from './RelatoriosGerenciais';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
@@ -88,6 +89,18 @@ export default function ReportsPage() {
 
   const [filtroUnidade, setFiltroUnidade] = useState<string>('Todas');
   const [filtroVendedor, setFiltroVendedor] = useState<string>('Todos');
+  // Relatório escolhido no menu — fica lembrado neste navegador e vai no #link (dá pra mandar)
+  const [relatorio, setRelatorio] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'padrao';
+    const h = window.location.hash.replace('#', '');
+    if (h && RELATORIOS.some(r => r.id === h)) return h;
+    try { const s = localStorage.getItem('relatorio-escolhido'); return s && RELATORIOS.some(r => r.id === s) ? s : 'padrao'; } catch { return 'padrao'; }
+  });
+  const escolherRelatorio = (id: string) => {
+    setRelatorio(id);
+    try { localStorage.setItem('relatorio-escolhido', id); } catch { /* sem armazenamento */ }
+    history.replaceState(null, '', id === 'padrao' ? window.location.pathname + window.location.search : `#${id}`);
+  };
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawLeadsGrafico, setRawLeadsGrafico] = useState<any[]>([]);
@@ -277,7 +290,7 @@ export default function ReportsPage() {
     return { cidadePorId, porNome, nomes };
   }, [rawClientes]);
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo, nomesPorId } = useMemo(() => {
       const nomesMap: Record<string, string> = {};
       for (const p of rawProfiles) nomesMap[p.id] = p.nome;
       const cidadesById = indiceClientes.cidadePorId;
@@ -450,7 +463,7 @@ export default function ReportsPage() {
           }, 0) / currentGanhos.length)
         : 0;
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral };
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo: visitasBase, nomesPorId: nomesMap };
   }, [rawLeads, rawPremissas, rawProfiles, indiceClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
 
   const graficoMensal = useMemo(() => {
@@ -512,6 +525,13 @@ export default function ReportsPage() {
   // busca a própria semana) aparecem na hora.
   const carregandoInicial = loading && !rawLeads.length;
 
+  // Menu de relatórios: "padrao" é a visão geral de sempre; os outros são os gerenciais
+  // (gráfico em cima, tabela embaixo, exportação), no mesmo recorte de período e filtros.
+  const ctxRelatorio: CtxRelatorio = useMemo(() => ({
+    empresaId: perfil?.empresa_id, userId: user?.id, isDirector, isGerente, unidadeGerente: perfil?.unidade,
+    dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: [], visitas: visitasPeriodo,
+  }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo]);
+
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
 
@@ -526,6 +546,16 @@ export default function ReportsPage() {
       <div className="flex flex-col xl:flex-row justify-start items-start xl:items-center gap-2 mb-2 px-2">
         <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
             
+            {/* MENU DE RELATÓRIOS */}
+            <select value={relatorio} onChange={e => escolherRelatorio(e.target.value)} className="h-10 bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/35%)] text-[var(--cor-primaria)] rounded-xl px-3 text-[11px] font-black uppercase tracking-wide outline-none max-w-[280px]" title="Escolha o relatório">
+              <option value="padrao" className="bg-[#0B1120] text-white">Visão geral (padrão)</option>
+              {[...new Set(RELATORIOS.map(r => r.grupo))].map(g => (
+                <optgroup key={g} label={g} className="bg-[#0B1120] text-slate-400">
+                  {RELATORIOS.filter(r => r.grupo === g).map(r => <option key={r.id} value={r.id} className="bg-[#0B1120] text-white">{r.nome}</option>)}
+                </optgroup>
+              ))}
+            </select>
+
             {/* BOTÕES DE AÇÃO */}
             <div className="flex items-center gap-2 h-10">
                 <button onClick={fetchReportData} className="bg-white/5 border border-white/10 text-slate-400 w-10 h-10 rounded-xl hover:text-white transition-all shadow-lg flex items-center justify-center flex-shrink-0" title="Atualizar Dados">
@@ -599,6 +629,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {relatorio !== 'padrao' ? (carregandoInicial ? <SkeletonPage /> : <RelatoriosGerenciais key={relatorio} id={relatorio} ctx={ctxRelatorio} />) : <>
       <MaterialSemanal />
 
       {carregandoInicial ? <SkeletonPage /> : <>
@@ -1232,6 +1263,7 @@ export default function ReportsPage() {
             </div>
         </div>
       )}
+      </>}
       </>}
 
     </div>

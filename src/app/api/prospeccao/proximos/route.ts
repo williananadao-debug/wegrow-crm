@@ -270,7 +270,7 @@ async function responder(request: Request, corpo: { lat: number; lng: number; ra
   return NextResponse.json({
     centro: { lat, lng }, raio,
     // De onde vieram os comércios (o id de cada lugar leva o prefixo da fonte)
-    fonte: corpo ? 'OpenStreetMap (pelo navegador)' : ({ 'g': 'Google', 'fsq': 'Foursquare', 'geo': 'Geoapify', 'osm': 'OpenStreetMap' } as Record<string, string>)[lugares[0]?.id.split(':')[0] || ''] || (process.env.FOURSQUARE_API_KEY ? 'Foursquare' : 'OpenStreetMap'),
+    fonte: corpo ? 'OpenStreetMap (pelo navegador)' : [...new Set(lugares.map(l => ({ g: 'Google', fsq: 'Foursquare', geo: 'Geoapify', osm: 'OpenStreetMap' } as Record<string, string>)[l.id.split(':')[0]]).filter(Boolean))].join(' + ') || 'mapa público',
     comercios,
     visitas: visitasSoltas,
     resumo: {

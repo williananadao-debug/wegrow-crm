@@ -87,8 +87,8 @@ BEGIN
   WHERE empresa_id = v_emp AND origem = 'demo_seed';
 
   -- ── 4. Motivo em toda venda perdida que ainda não tem ────────────────────────────
-  UPDATE leads SET notas = (
-      COALESCE(NULLIF(notas, ''), '[]')::jsonb || jsonb_build_array(jsonb_build_object(
+  -- leads.notas é jsonb: lista de {id, texto, created_at}
+  UPDATE leads SET notas = COALESCE(notas, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
         'id', (extract(epoch from now()) * 1000)::bigint + id,
         'texto', '🔴 MOTIVO DA PERDA: ' || (ARRAY[
           'Achou o preço alto para o momento, pediu proposta menor',
@@ -98,10 +98,10 @@ BEGIN
           'Anunciou antes e disse que não viu resultado',
           'Orçamento de marketing já comprometido com Instagram',
           'Decisão ficou com o sócio, que preferiu não anunciar agora'])[1 + (id % 7)::int],
-        'created_at', COALESCE(fechado_em, created_at))))::text
+        'created_at', COALESCE(fechado_em, created_at)))
   WHERE empresa_id = v_emp AND status = 'perdido'
     AND client_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED')
-    AND (notas IS NULL OR notas = '' OR (left(notas, 1) = '[' AND notas NOT LIKE '%MOTIVO DA PERDA%'));
+    AND (notas IS NULL OR (jsonb_typeof(notas) = 'array' AND notas::text NOT LIKE '%MOTIVO DA PERDA%'));
 
   -- ── 5. Faixa horária nos itens (programa → horário) ──────────────────────────────
   UPDATE leads l SET itens = sub.novos

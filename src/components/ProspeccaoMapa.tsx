@@ -13,6 +13,7 @@ type Comercio = {
   cliente: { id: number; nome: string; segmento: string | null; situacao?: 'anunciando' | 'ja_comprou' | 'negociando' | 'cadastrado'; total_comprado?: number } | null;
   ultima_visita: { id: number; em: string; lead_id: number | null } | null;
   posicao?: 'endereco' | 'confirmada';
+  aproximada?: boolean;
 };
 type VisitaSolta = { id: number; nome: string; lat: number; lng: number; em: string; cliente_id: number | null; distancia_m: number };
 type Resposta = { fonte?: string; centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
@@ -61,8 +62,11 @@ function distancia(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
 }
 // Navegação pelo nome + endereço quando houver (o Google Maps acha o lugar certo mesmo se a
 // coordenada do cadastro estiver torta); senão, pela coordenada.
-function linkRota(c: { nome: string; endereco: string | null; cidade: string | null; lat: number; lng: number }) {
-  const destino = c.endereco ? `${c.nome}, ${c.endereco}${c.cidade ? ', ' + c.cidade : ''}` : `${c.lat},${c.lng}`;
+function linkRota(c: { nome: string; endereco: string | null; cidade: string | null; lat: number; lng: number; aproximada?: boolean; posicao?: string }) {
+  // Posição aproximada (Foursquare): busca pelo nome na cidade — o Google acha o comércio de verdade
+  // mesmo quando o endereço do cadastro está velho.
+  const destino = c.aproximada && c.posicao !== 'confirmada' ? `${c.nome}${c.cidade ? ', ' + c.cidade : ''}`
+    : c.endereco ? `${c.nome}, ${c.endereco}${c.cidade ? ', ' + c.cidade : ''}` : `${c.lat},${c.lng}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
 }
 
@@ -201,7 +205,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
               const s = SITUACAO[situacaoDe(c)];
               return (
                 <CircleMarker key={c.osm_id} center={[c.lat, c.lng]} radius={selecionado === c.osm_id ? 10 : 6}
-                  pathOptions={{ color: '#0B1120', weight: 1.5, fillColor: s.cor, fillOpacity: 0.95 }}
+                  pathOptions={c.aproximada && c.posicao !== 'confirmada' ? { color: s.cor, weight: 2, dashArray: '3 3', fillColor: s.cor, fillOpacity: 0.25 } : { color: '#0B1120', weight: 1.5, fillColor: s.cor, fillOpacity: 0.95 }}
                   eventHandlers={{ click: () => { selecionar(c); document.getElementById(`pros-${c.osm_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }}>
                   <Tooltip>{c.nome} · {c.segmento} · {s.label}</Tooltip>
                 </CircleMarker>
@@ -217,6 +221,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
       <div className="flex flex-wrap gap-3 text-[9px] font-black uppercase text-slate-400">
         {Object.values(SITUACAO).map(s => <span key={s.label} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: s.cor }} />{s.label}</span>)}
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-400" />Visitado (fora do mapa público)</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-dashed border-slate-400" />Posição aproximada</span>
       </div>
 
       <div className="space-y-2">
@@ -234,6 +239,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
                   <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Store size={10} /> {c.segmento}</p>
                   {(c.endereco || c.bairro) && <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5"><MapPin size={10} /> {[c.endereco, c.bairro, c.cidade].filter(Boolean).join(' · ')}</p>}
                   {c.posicao === 'endereco' && <p className="text-[9px] text-amber-400 font-bold mt-0.5">Posição corrigida pelo endereço</p>}
+                  {c.aproximada && !c.posicao && <p className="text-[9px] text-slate-500 font-bold mt-0.5">Posição aproximada · toque para conferir pelo endereço</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: `${s.cor}22`, color: s.cor, border: `1px solid ${s.cor}55` }}>{s.label}</span>

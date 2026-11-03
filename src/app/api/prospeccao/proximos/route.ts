@@ -8,6 +8,7 @@ export const maxDuration = 30;
 type Lugar = {
   id: string; nome: string; lat: number; lng: number; segmento: string; endereco: string | null; bairro: string | null;
   cidade: string | null; telefone: string | null; site: string | null; instagram: string | null; horario: string | null;
+  aproximada?: boolean; // posição do Foursquare (cadastro colaborativo, às vezes desatualizado)
 };
 
 // Cache por região (≈100 m) e raio: o vendedor abre o mapa várias vezes no mesmo lugar e o
@@ -138,8 +139,20 @@ async function buscarLugares(lat: number, lng: number, raio: number): Promise<Lu
   if (c && Date.now() - c.em < CACHE_MS) return c.lugares;
   let lugares: Lugar[] | null = null;
   if (google) { try { lugares = await lugaresGoogle(lat, lng, raio, google); } catch { /* tenta o próximo */ } }
-  if (!lugares && fsq) { try { lugares = await lugaresFoursquare(lat, lng, raio, fsq); } catch (e) { console.error('[prospeccao] foursquare', e); } }
-  if (!lugares && geo) { try { lugares = await lugaresGeoapify(lat, lng, raio, geo); } catch { /* tenta o próximo */ } }
+  if (!lugares && (fsq || geo)) {
+    // Geoapify (OpenStreetMap, posição precisa) é a base; Foursquare só completa com o que o OSM não
+    // tem, marcado como posição aproximada — no interior o Foursquare tem endereço/posição velhos.
+    const [g, f] = await Promise.allSettled([
+      geo ? lugaresGeoapify(lat, lng, raio, geo) : Promise.resolve([] as Lugar[]),
+      fsq ? lugaresFoursquare(lat, lng, raio, fsq) : Promise.resolve([] as Lugar[]),
+    ]);
+    const base = g.status === 'fulfilled' ? g.value : [];
+    const extra = (f.status === 'fulfilled' ? f.value : []).map(l => ({ ...l, aproximada: true }));
+    if (f.status === 'rejected') console.error('[prospeccao] foursquare', f.reason);
+    const nomesBase = base.map(b => normalizarNome(b.nome));
+    const soNoFsq = extra.filter(l => { const n = normalizarNome(l.nome); return !nomesBase.some(b => mesmoNegocio(n, b)); });
+    if (base.length || soNoFsq.length) lugares = [...base, ...soNoFsq];
+  }
   if (!lugares) lugares = await lugaresOsm(lat, lng, raio);
   if (CACHE.size > 300) CACHE.delete(CACHE.keys().next().value!);
   CACHE.set(id, { em: Date.now(), lugares });
@@ -227,6 +240,7 @@ async function responder(request: Request, corpo: { lat: number; lng: number; ra
       segmento: cliente?.segmento || l.segmento, segmento_osm: l.segmento,
       lat: l.lat, lng: l.lng, distancia_m: distanciaMetros(lat, lng, l.lat, l.lng),
       endereco: l.endereco, bairro: l.bairro, cidade: l.cidade, telefone: l.telefone, site: l.site, instagram: l.instagram, horario: l.horario,
+      aproximada: Boolean(l.aproximada),
       cliente: cliente ? { id: cliente.id, nome: cliente.nome_empresa, segmento: cliente.segmento || null } : null,
       ultima_visita: visita ? { id: visita.id, em: visita.created_at, lead_id: visita.lead_id } : null,
     };

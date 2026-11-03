@@ -27,15 +27,16 @@ DECLARE
   v_opm numeric;
   v_base numeric;
 BEGIN
-  SELECT count(*) INTO v_count FROM empresas WHERE nome ILIKE '%rbn%';
-  IF v_count <> 1 THEN RAISE EXCEPTION 'Esperava 1 empresa com "RBN" no nome, achou %. Ajuste o filtro.', v_count; END IF;
-  SELECT id INTO v_emp FROM empresas WHERE nome ILIKE '%rbn%';
+  -- Conta de demonstração (antiga RBN, renomeada para ONDA DEMO / emissora Onda 98.1 em 03/11/2026)
+  v_emp := '80fc2113-3112-4471-87c0-08770dd2ccb1';
+  SELECT count(*) INTO v_count FROM empresas WHERE id = v_emp;
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Conta de demonstração não encontrada.'; END IF;
   IF NOT EXISTS (SELECT 1 FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED') THEN
     RAISE EXCEPTION 'Carga principal da demo não encontrada — rode 20261029110000 antes.';
   END IF;
   v_users := ARRAY(SELECT id FROM profiles WHERE empresa_id = v_emp ORDER BY (cargo = 'diretor') DESC, id);
   v_unid := ARRAY(SELECT nome FROM unidades WHERE empresa_id = v_emp ORDER BY nome);
-  IF array_length(v_unid, 1) IS NULL THEN v_unid := ARRAY['RBN 94,3']; END IF;
+  IF array_length(v_unid, 1) IS NULL THEN v_unid := ARRAY['Onda 98.1']; END IF;
 
   -- ── 1. Segmento no padrão do cadastro de clientes ──────────────────────────────────
   UPDATE clientes SET segmento = CASE

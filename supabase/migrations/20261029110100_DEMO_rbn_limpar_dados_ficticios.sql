@@ -10,9 +10,10 @@ DECLARE
   v_emp uuid;
   v_count int;
 BEGIN
-  SELECT count(*) INTO v_count FROM empresas WHERE nome ILIKE '%rbn%';
-  IF v_count <> 1 THEN RAISE EXCEPTION 'Esperava 1 empresa com "RBN" no nome, achou %. Ajuste o filtro.', v_count; END IF;
-  SELECT id INTO v_emp FROM empresas WHERE nome ILIKE '%rbn%';
+  -- Conta de demonstração (antiga RBN, renomeada para ONDA DEMO / emissora Onda 98.1 em 03/11/2026)
+  v_emp := '80fc2113-3112-4471-87c0-08770dd2ccb1';
+  SELECT count(*) INTO v_count FROM empresas WHERE id = v_emp;
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Conta de demonstração não encontrada.'; END IF;
 
   -- Visitas demo (20261029130000) = as ligadas aos anunciantes demo; antes dos clientes (FK vira NULL).
   DELETE FROM visitas WHERE empresa_id = v_emp AND cliente_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED');

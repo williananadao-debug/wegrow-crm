@@ -21,7 +21,7 @@ DECLARE
     '[{"servico": "Testemunhal ao vivo", "quantidade": 8, "precoUnitario": 90, "tempo": "30\"", "programa": "MANHÃ"}]'::jsonb,
     '[{"servico": "Spot 30\" horário nobre (6h-9h)", "quantidade": 30, "precoUnitario": 45, "tempo": "30\"", "programa": "MANHÃ"}]'::jsonb,
     '[{"servico": "Spot 30\" rotativo", "quantidade": 45, "precoUnitario": 28, "tempo": "30\"", "programa": "ROTATIVO"}, {"servico": "Produção de spot (gravação + edição)", "quantidade": 1, "precoUnitario": 250}]'::jsonb,
-    '[{"servico": "Post patrocinado Instagram RBN", "quantidade": 2, "precoUnitario": 350}, {"servico": "Spot 15\" rotativo", "quantidade": 30, "precoUnitario": 18, "tempo": "15\"", "programa": "ROTATIVO"}]'::jsonb
+    '[{"servico": "Post patrocinado Instagram Onda", "quantidade": 2, "precoUnitario": 350}, {"servico": "Spot 15\" rotativo", "quantidade": 30, "precoUnitario": 18, "tempo": "15\"", "programa": "ROTATIVO"}]'::jsonb
   ];
   v_obs text[] := ARRAY['Apresentei o mídia kit e a audiência da manhã.', 'Visita de relacionamento — campanha no ar.', 'Entreguei o comprovante de inserções.', 'Levei proposta impressa; responde até sexta.', 'Conversa sobre campanha de fim de ano.'];
   v_tar text[] := ARRAY['Ligar para % — retorno da proposta', 'Visitar % — renovação do contrato', 'Follow-up WhatsApp com %', 'Mandar comprovante de veiculação para %', 'Levar mídia kit atualizado para %'];
@@ -36,13 +36,14 @@ DECLARE
   v_lead bigint;
   v_dias int;
 BEGIN
-  SELECT count(*) INTO v_count FROM empresas WHERE nome ILIKE '%rbn%';
-  IF v_count <> 1 THEN RAISE EXCEPTION 'Esperava 1 empresa com "RBN" no nome, achou %. Ajuste o filtro.', v_count; END IF;
-  SELECT id INTO v_emp FROM empresas WHERE nome ILIKE '%rbn%';
+  -- Conta de demonstração (antiga RBN, renomeada para ONDA DEMO / emissora Onda 98.1 em 03/11/2026)
+  v_emp := '80fc2113-3112-4471-87c0-08770dd2ccb1';
+  SELECT count(*) INTO v_count FROM empresas WHERE id = v_emp;
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Conta de demonstração não encontrada.'; END IF;
   IF NOT EXISTS (SELECT 1 FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED') THEN RAISE EXCEPTION 'Rode antes a carga principal (20261029110000).'; END IF;
   v_users := ARRAY(SELECT id FROM profiles WHERE empresa_id = v_emp ORDER BY (cargo = 'diretor') DESC, id);
   v_unid := ARRAY(SELECT nome FROM unidades WHERE empresa_id = v_emp ORDER BY nome);
-  IF array_length(v_unid, 1) IS NULL THEN v_unid := ARRAY['RBN 94,3']; END IF;
+  IF array_length(v_unid, 1) IS NULL THEN v_unid := ARRAY['Onda 98.1']; END IF;
 
   -- ── 1. Todo dia até hoje: venda fechada, visita e tarefa ─────────────────────────
   FOR d IN SELECT generate_series(DATE '2026-06-01', CURRENT_DATE, interval '1 day')::date LOOP

@@ -260,6 +260,8 @@ async function responder(request: Request, corpo: { lat: number; lng: number; ra
   comercios.sort((a, b) => a.distancia_m - b.distancia_m);
   return NextResponse.json({
     centro: { lat, lng }, raio,
+    // De onde vieram os comércios (o id de cada lugar leva o prefixo da fonte)
+    fonte: corpo ? 'OpenStreetMap (pelo navegador)' : ({ 'g': 'Google', 'fsq': 'Foursquare', 'geo': 'Geoapify', 'osm': 'OpenStreetMap' } as Record<string, string>)[lugares[0]?.id.split(':')[0] || ''] || (process.env.FOURSQUARE_API_KEY ? 'Foursquare' : 'OpenStreetMap'),
     comercios,
     visitas: visitasSoltas,
     resumo: {

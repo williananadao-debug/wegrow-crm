@@ -14,7 +14,7 @@ type Comercio = {
   ultima_visita: { id: number; em: string; lead_id: number | null } | null;
 };
 type VisitaSolta = { id: number; nome: string; lat: number; lng: number; em: string; cliente_id: number | null; distancia_m: number };
-type Resposta = { centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
+type Resposta = { fonte?: string; centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
 
 const SITUACAO: Record<string, { cor: string; label: string }> = {
   anunciando: { cor: '#22C55E', label: 'Anunciando' },
@@ -229,7 +229,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
           );
         })}
       </div>
-      <p className="text-[9px] text-slate-600">Comércios do OpenStreetMap. Cidades pequenas podem ter cobertura parcial; o que você cadastra e visita passa a aparecer aqui.</p>
+      <p className="text-[9px] text-slate-600">Comércios de {dados?.fonte || 'mapa público'}. Cidades pequenas podem ter cobertura parcial; o que você cadastra e visita passa a aparecer aqui.</p>
     </div>
   );
 }

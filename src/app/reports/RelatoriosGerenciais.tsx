@@ -470,6 +470,9 @@ function GraficoView({ g }: { g: Grafico }) {
     );
   }
   const max = Math.max(...g.dados.map(d => Math.max(d.valor, d.valor2 || 0)), 1), dois = g.dados.some(d => d.valor2 !== undefined);
+  // Rótulo de dados em cima de cada coluna; com duas séries e muitas colunas fica ilegível, aí só no hover
+  const rotulos = !dois || g.dados.length <= 8;
+  const rotulo = (v: number) => rotulos && v > 0 && <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-white whitespace-nowrap">{fmtG(v, g.formato)}</span>;
   return (
     <div>
       {dois && <div className="flex gap-4 text-[10px] text-slate-400 mb-2"><span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-sm bg-blue-500" />{g.serie}</span><span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-sm bg-[var(--cor-primaria)]" />{g.serie2}</span></div>}
@@ -478,9 +481,9 @@ function GraficoView({ g }: { g: Grafico }) {
           <div key={i} className="flex-1 min-w-[34px] h-full flex flex-col justify-end items-center">
             <div className="w-full flex items-end justify-center gap-0.5 h-full">
               <div className={`${dois ? 'w-1/2' : 'w-full'} rounded-t bg-blue-500/80 relative`} style={{ height: `${Math.max(d.valor / max * 100, d.valor ? 2 : 0)}%` }} title={`${g.serie || ''} ${fmtG(d.valor, g.formato)}`}>
-                {!dois && d.valor > 0 && <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-white whitespace-nowrap">{fmtG(d.valor, g.formato)}</span>}
+                {rotulo(d.valor)}
               </div>
-              {dois && <div className="w-1/2 rounded-t bg-[var(--cor-primaria)]" style={{ height: `${Math.max((d.valor2 || 0) / max * 100, d.valor2 ? 2 : 0)}%` }} title={`${g.serie2 || ''} ${fmtG(d.valor2 || 0, g.formato)}`} />}
+              {dois && <div className="w-1/2 rounded-t bg-[var(--cor-primaria)] relative" style={{ height: `${Math.max((d.valor2 || 0) / max * 100, d.valor2 ? 2 : 0)}%` }} title={`${g.serie2 || ''} ${fmtG(d.valor2 || 0, g.formato)}`}>{rotulo(d.valor2 || 0)}</div>}
             </div>
             <span className="text-[9px] text-slate-500 font-bold mt-1 truncate max-w-full" title={d.rotulo}>{d.rotulo}</span>
           </div>

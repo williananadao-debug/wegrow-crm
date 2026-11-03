@@ -104,6 +104,9 @@ export default function ReportsPage() {
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
   const [rawLeadsGrafico, setRawLeadsGrafico] = useState<any[]>([]);
+  // Gráfico do ano somado no banco (painel_evolucao_mensal): 12 números em vez das vendas do ano.
+  // null = função indisponível (migration não rodada) → usa rawLeadsGrafico como antes.
+  const [graficoRpc, setGraficoRpc] = useState<number[] | null>(null);
   const [rawPremissas, setRawPremissas] = useState<any[]>([]);
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
   const [rawClientes, setRawClientes] = useState<any[]>([]);
@@ -224,14 +227,15 @@ export default function ReportsPage() {
         return q;
       };
       const doisCampos = (f: (q: ReturnType<typeof baseGrafico>) => ReturnType<typeof baseGrafico>) => [paginar(() => f(baseGrafico('fechado_em'))), paginar(() => f(baseGrafico('created_at')))];
-      const graficoQuery = mesclarQueries(
+      const graficoQuery = () => mesclarQueries(
         isGerente && perfil?.unidade ? [...doisCampos(q => q.eq('unidade', perfil.unidade)), ...doisCampos(q => q.eq('user_id', user?.id))]
           : !isDirector ? doisCampos(q => q.eq('user_id', user?.id)) : doisCampos(q => q),
         LIMITE_LINHAS);
 
+      // Em paralelo com o resto: se a função do banco responder, as vendas do ano nem são buscadas
       const [leadsRes, graficoRes, premissasRes, profilesRes, visitasRes] = await Promise.all([
         buildLeadsQuery(),
-        graficoQuery,
+        carregarGraficoRpc().catch(() => false).then(ok => ok ? { data: [] as any[] } : graficoQuery()),
         supabase.from('premissas').select('titulo, tipo_cliente').limit(1000),
         perfil?.empresa_id
           ? supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id)
@@ -260,6 +264,19 @@ export default function ReportsPage() {
       setRawClientes(res.flatMap(r => r.data || []));
     } catch (e) { console.error('[reports] clientes das vendas', e); }
   }
+
+  async function carregarGraficoRpc(): Promise<boolean> {
+    const pUser = filtroVendedor !== 'Todos' ? filtroVendedor : (!isDirector && !isGerente ? user?.id : null);
+    const pUnidade = isGerente ? (perfil?.unidade || null) : (filtroUnidade !== 'Todas' ? filtroUnidade : null);
+    const { data, error } = await supabase.rpc('painel_evolucao_mensal', { p_ano: new Date().getFullYear(), p_user: pUser, p_unidade: pUnidade });
+    if (error) { setGraficoRpc(null); return false; }
+    const meses = Array(12).fill(0);
+    (data || []).forEach((r: any) => { meses[Number(r.mes) - 1] = Number(r.valor) || 0; });
+    setGraficoRpc(meses);
+    return true;
+  }
+  // Filtro de unidade/vendedor muda o gráfico do ano: pede os 12 totais de novo ao banco
+  useEffect(() => { if (user && graficoRpc) carregarGraficoRpc(); }, [filtroUnidade, filtroVendedor]);
 
   async function fetchDadosDoPeriodo() {
     setLoading(true);
@@ -480,10 +497,11 @@ export default function ReportsPage() {
       const d = new Date(anoAtual, i, 1);
       const mesStr = String(i + 1).padStart(2, '0');
       const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+      if (graficoRpc) return { label, valor: graficoRpc[i], isCurrent: i === hoje.getMonth() };
       const ganhos = filtrado.filter(l => l.created_at && diaReferenciaLead(l).substring(0, 7) === `${anoAtual}-${mesStr}`);
       return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === hoje.getMonth() };
     });
-  }, [rawLeadsGrafico, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);
+  }, [rawLeadsGrafico, graficoRpc, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);
 
   const handleGeneratePreview = async () => {
       setIsExporting(true);

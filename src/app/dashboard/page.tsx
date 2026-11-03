@@ -61,20 +61,19 @@ export default function DashboardPage() {
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(null);
 
   const [rawLeads, setRawLeads] = useState<any[]>([]);
+  const [evolucaoAno, setEvolucaoAno] = useState<number[] | null>(null);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
   const [rawVisitas, setRawVisitas] = useState<any[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
   const temMidia = Boolean(empresa?.modulos?.midia);
 
-  // Janela de dados: do início do ano (Evolução Mensal) ou do período anterior ao filtrado
-  // (comparativo), o que vier antes, até hoje/fim do filtro. Antes o painel baixava TODOS os
-  // leads e visitas da empresa desde sempre — milhares de linhas a cada abertura e a cada
-  // refresh de 5 min. Só muda (e recarrega) se o filtro sair dessa janela.
+  // Janela de dados: do período anterior ao filtrado (comparativo) até hoje/fim do filtro. A
+  // Evolução Mensal do ano vem somada do banco (painel_evolucao_mensal), então não precisa mais
+  // baixar as vendas do ano inteiro. Antes o painel baixava todos os leads desde sempre.
   const janela = useMemo(() => {
     const hoje = getLocalYYYYMMDD(new Date());
-    const inicioAno = `${new Date().getFullYear()}-01-01`;
-    let inicio = inicioAno;
+    let inicio = dataInicio || getLocalYYYYMMDD(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
     if (dataInicio) {
       const fimRef = dataFim && dataFim < hoje ? dataFim : hoje;
       const dias = Math.max(Math.round((new Date(fimRef + 'T12:00:00').getTime() - new Date(dataInicio + 'T12:00:00').getTime()) / 86400000), 0) + 1;
@@ -130,13 +129,32 @@ export default function DashboardPage() {
 
         // Leads = criados na janela + fechados na janela + pipeline aberto (previsão e follow-ups)
         // + contratos vencendo nos próximos 30 dias. Mesclados por id.
-        const [criados, fechados, abertos, vencendo, perfisRes, visitas] = await Promise.all([
+        // Evolução mensal do ano: 12 totais somados no banco. Sem a função (migration
+        // 20261103110000 não rodada), cai pra busca só das vendas ganhas do ano.
+        const ano = new Date().getFullYear();
+        const evolucaoAno = async (): Promise<number[]> => {
+            const { data, error } = await supabase.rpc('painel_evolucao_mensal', { p_ano: ano, p_user: isDirector ? null : user?.id });
+            const meses = Array(12).fill(0);
+            if (!error) { (data || []).forEach((r: any) => { meses[Number(r.mes) - 1] = Number(r.valor) || 0; }); return meses; }
+            const vendas = await paginar(() => {
+                let q = supabase.from('leads').select('id, status, valor_total, fechado_em, created_at').eq('status', 'ganho')
+                  .gte('fechado_em', new Date(ano, 0, 1).toISOString()).lt('fechado_em', new Date(ano + 1, 0, 1).toISOString());
+                if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+                if (!isDirector) q = q.eq('user_id', user?.id);
+                return q;
+            });
+            vendas.forEach((l: any) => { meses[new Date(diaReferenciaLead(l) + 'T12:00:00').getMonth()] += Number(l.valor_total) || 0; });
+            return meses;
+        };
+
+        const [criados, fechados, abertos, vencendo, perfisRes, visitas, evolucao] = await Promise.all([
             paginar(() => leadsQuery().gte('created_at', iniIso).lte('created_at', fimIso)),
             paginar(() => leadsQuery().gte('fechado_em', iniIso).lte('fechado_em', fimIso)),
             paginar(() => leadsQuery().eq('status', 'aberto')),
             paginar(() => leadsQuery().eq('status', 'ganho').gte('contrato_fim', hoje).lte('contrato_fim', em30)),
             perfisQuery,
             paginar(visitasQuery),
+            evolucaoAno().catch(() => null),
         ]);
         const porId = new Map<number, any>();
         for (const l of [...criados, ...fechados, ...abertos, ...vencendo]) porId.set(l.id, l);
@@ -144,6 +162,7 @@ export default function DashboardPage() {
         setRawLeads(Array.from(porId.values()));
         setRawPerfis(perfisRes.data || []);
         setRawVisitas(visitas);
+        if (evolucao) setEvolucaoAno(evolucao);
 
     } catch (error) {
         console.error("Erro no refresh do dashboard:", error);
@@ -266,7 +285,7 @@ export default function DashboardPage() {
         const ini = getLocalYYYYMMDD(d);
         const fim2 = getLocalYYYYMMDD(new Date(d.getFullYear(), d.getMonth() + 1, 0));
         const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
-        const valor = rawLeads
+        const valor = evolucaoAno ? evolucaoAno[i] : rawLeads
           .filter(l => l.status === 'ganho' && diaReferenciaLead(l) >= ini && diaReferenciaLead(l) <= fim2)
           .reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
         return { label, valor, isCurrent: i === refMes.getMonth() };
@@ -342,7 +361,7 @@ export default function DashboardPage() {
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
           followupsAtrasados: rawLeads.filter(l => l.followup_em && l.followup_em < getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
-  }, [rawLeads, rawPerfis, rawVisitas, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
+  }, [rawLeads, rawPerfis, rawVisitas, evolucaoAno, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   useEffect(() => {
     if (!contratosVencendo.length || !user?.id) return;

@@ -21,7 +21,13 @@ BEGIN
     SELECT 1 FROM clientes c WHERE c.empresa_id = v_emp AND c.observacao_risco = 'DEMO-SEED' AND t.titulo LIKE '%' || c.nome_empresa || '%');
   DELETE FROM jobs WHERE empresa_id = v_emp AND briefing LIKE '%DEMO-SEED%';
   DELETE FROM lancamentos WHERE empresa_id = v_emp AND nf_numero = 'DEMO';
-  DELETE FROM leads WHERE empresa_id = v_emp AND origem = 'demo_seed';
+  -- Vendas demo: o complemento 20261103120000 troca a origem 'demo_seed' por origens realistas,
+  -- então também pega as vendas ligadas a anunciantes demo.
+  DELETE FROM leads WHERE empresa_id = v_emp AND (origem = 'demo_seed' OR client_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED'));
+  -- Audiência demo (complemento 20261103120000); as faixas saem junto (cascade)
+  IF to_regclass('public.audiencia_pesquisas') IS NOT NULL THEN
+    DELETE FROM audiencia_pesquisas WHERE empresa_id = v_emp AND observacao = 'DEMO-SEED';
+  END IF;
   DELETE FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED';
   DELETE FROM servicos WHERE empresa_id = v_emp AND descricao LIKE 'DEMO-SEED%';
   -- DELETE FROM metas WHERE empresa_id = v_emp AND ano = 2026 AND tipo = 'faturamento' AND user_id IS NULL;

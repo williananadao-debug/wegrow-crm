@@ -111,7 +111,7 @@ BEGIN
   -- Limpa follow-ups demo e redistribui: 3 para hoje, 4 atrasados, o resto nos próximos dias.
   WITH abertos AS (
     SELECT id, row_number() OVER (ORDER BY created_at DESC) AS rn
-    FROM leads WHERE empresa_id = v_emp AND origem = 'demo_seed' AND status = 'aberto'
+    FROM leads WHERE empresa_id = v_emp AND (origem = 'demo_seed' OR client_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED')) AND status = 'aberto'
   )
   UPDATE leads l SET followup_em = CASE
       WHEN a.rn <= 3 THEN CURRENT_DATE
@@ -122,7 +122,7 @@ BEGIN
   -- Contratos vencendo: 6 vendas recentes com fim em 3, 7, 12, 18, 24 e 29 dias.
   WITH recentes AS (
     SELECT id, row_number() OVER (ORDER BY fechado_em DESC) AS rn
-    FROM leads WHERE empresa_id = v_emp AND origem = 'demo_seed' AND status = 'ganho' AND contrato_inicio IS NOT NULL
+    FROM leads WHERE empresa_id = v_emp AND (origem = 'demo_seed' OR client_id IN (SELECT id FROM clientes WHERE empresa_id = v_emp AND observacao_risco = 'DEMO-SEED')) AND status = 'ganho' AND contrato_inicio IS NOT NULL
   )
   UPDATE leads l SET contrato_fim = CURRENT_DATE + (ARRAY[3, 7, 12, 18, 24, 29])[r.rn::int]
   FROM recentes r WHERE l.id = r.id AND r.rn <= 6;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
+import { paginarSupabase } from '@/lib/paginarSupabase';
 import { distanciaMetros, ehNegocioOsm, GRUPOS_GOOGLE, mesmoNegocio, normalizarNome, queryOverpass, segmentoDasTags, segmentoFoursquare, segmentoGoogle } from '@/lib/prospeccaoOsm';
 
 export const dynamic = 'force-dynamic';
@@ -75,14 +76,8 @@ const CACHE_CLIENTES = new Map<string, { em: number; lista: any[] }>();
 async function nomesClientes(db: ReturnType<typeof supabaseAdmin>, empresaId: string): Promise<any[]> {
   const c = CACHE_CLIENTES.get(empresaId);
   if (c && Date.now() - c.em < 120_000) return c.lista;
-  const lista: any[] = [];
-  for (let de = 0; de < 40000; de += 4000) {
-    const lote = await Promise.all([0, 1, 2, 3].map(i => db.from('clientes').select('id, nome_empresa, nome_fantasia, razao_social, segmento')
-      .eq('empresa_id', empresaId).is('deleted_at', null).order('id').range(de + i * 1000, de + i * 1000 + 999)));
-    let fim = false;
-    for (const { data } of lote) { lista.push(...(data || [])); if (!data || data.length < 1000) { fim = true; break; } }
-    if (fim) break;
-  }
+  const { data: lista } = await paginarSupabase(() => db.from('clientes').select('id, nome_empresa, nome_fantasia, razao_social, segmento')
+    .eq('empresa_id', empresaId).is('deleted_at', null).order('id'), 40000);
   CACHE_CLIENTES.set(empresaId, { em: Date.now(), lista });
   return lista;
 }

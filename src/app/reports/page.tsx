@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { SkeletonPage } from '@/components/Skeleton';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { MaterialSemanal } from './MaterialSemanal';
+import { paginarSupabase } from '@/lib/paginarSupabase';
 import RelatoriosGerenciais, { RELATORIOS, type Ctx as CtxRelatorio } from './RelatoriosGerenciais';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
@@ -133,18 +134,9 @@ export default function ReportsPage() {
   // O Supabase entrega no máximo 1000 linhas por consulta, mesmo com .limit(5000) — o resto
   // sumia calado (mês com venda faltando, cidade de cliente "não informada"). Busca em páginas
   // de 1000 até acabar; montar() precisa devolver uma query nova a cada chamada.
-  // As páginas vêm de 4 em 4 em paralelo (uma a uma deixava o relatório lento).
-  async function paginar(montar: () => any, max = LIMITE_LINHAS) {
-    const todos: any[] = [];
-    for (let de = 0; de < max; de += 4000) {
-      const lote = await Promise.all([0, 1, 2, 3].map(i => montar().range(de + i * 1000, de + i * 1000 + 999)));
-      for (const { data, error } of lote) {
-        if (error) return { data: todos, error };
-        todos.push(...(data || []));
-        if (!data || data.length < 1000) return { data: todos, error: null };
-      }
-    }
-    return { data: todos, error: null };
+  // 1ª página sozinha (quase sempre basta); as seguintes 3 por vez (lib/paginarSupabase).
+  function paginar(montar: () => any, max = LIMITE_LINHAS) {
+    return paginarSupabase(montar, max);
   }
 
   async function mesclarQueries(queries: any[], limite: number) {

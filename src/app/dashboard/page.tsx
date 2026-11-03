@@ -7,6 +7,7 @@ import {
   CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag, Megaphone
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
+import { paginarSupabase } from '@/lib/paginarSupabase';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { InfoTooltip } from '@/components/InfoTooltip';
@@ -103,18 +104,11 @@ export default function DashboardPage() {
             return q;
         };
 
-        // Páginas de 1000 (teto do Supabase) em paralelo; cada recorte abaixo já é pequeno.
+        // Recorte pequeno = 1 requisição; só pagina se passar de 1000 linhas
         const paginar = async (montar: () => any) => {
-            const todos: any[] = [];
-            for (let de = 0; de < 20000; de += 4000) {
-                const lote = await Promise.all([0, 1, 2, 3].map(i => montar().order('id').range(de + i * 1000, de + i * 1000 + 999)));
-                for (const { data, error } of lote) {
-                    if (error) throw error;
-                    todos.push(...(data || []));
-                    if (!data || data.length < 1000) return todos;
-                }
-            }
-            return todos;
+            const { data, error } = await paginarSupabase(() => montar().order('id'));
+            if (error) throw error;
+            return data;
         };
 
         let perfisQuery = supabase.from('profiles').select('id, nome');

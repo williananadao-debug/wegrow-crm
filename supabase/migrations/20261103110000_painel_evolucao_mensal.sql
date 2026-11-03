@@ -33,3 +33,6 @@ as $$
 $$;
 
 grant execute on function public.painel_evolucao_mensal(int, uuid, text) to authenticated;
+
+-- Recarrega o cache da API do Supabase pra função aparecer na hora (sem isso pode dar 404 por alguns minutos)
+notify pgrst, 'reload schema';

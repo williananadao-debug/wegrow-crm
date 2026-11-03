@@ -271,6 +271,9 @@ export default function DashboardPage() {
       const convAnt = visitasAnt.length > 0 ? (gAnt / visitasAnt.length) * 100 : 0;
       const deltaFat = fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : null;
       const deltaConv = convAnt > 0 ? Math.round(conversao - convAnt) : null;
+      // Visitas e leads do período contra o período anterior de mesmo tamanho (mesmos filtros)
+      const deltaVisitas = visitasAnt.length > 0 ? ((visitasRegistradas - visitasAnt.length) / visitasAnt.length) * 100 : null;
+      const deltaLeads = leadsAnt.length > 0 ? ((leadsFiltrados.length - leadsAnt.length) / leadsAnt.length) * 100 : null;
 
       // Evolução do ano corrente, mês a mês (independente de filtros)
       const refMes = new Date();
@@ -349,7 +352,7 @@ export default function DashboardPage() {
 
       return {
           ranking: rankingFinal,
-          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitasRegistradas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, evolucaoMensal, totalDesconto },
+          statsComercial: { faturamentoMês: fat, metaMes: 100000, leadsAbertos: leadsFiltrados.length - ganhos - perdidos, totalVisitas: visitasRegistradas, taxaConversao: Math.round(conversao), propostasEnviadas: leadsFiltrados.length, leadsSemVisita: semVisita, leadsComVisita: comVisita, funil, vendasPorDia: vendasPorDiaArray, visitasRegistradas, visitasConvertidas, visitasGanhas, deltaFat, deltaConv, deltaVisitas, deltaLeads, visitasAnteriores: visitasAnt.length, leadsAnteriores: leadsAnt.length, evolucaoMensal, totalDesconto },
           previsaoFechamento: Math.round(previsaoFechamento),
           contratosVencendo,
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
@@ -536,11 +539,21 @@ export default function DashboardPage() {
                 <div onClick={() => irParaVisitas()} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-yellow-500/40 transition-colors">
                     <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest mb-0.5">Visitas</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.totalVisitas}</h3>
+                    {statsComercial.deltaVisitas !== null && (
+                      <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaVisitas >= 0 ? 'text-green-400' : 'text-red-400'}`} title={`${statsComercial.visitasAnteriores} no período anterior`}>
+                        {statsComercial.deltaVisitas >= 0 ? '▲' : '▼'} {Math.abs(statsComercial.deltaVisitas).toFixed(1)}% vs período anterior
+                      </p>
+                    )}
                     <MapPin className="absolute top-4 right-4 text-yellow-400 opacity-20" size={24} />
                 </div>
                 <div onClick={() => irParaDeals()} className="bg-[#0B1120] border border-white/10 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-purple-500/40 transition-colors">
                     <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-0.5">{isCDL ? 'Prospectos' : 'Leads Totais'}</p>
                     <h3 className="text-2xl font-black text-white tracking-tight">{statsComercial.propostasEnviadas}</h3>
+                    {statsComercial.deltaLeads !== null && (
+                      <p className={`text-[9px] font-black mt-1 ${statsComercial.deltaLeads >= 0 ? 'text-green-400' : 'text-red-400'}`} title={`${statsComercial.leadsAnteriores} no período anterior`}>
+                        {statsComercial.deltaLeads >= 0 ? '▲' : '▼'} {Math.abs(statsComercial.deltaLeads).toFixed(1)}% vs período anterior
+                      </p>
+                    )}
                     <FileText className="absolute top-4 right-4 text-purple-400 opacity-20" size={24} />
                 </div>
                 <div onClick={() => irParaDeals({ etapa: '4' })} className="bg-[#0B1120] border border-red-500/20 p-4 rounded-2xl relative overflow-hidden group shadow-lg cursor-pointer hover:border-red-500/50 transition-colors">

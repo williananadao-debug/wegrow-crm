@@ -72,6 +72,32 @@ async function lugaresGoogle(lat: number, lng: number, raio: number, chave: stri
 
 // Nomes da carteira pra casar com o mapa — só id/nomes/segmento, páginas em paralelo e cache
 // curto por empresa (abrir o mapa de novo não refaz a busca).
+// Segmentos que a empresa mais vende (últimos 12 meses): base do "potencial" de cada comércio
+// não cadastrado. Só vendas com cliente vinculado; segmento vem do cadastro do cliente.
+const CACHE_SEGMENTOS = new Map<string, { em: number; ranking: { segmento: string; vendas: number; valor: number }[] }>();
+async function segmentosFortes(db: ReturnType<typeof supabaseAdmin>, empresaId: string) {
+  const c = CACHE_SEGMENTOS.get(empresaId);
+  if (c && Date.now() - c.em < 30 * 60_000) return c.ranking;
+  const desde = new Date(Date.now() - 365 * 86400_000).toISOString();
+  const { data: vendas } = await paginarSupabase(() => db.from('leads').select('client_id, valor_total').eq('empresa_id', empresaId).eq('status', 'ganho')
+    .gte('fechado_em', desde).not('client_id', 'is', null).order('id'), 20000);
+  const ids = [...new Set((vendas || []).map((v: any) => v.client_id))];
+  const seg: Record<number, string> = {};
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await db.from('clientes').select('id, segmento').in('id', ids.slice(i, i + 300));
+    (data || []).forEach((x: any) => { if (x.segmento) seg[x.id] = x.segmento; });
+  }
+  const mapa = new Map<string, { segmento: string; vendas: number; valor: number }>();
+  (vendas || []).forEach((v: any) => {
+    const s = seg[v.client_id]; if (!s) return;
+    const a = mapa.get(s) || { segmento: s, vendas: 0, valor: 0 };
+    a.vendas++; a.valor += Number(v.valor_total) || 0; mapa.set(s, a);
+  });
+  const ranking = [...mapa.values()].sort((a, b) => b.valor - a.valor);
+  CACHE_SEGMENTOS.set(empresaId, { em: Date.now(), ranking });
+  return ranking;
+}
+
 const CACHE_CLIENTES = new Map<string, { em: number; lista: any[] }>();
 async function nomesClientes(db: ReturnType<typeof supabaseAdmin>, empresaId: string): Promise<any[]> {
   const c = CACHE_CLIENTES.get(empresaId);
@@ -266,8 +292,19 @@ async function responder(request: Request, corpo: { lat: number; lng: number; ra
     .filter((v, i, arr) => arr.findIndex(x => normalizarNome(x.empresa) === normalizarNome(v.empresa)) === i)
     .map(v => ({ id: v.id, nome: v.empresa, lat: v.latitude, lng: v.longitude, em: v.created_at, cliente_id: v.cliente_id, lead_id: v.lead_id, distancia_m: distanciaMetros(lat, lng, v.latitude, v.longitude) }));
 
+  // Potencial: comércio novo de um segmento que a empresa já vende bem tem mais chance de fechar
+  const ranking = await segmentosFortes(db, empresaId).catch(() => []);
+  const posicao = new Map(ranking.map((r, i) => [r.segmento, i]));
+  comercios.forEach(c => {
+    if (c.cliente) return;
+    const i = posicao.get(c.segmento);
+    c.potencial = i === undefined ? null : i < 3 ? 'alto' : i < 8 ? 'medio' : null;
+    if (i !== undefined) c.potencial_info = `${ranking[i].vendas} venda${ranking[i].vendas === 1 ? '' : 's'} nesse segmento em 12 meses`;
+  });
+
   comercios.sort((a, b) => a.distancia_m - b.distancia_m);
   return NextResponse.json({
+    segmentos_fortes: ranking.slice(0, 8),
     centro: { lat, lng }, raio,
     // De onde vieram os comércios (o id de cada lugar leva o prefixo da fonte)
     fonte: corpo ? 'OpenStreetMap (pelo navegador)' : [...new Set(lugares.map(l => ({ g: 'Google', fsq: 'Foursquare', geo: 'Geoapify', osm: 'OpenStreetMap' } as Record<string, string>)[l.id.split(':')[0]]).filter(Boolean))].join(' + ') || 'mapa público',

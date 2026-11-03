@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Loader2, LocateFixed, Navigation, Phone, Plus, MapPin, CheckCircle2, Store, Globe } from 'lucide-react';
+import { Loader2, LocateFixed, Navigation, Phone, Plus, MapPin, CheckCircle2, Store, Globe, Flame, Route, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { queryOverpass } from '@/lib/prospeccaoOsm';
 
@@ -14,9 +14,10 @@ type Comercio = {
   ultima_visita: { id: number; em: string; lead_id: number | null } | null;
   posicao?: 'endereco' | 'confirmada';
   aproximada?: boolean;
+  potencial?: 'alto' | 'medio' | null; potencial_info?: string;
 };
 type VisitaSolta = { id: number; nome: string; lat: number; lng: number; em: string; cliente_id: number | null; distancia_m: number };
-type Resposta = { fonte?: string; centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
+type Resposta = { fonte?: string; segmentos_fortes?: { segmento: string; vendas: number; valor: number }[]; centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
 
 const SITUACAO: Record<string, { cor: string; label: string }> = {
   anunciando: { cor: '#22C55E', label: 'Anunciando' },
@@ -76,9 +77,10 @@ function Recentrar({ lat, lng, raio }: { lat: number; lng: number; raio: number 
   return null;
 }
 
-export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }: {
+export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita, onRotaAtualizada }: {
   empresaId: string; userId: string;
   onRegistrarVisita: (dados: { nome: string; telefone: string; cidade: string; clienteId: number | null }) => void;
+  onRotaAtualizada?: () => void;
 }) {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [raio, setRaio] = useState(1000);
@@ -89,6 +91,11 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
   const [segmento, setSegmento] = useState('Todos');
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [cadastrando, setCadastrando] = useState<string | null>(null);
+  const [ordem, setOrdem] = useState<'distancia' | 'potencial'>('distancia');
+  // Comércios marcados pra virar paradas da Rota do Dia
+  const [marcados, setMarcados] = useState<string[]>([]);
+  const [montandoRota, setMontandoRota] = useState(false);
+  const [aviso, setAviso] = useState('');
 
   async function selecionar(c: Comercio) {
     setSelecionado(c.osm_id);
@@ -139,12 +146,20 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
     return () => { cancelado = true; };
   }, [pos, raio]);
 
-  const segmentos = useMemo(() => ['Todos', ...Array.from(new Set((dados?.comercios || []).map(c => c.segmento))).sort((a, b) => a.localeCompare(b, 'pt-BR'))], [dados]);
-  const lista = useMemo(() => (dados?.comercios || []).filter(c =>
-    (filtro === 'todos' || (filtro === 'novos' ? !c.cliente : !!c.cliente)) && (segmento === 'Todos' || c.segmento === segmento)
-  ), [dados, filtro, segmento]);
+  // Segmentos com a contagem no raio (respeitando o filtro de situação), os mais frequentes primeiro
+  const segmentos = useMemo(() => {
+    const base = (dados?.comercios || []).filter(c => filtro === 'todos' || (filtro === 'novos' ? !c.cliente : !!c.cliente));
+    const cont = new Map<string, number>(); base.forEach(c => cont.set(c.segmento, (cont.get(c.segmento) || 0) + 1));
+    return [...cont.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  }, [dados, filtro]);
+  const lista = useMemo(() => {
+    const peso = (c: Comercio) => c.potencial === 'alto' ? 0 : c.potencial === 'medio' ? 1 : 2;
+    return (dados?.comercios || []).filter(c =>
+      (filtro === 'todos' || (filtro === 'novos' ? !c.cliente : !!c.cliente)) && (segmento === 'Todos' || c.segmento === segmento)
+    ).sort((a, b) => ordem === 'potencial' ? peso(a) - peso(b) || a.distancia_m - b.distancia_m : a.distancia_m - b.distancia_m);
+  }, [dados, filtro, segmento, ordem]);
 
-  async function cadastrar(c: Comercio) {
+  async function cadastrar(c: Comercio): Promise<number | null> {
     setCadastrando(c.osm_id);
     const { data, error } = await supabase.from('clientes').insert([{
       nome_empresa: c.nome.toLocaleUpperCase('pt-BR'), nome_fantasia: c.nome, segmento: c.segmento_osm.startsWith('Outro') ? null : c.segmento_osm,
@@ -152,12 +167,46 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
       empresa_id: empresaId, user_id: userId,
     }]).select('id, nome_empresa, segmento').single();
     setCadastrando(null);
-    if (error || !data) { setErro(`Não foi possível cadastrar: ${error?.message || 'erro desconhecido'}`); return; }
+    if (error || !data) { setErro(`Não foi possível cadastrar: ${error?.message || 'erro desconhecido'}`); return null; }
     setDados(d => d && ({
       ...d,
       comercios: d.comercios.map(x => x.osm_id === c.osm_id ? { ...x, cliente: { id: data.id, nome: data.nome_empresa, segmento: data.segmento, situacao: 'cadastrado' } } : x),
       resumo: { ...d.resumo, clientes: d.resumo.clientes + 1, novos: d.resumo.novos - 1 },
     }));
+    return data.id;
+  }
+
+  // Rota do Dia a partir do mapa: cadastra quem ainda não é cliente, ordena pelo vizinho mais
+  // próximo a partir de onde o vendedor está e adiciona as paradas no fim da rota de hoje.
+  async function montarRota() {
+    if (!pos || !marcados.length) return;
+    setMontandoRota(true); setAviso(''); setErro('');
+    try {
+      const escolhidos = (dados?.comercios || []).filter(c => marcados.includes(c.osm_id));
+      const ordenados: Comercio[] = []; let atual: { lat: number; lng: number } = pos; const resto = [...escolhidos];
+      while (resto.length) { resto.sort((a, b) => distancia(atual, a) - distancia(atual, b)); const prox = resto.shift()!; ordenados.push(prox); atual = prox; }
+      const ids: number[] = [];
+      for (const c of ordenados) { const id = c.cliente?.id ?? await cadastrar(c); if (id) ids.push(id); }
+      const d = new Date(); const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const buscarRota = () => supabase.from('rotas_dia').select('id').eq('empresa_id', empresaId).eq('vendedor_id', userId).eq('data', hoje).maybeSingle();
+      let rota = (await buscarRota()).data;
+      if (!rota) {
+        const nova = await supabase.from('rotas_dia').insert([{ empresa_id: empresaId, vendedor_id: userId, data: hoje, criado_por: userId }]).select('id').single();
+        rota = nova.data || (await buscarRota()).data;
+      }
+      if (!rota) throw new Error('não foi possível abrir a rota de hoje');
+      const rotaId = rota.id;
+      const { data: existentes } = await supabase.from('rotas_dia_paradas').select('cliente_id, ordem').eq('rota_id', rotaId);
+      const jaNaRota = new Set((existentes || []).map((p: any) => p.cliente_id));
+      let ordemAtual = Math.max(0, ...(existentes || []).map((p: any) => Number(p.ordem) || 0));
+      const novas = ids.filter(id => !jaNaRota.has(id)).map(id => ({ rota_id: rotaId, empresa_id: empresaId, vendedor_id: userId, cliente_id: id, ordem: ++ordemAtual, status: 'pendente' }));
+      if (novas.length) { const { error } = await supabase.from('rotas_dia_paradas').insert(novas); if (error) throw error; }
+      const repetidas = ids.length - novas.length;
+      setMarcados([]);
+      setAviso(`${novas.length} parada(s) adicionada(s) à Rota do Dia${repetidas > 0 ? ` · ${repetidas} já estava(m) na rota` : ''}.`);
+      onRotaAtualizada?.();
+    } catch (e: any) { setErro(`Não foi possível montar a rota: ${e?.message || 'erro desconhecido'}`); }
+    finally { setMontandoRota(false); }
   }
 
   return (
@@ -173,9 +222,13 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
             <button key={v} onClick={() => setFiltro(v)} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase ${filtro === v ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'}`}>{l}</button>
           ))}
         </div>
-        <select value={segmento} onChange={e => setSegmento(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-bold text-white outline-none max-w-[220px]">
-          {segmentos.map(s => <option key={s} value={s} className="bg-[#0B1120]">{s}</option>)}
+        <select value={segmento} onChange={e => setSegmento(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-bold text-white outline-none max-w-[240px]">
+          <option value="Todos" className="bg-[#0B1120]">Todos os segmentos</option>
+          {segmentos.map(([sg, n]) => <option key={sg} value={sg} className="bg-[#0B1120]">{sg} ({n})</option>)}
         </select>
+        <button onClick={() => setOrdem(o => o === 'distancia' ? 'potencial' : 'distancia')} title="Ordenar a lista" className={`flex items-center gap-1.5 border px-3 py-2 rounded-xl text-[10px] font-black uppercase ${ordem === 'potencial' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+          <Flame size={12} /> {ordem === 'potencial' ? 'Maior potencial' : 'Mais perto'}
+        </button>
         <button onClick={localizar} className="ml-auto flex items-center gap-1.5 bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase"><LocateFixed size={12} /> Minha posição</button>
       </div>
 
@@ -188,6 +241,10 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
       )}
 
       {erro && <p className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-xs font-bold">{erro}</p>}
+      {aviso && <p className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-green-400 text-xs font-bold">{aviso}</p>}
+      {dados?.segmentos_fortes && dados.segmentos_fortes.length > 0 && (
+        <p className="text-[10px] text-slate-400"><Flame size={10} className="inline text-orange-400 -mt-0.5" /> <b className="text-slate-300">Potencial alto</b> = comércio novo de um dos segmentos que a empresa mais vende: {dados.segmentos_fortes.slice(0, 3).map(x => x.segmento).join(', ')}.</p>
+      )}
 
       <div className="h-[42vh] min-h-[280px] rounded-2xl overflow-hidden border border-white/10 relative">
         {pos ? (
@@ -204,10 +261,10 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
             {lista.map(c => {
               const s = SITUACAO[situacaoDe(c)];
               return (
-                <CircleMarker key={c.osm_id} center={[c.lat, c.lng]} radius={selecionado === c.osm_id ? 10 : 6}
+                <CircleMarker key={c.osm_id} center={[c.lat, c.lng]} radius={selecionado === c.osm_id || marcados.includes(c.osm_id) ? 10 : c.potencial === 'alto' ? 8 : 6}
                   pathOptions={c.aproximada && c.posicao !== 'confirmada' ? { color: s.cor, weight: 2, dashArray: '3 3', fillColor: s.cor, fillOpacity: 0.25 } : { color: '#0B1120', weight: 1.5, fillColor: s.cor, fillOpacity: 0.95 }}
                   eventHandlers={{ click: () => { selecionar(c); document.getElementById(`pros-${c.osm_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }}>
-                  <Tooltip>{c.nome} · {c.segmento} · {s.label}</Tooltip>
+                  <Tooltip>{c.nome} · {c.segmento} · {s.label}{c.potencial === 'alto' ? ' · potencial alto' : ''}</Tooltip>
                 </CircleMarker>
               );
             })}
@@ -241,8 +298,9 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
                   {c.posicao === 'endereco' && <p className="text-[9px] text-amber-400 font-bold mt-0.5">Posição corrigida pelo endereço</p>}
                   {c.aproximada && !c.posicao && <p className="text-[9px] text-slate-500 font-bold mt-0.5">Posição aproximada · toque para conferir pelo endereço</p>}
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="text-right flex-shrink-0 space-y-1">
                   <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: `${s.cor}22`, color: s.cor, border: `1px solid ${s.cor}55` }}>{s.label}</span>
+                  {c.potencial && <span title={c.potencial_info} className={`block text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${c.potencial === 'alto' ? 'bg-orange-500 text-white' : 'bg-orange-500/15 text-orange-300 border border-orange-500/30'}`}><Flame size={8} className="inline -mt-0.5" /> Potencial {c.potencial}</span>}
                   <p className="text-[10px] font-black text-slate-500 mt-1">{fmtDist(c.distancia_m)}</p>
                 </div>
               </div>
@@ -252,6 +310,10 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
                 {c.horario && <span>Horário: {c.horario}</span>}
               </div>
               <div className="flex flex-wrap gap-2 mt-2.5">
+                <button onClick={e => { e.stopPropagation(); setMarcados(m => m.includes(c.osm_id) ? m.filter(x => x !== c.osm_id) : [...m, c.osm_id]); }}
+                  className={`flex items-center gap-1 border px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase ${marcados.includes(c.osm_id) ? 'bg-amber-500 border-amber-500 text-[#0F172A]' : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'}`}>
+                  {marcados.includes(c.osm_id) ? <Check size={11} /> : <Route size={11} />} {marcados.includes(c.osm_id) ? 'Na rota' : 'Pôr na rota'}
+                </button>
                 {!c.cliente && (
                   <button onClick={e => { e.stopPropagation(); cadastrar(c); }} disabled={cadastrando === c.osm_id}
                     className="flex items-center gap-1 bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase disabled:opacity-50">
@@ -272,6 +334,17 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
           );
         })}
       </div>
+      {marcados.length > 0 && (
+        <div className="sticky bottom-0 z-10 bg-[#0B1120] border border-amber-500/40 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 shadow-2xl">
+          <p className="text-xs text-white font-bold">{marcados.length} marcado(s) · quem não é cliente entra no cadastro</p>
+          <div className="flex gap-2">
+            <button onClick={() => setMarcados([])} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:text-white">Limpar</button>
+            <button onClick={montarRota} disabled={montandoRota} className="flex items-center gap-1.5 bg-amber-500 text-[#0F172A] px-4 py-2 rounded-xl text-[10px] font-black uppercase disabled:opacity-60">
+              {montandoRota ? <Loader2 size={12} className="animate-spin" /> : <Route size={12} />} Adicionar à Rota do Dia
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-[9px] text-slate-600">Comércios de {dados?.fonte || 'mapa público'}. Cidades pequenas podem ter cobertura parcial; o que você cadastra e visita passa a aparecer aqui.</p>
     </div>
   );

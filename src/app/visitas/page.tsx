@@ -1537,7 +1537,7 @@ export default function VisitasPage() {
               <button onClick={() => setProspeccaoAberta(false)} className="p-2 bg-white/5 rounded-full text-slate-500 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-4 md:p-5 overflow-y-auto custom-scrollbar flex-1">
-              <ProspeccaoMapa empresaId={perfil.empresa_id} userId={user.id} onRegistrarVisita={registrarVisitaDaProspeccao} />
+              <ProspeccaoMapa empresaId={perfil.empresa_id} userId={user.id} onRegistrarVisita={registrarVisitaDaProspeccao} onRotaAtualizada={carregarRotaHoje} />
             </div>
           </div>
         </div>

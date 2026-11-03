@@ -17,7 +17,7 @@ type Config = {
 type Nota = {
   id: string; empresa_id: string; empresa_nome: string; empresa_logo: string | null; competencia: string; valor: number;
   status: string; numero: string | null; pdf_url: string | null; xml_url: string | null; erro: string | null;
-  email_para: string | null; email_enviado_em: string | null; origem: string | null; created_at: string;
+  email_para: string | null; email_enviado_em: string | null; origem: string | null; created_at: string; tomador?: string | null;
 };
 
 const STATUS: Record<string, { label: string; cor: string }> = {
@@ -336,6 +336,7 @@ export default function NotasFiscaisPage() {
                           <tr key={n.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
                             <td className="py-3 pl-5 pr-3">
                               <p className="font-medium truncate max-w-[220px]">{n.empresa_nome}</p>
+                              {n.tomador && <p className="text-xs text-slate-400 truncate max-w-[220px]" title={n.tomador}>{n.tomador}</p>}
                               <p className="text-xs text-slate-500">{n.numero ? `NFS-e nº ${n.numero}` : 'Sem número ainda'} · {new Date(n.created_at).toLocaleDateString('pt-BR')}</p>
                             </td>
                             <td className="py-3 px-3 tabular-nums text-slate-300">{comp(n.competencia)}</td>

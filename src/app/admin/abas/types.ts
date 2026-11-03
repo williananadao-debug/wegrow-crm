@@ -1,5 +1,6 @@
 export type Billing = {
   empresa_id: string;
+  nf_por_emissora?: boolean;
   valor_mensal: number;
   proximo_vencimento: string | null;
   whatsapp: string | null;
@@ -128,7 +129,9 @@ export async function emitirNfMensalidade(token: string, empresaId: string, comp
     if (!res.ok) return { ok: false, msg: json.erro || 'Erro ao emitir a nota.' };
     const [a, m] = competencia.split('-');
     if (json.jaExistia) return { ok: true, msg: `Já existe nota da competência ${m}/${a} — nada foi emitido de novo.` };
-    return { ok: true, msg: `Nota da competência ${m}/${a} enviada ao Asaas — vai por e-mail assim que a prefeitura autorizar.` };
+    const varias = (json.quantidade || 1) > 1 ? `${json.quantidade} notas (uma por emissora)` : 'Nota';
+    const avisos = json.avisos?.length ? ` Atenção: ${json.avisos.join(' · ')}` : '';
+    return { ok: true, msg: `${varias} da competência ${m}/${a} enviada${(json.quantidade || 1) > 1 ? 's' : ''} ao Asaas — vai por e-mail assim que a prefeitura autorizar.${avisos}` };
   } catch (err: any) {
     return { ok: false, msg: err?.message || 'Erro de rede ao emitir a nota.' };
   }

@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     if (!body.empresa_id) return NextResponse.json({ erro: 'empresa_id obrigatório.' }, { status: 422 });
     const r = await emitirNfWegrow(db, { empresaId: body.empresa_id, competencia: body.competencia, origem: body.origem === 'pagamento_recebido' ? 'pagamento_recebido' : 'manual' });
     if (!r.ok) return NextResponse.json({ erro: r.erro }, { status: 422 });
-    return NextResponse.json({ ok: true, nota: r.nota, jaExistia: !!r.jaExistia });
+    return NextResponse.json({ ok: true, nota: r.nota, quantidade: r.notas?.length || 1, avisos: r.avisos || [], jaExistia: !!r.jaExistia });
   }
 
   if (body.acao === 'sincronizar' || body.acao === 'reenviar') {

@@ -61,7 +61,11 @@ export function preencherDescricao(modelo: string, competencia: string, empresa:
 
 const STATUS_FINAIS_RUINS = ['CANCELED', 'ERROR', 'CANCELLATION_DENIED'];
 
-type Resultado = { ok: true; nota: any; jaExistia?: boolean } | { ok: false; erro: string };
+type Resultado = { ok: true; nota: any; notas?: any[]; jaExistia?: boolean; avisos?: string[] } | { ok: false; erro: string };
+
+// Quem recebe a nota. Normalmente o próprio cliente; com nf_por_emissora (ex.: Demais FM) é
+// cada emissora de Unidades, com a razão social e o CNPJ dela e o valor mensal dividido.
+type Tomador = { unidadeId: string | null; nome: string; cnpj: string; valorCheio: number; emissora?: string };
 
 export async function emitirNfWegrow(db: SupabaseClient, p: {
   empresaId: string; competencia?: string; paymentId?: string | null; origem: 'manual' | 'pagamento_recebido' | 'webhook' | 'cron';
@@ -73,57 +77,96 @@ export async function emitirNfWegrow(db: SupabaseClient, p: {
 
   const competencia = p.competencia || new Date().toISOString().substring(0, 7);
 
-  const { data: jaTem } = await db.from('wegrow_notas_fiscais').select('*')
-    .eq('empresa_id', p.empresaId).eq('competencia', competencia).not('status', 'in', `(${STATUS_FINAIS_RUINS.join(',')})`)
-    .limit(1).maybeSingle();
-  if (jaTem) return { ok: true, nota: jaTem, jaExistia: true };
-
   const [{ data: empresa }, { data: billing }] = await Promise.all([
     db.from('empresas').select('nome, parceiro_id').eq('id', p.empresaId).maybeSingle(),
     db.from('clientes_wegrow').select('*').eq('empresa_id', p.empresaId).maybeSingle(),
   ]);
-  const razaoSocial = billing?.razao_social || empresa?.nome;
-  const cnpj = String(billing?.cnpj || '').replace(/\D/g, '');
+  const valorMensal = Number(billing?.valor_mensal || 0);
+  const email = billing?.email_financeiro || billing?.contrato_signer_email || null;
+
+  let tomadores: Tomador[];
+  if (billing?.nf_por_emissora) {
+    const { data: unidades } = await db.from('unidades').select('id, nome, razao_social, cnpj').eq('empresa_id', p.empresaId).order('nome');
+    const validas = (unidades || []).filter(u => u.razao_social && String(u.cnpj || '').replace(/\D/g, '').length === 14);
+    if (!validas.length) return { ok: false, erro: 'Cliente marcado para uma nota por emissora, mas nenhuma emissora tem razão social e CNPJ em Unidades.' };
+    // Divide em centavos; a diferença do arredondamento fica na última emissora
+    const parte = Math.floor(valorMensal * 100 / validas.length) / 100;
+    tomadores = validas.map((u, i) => ({
+      unidadeId: u.id, nome: u.razao_social, cnpj: String(u.cnpj).replace(/\D/g, ''), emissora: u.nome,
+      valorCheio: i === validas.length - 1 ? Math.round((valorMensal - parte * (validas.length - 1)) * 100) / 100 : parte,
+    }));
+  } else {
+    tomadores = [{ unidadeId: null, nome: billing?.razao_social || empresa?.nome, cnpj: String(billing?.cnpj || '').replace(/\D/g, ''), valorCheio: valorMensal }];
+  }
+
   // Modelo fiscal com parceiro (aprovado em 03/11/2026): cada empresa emite a nota da sua parte
   // direto para a rádio. A WeGrow fatura só a licença (100% − comissão do parceiro); o parceiro
   // fatura os serviços dele (implantação, treinamento, suporte). O Asaas divide o pagamento.
-  const valorCheio = Number(billing?.valor_mensal || 0);
-  let valor = valorCheio, obsParceiro = '';
+  let pctWegrow = 100, obsParceiro = '';
   if (empresa?.parceiro_id) {
     const { data: parceiro } = await db.from('parceiros').select('nome, comissao_pct, ativo').eq('id', empresa.parceiro_id).maybeSingle();
     const pct = Number(parceiro?.comissao_pct) || 0;
     if (parceiro?.ativo !== false && pct > 0 && pct < 100) {
-      valor = Math.round(valorCheio * (100 - pct)) / 100;
+      pctWegrow = 100 - pct;
       obsParceiro = `Valor referente à licença de uso do software WeGrow. Os serviços de implantação, treinamento e suporte são faturados pela ${parceiro?.nome || 'empresa parceira'} em nota própria.`;
     }
   }
-  const email = billing?.email_financeiro || billing?.contrato_signer_email || null;
+
+  const notas: any[] = [], erros: string[] = [];
+  let todasJaExistiam = true;
+  for (const t of tomadores) {
+    const r = await emitirParaTomador(db, config, p, competencia, t, Math.round(t.valorCheio * pctWegrow) / 100, obsParceiro, email, tomadores.length > 1 || !!billing?.nf_por_emissora);
+    if (r.ok) { notas.push(r.nota); if (!r.jaExistia) todasJaExistiam = false; }
+    else erros.push(t.emissora ? `${t.emissora}: ${r.erro}` : r.erro);
+  }
+  if (!notas.length) return { ok: false, erro: erros.join(' · ') };
+  return { ok: true, nota: notas[0], notas, jaExistia: todasJaExistiam, avisos: erros.length ? erros : undefined };
+}
+
+async function emitirParaTomador(db: SupabaseClient, config: ConfigNf, p: { empresaId: string; paymentId?: string | null; origem: string },
+  competencia: string, t: Tomador, valor: number, obsParceiro: string, email: string | null, porEmissora: boolean,
+): Promise<{ ok: true; nota: any; jaExistia?: boolean } | { ok: false; erro: string }> {
+  let q = db.from('wegrow_notas_fiscais').select('*')
+    .eq('empresa_id', p.empresaId).eq('competencia', competencia).not('status', 'in', `(${STATUS_FINAIS_RUINS.join(',')})`);
+  if (porEmissora) q = q.eq('unidade_id', t.unidadeId);
+  const { data: jaTem } = await q.limit(1).maybeSingle();
+  if (jaTem) return { ok: true, nota: jaTem, jaExistia: true };
+
+  // unidade_id/tomador só existem depois da migration 20261103140000; a nota única não usa
+  const extra = porEmissora ? { unidade_id: t.unidadeId, tomador: `${t.emissora} · ${t.nome}` } : {};
+  // Com uma nota por emissora o boleto é um só (no CNPJ do cadastro), então a nota não se vincula a ele
+  const paymentId = porEmissora ? null : p.paymentId || null;
 
   const registrarErro = async (erro: string) => {
-    await db.from('wegrow_notas_fiscais').insert({ empresa_id: p.empresaId, competencia, valor, status: 'ERROR', erro, email_para: email, origem: p.origem, asaas_payment_id: p.paymentId || null });
+    await db.from('wegrow_notas_fiscais').insert({ empresa_id: p.empresaId, competencia, valor, status: 'ERROR', erro, email_para: email, origem: p.origem, asaas_payment_id: paymentId, ...extra });
     return { ok: false as const, erro };
   };
 
-  if (!razaoSocial || !cnpj) return registrarErro('Falta razão social ou CNPJ do cliente (aba Documentos/Faturamento).');
+  if (!t.nome || !t.cnpj) return registrarErro('Falta razão social ou CNPJ do cliente (aba Documentos/Faturamento).');
   if (!valor) return registrarErro('Falta o valor mensal (aba Faturamento).');
 
   try {
-    let customerId = billing?.asaas_customer_id as string | undefined;
+    // O cliente do Asaas fica salvo só para a nota única; por emissora, procura pelo CNPJ de cada uma
+    let customerId: string | undefined;
+    if (!porEmissora) {
+      const { data } = await db.from('clientes_wegrow').select('asaas_customer_id').eq('empresa_id', p.empresaId).maybeSingle();
+      customerId = data?.asaas_customer_id || undefined;
+    }
     if (!customerId) {
-      const busca = await asaasWegrow('GET', `/customers?cpfCnpj=${cnpj}`);
+      const busca = await asaasWegrow('GET', `/customers?cpfCnpj=${t.cnpj}`);
       customerId = busca.data?.[0]?.id;
       if (!customerId) {
-        const criado = await asaasWegrow('POST', '/customers', { name: razaoSocial, cpfCnpj: cnpj, email: email || undefined });
+        const criado = await asaasWegrow('POST', '/customers', { name: t.nome, cpfCnpj: t.cnpj, email: email || undefined });
         customerId = criado.id;
       }
-      await db.from('clientes_wegrow').update({ asaas_customer_id: customerId }).eq('empresa_id', p.empresaId);
+      if (!porEmissora) await db.from('clientes_wegrow').update({ asaas_customer_id: customerId }).eq('empresa_id', p.empresaId);
     }
 
     const invoice = await asaasWegrow('POST', '/invoices', {
-      ...(p.paymentId ? { payment: p.paymentId } : { customer: customerId }),
-      serviceDescription: preencherDescricao(config.descricao, competencia, razaoSocial),
+      ...(paymentId ? { payment: paymentId } : { customer: customerId }),
+      serviceDescription: preencherDescricao(config.descricao, competencia, t.nome) + (porEmissora ? `\nEmissora: ${t.emissora}` : ''),
       observations: [config.observacoes, obsParceiro].filter(Boolean).join(' '),
-      externalReference: `${p.empresaId}:${competencia}`,
+      externalReference: `${p.empresaId}:${competencia}${porEmissora ? `:${t.unidadeId}` : ''}`,
       value: valor,
       deductions: 0,
       effectiveDate: new Date().toISOString().substring(0, 10),
@@ -134,13 +177,13 @@ export async function emitirNfWegrow(db: SupabaseClient, p: {
     });
 
     const { data: nota } = await db.from('wegrow_notas_fiscais').insert({
-      empresa_id: p.empresaId, competencia, valor, asaas_invoice_id: invoice.id, asaas_payment_id: p.paymentId || null,
+      empresa_id: p.empresaId, competencia, valor, asaas_invoice_id: invoice.id, asaas_payment_id: paymentId,
       status: invoice.status || 'SCHEDULED', numero: invoice.number || null, pdf_url: invoice.pdfUrl || null, xml_url: invoice.xmlUrl || null,
-      email_para: email, origem: p.origem,
+      email_para: email, origem: p.origem, ...extra,
     }).select().single();
 
-    console.log(`[nfWegrow] emitida empresa=${p.empresaId} competencia=${competencia} invoice=${invoice.id} status=${invoice.status}`);
-    if (nota && invoice.status === 'AUTHORIZED') await enviarEmailSePreciso(db, nota, config, razaoSocial);
+    console.log(`[nfWegrow] emitida empresa=${p.empresaId} competencia=${competencia}${porEmissora ? ` unidade=${t.unidadeId}` : ''} invoice=${invoice.id} status=${invoice.status}`);
+    if (nota && invoice.status === 'AUTHORIZED') await enviarEmailSePreciso(db, nota, config, porEmissora ? `${t.nome} (${t.emissora})` : t.nome);
     return { ok: true, nota };
   } catch (err: any) {
     console.error('[nfWegrow] erro ao emitir', err);
@@ -165,7 +208,10 @@ export async function sincronizarNfWegrow(db: SupabaseClient, nota: any, invoice
     const config = await carregarConfigNf(db);
     const { data: billing } = await db.from('clientes_wegrow').select('razao_social').eq('empresa_id', nota.empresa_id).maybeSingle();
     const { data: empresa } = await db.from('empresas').select('nome').eq('id', nota.empresa_id).maybeSingle();
-    if (config) await enviarEmailSePreciso(db, atualizada, config, billing?.razao_social || empresa?.nome || '');
+    // Nota por emissora guarda o tomador ("DEMAIS FM 104,7 · REDE SERRANA…")
+    const [emissora, razao] = String(atualizada.tomador || '').split(' · ');
+    const cliente = razao ? `${razao} (${emissora})` : billing?.razao_social || empresa?.nome || '';
+    if (config) await enviarEmailSePreciso(db, atualizada, config, cliente);
   }
   return atualizada;
 }

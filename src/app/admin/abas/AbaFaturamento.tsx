@@ -23,6 +23,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
     contato: empresa.billing?.contato ?? '',
     email_financeiro: empresa.billing?.email_financeiro ?? '',
     observacao: empresa.billing?.observacao ?? '',
+    nf_por_emissora: !!empresa.billing?.nf_por_emissora,
   });
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       contato: empresa.billing?.contato ?? '',
       email_financeiro: empresa.billing?.email_financeiro ?? '',
       observacao: empresa.billing?.observacao ?? '',
+      nf_por_emissora: !!empresa.billing?.nf_por_emissora,
     });
     setErro(null);
   }, [empresa.id]);
@@ -64,6 +66,8 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
       contato: form.contato || null,
       email_financeiro: form.email_financeiro.trim().toLowerCase() || null,
       observacao: form.observacao || null,
+      // Só envia quando ligado: antes da migration 20261103140000 a coluna não existe
+      ...(form.nf_por_emissora || empresa.billing?.nf_por_emissora ? { nf_por_emissora: form.nf_por_emissora } : {}),
     };
     const { error } = await supabase.from('clientes_wegrow').upsert(payload, { onConflict: 'empresa_id' });
     if (error) { setSaving(false); setErro(error.message); return; }
@@ -243,6 +247,13 @@ export default function AbaFaturamento({ empresa, token, onAtualizado }: AbaProp
         <input type="email" value={form.email_financeiro} onChange={e => setForm(f => ({ ...f, email_financeiro: e.target.value }))} placeholder={empresa.billing?.contrato_signer_email || 'financeiro@cliente.com.br'} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         {!form.email_financeiro && empresa.billing?.contrato_signer_email && <p className="text-[11px] text-slate-500 mt-1 ml-1">Vazio = vai para quem assinou o contrato ({empresa.billing.contrato_signer_email}).</p>}
       </div>
+      <label className="flex items-start gap-2.5 cursor-pointer bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2.5">
+        <input type="checkbox" checked={form.nf_por_emissora} onChange={e => setForm(f => ({ ...f, nf_por_emissora: e.target.checked }))} className="mt-0.5 accent-[#22C55E]" />
+        <span>
+          <span className="text-sm text-white font-medium block">Uma nota fiscal por emissora</span>
+          <span className="text-[11px] text-slate-500">Emite uma NFS-e para cada emissora cadastrada em Unidades, no nome e CNPJ dela, dividindo o valor mensal entre elas.</span>
+        </span>
+      </label>
       <div>
         <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Observação</label>
         <textarea value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} placeholder="Notas internas..." className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-colors resize-none placeholder:text-slate-600"/>

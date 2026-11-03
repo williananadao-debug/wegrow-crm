@@ -79,12 +79,24 @@ export async function emitirNfWegrow(db: SupabaseClient, p: {
   if (jaTem) return { ok: true, nota: jaTem, jaExistia: true };
 
   const [{ data: empresa }, { data: billing }] = await Promise.all([
-    db.from('empresas').select('nome').eq('id', p.empresaId).maybeSingle(),
+    db.from('empresas').select('nome, parceiro_id').eq('id', p.empresaId).maybeSingle(),
     db.from('clientes_wegrow').select('*').eq('empresa_id', p.empresaId).maybeSingle(),
   ]);
   const razaoSocial = billing?.razao_social || empresa?.nome;
   const cnpj = String(billing?.cnpj || '').replace(/\D/g, '');
-  const valor = Number(billing?.valor_mensal || 0);
+  // Modelo fiscal com parceiro (aprovado em 03/11/2026): cada empresa emite a nota da sua parte
+  // direto para a rádio. A WeGrow fatura só a licença (100% − comissão do parceiro); o parceiro
+  // fatura os serviços dele (implantação, treinamento, suporte). O Asaas divide o pagamento.
+  const valorCheio = Number(billing?.valor_mensal || 0);
+  let valor = valorCheio, obsParceiro = '';
+  if (empresa?.parceiro_id) {
+    const { data: parceiro } = await db.from('parceiros').select('nome, comissao_pct, ativo').eq('id', empresa.parceiro_id).maybeSingle();
+    const pct = Number(parceiro?.comissao_pct) || 0;
+    if (parceiro?.ativo !== false && pct > 0 && pct < 100) {
+      valor = Math.round(valorCheio * (100 - pct)) / 100;
+      obsParceiro = `Valor referente à licença de uso do software WeGrow. Os serviços de implantação, treinamento e suporte são faturados pela ${parceiro?.nome || 'empresa parceira'} em nota própria.`;
+    }
+  }
   const email = billing?.email_financeiro || billing?.contrato_signer_email || null;
 
   const registrarErro = async (erro: string) => {
@@ -110,7 +122,7 @@ export async function emitirNfWegrow(db: SupabaseClient, p: {
     const invoice = await asaasWegrow('POST', '/invoices', {
       ...(p.paymentId ? { payment: p.paymentId } : { customer: customerId }),
       serviceDescription: preencherDescricao(config.descricao, competencia, razaoSocial),
-      observations: config.observacoes || '',
+      observations: [config.observacoes, obsParceiro].filter(Boolean).join(' '),
       externalReference: `${p.empresaId}:${competencia}`,
       value: valor,
       deductions: 0,

@@ -86,18 +86,37 @@ async function nomesClientes(db: ReturnType<typeof supabaseAdmin>, empresaId: st
   return lista;
 }
 
+// Geoapify (GEOAPIFY_API_KEY): os mesmos dados do OpenStreetMap, mas num serviço estável e com
+// cota grátis diária (3.000 créditos/dia). As tags originais do OSM vêm em datasource.raw, então
+// o segmento sai pela mesma regra do mapa aberto.
+const CATEGORIAS_GEOAPIFY = 'commercial,catering,healthcare,service,office,education,accommodation,pet,rental';
+async function lugaresGeoapify(lat: number, lng: number, raio: number, chave: string): Promise<Lugar[]> {
+  const url = `https://api.geoapify.com/v2/places?categories=${CATEGORIAS_GEOAPIFY}&filter=circle:${lng},${lat},${Math.round(raio)}&bias=proximity:${lng},${lat}&limit=500&lang=pt&apiKey=${encodeURIComponent(chave)}`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`Geoapify ${r.status}`);
+  const feats: any[] = (await r.json()).features || [];
+  return feats.map(f => {
+    const p = f.properties || {}, raw = p.datasource?.raw || {};
+    const tags = { ...raw, name: p.name || raw.name };
+    return {
+      id: `geo:${p.place_id}`, nome: p.name || raw.name || '', lat: p.lat, lng: p.lon,
+      segmento: segmentoDasTags(tags), endereco: [p.street, p.housenumber].filter(Boolean).join(', ') || null,
+      bairro: p.suburb || p.district || null, cidade: p.city || null, telefone: p.contact?.phone || raw.phone || raw['contact:phone'] || null,
+      site: p.website || raw.website || null, instagram: raw['contact:instagram'] || null, horario: p.opening_hours || raw.opening_hours || null,
+    };
+  }).filter(l => l.nome && l.lat !== undefined);
+}
+
 async function buscarLugares(lat: number, lng: number, raio: number): Promise<Lugar[]> {
-  const chave = process.env.GOOGLE_PLACES_API_KEY;
-  const id = `${chave ? 'g' : 'o'}|${lat.toFixed(3)}|${lng.toFixed(3)}|${raio}`;
+  // Ordem: Google (pago) → Geoapify (cota grátis) → Overpass público
+  const google = process.env.GOOGLE_PLACES_API_KEY, geo = process.env.GEOAPIFY_API_KEY;
+  const id = `${google ? 'g' : geo ? 'y' : 'o'}|${lat.toFixed(3)}|${lng.toFixed(3)}|${raio}`;
   const c = CACHE.get(id);
   if (c && Date.now() - c.em < CACHE_MS) return c.lugares;
-  let lugares: Lugar[];
-  try {
-    lugares = chave ? await lugaresGoogle(lat, lng, raio, chave) : await lugaresOsm(lat, lng, raio);
-  } catch (e) {
-    if (!chave) throw e;
-    lugares = await lugaresOsm(lat, lng, raio); // Google falhou: tenta o mapa aberto
-  }
+  let lugares: Lugar[] | null = null;
+  if (google) { try { lugares = await lugaresGoogle(lat, lng, raio, google); } catch { /* tenta o próximo */ } }
+  if (!lugares && geo) { try { lugares = await lugaresGeoapify(lat, lng, raio, geo); } catch { /* tenta o próximo */ } }
+  if (!lugares) lugares = await lugaresOsm(lat, lng, raio);
   if (CACHE.size > 300) CACHE.delete(CACHE.keys().next().value!);
   CACHE.set(id, { em: Date.now(), lugares });
   return lugares;
@@ -148,7 +167,7 @@ async function responder(request: Request, corpo: { lat: number; lng: number; ra
       lugares = await buscarLugares(lat, lng, raio);
     } catch {
       // Sem Google configurado, o navegador tenta o mapa aberto direto (plano B)
-      return NextResponse.json({ erro: 'O serviço de mapa de comércios não respondeu agora. Tente de novo em 1 minuto ou diminua o raio.', osmNoNavegador: !process.env.GOOGLE_PLACES_API_KEY }, { status: 503 });
+      return NextResponse.json({ erro: 'O serviço de mapa de comércios não respondeu agora. Tente de novo em 1 minuto ou diminua o raio.', osmNoNavegador: true }, { status: 503 });
     }
   }
 

@@ -184,10 +184,20 @@ export default function ReportsPage() {
     return mesclarQueries(ambos(q => q), LIMITE_LINHAS);
   }
 
+  // Primeiro dia do período anterior de mesmo tamanho (o comparativo de todos os relatórios)
+  function inicioPeriodoAnterior() {
+    const hojeStr = getLocalYYYYMMDD(new Date());
+    const ini = new Date(dataInicio + 'T12:00:00');
+    const fimEf = new Date((dataFim > hojeStr ? hojeStr : dataFim) + 'T12:00:00');
+    const dias = Math.max(Math.round((fimEf.getTime() - ini.getTime()) / 86400000), 0);
+    const ant = new Date(ini); ant.setDate(ini.getDate() - 1 - dias);
+    return getLocalYYYYMMDD(ant);
+  }
+
   function buildVisitasQuery() {
     const base = () => {
       let q = supabase.from('visitas').select('id, user_id, unidade, lead_id, created_at, cidade')
-        .gte('created_at', dataInicio + 'T00:00:00')
+        .gte('created_at', inicioPeriodoAnterior() + 'T00:00:00') // inclui o período anterior, pra comparar
         .lte('created_at', dataFim + 'T23:59:59')
         .order('id');
       if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
@@ -299,7 +309,7 @@ export default function ReportsPage() {
     return { cidadePorId, porNome, nomes };
   }, [rawClientes]);
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo, nomesPorId } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo, nomesPorId, leadsAnteriores, visitasAnt, periodoAnterior } = useMemo(() => {
       const nomesMap: Record<string, string> = {};
       for (const p of rawProfiles) nomesMap[p.id] = p.nome;
       const cidadesById = indiceClientes.cidadePorId;
@@ -411,11 +421,14 @@ export default function ReportsPage() {
       const leadStatusById = rawLeads.reduce((acc: any, l) => { acc[l.id] = l.status; return acc; }, {});
       const leadValorById = rawLeads.reduce((acc: any, l) => { acc[l.id] = Number(l.valor_total) || 0; return acc; }, {});
 
-      const visitasBase = rawVisitas.filter(v => {
+      const visitaNoFiltro = (v: any) => {
           if (filtroVendedor !== 'Todos' && v.user_id !== filtroVendedor) return false;
           if (!isGerente && filtroUnidade !== 'Todas' && v.unidade !== filtroUnidade) return false;
           return true;
-      });
+      };
+      const diaVisita = (v: any) => getLocalYYYYMMDD(new Date(v.created_at));
+      const visitasBase = rawVisitas.filter(v => visitaNoFiltro(v) && diaVisita(v) >= dataInicio && diaVisita(v) <= dataFim);
+      const visitasAnteriores = rawVisitas.filter(v => visitaNoFiltro(v) && diaVisita(v) >= strPastStart && diaVisita(v) <= strPastEnd);
       const visitasConvertidas = visitasBase.filter(v => v.lead_id);
       const visitasGanhas = visitasBase.filter(v => v.lead_id && leadStatusById[v.lead_id] === 'ganho');
 
@@ -472,7 +485,7 @@ export default function ReportsPage() {
           }, 0) / currentGanhos.length)
         : 0;
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo: visitasBase, nomesPorId: nomesMap };
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo: visitasBase, nomesPorId: nomesMap, leadsAnteriores: pastLeads, visitasAnt: visitasAnteriores, periodoAnterior: { inicio: strPastStart, fim: strPastEnd } };
   }, [rawLeads, rawPremissas, rawProfiles, indiceClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
 
   const graficoMensal = useMemo(() => {
@@ -539,8 +552,8 @@ export default function ReportsPage() {
   // (gráfico em cima, tabela embaixo, exportação), no mesmo recorte de período e filtros.
   const ctxRelatorio: CtxRelatorio = useMemo(() => ({
     empresaId: perfil?.empresa_id, userId: user?.id, isDirector, isGerente, unidadeGerente: perfil?.unidade,
-    dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: [], visitas: visitasPeriodo,
-  }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo]);
+    dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: leadsAnteriores, visitas: visitasPeriodo, visitasAnt, periodoAnterior,
+  }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo, leadsAnteriores, visitasAnt, periodoAnterior]);
   const relatoriosVisiveis = RELATORIOS.filter(r => isDirector || !r.diretoria);
   const relatorioAtivo = relatoriosVisiveis.some(r => r.id === relatorio) ? relatorio : 'padrao';
 

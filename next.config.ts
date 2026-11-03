@@ -11,8 +11,21 @@ const withPWA = withPWAInit({
   // Malha do mapa da eleição (1,4 MB) só baixa quem abre /eleicao — fora do precache do app.
   publicExcludes: ['!noprecache/**/*', '!eleicao/**/*'],
   disable: process.env.NODE_ENV === "development", // Fica invisível enquanto você programa
+  // Dados nunca passam pelo cache do service worker: a regra padrão da lib ("NetworkFirst" com
+  // 10 s de timeout) guardava as respostas do Supabase e da nossa /api e, com rede lenta, mostrava
+  // dado velho como se fosse atual — além de dobrar cada requisição no navegador. As regras
+  // abaixo vêm antes das padrão (que seguem valendo pra JS, CSS, imagens e páginas).
+  extendDefaultRuntimeCaching: true,
   workboxOptions: {
     disableDevLogs: true,
+    runtimeCaching: [
+      // Mesmo cacheName das regras padrão "apis" e "cross-origin" = substitui as duas.
+      // Nossa /api: sempre da rede, nada guardado.
+      { urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith("/api/"), handler: "NetworkOnly", method: "GET", options: { cacheName: "apis" } },
+      // Outros domínios (CDN, fontes, mapas) seguem com cache; o Supabase fica de fora do
+      // service worker — a requisição vai direto, sem cache e sem passar duas vezes.
+      { urlPattern: ({ url, sameOrigin }) => !sameOrigin && !url.hostname.endsWith(".supabase.co"), handler: "NetworkFirst", options: { cacheName: "cross-origin", expiration: { maxEntries: 32, maxAgeSeconds: 3600 }, networkTimeoutSeconds: 10 } },
+    ],
   },
 });
 

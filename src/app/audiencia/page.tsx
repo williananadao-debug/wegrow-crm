@@ -33,7 +33,16 @@ export default function AudienciaPage() {
   const [importar, setImportar] = useState(false);
   const [erro, setErro] = useState('');
 
-  const unidadeAtual = unidade || unidades[0]?.nome || '';
+  // Emissoras = cadastro de Unidades + as que já têm pesquisa (conta sem unidade cadastrada
+  // ainda enxerga a pesquisa dela).
+  const [comPesquisa, setComPesquisa] = useState<string[]>([]);
+  useEffect(() => {
+    if (!empresaId) return;
+    supabase.from('audiencia_pesquisas').select('unidade').eq('empresa_id', empresaId).limit(500)
+      .then(({ data }) => setComPesquisa([...new Set((data || []).map((x: any) => x.unidade).filter(Boolean))] as string[]));
+  }, [empresaId]);
+  const emissoras = useMemo(() => [...new Set([...unidades.map(u => u.nome), ...comPesquisa])], [unidades, comPesquisa]);
+  const unidadeAtual = unidade || emissoras[0] || '';
 
   const carregarPesquisas = useCallback(async () => {
     if (!empresaId || !unidadeAtual) return;
@@ -114,7 +123,8 @@ export default function AudienciaPage() {
         </div>
         <div className="flex items-center gap-2">
           <select value={unidadeAtual} onChange={e => setUnidade(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-bold outline-none">
-            {unidades.map(u => <option key={u.id} value={u.nome} className="bg-[#0B1120]">{u.nome}</option>)}
+            {emissoras.map(n => <option key={n} value={n} className="bg-[#0B1120]">{n}</option>)}
+            {emissoras.length === 0 && <option value="" className="bg-[#0B1120]">Cadastre a emissora em Configurações → Unidades</option>}
           </select>
           {podeEditar && unidadeAtual && (
             <button onClick={() => setEditor({ id: null, form: { ...FORM_VAZIO } })} className="flex items-center gap-2 bg-[var(--cor-primaria)] text-[#0F172A] px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest"><Plus size={14} /> Nova pesquisa</button>

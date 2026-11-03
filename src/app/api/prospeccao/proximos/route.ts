@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
-import { distanciaMetros, ehNegocioOsm, GRUPOS_GOOGLE, mesmoNegocio, normalizarNome, queryOverpass, segmentoDasTags, segmentoGoogle } from '@/lib/prospeccaoOsm';
+import { distanciaMetros, ehNegocioOsm, GRUPOS_GOOGLE, mesmoNegocio, normalizarNome, queryOverpass, segmentoDasTags, segmentoFoursquare, segmentoGoogle } from '@/lib/prospeccaoOsm';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -107,14 +107,38 @@ async function lugaresGeoapify(lat: number, lng: number, raio: number, chave: st
   }).filter(l => l.nome && l.lat !== undefined);
 }
 
+// Foursquare Places (FOURSQUARE_API_KEY, chave de serviço): até 50 lugares por chamada, ordenados
+// pela distância; segue o link da próxima página até 3 vezes (150 lugares). Só campos do nível
+// Pro (sem telefone, site e horário, que são cobrados à parte) pra ficar na cota grátis.
+async function lugaresFoursquare(lat: number, lng: number, raio: number, chave: string): Promise<Lugar[]> {
+  const out: Lugar[] = [];
+  let url: string | null = `https://places-api.foursquare.com/places/search?ll=${lat},${lng}&radius=${Math.round(raio)}&limit=50&sort=DISTANCE&fields=fsq_place_id,name,latitude,longitude,location,categories`;
+  for (let pagina = 0; url && pagina < 3; pagina++) {
+    const r: Response = await fetch(url, { headers: { Authorization: `Bearer ${chave}`, 'X-Places-Api-Version': '2025-06-17', Accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
+    if (!r.ok) { if (pagina === 0) throw new Error(`Foursquare ${r.status}`); break; }
+    const j = await r.json();
+    for (const p of (j.results || []) as any[]) {
+      const cats = (p.categories || []).map((c: any) => String(c.name || ''));
+      const segmento = segmentoFoursquare(cats);
+      if (!segmento || !p.name || p.latitude === undefined) continue;
+      out.push({ id: `fsq:${p.fsq_place_id}`, nome: p.name, lat: p.latitude, lng: p.longitude, segmento,
+        endereco: p.location?.address || null, bairro: null, cidade: p.location?.locality || null, telefone: null, site: null, instagram: null, horario: null });
+    }
+    const prox: RegExpMatchArray | null = (r.headers.get('link') || '').match(/<([^>]+)>;\s*rel="next"/);
+    url = prox ? prox[1] : null;
+  }
+  return out;
+}
+
 async function buscarLugares(lat: number, lng: number, raio: number): Promise<Lugar[]> {
-  // Ordem: Google (pago) → Geoapify (cota grátis) → Overpass público
-  const google = process.env.GOOGLE_PLACES_API_KEY, geo = process.env.GEOAPIFY_API_KEY;
-  const id = `${google ? 'g' : geo ? 'y' : 'o'}|${lat.toFixed(3)}|${lng.toFixed(3)}|${raio}`;
+  // Ordem: Google (pago) → Foursquare (cota grátis mensal) → Geoapify (cota grátis diária) → Overpass público
+  const google = process.env.GOOGLE_PLACES_API_KEY, fsq = process.env.FOURSQUARE_API_KEY, geo = process.env.GEOAPIFY_API_KEY;
+  const id = `${google ? 'g' : fsq ? 'f' : geo ? 'y' : 'o'}|${lat.toFixed(3)}|${lng.toFixed(3)}|${raio}`;
   const c = CACHE.get(id);
   if (c && Date.now() - c.em < CACHE_MS) return c.lugares;
   let lugares: Lugar[] | null = null;
   if (google) { try { lugares = await lugaresGoogle(lat, lng, raio, google); } catch { /* tenta o próximo */ } }
+  if (!lugares && fsq) { try { lugares = await lugaresFoursquare(lat, lng, raio, fsq); } catch (e) { console.error('[prospeccao] foursquare', e); } }
   if (!lugares && geo) { try { lugares = await lugaresGeoapify(lat, lng, raio, geo); } catch { /* tenta o próximo */ } }
   if (!lugares) lugares = await lugaresOsm(lat, lng, raio);
   if (CACHE.size > 300) CACHE.delete(CACHE.keys().next().value!);

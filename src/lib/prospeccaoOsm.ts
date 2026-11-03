@@ -101,6 +101,43 @@ export function segmentoGoogle(primario: string | undefined, tipos: string[] = [
   return primario ? `Outro (${primario.replace(/_/g, ' ')})` : 'Outro';
 }
 
+// Foursquare: segmento pelo nome da categoria (em inglês, padrão da API)
+const POR_CATEGORIA_FSQ: [RegExp, string][] = [
+  [/supermarket|grocery|convenience|butcher|market|warehouse store/i, 'Supermercado / Mercado'],
+  [/pharmacy|drugstore/i, 'Farmácia / Drogaria'],
+  [/bakery|pastry|dessert|candy|confection/i, 'Padaria / Confeitaria'],
+  [/\bbar\b|\bpub\b|brewery|night ?club|lounge/i, 'Bar / Casa Noturna'],
+  [/restaurant|food|café|cafe|coffee|pizza|burger|snack|diner|steakhouse|churrasc|ice cream|juice/i, 'Restaurante / Lanchonete'],
+  [/dentist|doctor|medical|clinic|physio|optic|optometr/i, 'Clínica Médica / Odontológica'],
+  [/hospital|laborator/i, 'Hospital / Laboratório'],
+  [/gym|fitness|yoga|pilates|spa|salon|barber|beauty|nail|cosmetic/i, 'Academia / Estética / Bem-estar'],
+  [/clothing|apparel|shoe|boutique|jewelry|accessor|fashion|lingerie/i, 'Loja de Roupas / Vestuário'],
+  [/furniture|home|decor|appliance|electronics|mattress|bed /i, 'Loja de Móveis e Decoração'],
+  [/book|stationery|office supply|paper/i, 'Papelaria / Livraria'],
+  [/pet|veterinar/i, 'Petshop'],
+  [/car dealer|automotive dealer|motorcycle dealer|dealership/i, 'Concessionária / Loja de Veículos'],
+  [/auto ?parts|tire/i, 'Autopeças'],
+  [/car wash|auto(motive)? (repair|service)|mechanic|oil change|gas station|fuel/i, 'Oficina Mecânica / Auto Center'],
+  [/hardware|building|construction|lumber|paint|home improvement/i, 'Construção Civil / Materiais de Construção'],
+  [/accountant|accounting/i, 'Contabilidade'],
+  [/lawyer|law |legal|attorney/i, 'Advocacia / Jurídico'],
+  [/software|technology|computer|it services|internet/i, 'Tecnologia / Software'],
+  [/advertising|marketing|media agency|print shop/i, 'Marketing / Publicidade'],
+  [/school|college|university|education|language|driving school|tutor/i, 'Educação / Escola / Curso'],
+  [/farm|agricultur|feed store|garden/i, 'Agropecuária / Agronegócio'],
+  [/cooperative/i, 'Cooperativa Agrícola'],
+  [/shipping|logistics|moving|freight|courier/i, 'Transportadora / Logística'],
+  [/government|city hall|association|union|non-?profit/i, 'Órgão Público / Associação / Sindicato'],
+  [/bank|insurance|real estate|financial|consult/i, 'Consultoria'],
+];
+const NAO_NEGOCIO_FSQ = /park|plaza|neighborhood|residential|road|street|bridge|bus (stop|station)|river|lake|mountain|church|temple|cemetery|playground|monument|field|trail|beach|city|town|village|state|country/i;
+export function segmentoFoursquare(categorias: string[]): string | null {
+  if (!categorias.length) return 'Outro';
+  if (categorias.every(c => NAO_NEGOCIO_FSQ.test(c))) return null; // não é comércio
+  for (const c of categorias) for (const [re, seg] of POR_CATEGORIA_FSQ) if (re.test(c)) return seg;
+  return `Outro (${categorias[0]})`;
+}
+
 // Nome comparável: sem acento, sem pontuação e sem sufixos societários/palavras genéricas.
 const GENERICAS = new Set(['ltda', 'me', 'epp', 'eireli', 'sa', 'cia', 'comercio', 'de', 'da', 'do', 'das', 'dos', 'e', 'loja', 'the']);
 export function normalizarNome(t: string | null | undefined): string {

@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip, useMap } from '
 import 'leaflet/dist/leaflet.css';
 import { Loader2, LocateFixed, Navigation, Phone, Plus, MapPin, CheckCircle2, Store, Globe } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { queryOverpass } from '@/lib/prospeccaoOsm';
 
 type Comercio = {
   osm_id: string; nome: string; segmento: string; segmento_osm: string; lat: number; lng: number; distancia_m: number;
@@ -25,6 +26,20 @@ const SITUACAO: Record<string, { cor: string; label: string }> = {
 const situacaoDe = (c: Comercio) => c.cliente ? (c.cliente.situacao || 'cadastrado') : 'novo';
 const fmtDist = (m: number) => m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`;
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+const ESPELHOS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+async function overpassNoNavegador(lat: number, lng: number, raio: number): Promise<any[]> {
+  const corpo = 'data=' + encodeURIComponent(queryOverpass(lat, lng, raio));
+  try {
+    return await Promise.any(ESPELHOS.map(async url => {
+      const r = await fetch(url, { method: 'POST', body: corpo, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(25000) });
+      if (!r.ok) throw new Error(String(r.status));
+      return (await r.json()).elements as any[];
+    }));
+  } catch {
+    throw new Error('O mapa público de comércios está fora do ar agora. Tente de novo em alguns minutos.');
+  }
+}
 
 function Recentrar({ lat, lng, raio }: { lat: number; lng: number; raio: number }) {
   const map = useMap();
@@ -66,9 +81,17 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
       setCarregando(true); setErro('');
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const r = await fetch(`/api/prospeccao/proximos?lat=${pos.lat}&lng=${pos.lng}&raio=${raio}`, { headers: { Authorization: `Bearer ${session?.access_token}` } });
-        const j = await r.json().catch(() => ({ erro: r.status === 504 ? 'O mapa demorou demais para responder. Tente de novo ou diminua o raio.' : 'Falha ao buscar comércios. Tente de novo.' }));
-        if (!r.ok) throw new Error(j.erro || 'Falha ao buscar comércios.');
+        const auth = { Authorization: `Bearer ${session?.access_token}` };
+        const r = await fetch(`/api/prospeccao/proximos?lat=${pos.lat}&lng=${pos.lng}&raio=${raio}`, { headers: auth });
+        let j = await r.json().catch(() => ({ erro: r.status === 504 ? 'O mapa demorou demais para responder. Tente de novo ou diminua o raio.' : 'Falha ao buscar comércios. Tente de novo.', osmNoNavegador: true }));
+        if (!r.ok && j.osmNoNavegador) {
+          // Plano B: o servidor do mapa aberto recusou o nosso servidor — pergunta direto daqui
+          // (a rede do vendedor costuma passar) e manda os comércios pra cruzar com a carteira.
+          const elementos = await overpassNoNavegador(pos.lat, pos.lng, raio);
+          const r2 = await fetch('/api/prospeccao/proximos', { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: pos.lat, lng: pos.lng, raio, elementos }) });
+          j = await r2.json().catch(() => ({ erro: 'Falha ao cruzar com a carteira.' }));
+          if (!r2.ok) throw new Error(j.erro || 'Falha ao buscar comércios.');
+        } else if (!r.ok) throw new Error(j.erro || 'Falha ao buscar comércios.');
         if (!cancelado) setDados(j);
       } catch (e: any) { if (!cancelado) setErro(e.message); }
       finally { if (!cancelado) setCarregando(false); }

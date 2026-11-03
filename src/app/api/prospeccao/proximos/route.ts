@@ -27,12 +27,17 @@ async function lugaresOsm(lat: number, lng: number, raio: number): Promise<Lugar
     const r = await fetch(url, {
       method: 'POST', body: 'data=' + encodeURIComponent(query),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'WeGrow-CRM/1.0 (prospeccao)' },
-      signal: AbortSignal.timeout(14000),
+      signal: AbortSignal.timeout(8000), // curto: se travar, o navegador tenta (plano B)
     });
     if (!r.ok) throw new Error(String(r.status));
     return (await r.json()).elements;
   }));
-  return elementos.filter(el => el.tags?.name && ehNegocioOsm(el.tags)).map(el => {
+  return lugaresDeElementos(elementos);
+}
+
+// Elementos crus do Overpass (do servidor ou vindos do navegador do vendedor) → lugares
+function lugaresDeElementos(elementos: any[]): Lugar[] {
+  return elementos.filter(el => el?.tags?.name && ehNegocioOsm(el.tags)).map(el => {
     const t = el.tags;
     return {
       id: `osm:${el.type}/${el.id}`, nome: t.name, lat: el.lat ?? el.center?.lat, lng: el.lon ?? el.center?.lon,
@@ -102,6 +107,20 @@ async function buscarLugares(lat: number, lng: number, raio: number): Promise<Lu
 // cliente da carteira, já visitado ou novo, com segmento; mais as visitas registradas no raio que
 // o OSM não conhece (o comércio existe na carteira mas não no mapa público).
 export async function GET(request: Request) {
+  return responder(request, null);
+}
+
+// POST { lat, lng, raio, elementos } — plano B: o servidor público do mapa às vezes recusa ou
+// trava as consultas vindas da Vercel; aí o navegador do vendedor consulta o Overpass e manda os
+// elementos pra cá só pra cruzar com a carteira.
+export async function POST(request: Request) {
+  let corpo: any;
+  try { corpo = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
+  if (!Array.isArray(corpo?.elementos)) return NextResponse.json({ erro: 'Elementos obrigatórios.' }, { status: 422 });
+  return responder(request, corpo);
+}
+
+async function responder(request: Request, corpo: { lat: number; lng: number; raio: number; elementos: any[] } | null) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
   if (!token) return NextResponse.json({ erro: 'Não autenticado.' }, { status: 401 });
   const db = supabaseAdmin();
@@ -112,8 +131,8 @@ export async function GET(request: Request) {
   const empresaId = perfil.empresa_id;
 
   const q = new URL(request.url).searchParams;
-  const lat = Number(q.get('lat')), lng = Number(q.get('lng'));
-  const raio = Math.min(Math.max(Number(q.get('raio')) || 1000, 200), 3000);
+  const lat = Number(corpo ? corpo.lat : q.get('lat')), lng = Number(corpo ? corpo.lng : q.get('lng'));
+  const raio = Math.min(Math.max(Number(corpo ? corpo.raio : q.get('raio')) || 1000, 200), 3000);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     return NextResponse.json({ erro: 'Localização inválida.' }, { status: 400 });
   }
@@ -122,10 +141,15 @@ export async function GET(request: Request) {
   const dLat = raio / 111320, dLng = raio / (111320 * Math.cos(lat * Math.PI / 180));
 
   let lugares: Lugar[];
-  try {
-    lugares = await buscarLugares(lat, lng, raio);
-  } catch {
-    return NextResponse.json({ erro: 'O serviço de mapa de comércios não respondeu agora. Tente de novo em 1 minuto ou diminua o raio.' }, { status: 503 });
+  if (corpo) {
+    lugares = lugaresDeElementos(corpo.elementos.slice(0, 1500));
+  } else {
+    try {
+      lugares = await buscarLugares(lat, lng, raio);
+    } catch {
+      // Sem Google configurado, o navegador tenta o mapa aberto direto (plano B)
+      return NextResponse.json({ erro: 'O serviço de mapa de comércios não respondeu agora. Tente de novo em 1 minuto ou diminua o raio.', osmNoNavegador: !process.env.GOOGLE_PLACES_API_KEY }, { status: 503 });
+    }
   }
 
   const [clientesTodos, { data: visitasRaio }] = await Promise.all([

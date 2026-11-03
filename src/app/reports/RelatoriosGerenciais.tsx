@@ -18,7 +18,7 @@ type Coluna = { k: string; t: string; tipo?: Tipo };
 type Ponto = { rotulo: string; valor: number; valor2?: number };
 type Grafico = { tipo: 'barras' | 'colunas' | 'rosca'; dados: Ponto[]; serie?: string; serie2?: string; formato?: 'brl' | 'n' | 'pct' };
 type Resultado = { grafico: Grafico | null; colunas: Coluna[]; linhas: Record<string, any>[]; resumo?: string; total?: Record<string, any> };
-type Def = { id: string; grupo: string; nome: string; descricao: string; gerar: (c: Ctx, op: Record<string, number>) => Promise<Resultado> | Resultado; opcao?: { k: string; rotulo: string; padrao: number; sufixo: string } };
+type Def = { id: string; grupo: string; nome: string; descricao: string; diretoria?: boolean; gerar: (c: Ctx, op: Record<string, number>) => Promise<Resultado> | Resultado; opcao?: { k: string; rotulo: string; padrao: number; sufixo: string } };
 
 const brl = (v: number) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 const kbrl = (v: number) => Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(v);
@@ -73,7 +73,7 @@ const DEFS: Def[] = [
       return { grafico: { tipo: 'barras', formato: 'brl', dados: linhas.map(l => ({ rotulo: l.vendedor, valor: l.faturamento })) },
         colunas: [{ k: 'vendedor', t: 'Vendedor' }, { k: 'leads', t: 'Leads', tipo: 'n' }, { k: 'vendas', t: 'Vendas', tipo: 'n' }, { k: 'faturamento', t: 'Faturamento', tipo: 'brl' }, { k: 'ticket', t: 'Ticket médio', tipo: 'brl' }, { k: 'conversao', t: 'Conversão', tipo: 'pct' }, { k: 'desc_pct', t: 'Desconto médio', tipo: 'pct' }], linhas };
     } },
-  { id: 'comissao', grupo: 'Comercial', nome: 'Comissão por vendedor', descricao: 'Comissão sobre as vendas ganhas no período, com o percentual que você definir.', opcao: { k: 'pct', rotulo: 'Comissão', padrao: 5, sufixo: '%' },
+  { id: 'comissao', diretoria: true, grupo: 'Comercial', nome: 'Comissão por vendedor', descricao: 'Comissão sobre as vendas ganhas no período, com o percentual que você definir.', opcao: { k: 'pct', rotulo: 'Comissão', padrao: 5, sufixo: '%' },
     gerar: (c, op) => {
       const pct = op.pct ?? 5;
       const linhas = agrupar(ganhos(c.leads), l => vend(c, l), (a, l) => { a.vendas++; a.faturamento += valor(l); }, () => ({ vendas: 0, faturamento: 0 }))
@@ -213,7 +213,7 @@ const DEFS: Def[] = [
       return { grafico: { tipo: 'colunas', formato: 'brl', serie: 'Valor a renovar', dados: g }, resumo: `${linhas.length} contratos · ${kbrl(linhas.reduce((s: number, l: any) => s + l.valor, 0))} para renovar`,
         colunas: [{ k: 'cliente', t: 'Cliente' }, { k: 'vendedor', t: 'Vendedor' }, { k: 'unidade', t: 'Unidade' }, { k: 'fim', t: 'Vence em', tipo: 'data' }, { k: 'dias', t: 'Dias', tipo: 'n' }, { k: 'valor', t: 'Valor do contrato', tipo: 'brl' }], linhas };
     } },
-  { id: 'receita_contratada', grupo: 'Contratos e financeiro', nome: 'Receita contratada (próximos 12 meses)', descricao: 'O que já está vendido para os próximos meses, pelos contratos vigentes (valor do contrato dividido pelos meses de veiculação).',
+  { id: 'receita_contratada', diretoria: true, grupo: 'Contratos e financeiro', nome: 'Receita contratada (próximos 12 meses)', descricao: 'O que já está vendido para os próximos meses, pelos contratos vigentes (valor do contrato dividido pelos meses de veiculação).',
     gerar: async c => {
       const h = hoje();
       const { data } = await escopo(supabase.from('leads').select('id, contrato_inicio, contrato_fim, valor_total, created_at').eq('status', 'ganho').gte('contrato_fim', h), c).limit(3000);
@@ -227,7 +227,7 @@ const DEFS: Def[] = [
       return { grafico: { tipo: 'colunas', formato: 'brl', serie: 'Receita contratada', dados: meses.map(m => ({ rotulo: m.rotulo, valor: m.receita })) },
         colunas: [{ k: 'rotulo', t: 'Mês' }, { k: 'contratos', t: 'Contratos ativos', tipo: 'n' }, { k: 'receita', t: 'Receita contratada', tipo: 'brl' }], linhas: meses };
     } },
-  { id: 'inadimplencia', grupo: 'Contratos e financeiro', nome: 'Parcelas vencidas (inadimplência)', descricao: 'Parcelas de vendas que venceram e não foram pagas, por faixa de atraso.',
+  { id: 'inadimplencia', diretoria: true, grupo: 'Contratos e financeiro', nome: 'Parcelas vencidas (inadimplência)', descricao: 'Parcelas de vendas que venceram e não foram pagas, por faixa de atraso.',
     gerar: async c => {
       const h = hoje();
       let q = supabase.from('lancamentos').select('id, titulo, valor, data_vencimento, lead_id').eq('tipo', 'entrada').eq('status', 'pendente').lt('data_vencimento', h).not('lead_id', 'is', null);
@@ -243,7 +243,7 @@ const DEFS: Def[] = [
       return { grafico: { tipo: 'colunas', formato: 'brl', serie: 'Em atraso', dados: g }, resumo: `${linhas.length} parcelas · ${kbrl(linhas.reduce((s: number, l: any) => s + l.valor, 0))} em atraso`,
         colunas: [{ k: 'cliente', t: 'Cliente' }, { k: 'vendedor', t: 'Vendedor' }, { k: 'vencimento', t: 'Venceu em', tipo: 'data' }, { k: 'dias', t: 'Dias de atraso', tipo: 'n' }, { k: 'valor', t: 'Valor', tipo: 'brl' }], linhas };
     } },
-  { id: 'recebimentos', grupo: 'Contratos e financeiro', nome: 'Recebimentos do período', descricao: 'O que efetivamente entrou no caixa no período (parcelas pagas), por dia.',
+  { id: 'recebimentos', diretoria: true, grupo: 'Contratos e financeiro', nome: 'Recebimentos do período', descricao: 'O que efetivamente entrou no caixa no período (parcelas pagas), por dia.',
     gerar: async c => {
       let q = supabase.from('lancamentos').select('id, titulo, valor, data_pagamento, data_vencimento').eq('tipo', 'entrada').eq('status', 'pago').gte('data_pagamento', c.dataInicio).lte('data_pagamento', c.dataFim);
       if (c.empresaId) q = q.eq('empresa_id', c.empresaId);
@@ -282,7 +282,8 @@ const DEFS: Def[] = [
     } },
 ];
 
-export const RELATORIOS = DEFS.map(d => ({ id: d.id, grupo: d.grupo, nome: d.nome }));
+// diretoria: valores de comissão, recebimentos e carteira contratada — só o diretor vê.
+export const RELATORIOS = DEFS.map(d => ({ id: d.id, grupo: d.grupo, nome: d.nome, diretoria: Boolean(d.diretoria) }));
 
 // ───────── Gráfico (SVG próprio: barras deitadas, colunas com até 2 séries, rosca)
 const CORES = ['#22C55E', '#3B82F6', '#F59E0B', '#A855F7', '#EF4444', '#06B6D4', '#EC4899', '#84CC16'];

@@ -118,7 +118,7 @@ export default function ReportsPage() {
   const isDirector = perfil?.cargo === 'diretor';
   const isGerente = perfil?.cargo === 'gerente';
 
-  useEffect(() => { if (user) fetchReportData(); }, [user, perfil]);
+  useEffect(() => { if (user && (isDirector || isGerente)) fetchReportData(); }, [user, perfil]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user && rawLeads.length > 0) fetchDadosDoPeriodo(); }, [dataInicio, dataFim]);
 
@@ -531,6 +531,19 @@ export default function ReportsPage() {
     empresaId: perfil?.empresa_id, userId: user?.id, isDirector, isGerente, unidadeGerente: perfil?.unidade,
     dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: [], visitas: visitasPeriodo,
   }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo]);
+  const relatoriosVisiveis = RELATORIOS.filter(r => isDirector || !r.diretoria);
+  const relatorioAtivo = relatoriosVisiveis.some(r => r.id === relatorio) ? relatorio : 'padrao';
+
+  // Relatórios são da liderança (o menu já só mostra pra diretor e gerente) — quem abre o
+  // endereço direto sem ser liderança não vê nada.
+  if (perfil && !isDirector && !isGerente) {
+    return (
+      <div className="p-10 flex flex-col items-center justify-center text-center gap-2 min-h-[50vh]">
+        <p className="text-white font-black uppercase italic text-lg">Acesso restrito</p>
+        <p className="text-slate-400 text-sm max-w-md">Os relatórios gerenciais são da diretoria e da gerência. Seus números estão no Dashboard e em Metas.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-4 pb-20 animate-in fade-in duration-700">
@@ -547,11 +560,11 @@ export default function ReportsPage() {
         <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
             
             {/* MENU DE RELATÓRIOS */}
-            <select value={relatorio} onChange={e => escolherRelatorio(e.target.value)} className="h-10 bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/35%)] text-[var(--cor-primaria)] rounded-xl px-3 text-[11px] font-black uppercase tracking-wide outline-none max-w-[280px]" title="Escolha o relatório">
+            <select value={relatorioAtivo} onChange={e => escolherRelatorio(e.target.value)} className="h-10 bg-[rgb(var(--cor-primaria-rgb)/10%)] border border-[rgb(var(--cor-primaria-rgb)/35%)] text-[var(--cor-primaria)] rounded-xl px-3 text-[11px] font-black uppercase tracking-wide outline-none max-w-[280px]" title="Escolha o relatório">
               <option value="padrao" className="bg-[#0B1120] text-white">Visão geral (padrão)</option>
-              {[...new Set(RELATORIOS.map(r => r.grupo))].map(g => (
+              {[...new Set(relatoriosVisiveis.map(r => r.grupo))].map(g => (
                 <optgroup key={g} label={g} className="bg-[#0B1120] text-slate-400">
-                  {RELATORIOS.filter(r => r.grupo === g).map(r => <option key={r.id} value={r.id} className="bg-[#0B1120] text-white">{r.nome}</option>)}
+                  {relatoriosVisiveis.filter(r => r.grupo === g).map(r => <option key={r.id} value={r.id} className="bg-[#0B1120] text-white">{r.nome}</option>)}
                 </optgroup>
               ))}
             </select>
@@ -629,7 +642,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {relatorio !== 'padrao' ? (carregandoInicial ? <SkeletonPage /> : <RelatoriosGerenciais key={relatorio} id={relatorio} ctx={ctxRelatorio} />) : <>
+      {relatorioAtivo !== 'padrao' ? (carregandoInicial ? <SkeletonPage /> : <RelatoriosGerenciais key={relatorioAtivo} id={relatorioAtivo} ctx={ctxRelatorio} />) : <>
       <MaterialSemanal />
 
       {carregandoInicial ? <SkeletonPage /> : <>

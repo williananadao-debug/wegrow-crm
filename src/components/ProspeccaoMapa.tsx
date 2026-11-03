@@ -12,6 +12,7 @@ type Comercio = {
   instagram: string | null; horario: string | null;
   cliente: { id: number; nome: string; segmento: string | null; situacao?: 'anunciando' | 'ja_comprou' | 'negociando' | 'cadastrado'; total_comprado?: number } | null;
   ultima_visita: { id: number; em: string; lead_id: number | null } | null;
+  posicao?: 'endereco' | 'confirmada';
 };
 type VisitaSolta = { id: number; nome: string; lat: number; lng: number; em: string; cliente_id: number | null; distancia_m: number };
 type Resposta = { fonte?: string; centro: { lat: number; lng: number }; raio: number; comercios: Comercio[]; visitas: VisitaSolta[]; resumo: { total: number; clientes: number; novos: number } };
@@ -41,6 +42,30 @@ async function overpassNoNavegador(lat: number, lng: number, raio: number): Prom
   }
 }
 
+// Posição do cadastro do Foursquare às vezes está longe do endereço (ex.: loja "no meio do trevo").
+// Ao tocar no comércio, confere o endereço no Nominatim (1 consulta por toque, dentro do limite de
+// uso deles) e, se der mais de 150 m de diferença, usa a posição do endereço.
+async function posicaoPeloEndereco(c: { endereco: string | null; cidade: string | null }): Promise<{ lat: number; lng: number } | null> {
+  if (!c.endereco) return null;
+  try {
+    const q = [c.endereco, c.cidade, 'Brasil'].filter(Boolean).join(', ');
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    return j?.[0] ? { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) } : null;
+  } catch { return null; }
+}
+function distancia(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371000, rad = Math.PI / 180, dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(x)));
+}
+// Navegação pelo nome + endereço quando houver (o Google Maps acha o lugar certo mesmo se a
+// coordenada do cadastro estiver torta); senão, pela coordenada.
+function linkRota(c: { nome: string; endereco: string | null; cidade: string | null; lat: number; lng: number }) {
+  const destino = c.endereco ? `${c.nome}, ${c.endereco}${c.cidade ? ', ' + c.cidade : ''}` : `${c.lat},${c.lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
+}
+
 function Recentrar({ lat, lng, raio }: { lat: number; lng: number; raio: number }) {
   const map = useMap();
   useEffect(() => { map.setView([lat, lng], raio <= 500 ? 16 : raio <= 1000 ? 15 : raio <= 2000 ? 14 : 13); }, [lat, lng, raio, map]);
@@ -60,6 +85,17 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
   const [segmento, setSegmento] = useState('Todos');
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [cadastrando, setCadastrando] = useState<string | null>(null);
+
+  async function selecionar(c: Comercio) {
+    setSelecionado(c.osm_id);
+    if (c.posicao || !c.endereco || !pos) return;
+    const p = await posicaoPeloEndereco(c);
+    setDados(d => d && ({ ...d, comercios: d.comercios.map(x => {
+      if (x.osm_id !== c.osm_id) return x;
+      if (!p || distancia(p, { lat: x.lat, lng: x.lng }) < 150) return { ...x, posicao: 'confirmada' as const };
+      return { ...x, lat: p.lat, lng: p.lng, distancia_m: distancia(pos, p), posicao: 'endereco' as const };
+    }) }));
+  }
 
   const localizar = useCallback(() => {
     setErro('');
@@ -166,7 +202,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
               return (
                 <CircleMarker key={c.osm_id} center={[c.lat, c.lng]} radius={selecionado === c.osm_id ? 10 : 6}
                   pathOptions={{ color: '#0B1120', weight: 1.5, fillColor: s.cor, fillOpacity: 0.95 }}
-                  eventHandlers={{ click: () => { setSelecionado(c.osm_id); document.getElementById(`pros-${c.osm_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }}>
+                  eventHandlers={{ click: () => { selecionar(c); document.getElementById(`pros-${c.osm_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }}>
                   <Tooltip>{c.nome} · {c.segmento} · {s.label}</Tooltip>
                 </CircleMarker>
               );
@@ -190,13 +226,14 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
         {lista.map(c => {
           const sit = situacaoDe(c); const s = SITUACAO[sit];
           return (
-            <div key={c.osm_id} id={`pros-${c.osm_id}`} onClick={() => setSelecionado(c.osm_id)}
+            <div key={c.osm_id} id={`pros-${c.osm_id}`} onClick={() => selecionar(c)}
               className={`rounded-2xl border p-3 transition-colors cursor-pointer ${selecionado === c.osm_id ? 'border-amber-500/60 bg-amber-500/5' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-white text-sm font-black truncate">{c.nome}</p>
                   <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Store size={10} /> {c.segmento}</p>
                   {(c.endereco || c.bairro) && <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5"><MapPin size={10} /> {[c.endereco, c.bairro, c.cidade].filter(Boolean).join(' · ')}</p>}
+                  {c.posicao === 'endereco' && <p className="text-[9px] text-amber-400 font-bold mt-0.5">Posição corrigida pelo endereço</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: `${s.cor}22`, color: s.cor, border: `1px solid ${s.cor}55` }}>{s.label}</span>
@@ -220,7 +257,7 @@ export default function ProspeccaoMapa({ empresaId, userId, onRegistrarVisita }:
                   className="flex items-center gap-1 bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:bg-blue-600 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase">
                   <MapPin size={11} /> Registrar visita
                 </button>
-                <a href={`https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                <a href={linkRota(c)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                   className="flex items-center gap-1 bg-white/5 border border-white/10 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase"><Navigation size={11} /> Ir</a>
                 {c.telefone && <a href={`tel:${c.telefone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 bg-white/5 border border-white/10 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase"><Phone size={11} /> Ligar</a>}
                 {c.site && <a href={c.site.startsWith('http') ? c.site : `https://${c.site}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1 bg-white/5 border border-white/10 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase"><Globe size={11} /> Site</a>}

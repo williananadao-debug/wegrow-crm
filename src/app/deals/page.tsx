@@ -2536,7 +2536,7 @@ export default function DealsPage() {
                     )}
 
                     <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl">
-                        <div className="flex items-center justify-between mb-1"><label className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1"><FileText size={12}/> Observação do contrato</label><BotaoDitado disabled={leadTravado} onTexto={t => setObservacaoContrato(o => juntarTexto(o, t))} /></div>
+                        <label className="text-[10px] font-black uppercase text-amber-400 mb-1 flex items-center gap-1"><FileText size={12}/> Observação do contrato</label>
                         <p className="text-[10px] text-slate-500 mb-2">Sai no contrato e na proposta (seção &quot;Observações&quot;). As notas do lead são só da equipe e não vão mais pro contrato.</p>
                         <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-amber-500 min-h-[70px] custom-scrollbar disabled:opacity-60" value={observacaoContrato} onChange={e => setObservacaoContrato(e.target.value)} disabled={leadTravado} placeholder="Ex.: Inserções de segunda a sábado. Cliente envia o áudio até 48h antes da estreia." />
                     </div>

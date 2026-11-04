@@ -61,6 +61,29 @@ export async function POST(request: Request) {
   return NextResponse.json(data, { status: 201 });
 }
 
+// PATCH — edita unidade (dados e cor de marca; a logo sobe por /api/admin/unidades/logo)
+const CAMPOS_EDITAVEIS = ['nome', 'razao_social', 'cnpj', 'endereco', 'cidade', 'estado', 'cor'];
+
+export async function PATCH(request: Request) {
+  if (!await verificarAdmin(request))
+    return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 });
+
+  let body: any;
+  try { body = await request.json(); } catch { return NextResponse.json({ erro: 'Corpo inválido.' }, { status: 400 }); }
+
+  const { id } = body;
+  if (!id) return NextResponse.json({ erro: 'id obrigatório.' }, { status: 422 });
+  if (body.cor && !/^#[0-9a-f]{6}$/i.test(body.cor)) return NextResponse.json({ erro: 'Cor inválida (use #RRGGBB).' }, { status: 422 });
+
+  const patch: Record<string, any> = {};
+  for (const c of CAMPOS_EDITAVEIS) if (c in body) patch[c] = body[c] === '' ? null : body[c];
+  if (!Object.keys(patch).length) return NextResponse.json({ erro: 'Nada para atualizar.' }, { status: 422 });
+
+  const { data, error } = await supabaseAdmin().from('unidades').update(patch).eq('id', id).select().single();
+  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
 // DELETE ?id=xxx
 export async function DELETE(request: Request) {
   if (!await verificarAdmin(request))

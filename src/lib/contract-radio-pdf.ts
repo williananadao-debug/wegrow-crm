@@ -11,6 +11,9 @@ export type ContratoData = {
   emissora_nome: string;
   emissora_cidade?: string;
   emissora_estado?: string;
+  // Marca da unidade (God Mode → Unidades): usada quando a emissora não tem timbrado próprio
+  emissora_logo?: Buffer | null;
+  emissora_cor?: string | null;
   cliente: string;
   cliente_razao_social?: string;
   cliente_nome_fantasia?: string;
@@ -126,7 +129,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.on('error', reject);
 
       const W = doc.page.width - 100; // largura útil
-      const corTitulo = '#111111';
+      const corTitulo = /^#[0-9a-f]{6}$/i.test(data.emissora_cor || '') ? data.emissora_cor! : '#111111';
 
       // ── TIMBRADO (marca d'água + logo + onda, por frequência) ────
       const timbradoArquivo = getTimbradoFile(data.emissora_nome);
@@ -143,6 +146,13 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       let paginaAtual = 1; // 1-based — usado pra dizer ao Docuseal em qual página cai a assinatura
       doc.on('pageAdded', () => { paginaAtual++; desenharTimbrado(); });
       if (timbradoPath) doc.y = 110; // desce o início do texto pra não sobrepor a logo do timbrado
+      else if (data.emissora_logo) {
+        // Sem timbrado: logo da unidade centralizada no topo da primeira página
+        try {
+          doc.image(data.emissora_logo, (doc.page.width - 150) / 2, 36, { fit: [150, 56], align: 'center', valign: 'center' });
+          doc.y = 104;
+        } catch { /* logo ilegível: segue sem ela */ }
+      }
 
       // ── HEADER ──────────────────────────────────────────────────
       doc.fontSize(16).font('Helvetica-Bold').fillColor(corTitulo)
@@ -150,7 +160,7 @@ export function gerarContratoBuffer(data: ContratoData): Promise<ContratoBufferR
       doc.fontSize(8).font('Helvetica').fillColor('#555')
         .text(`${data.emissora_nome}  ·  Protocolo #${data.protocolo}`, { align: 'center' });
       doc.moveDown(0.8);
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor('#ccc').stroke();
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(data.emissora_cor && !timbradoPath ? corTitulo : '#ccc').stroke();
       doc.moveDown(0.8);
 
       // ── INTRO ────────────────────────────────────────────────────

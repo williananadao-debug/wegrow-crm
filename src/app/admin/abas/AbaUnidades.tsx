@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Loader2, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import { AbaProps, headersAuth } from './types';
+import { extrairCorDominante } from '@/lib/extrair-cor-logo';
 
-type Unidade = { id: string; nome: string; razao_social?: string; cnpj?: string; endereco?: string; cidade?: string; estado?: string; };
+type Unidade = { id: string; nome: string; razao_social?: string; cnpj?: string; endereco?: string; cidade?: string; estado?: string; logo_url?: string | null; cor?: string | null; };
 
 export default function AbaUnidades({ empresa, token }: AbaProps) {
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -41,6 +42,53 @@ export default function AbaUnidades({ empresa, token }: AbaProps) {
     setSaving(false);
   };
 
+  // Marca da unidade (redes com várias emissoras, cada uma com logo e cor próprias)
+  const [subindoLogo, setSubindoLogo] = useState<string | null>(null);
+  const [erroMarca, setErroMarca] = useState<string | null>(null);
+
+  const salvarCor = async (id: string, cor: string) => {
+    setUnidades(prev => prev.map(x => x.id === id ? { ...x, cor } : x));
+    const res = await fetch('/api/admin/unidades', { method: 'PATCH', headers: headersAuth(token), body: JSON.stringify({ id, cor }) });
+    if (!res.ok) { setErroMarca((await res.json().catch(() => ({}))).erro || 'Erro ao salvar a cor.'); carregar(); }
+  };
+
+  // O seletor de cor dispara a cada movimento; salva só quando para de mexer
+  const timersCor = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mudarCor = (id: string, cor: string) => {
+    setUnidades(prev => prev.map(x => x.id === id ? { ...x, cor } : x));
+    clearTimeout(timersCor.current[id]);
+    timersCor.current[id] = setTimeout(() => salvarCor(id, cor), 600);
+  };
+
+  const subirLogo = async (u: Unidade, file: File) => {
+    setErroMarca(null);
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) { setErroMarca('Use uma imagem PNG ou JPG (a logo vai para o contrato em PDF).'); return; }
+    setSubindoLogo(u.id);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch('/api/admin/unidades/logo', {
+        method: 'POST', headers: headersAuth(token), body: JSON.stringify({ unidadeId: u.id, imagemBase64: base64 }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setErroMarca(json.erro || `Erro ao subir logo (HTTP ${res.status}).`); return; }
+      setUnidades(prev => prev.map(x => x.id === u.id ? { ...x, logo_url: json.logoUrl } : x));
+      // Sem cor definida ainda, já usa a cor dominante da logo (dá pra trocar depois)
+      if (!u.cor) {
+        const cor = await extrairCorDominante(base64);
+        if (cor) await salvarCor(u.id, cor);
+      }
+    } catch (err: any) {
+      setErroMarca('Erro ao subir logo: ' + (err?.message || 'erro desconhecido.'));
+    } finally {
+      setSubindoLogo(null);
+    }
+  };
+
   const remover = async (id: string) => {
     if (!confirm('Remover esta unidade?')) return;
     await fetch(`/api/admin/unidades?id=${id}`, { method: 'DELETE', headers: headersAuth(token) });
@@ -55,18 +103,28 @@ export default function AbaUnidades({ empresa, token }: AbaProps) {
         ) : unidades.length === 0 ? (
           <p className="text-slate-600 text-xs text-center py-4">Nenhuma unidade cadastrada.</p>
         ) : unidades.map(u => (
-          <div key={u.id} className="flex items-center justify-between bg-white/5 border border-white/5 rounded-xl px-4 py-3 group">
-            <div>
+          <div key={u.id} className="flex items-center justify-between bg-white/5 border border-white/5 rounded-xl px-4 py-3 group" style={u.cor ? { borderLeft: `3px solid ${u.cor}` } : undefined}>
+            <label title="Logo da unidade (PNG ou JPG)" className="w-11 h-11 mr-3 rounded-lg bg-white border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-[#22C55E]/60">
+              {subindoLogo === u.id ? <Loader2 size={14} className="animate-spin text-slate-500"/>
+                : u.logo_url ? <img src={u.logo_url} alt="" className="w-full h-full object-contain p-0.5"/>
+                : <ImageIcon size={15} className="text-slate-400"/>}
+              <input type="file" accept="image/png,image/jpeg" className="hidden" disabled={!!subindoLogo} onChange={e => { const f = e.target.files?.[0]; if (f) subirLogo(u, f); e.target.value = ''; }}/>
+            </label>
+            <div className="flex-1 min-w-0">
               <p className="font-black text-sm">{u.nome}</p>
               {u.razao_social && <p className="text-[10px] text-slate-500 font-mono">{u.razao_social} · {u.cnpj}</p>}
               {u.cidade && <p className="text-[10px] text-slate-600">{u.cidade}, {u.estado}</p>}
             </div>
+            <input type="color" title="Cor da unidade" value={u.cor || '#22C55E'} onChange={e => mudarCor(u.id, e.target.value)}
+              className="w-8 h-8 ml-2 rounded-md bg-transparent border border-white/10 cursor-pointer flex-shrink-0"/>
             <button onClick={() => remover(u.id)} className="text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2">
               <Trash2 size={14}/>
             </button>
           </div>
         ))}
       </div>
+      <p className="text-[10px] text-slate-600 -mt-3 mb-4">Clique no quadrado para subir a logo de cada unidade e no quadradinho colorido para a cor. Os dois aparecem no contrato da emissora.</p>
+      {erroMarca && <p className="text-xs text-red-400 -mt-2 mb-4">{erroMarca}</p>}
 
       <form onSubmit={adicionar} className="border-t border-white/5 pt-5 space-y-3">
         <p className="text-xs font-semibold text-slate-500">Nova Unidade</p>

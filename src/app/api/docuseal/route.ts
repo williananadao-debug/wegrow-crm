@@ -40,7 +40,8 @@ export async function POST(req: Request) {
 
     const [{ data: empresa, error: empErr }, { data: unidades }] = await Promise.all([
       supabase.from('empresas').select('modulos').eq('id', empresa_id).single(),
-      supabase.from('unidades').select('nome, razao_social, cnpj, endereco, cidade, estado').eq('empresa_id', empresa_id),
+      // '*' e não a lista de colunas: logo_url/cor só existem depois da migration 20261104150000
+      supabase.from('unidades').select('*').eq('empresa_id', empresa_id),
     ]);
 
     if (empErr) return NextResponse.json({ erro: 'Erro ao buscar empresa: ' + empErr!.message }, { status: 500 });
@@ -58,6 +59,17 @@ export async function POST(req: Request) {
       estado: unidadeMatch?.estado || '',
     };
 
+    // Logo da unidade para o topo do contrato (só PNG/JPG, que é o que o pdfkit lê)
+    let emissoraLogo: Buffer | null = null;
+    if (unidadeMatch?.logo_url) {
+      try {
+        const r = await fetch(unidadeMatch.logo_url, { signal: AbortSignal.timeout(8000) });
+        const b = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+        const png = b && b[0] === 0x89 && b[1] === 0x50, jpg = b && b[0] === 0xff && b[1] === 0xd8;
+        if (png || jpg) emissoraLogo = b;
+      } catch (err) { console.warn('[docuseal] logo da unidade', err); }
+    }
+
     // Gera PDF do contrato
     let pdfBuffer: Buffer;
     let sigPage: number;
@@ -71,6 +83,8 @@ export async function POST(req: Request) {
         emissora_nome: emissora.nome,
         emissora_cidade: emissora.cidade,
         emissora_estado: emissora.estado,
+        emissora_logo: emissoraLogo,
+        emissora_cor: unidadeMatch?.cor || null,
         cliente: deal.empresa || signers[0]?.name || '',
         cliente_razao_social: deal.razao_social || '',
         cliente_nome_fantasia: deal.nome_fantasia || '',

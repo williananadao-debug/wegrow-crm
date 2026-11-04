@@ -105,6 +105,9 @@ function PulseNovaVendaContent() {
   const [condDiasDevolucao, setCondDiasDevolucao] = useState('10');
   const [condUltimaNaEntrega, setCondUltimaNaEntrega] = useState(false);
   const [condFormaUltima, setCondFormaUltima] = useState('pix');
+  // Cláusulas adicionais (ex.: parceria/indicação) — ficam salvas na venda (observacao_contrato)
+  // e voltam preenchidas ao refazer o contrato.
+  const [clausulasExtras, setClausulasExtras] = useState('');
   const [contratoLinks, setContratoLinks] = useState<{ consultorSignUrl: string; signUrl: string | null } | null>(null);
 
   // NF de venda: normal (5101/5102) ou NF1 (entrega futura, CFOP 5922) — emitida na hora da venda. A NF2 (entrega, CFOP
@@ -773,6 +776,7 @@ function PulseNovaVendaContent() {
     setContratoLinks(null);
     setCondProtecoes(false); setCondDataEntrega(''); setCondMulta('0,5'); setCondDiasRescisao('30'); setCondDiasDevolucao('10');
     setCondUltimaNaEntrega(false); setCondFormaUltima('pix');
+    setClausulasExtras(venda?.observacao_contrato || '');
     setContratoAberto(true);
   };
 
@@ -807,6 +811,12 @@ function PulseNovaVendaContent() {
       const prazoFabricacaoDiasVenda = prazosVenda.length > 0 ? Math.max(...prazosVenda) : null;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
+      const extras = clausulasExtras.trim() || null;
+      if (extras !== (vendaAlvo.observacao_contrato || null)) {
+        const { error: errObs } = await supabase.from('leads').update({ observacao_contrato: extras }).eq('id', vendaAlvo.id);
+        if (errObs) throw new Error('Não foi possível salvar as cláusulas adicionais: ' + errObs.message);
+        setVendaAlvo((v: any) => v && v.id === vendaAlvo.id ? { ...v, observacao_contrato: extras } : v);
+      }
       const res = await fetch('/api/docuseal/pulse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -823,6 +833,7 @@ function PulseNovaVendaContent() {
             forma_pagamento_entrada: vendaAlvo.forma_pagamento_entrada || undefined,
             parcelas_detalhe: Array.isArray(vendaAlvo.parcelas_detalhe) && vendaAlvo.parcelas_detalhe.length > 0 ? vendaAlvo.parcelas_detalhe : undefined,
             prazoFabricacaoDias: prazoFabricacaoDiasVenda, unidade: vendaAlvo.unidade || unidadeSel,
+            observacao: extras || undefined,
             condicoes: (condProtecoes || condUltimaNaEntrega) ? {
               ...(condProtecoes ? {
                 dataLimiteEntrega: condDataEntrega, multaAtrasoSemanalPct: multaNum,
@@ -1172,6 +1183,11 @@ function PulseNovaVendaContent() {
                   </div>
                 </div>
               )}
+            </div>
+            <div className="border-t border-white/5 pt-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Cláusulas adicionais (opcional)</label>
+              <p className="text-slate-500 text-[10px] leading-snug mb-1.5">Cole ou escreva aqui. Cada bloco que começa com &quot;CLÁUSULA – TÍTULO&quot; vira uma cláusula numerada no contrato. Fica salvo nesta venda.</p>
+              <textarea value={clausulasExtras} onChange={e => setClausulasExtras(e.target.value)} rows={6} placeholder={'CLÁUSULA – PARCERIA COMERCIAL\nTexto da cláusula...'} className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-white text-xs outline-none focus:border-purple-500 custom-scrollbar" />
             </div>
             {contratoErro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{contratoErro}</div>}
             <button onClick={enviarContrato} disabled={enviandoContrato} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black uppercase text-xs py-3 rounded-xl flex items-center justify-center gap-2">

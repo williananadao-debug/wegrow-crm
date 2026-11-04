@@ -84,6 +84,26 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
 function normalizarTexto(t: string) {
   return textoParaPdf(t);
 }
+
+type ClausulaExtra = { titulo: string; paragrafos: { texto: string; negrito: boolean }[] };
+function separarClausulasExtras(texto: string): ClausulaExtra[] {
+  const out: ClausulaExtra[] = [];
+  let atual: ClausulaExtra | null = null;
+  for (const bruta of texto.replace(/\r\n?/g, '\n').split('\n')) {
+    const linha = bruta.replace(/^\s*#+\s*/, '').trim();
+    if (!linha) continue;
+    const limpa = linha.replace(/\*+/g, '').replace(/\s{2,}/g, ' ').trim();
+    const titulo = limpa.match(/^CL[ÁA]USULA\b[^A-Za-zÀ-ú]*(.+)$/i);
+    if (titulo) {
+      atual = { titulo: titulo[1].trim().toUpperCase(), paragrafos: [] };
+      out.push(atual);
+      continue;
+    }
+    if (!atual) { atual = { titulo: 'OBSERVAÇÕES', paragrafos: [] }; out.push(atual); }
+    atual.paragrafos.push({ texto: limpa, negrito: /^\*[^*].*[^*]\*$/.test(linha) || /^\*\*.+\*\*$/.test(linha) });
+  }
+  return out.filter(c => c.paragrafos.length > 0 || c.titulo !== 'OBSERVAÇÕES');
+}
 function fmt(v: number) {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -338,13 +358,21 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       );
       doc.moveDown(0.6);
 
-      if (data.observacao) {
-        clausula('7ª', 'OBSERVAÇÕES');
-        doc.font('Helvetica').fontSize(8).fillColor('#000').text(normalizarTexto(data.observacao), { align: 'justify' });
-        doc.moveDown(0.6);
-      }
-      // +1 pela cláusula de acompanhamento (6ª) e +1 se houver Observações (7ª).
-      const nClausula = (base: number) => (data.observacao ? base + 2 : base + 1);
+      // Cláusulas adicionais digitadas na venda (campo observacao_contrato). Cada bloco que
+      // começa com "CLÁUSULA – TÍTULO" vira uma cláusula numerada; texto antes do primeiro
+      // título sai como "OBSERVAÇÕES". Asteriscos/### de texto colado do WhatsApp/Word são
+      // removidos; linha que estava toda entre asteriscos vira subtítulo em negrito.
+      const extras = separarClausulasExtras(data.observacao || '');
+      extras.forEach((c, i) => {
+        clausula(`${7 + i}ª`, c.titulo);
+        for (const p of c.paragrafos) {
+          doc.font(p.negrito ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor('#000').text(normalizarTexto(p.texto), { align: 'justify' });
+          doc.moveDown(p.negrito ? 0.2 : 0.4);
+        }
+        doc.moveDown(0.2);
+      });
+      // +1 pela cláusula de acompanhamento (6ª) e +1 por cláusula adicional (7ª em diante).
+      const nClausula = (base: number) => base + 1 + extras.length;
 
       // ── DOCUMENTAÇÃO E EMPLACAMENTO ───────────────────────────────────
       clausula(`${nClausula(6)}ª`, 'DA DOCUMENTAÇÃO E EMPLACAMENTO');

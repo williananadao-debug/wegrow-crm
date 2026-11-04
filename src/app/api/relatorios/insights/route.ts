@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { chatComReserva } from '@/lib/iaReserva';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const completion = await groq.chat.completions.create({
+    const completion = await chatComReserva(groq, {
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

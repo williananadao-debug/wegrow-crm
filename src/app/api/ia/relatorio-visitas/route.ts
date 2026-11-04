@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = `Você é um estrategista de vendas especializado em analisar comentários de visitas comerciais em campo (rádio/mídia local).
@@ -137,7 +138,7 @@ ${listaClientes}`;
     // vazar pra dentro de message.content (quebrando o parse de JSON) ou consumir tokens
     // demais e truncar o JSON final antes de fechar. reasoning_effort:'low' +
     // include_reasoning:false mantêm o content só com a resposta final.
-    const response = await groq.chat.completions.create({
+    const response = await chatComReserva(groq, {
       model: 'openai/gpt-oss-120b',
       max_tokens: 2000,
       temperature: 0.2,

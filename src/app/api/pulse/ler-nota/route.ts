@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT_ENTRADA = `Você lê fotos de notas fiscais de fornecedores (compra de mercadoria) e extrai os dados em JSON.
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Imagem inválida.' }, { status: 400 });
     }
 
-    const response = await groq.chat.completions.create({
+    const response = await chatComReserva(groq, {
       model: 'qwen/qwen3.8-27b',
       max_tokens: 3000,
       temperature: 0.1,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
     try {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
       const nomesCategorias = categorias.map(c => c.nome).join(', ');
-      const resp = await groq.chat.completions.create({
+      const resp = await chatComReserva(groq, {
         model: 'openai/gpt-oss-120b',
         max_tokens: 200,
         temperature: 0.6,

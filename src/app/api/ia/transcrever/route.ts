@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { transcreverComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 // Transcrição dos campos de texto livre (visitas, notas do lead, observações) com o Whisper
 // da Groq. O áudio só passa por aqui: não é gravado em lugar nenhum, só o texto volta.
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const TAMANHO_MAXIMO = 15 * 1024 * 1024; // ~10 min de áudio comprimido; a Groq aceita até 25 MB
 
@@ -42,15 +43,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const r = await groq.audio.transcriptions.create({
-      file: audio,
-      model: 'whisper-large-v3-turbo',
-      language: 'pt',
-      response_format: 'json',
-      temperature: 0,
-      prompt: `Anotação de vendedor sobre visita a cliente, proposta comercial ou negociação.${vocabulario ? ` Nomes: ${vocabulario}.` : ''}`,
-    });
-    const texto = String(r.text || '').trim();
+    const texto = await transcreverComReserva(groq, audio,
+      `Anotação de vendedor sobre visita a cliente, proposta comercial ou negociação.${vocabulario ? ` Nomes: ${vocabulario}.` : ''}`);
     console.log(`[transcrever] empresa=${perfil.empresa_id} bytes=${audio.size} chars=${texto.length}`);
     return NextResponse.json({ texto });
   } catch (err: any) {

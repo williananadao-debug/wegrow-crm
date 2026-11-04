@@ -91,6 +91,8 @@ export default function VisitasPage() {
   const temPulse = Boolean(empresa?.modulos?.pulse);
   const router = useRouter();
   const { unidades } = useUnidades(perfil?.empresa_id);
+  // "Ao redor" ainda em teste: só aparece na conta demo (Onda 98.1) até liberar para os clientes
+  const aoRedorLiberado = perfil?.empresa_id === '80fc2113-3112-4471-87c0-08770dd2ccb1';
 
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [vendedores, setVendedores] = useState<Perfil[]>([]);
@@ -786,13 +788,13 @@ export default function VisitasPage() {
 
         {/* No celular: secundários só com ícone e o "Registrar" ocupando o resto da linha */}
         <div className="flex gap-2">
-          <button
+          {aoRedorLiberado && <button
             onClick={() => setProspeccaoAberta(true)}
             title="Comércios ao seu redor: quem já é cliente e quem ainda não está cadastrado"
             className="flex items-center justify-center gap-2 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-3 md:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
           >
             <Radar size={14} /> <span className="hidden md:inline">Ao redor</span>
-          </button>
+          </button>}
           {temPulse && (
             <button
               onClick={abrirRotaDoDia}
@@ -1560,7 +1562,7 @@ export default function VisitasPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setProspeccaoAberta(true)} title="Comércios ao seu redor" className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"><Radar size={12} /> Ao redor</button>
+                {aoRedorLiberado && <button onClick={() => setProspeccaoAberta(true)} title="Comércios ao seu redor" className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"><Radar size={12} /> Ao redor</button>}
                 <button onClick={() => setIsRotaModalOpen(false)} className="text-slate-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"><X size={18}/></button>
               </div>
             </div>

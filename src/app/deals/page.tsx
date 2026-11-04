@@ -12,6 +12,7 @@ import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
 import ItensFabrica from './ItensFabrica';
+import BotaoDitado, { juntarTexto } from '@/components/BotaoDitado';
 import { temRecurso } from '@/lib/catalogo';
 import { CDL } from '@/lib/cdl-config';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -2535,7 +2536,7 @@ export default function DealsPage() {
                     )}
 
                     <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl">
-                        <label className="text-[10px] font-black uppercase text-amber-400 mb-1 flex items-center gap-1"><FileText size={12}/> Observação do contrato</label>
+                        <div className="flex items-center justify-between mb-1"><label className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1"><FileText size={12}/> Observação do contrato</label><BotaoDitado disabled={leadTravado} onTexto={t => setObservacaoContrato(o => juntarTexto(o, t))} /></div>
                         <p className="text-[10px] text-slate-500 mb-2">Sai no contrato e na proposta (seção &quot;Observações&quot;). As notas do lead são só da equipe e não vão mais pro contrato.</p>
                         <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-amber-500 min-h-[70px] custom-scrollbar disabled:opacity-60" value={observacaoContrato} onChange={e => setObservacaoContrato(e.target.value)} disabled={leadTravado} placeholder="Ex.: Inserções de segunda a sábado. Cliente envia o áudio até 48h antes da estreia." />
                     </div>
@@ -2677,6 +2678,7 @@ export default function DealsPage() {
                                 </div>
                                 <div className="flex gap-2">
                                     <input className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] text-white outline-none" placeholder="Nova nota..." value={novaNota} onChange={e => setNovaNota(e.target.value)} />
+                                    <BotaoDitado onTexto={t => setNovaNota(n => juntarTexto(n, t))} />
                                     <button type="button" onClick={adicionarNota} className="bg-blue-600 text-white px-3 rounded-lg text-[10px] font-bold">OK</button>
                                 </div>
                             </div>
@@ -2773,6 +2775,7 @@ export default function DealsPage() {
                         Por que não fechamos este negócio? Detalhe o motivo abaixo. Nossa <strong>Inteligência Artificial</strong> usa estes dados para mapear padrões e encontrar oportunidades de recuperação no futuro.
                     </p>
                     <div>
+                        <div className="flex justify-end mb-1.5"><BotaoDitado onTexto={t => setMotivoPerda(m => juntarTexto(m, t))} /></div>
                         <textarea 
                             className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white text-sm font-medium outline-none focus:border-red-500 min-h-[120px] resize-none custom-scrollbar" 
                             placeholder="Ex: Achou o valor muito alto, fechou com a concorrência XYZ, o budget anual da empresa já tinha acabado..." 

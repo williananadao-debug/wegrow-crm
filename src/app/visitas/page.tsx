@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Toast } from '@/components/Toast';
+import BotaoDitado, { juntarTexto } from '@/components/BotaoDitado';
 import { useUnidades } from '@/lib/useUnidades';
 import { geocodificarParadas, type ParadaGeo } from '@/lib/geocode';
 import { normalizarTexto, parsePalavrasChave, textoBuscavel, destacar } from './palavrasChave';
@@ -1190,9 +1191,12 @@ export default function VisitasPage() {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">
-                  Observação
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    Observação
+                  </label>
+                  <BotaoDitado onTexto={t => setObservacao(o => juntarTexto(o, t))} />
+                </div>
                 <textarea
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-blue-500 min-h-[90px] resize-none custom-scrollbar transition-colors"
                   placeholder="O que aconteceu na visita? Cliente disse que..."

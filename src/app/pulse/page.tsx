@@ -199,7 +199,7 @@ export default function PulsePainelPage() {
         supabase.from('pulse_producao_eventos').select('producao_id, created_at')
           .eq('tipo', 'status').ilike('texto', '%Entregue%').gte('created_at', inicioMes.toISOString()),
         supabase.from('estoque_movimentacoes').select('quantidade, valor_unitario')
-          .eq('empresa_id', perfil.empresa_id).eq('tipo', 'entrada_nf').gte('created_at', inicioMes.toISOString()),
+          .eq('empresa_id', perfil.empresa_id).in('tipo', ['entrada_nf', 'entrada_sem_nf']).gte('created_at', inicioMes.toISOString()),
         supabase.from('estoque_movimentacoes').select('servico_id, quantidade, created_at')
           .eq('empresa_id', perfil.empresa_id).lt('quantidade', 0).gte('created_at', desde30d.toISOString()),
       ]);

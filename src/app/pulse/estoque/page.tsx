@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ShoppingCart, Truck, Loader2, Activity, Boxes, Package, Minus, Plus, ScanLine, X, Wallet, AlertTriangle, Pencil, Search, ListTree, Receipt, TrendingDown, TrendingUp, BarChart3, ClipboardCheck, ChevronRight, ChevronDown, Percent, FileText, Wand2, Tag, MoreHorizontal, Trash2, ShoppingBag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../usePulseAccess';
@@ -27,6 +27,7 @@ type Movimentacao = {
 
 const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
   entrada_nf: { label: 'Nota Fiscal (entrada)', cor: 'text-purple-400 bg-purple-500/10' },
+  entrada_sem_nf: { label: 'Compra sem nota', cor: 'text-teal-400 bg-teal-500/10' },
   saida_nf: { label: 'Nota Fiscal (saída)', cor: 'text-orange-400 bg-orange-500/10' },
   ajuste: { label: 'Ajuste manual', cor: 'text-blue-400 bg-blue-500/10' },
   venda: { label: 'Venda', cor: 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)]' },
@@ -50,6 +51,7 @@ export default function PulseEstoquePage() {
   const [servicos, setServicos] = useState<ServicoConfig[]>([]);
   const [loadingServicos, setLoadingServicos] = useState(true);
   const [notaModalAberto, setNotaModalAberto] = useState(false);
+  const [compraSemNota, setCompraSemNota] = useState(false);
   const [notaTipo, setNotaTipo] = useState<'entrada' | 'saida'>('entrada');
 
   // Etiqueta de código de barras (SKU, o mesmo lido na Saída Rápida) — abre a escolha de
@@ -422,13 +424,16 @@ export default function PulseEstoquePage() {
           <Link href="/pulse/estoque/saida-rapida" className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> Saída Rápida
           </Link>
-          <button onClick={() => { setNotaTipo('entrada'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+          <button onClick={() => { setNotaTipo('entrada'); setCompraSemNota(false); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> <span className="md:hidden">Entrada NF</span><span className="hidden md:inline">Dar entrada por Nota Fiscal</span>
+          </button>
+          <button onClick={() => { setNotaTipo('entrada'); setCompraSemNota(true); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+            <ShoppingBag size={14} /> Compra sem nota
           </button>
           {/* Saída manual liberada pro Almoxarifado (mesmo cargo que só enxerga Estoque/Notas
           Fiscais) — antes só existia entrada por aqui; pra dar saída sem passar pelo funil de
           venda (ex: baixa avulsa com NF de venda já emitida em mãos), precisa desse atalho. */}
-          <button onClick={() => { setNotaTipo('saida'); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+          <button onClick={() => { setNotaTipo('saida'); setCompraSemNota(false); setNotaModalAberto(true); }} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <ScanLine size={14} /> <span className="md:hidden">Saída NF</span><span className="hidden md:inline">Dar saída por Nota Fiscal</span>
           </button>
 
@@ -769,6 +774,7 @@ export default function PulseEstoquePage() {
         empresaId={perfil?.empresa_id}
         userId={user?.id}
         tipoInicial={notaTipo}
+        metodoInicial={compraSemNota ? 'sem_nota' : undefined}
         temCRM={temCRM}
         onConcluido={() => fetchServicos()}
       />}

@@ -18,6 +18,7 @@ type Movimentacao = {
 
 const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
   entrada_nf: { label: 'NF entrada', cor: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  entrada_sem_nf: { label: 'Compra sem nota', cor: 'text-teal-400 bg-teal-500/10 border-teal-500/20' },
   saida_nf: { label: 'NF saída', cor: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   ajuste: { label: 'Ajuste', cor: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   venda: { label: 'Venda', cor: 'text-[var(--cor-primaria)] bg-[rgb(var(--cor-primaria-rgb)/10%)] border-transparent' },

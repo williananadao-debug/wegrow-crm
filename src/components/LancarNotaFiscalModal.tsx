@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Camera, FileUp, FileCode2, PenLine, X, CheckCircle2, Trash2, ArrowLeft, Plus, Search } from 'lucide-react';
+import { Loader2, Camera, FileUp, FileCode2, PenLine, X, CheckCircle2, Trash2, ArrowLeft, Plus, Search, ShoppingBag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ServicoConfig, formatId } from '@/app/pulse/shared';
 import { acharServicoParecido } from '@/lib/matchProduto';
@@ -25,7 +25,9 @@ type PedidoOpcao = { id: number; empresa: string; valor_total: number };
 
 const novaChave = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
-type Metodo = 'foto' | 'pdf' | 'xml' | 'manual';
+// 'sem_nota': compra sem nota fiscal (Mercado Livre, loja, recibo). Dá entrada no estoque e lança a
+// despesa, mas NÃO cria registro em fiscal_notas — não é documento fiscal e não pode aparecer como nota.
+type Metodo = 'foto' | 'pdf' | 'xml' | 'manual' | 'sem_nota';
 
 const METODOS: { id: Metodo; label: string; icone: typeof Camera; desc: string }[] = [
   { id: 'foto', label: 'Foto', icone: Camera, desc: 'Tira foto ou escolhe da galeria — a IA lê' },
@@ -40,7 +42,7 @@ const METODOS: { id: Metodo; label: string; icone: typeof Camera; desc: string }
 // vindo de IA (foto/PDF) ou de leitura exata (XML), humano confere antes de mexer em
 // estoque — casamento automático de produto é só sugestão, nunca é definitivo sozinho.
 export default function LancarNotaFiscalModal({
-  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipoInicial = 'entrada', temCRM = false,
+  aberto, onFechar, servicos, empresaId, userId, onConcluido, tipoInicial = 'entrada', temCRM = false, metodoInicial,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -54,6 +56,8 @@ export default function LancarNotaFiscalModal({
   // Empresa com CRM ativo: venda pode ter nascido no funil (tipo != 'Pulse') — busca de
   // pedido pra saída não pode filtrar só por tipo='Pulse' nesse caso (ver useEffect abaixo).
   temCRM?: boolean;
+  // Abre direto num caminho (ex.: botão "Compra sem nota" no Estoque), pulando a escolha
+  metodoInicial?: 'sem_nota';
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [etapa, setEtapa] = useState<'escolha' | 'preparando' | 'lendo' | 'revisao'>('escolha');
@@ -72,6 +76,9 @@ export default function LancarNotaFiscalModal({
   const [dataEmissao, setDataEmissao] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [dataVencimento, setDataVencimento] = useState(() => new Date().toISOString().substring(0, 10));
+  // Só na compra sem nota: já foi paga (cartão/Pix na hora) ou fica a pagar, e nº do pedido/obs
+  const [jaPago, setJaPago] = useState(true);
+  const [observacao, setObservacao] = useState('');
   const [itens, setItens] = useState<ItemNota[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -142,6 +149,7 @@ export default function LancarNotaFiscalModal({
     setDataVencimento(new Date().toISOString().substring(0, 10));
     setItens([]); setErro(null); setArquivoOriginal(null);
     setPedidoQuery(''); setPedidoResultados([]); setPedidoSelecionado(null);
+    setJaPago(true); setObservacao('');
   };
 
   const fechar = () => { if (!salvando) { reset(); onFechar(); } };
@@ -234,6 +242,11 @@ export default function LancarNotaFiscalModal({
   const escolherMetodo = (m: Metodo) => {
     setMetodo(m); setErro(null);
     if (m === 'manual') { setItens([]); setArquivoOriginal(null); setEtapa('revisao'); return; }
+    if (m === 'sem_nota') {
+      setTipo('entrada'); setArquivoOriginal(null); setDataEmissao(new Date().toISOString().substring(0, 10));
+      setItens([{ chave: novaChave(), descricao: '', quantidade: 1, valorUnitario: 0, servicoId: 'novo', categoria: 'materia_prima' }]);
+      setEtapa('revisao'); return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -247,6 +260,69 @@ export default function LancarNotaFiscalModal({
     }));
   };
   const removerItem = (chave: string) => setItens(prev => prev.filter(it => it.chave !== chave));
+
+  useEffect(() => {
+    if (aberto && metodoInicial && etapa === 'escolha' && !metodo) escolherMetodo(metodoInicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, metodoInicial]);
+
+  const semNota = metodo === 'sem_nota';
+  const totalItens = itens.reduce((acc, i) => acc + (i.quantidade || 0) * (i.valorUnitario || 0), 0);
+
+  // Compra sem nota: entrada no estoque (tipo entrada_sem_nf, entra no custo médio) + despesa no
+  // financeiro. Sem fiscal_notas: não é documento fiscal.
+  const confirmarSemNota = async () => {
+    const validos = itens.filter(i => i.descricao.trim() && i.quantidade > 0);
+    if (!fornecedor.trim()) return setErro('Informe onde foi comprado (ex.: Mercado Livre).');
+    if (validos.length === 0) return setErro('Adicione pelo menos um item com descrição e quantidade.');
+    const total = Number(valorTotal) || totalItens;
+    if (!(total > 0)) return setErro('Informe o valor total da compra.');
+    if (!dataEmissao) return setErro('Informe a data da compra.');
+    if (!jaPago && !dataVencimento) return setErro('Informe quando vai ser pago.');
+    if (!empresaId) return setErro('Empresa não identificada.');
+    setSalvando(true); setErro(null);
+    try {
+      const obs = ['Compra sem nota fiscal', observacao.trim()].filter(Boolean).join(' · ');
+      for (const item of validos.filter(i => i.servicoId !== 'ignorar')) {
+        let servicoId: number;
+        let ehSobEncomenda = false;
+        if (item.servicoId === 'novo') {
+          const nomeUpper = item.descricao.toLocaleUpperCase('pt-BR');
+          const { data: criado, error: erroCriar } = await supabase.from('servicos').insert([{
+            nome: nomeUpper, preco: item.valorUnitario, tipo: item.categoria === 'uso_consumo' ? 'Uso e Consumo' : 'Nota Fiscal', unidade: '',
+            estoque: item.quantidade, empresa_id: empresaId, sku: gerarSkuAutomatico(nomeUpper),
+          }]).select('id').single();
+          if (erroCriar || !criado) throw new Error(erroCriar?.message || `Erro ao criar produto "${item.descricao}".`);
+          servicoId = criado.id;
+        } else {
+          servicoId = item.servicoId as number;
+          const atual = servicos.find(s => s.id === servicoId);
+          ehSobEncomenda = atual?.estoque === null || atual?.estoque === undefined;
+          if (!ehSobEncomenda) await supabase.from('servicos').update({ estoque: (atual?.estoque || 0) + item.quantidade }).eq('id', servicoId);
+        }
+        if (!ehSobEncomenda) {
+          const { error: erroMov } = await supabase.from('estoque_movimentacoes').insert([{
+            empresa_id: empresaId, servico_id: servicoId, quantidade: item.quantidade, valor_unitario: item.valorUnitario,
+            user_id: userId, tipo: 'entrada_sem_nf', motivo: 'compra', fornecedor: fornecedor.trim(),
+            cnpj_participante: cnpjFornecedor || null, observacao: obs,
+          }]);
+          if (erroMov) throw new Error(erroMov.message);
+        }
+      }
+      await supabase.from('lancamentos').insert([{
+        titulo: `Compra sem nota - ${fornecedor.trim()}`, valor: total, tipo: 'saida', categoria: 'Fornecedor',
+        status: jaPago ? 'pago' : 'pendente', data_vencimento: jaPago ? dataEmissao : dataVencimento,
+        data_pagamento: jaPago ? dataEmissao : null, user_id: userId, empresa_id: empresaId,
+      }]);
+      onConcluido();
+      reset();
+      onFechar();
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Erro ao lançar a compra.');
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   const confirmar = async () => {
     const validos = itens.filter(i => i.descricao.trim() && i.quantidade > 0);
@@ -361,12 +437,12 @@ export default function LancarNotaFiscalModal({
 
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            {etapa === 'revisao' && metodo && (
-              <button onClick={() => { setEtapa('escolha'); setErro(null); }} className="text-slate-500 hover:text-white p-1"><ArrowLeft size={16} /></button>
+            {etapa === 'revisao' && metodo && !metodoInicial && (
+              <button onClick={() => { setEtapa('escolha'); setMetodo(null); setErro(null); }} className="text-slate-500 hover:text-white p-1"><ArrowLeft size={16} /></button>
             )}
             <div>
-              <h3 className="font-black text-white uppercase italic text-lg">Lançar Nota Fiscal</h3>
-              <p className="text-slate-500 text-xs font-bold">{etapa === 'escolha' ? 'Escolha como vai lançar' : 'Foto/PDF/XML → você confirma'}</p>
+              <h3 className="font-black text-white uppercase italic text-lg">{semNota ? 'Compra sem nota' : 'Lançar Nota Fiscal'}</h3>
+              <p className="text-slate-500 text-xs font-bold">{semNota ? 'Mercado Livre, loja, recibo — entra no estoque sem nota fiscal' : etapa === 'escolha' ? 'Escolha como vai lançar' : 'Foto/PDF/XML → você confirma'}</p>
             </div>
           </div>
           <button onClick={fechar} className="text-slate-500 hover:text-white p-1"><X size={18} /></button>
@@ -387,6 +463,15 @@ export default function LancarNotaFiscalModal({
                   <p className="text-slate-500 text-[10px] mt-0.5 leading-snug">{m.desc}</p>
                 </button>
               ))}
+              {tipo === 'entrada' && (
+                <button onClick={() => escolherMetodo('sem_nota')} className="col-span-2 text-left bg-teal-500/[0.06] hover:bg-teal-500/[0.12] border border-teal-500/25 hover:border-teal-500/40 rounded-2xl p-4 transition-all flex items-center gap-3">
+                  <ShoppingBag size={20} className="text-teal-300 shrink-0" />
+                  <span>
+                    <span className="block text-white font-bold text-sm">Compra sem nota</span>
+                    <span className="block text-slate-500 text-[10px] mt-0.5 leading-snug">Mercado Livre, loja, recibo — dá entrada no estoque e lança a despesa, sem nota fiscal</span>
+                  </span>
+                </button>
+              )}
             </div>
             {erro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{erro}</div>}
           </div>
@@ -414,11 +499,11 @@ export default function LancarNotaFiscalModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{tipo === 'saida' ? 'Cliente' : 'Fornecedor'}</label>
-                <input value={fornecedor} onChange={e => setFornecedor(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{semNota ? 'Onde comprou' : tipo === 'saida' ? 'Cliente' : 'Fornecedor'}</label>
+                <input value={fornecedor} onChange={e => setFornecedor(e.target.value)} placeholder={semNota ? 'Ex.: Mercado Livre' : undefined} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">CNPJ/CPF</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{semNota ? 'CNPJ/CPF do vendedor (opcional)' : 'CNPJ/CPF'}</label>
                 <input value={cnpjFornecedor} onChange={e => setCnpjFornecedor(e.target.value)} placeholder="Só números" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
             </div>
@@ -457,6 +542,18 @@ export default function LancarNotaFiscalModal({
               </div>
             )}
 
+            {semNota ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Data da compra</label>
+                  <input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-teal-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Nº do pedido / obs. (opcional)</label>
+                  <input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Ex.: pedido 2000012345" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-teal-500" />
+                </div>
+              </div>
+            ) : (<>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Número</label>
@@ -476,18 +573,34 @@ export default function LancarNotaFiscalModal({
               <input value={chaveAcesso} onChange={e => setChaveAcesso(e.target.value.replace(/\D/g, ''))} maxLength={44} placeholder="Deixe em branco se não tiver" className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-xs font-mono tracking-tight outline-none focus:border-purple-500" />
               {chaveAcesso && chaveAcesso.length !== 44 && <p className="text-amber-400 text-[10px] font-bold mt-1">{chaveAcesso.length}/44 dígitos — confira, pode estar incompleta</p>}
             </div>
+            </>)}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor total</label>
-                <input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor total{semNota ? ' (com frete)' : ''}</label>
+                <input type="number" step="0.01" value={valorTotal} onChange={e => setValorTotal(e.target.value)} placeholder={semNota && totalItens > 0 ? totalItens.toFixed(2) : undefined} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
               </div>
-              {tipo === 'entrada' && (
+              {semNota ? (
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pagamento</label>
+                  <div className="flex gap-1 bg-black/40 border border-white/10 rounded-xl p-1">
+                    <button type="button" onClick={() => setJaPago(true)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase ${jaPago ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white'}`}>Já pago</button>
+                    <button type="button" onClick={() => setJaPago(false)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase ${!jaPago ? 'bg-teal-500 text-white' : 'text-slate-400 hover:text-white'}`}>A pagar</button>
+                  </div>
+                </div>
+              ) : tipo === 'entrada' && (
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vencimento</label>
                   <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-purple-500" />
                 </div>
               )}
             </div>
+            {semNota && !jaPago && (
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Vence em</label>
+                <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-white text-sm outline-none focus:border-teal-500" />
+              </div>
+            )}
+            {semNota && <p className="text-slate-500 text-[10px] font-bold leading-snug">Sem valor total, usa a soma dos itens. O valor unitário de cada item entra no custo médio do produto.</p>}
 
             <div className="border-t border-white/5 pt-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -536,9 +649,9 @@ export default function LancarNotaFiscalModal({
 
             {erro && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl">{erro}</div>}
 
-            <button onClick={confirmar} disabled={salvando} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2">
+            <button onClick={semNota ? confirmarSemNota : confirmar} disabled={salvando} className={`w-full ${semNota ? 'bg-teal-500 hover:bg-teal-600' : 'bg-purple-500 hover:bg-purple-600'} disabled:opacity-50 text-white py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2`}>
               {salvando ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              {salvando ? 'Salvando...' : `Confirmar ${tipo === 'entrada' ? 'entrada' : 'saída'}`}
+              {salvando ? 'Salvando...' : semNota ? 'Confirmar compra' : `Confirmar ${tipo === 'entrada' ? 'entrada' : 'saída'}`}
             </button>
           </div>
         )}

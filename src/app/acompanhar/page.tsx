@@ -20,6 +20,7 @@ type Producao = {
 type Pedido = {
   id: number; fechadoEm: string; valorTotal: number; itens: { nome: string; quantidade: number }[];
   producoes: Producao[]; parcelas: Parcela[]; totalPago: number;
+  marcos?: { chave: string; rotulo: string; situacao: 'feito' | 'pendente' | 'previsto'; data: string | null; detalhe: string | null }[];
   contrato: { assinado: boolean; linkAssinatura: string | null; arquivos: { nome: string; url: string }[] };
 };
 type Dados = { empresa: { nome: string; logo: string | null; cor: string }; cliente: { nome: string }; etapas: string[]; pedidos: Pedido[] };
@@ -94,6 +95,26 @@ function PedidoView({ p, etapas, cor, abrirFoto }: { p: Pedido; etapas: string[]
       </div>
 
       <Secao id={`producao-${p.id}`} icone={<Factory size={16} />} titulo="Produção">
+        {p.marcos && p.marcos.length > 0 && (
+          <div className="mb-5 pb-5 border-b border-slate-100">
+            <p className="text-xs font-black uppercase text-slate-500 mb-3">Caminho do pedido</p>
+            <ol className="relative space-y-3 before:absolute before:left-[8.5px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200">
+              {p.marcos.map(m => (
+                <li key={m.chave} className="relative flex items-start gap-2.5 text-sm">
+                  <span className="relative z-10 bg-white">
+                    {m.situacao === 'feito' ? <CheckCircle2 size={18} style={{ color: cor }} /> : <Circle size={18} className={m.situacao === 'pendente' ? 'text-slate-600' : 'text-slate-300'} />}
+                  </span>
+                  <div className="min-w-0 flex-1 flex flex-wrap items-baseline justify-between gap-x-3">
+                    <p className={m.situacao === 'feito' ? 'text-slate-800 font-semibold' : m.situacao === 'pendente' ? 'text-slate-900 font-bold' : 'text-slate-500 font-semibold'}>{m.rotulo}</p>
+                    <p className="text-xs text-slate-500">
+                      {m.detalhe}{m.detalhe && m.data ? ': ' : ''}{m.data && <b className="text-slate-700">{dataBr(m.data)}</b>}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         {p.producoes.length === 0 ? (
           <p className="text-sm text-slate-500">A produção ainda não começou. Assim que iniciar, as etapas e fotos aparecem aqui.</p>
         ) : p.producoes.map(pr => {

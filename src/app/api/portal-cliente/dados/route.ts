@@ -83,6 +83,9 @@ export async function GET() {
     : { data: [] };
 
   const etapas = etapasFabricacaoDe(empresa.modulos);
+  // Prazo de fabricação de cada produto do catálogo — é o prazo que vai na cláusula 4ª do contrato
+  const { data: catalogo } = await db.from('servicos').select('nome, prazo_fabricacao_dias').eq('empresa_id', sessao.empresa_id).not('prazo_fabricacao_dias', 'is', null);
+  const prazoDoProduto = new Map((catalogo || []).map(c => [c.nome, Number(c.prazo_fabricacao_dias) || 0]));
 
   const pedidos = (leads || []).map(l => {
     const itens = (Array.isArray(l.itens) ? l.itens : []).map((i: { servico?: string; quantidade?: number }) => ({ nome: i.servico || 'Item', quantidade: Number(i.quantidade) || 1 }));
@@ -160,9 +163,36 @@ export async function GET() {
     };
 
     const parcelas = planoPagamento(l);
+
+    // Caminho do pedido com o que está na venda: fechamento, contrato, entrada, início da
+    // fabricação, entrega (prazo do contrato) e a parcela que vence na entrega.
+    const fechadoEm = l.fechado_em || l.created_at;
+    const prazosItens = (Array.isArray(l.itens) ? l.itens : []).map((i: { servico?: string }) => prazoDoProduto.get(i.servico || '') || 0).filter((d: number) => d > 0);
+    const prazoContratoDias = prazosItens.length ? Math.max(...prazosItens) : null;
+    const prod = prods[0];
+    const entregaPrevista = prod?.previsaoEntrega || (prazoContratoDias ? somaDias(fechadoEm, prazoContratoDias).substring(0, 10) : null);
+    const entrada = parcelas.find(x => x.rotulo === 'Entrada');
+    const naEntrega = parcelas.find(x => /\(na entrega\)$/.test(x.rotulo));
+    const entregue = prod?.status === 'entregue';
+    const pronto = prod && prod.status !== 'em_producao' && prod.status !== 'aguardando';
+    const marcos = [
+      { chave: 'venda', rotulo: 'Pedido fechado', situacao: 'feito', data: fechadoEm, detalhe: null },
+      { chave: 'contrato', rotulo: 'Contrato assinado', situacao: contrato.assinado ? 'feito' : 'pendente', data: null,
+        detalhe: contrato.assinado ? null : 'Aguardando assinatura' },
+      ...(entrada ? [{ chave: 'entrada', rotulo: 'Entrada', situacao: entrada.pago ? 'feito' : 'pendente', data: entrada.pago ? entrada.pagoEm : entrada.vencimento,
+        detalhe: entrada.pago ? null : entrada.vencimento ? 'Vencimento' : 'Aguardando pagamento' }] : []),
+      { chave: 'producao', rotulo: 'Início da produção', situacao: prod?.inicioProducao ? 'feito' : 'pendente', data: prod?.inicioProducao || null,
+        detalhe: prod?.inicioProducao ? null : prod ? 'Na fila da fábrica' : 'Produção ainda não aberta' },
+      { chave: 'pronto', rotulo: 'Fabricação concluída', situacao: pronto ? 'feito' : 'previsto', data: null, detalhe: pronto ? null : 'Ao fim da última etapa' },
+      { chave: 'entrega', rotulo: 'Entrega', situacao: entregue ? 'feito' : 'previsto', data: entregue ? null : entregaPrevista,
+        detalhe: entregue ? null : prazoContratoDias ? `Previsão (contrato: ${prazoContratoDias} dias corridos)` : 'Previsão' },
+      ...(naEntrega ? [{ chave: 'ultima', rotulo: `${naEntrega.rotulo.replace(/\s*\(na entrega\)$/, '')} na entrega`, situacao: naEntrega.pago ? 'feito' : 'previsto',
+        data: naEntrega.pago ? naEntrega.pagoEm : entregaPrevista, detalhe: naEntrega.pago ? null : 'Paga no dia da entrega' }] : []),
+    ];
+
     return {
-      id: l.id, fechadoEm: l.fechado_em || l.created_at, valorTotal: Number(l.valor_total) || 0, itens,
-      producoes: prods, contrato, parcelas,
+      id: l.id, fechadoEm, valorTotal: Number(l.valor_total) || 0, itens,
+      producoes: prods, contrato, parcelas, marcos, prazoContratoDias,
       totalPago: parcelas.filter(p => p.pago).reduce((s, p) => s + p.valor, 0),
     };
   });

@@ -207,7 +207,7 @@ export const gerarJsonOpec = (lead: any, clienteFull: any, vendedorLogado: any, 
       // Segmentação Padrão
       setor: "Comércio/Serviços",
       subsetor: "Geral",
-      segmento: "Geral",
+      segmento: clienteFull?.segmento?.trim() || "Geral", // do cadastro do cliente; "Geral" só quando está vazio
       
       // Dados da Agência
       agencia: lead.tipo === 'Agência' ? (clienteFull?.nome_empresa || lead.empresa) : null,

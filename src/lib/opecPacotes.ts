@@ -237,8 +237,9 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                     id_cliente: clienteData?.id || job.client_id || null,
                     // Nome fantasia e razão social vêm dos campos próprios do cadastro; o nome da
                     // empresa (nome_empresa) só entra quando eles estão vazios.
-                    nome_fantasia: clienteData?.nome_fantasia?.trim() || job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
-                    razao_social: clienteData?.razao_social?.trim() || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
+                    // Em maiúsculas, como os demais nomes que o OPEC recebe (o cadastro fica como está)
+                    nome_fantasia: String(clienteData?.nome_fantasia?.trim() || job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado').toLocaleUpperCase('pt-BR'),
+                    razao_social: String(clienteData?.razao_social?.trim() || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado').toLocaleUpperCase('pt-BR'),
                     cnpj: clienteData?.cnpj || leadData?.cnpj || null,
                     telefone_whatsapp: clienteData?.telefone || leadData?.telefone || null,
                     cidade: clienteData?.cidade || leadData?.cidade || null,

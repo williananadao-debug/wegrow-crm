@@ -37,6 +37,39 @@ function temposDasEtapas(evs: { texto: string | null; created_at: string }[]) {
   return t;
 }
 
+const dataBR = (iso: string) => { const [a, m, d] = iso.substring(0, 10).split('-'); return `${d}/${m}/${a}`; };
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+// Entrega combinada na venda, lida do texto da proposta/itens/cláusulas. Cada venda da Trailer
+// combina de um jeito: data exata, mês ("entrega para maio de 2027") ou intervalo de dias
+// ("250 a 280 dias após fechamento do contrato e pagamento da entrada").
+function entregaCombinada(texto: string, base: string | null): { data: string | null; texto: string } | null {
+  const t = texto.toLowerCase().replace(/\s+/g, ' ');
+  let m = t.match(/entrega[^.]{0,80}?(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) {
+    const iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return { data: iso, texto: dataBR(iso) };
+  }
+  m = t.match(/entrega[^.]{0,80}?(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*(?:de\s*|\/\s*)?(\d{4})/);
+  if (m) {
+    const mes = MESES.find(x => x.replace('ç', 'c') === m![1].replace('ç', 'c')) || m[1];
+    return { data: null, texto: `${mes[0].toUpperCase()}${mes.slice(1)} de ${m[2]}` };
+  }
+  m = t.match(/entrega[^.]{0,80}?(\d{2,3})\s*(?:a|à|á|-|até)\s*(\d{2,3})\s*dias/);
+  if (m) {
+    const [de, ate] = [Number(m[1]), Number(m[2])];
+    return base
+      ? { data: null, texto: `Entre ${dataBR(somaDias(base, de))} e ${dataBR(somaDias(base, ate))}` }
+      : { data: null, texto: `${de} a ${ate} dias após o fechamento do contrato e o pagamento da entrada` };
+  }
+  m = t.match(/entrega[^.]{0,80}?(\d{2,3})\s*dias/);
+  if (m) {
+    const dias = Number(m[1]);
+    return base ? { data: somaDias(base, dias).substring(0, 10), texto: dataBR(somaDias(base, dias)) } : { data: null, texto: `${dias} dias após o fechamento do contrato e o pagamento da entrada` };
+  }
+  return null;
+}
+
 // Retorno de etapa é correção interna da fábrica, e o tempo de espera é métrica da equipe:
 // nenhum dos dois vai pro cliente.
 const textoParaCliente = (texto: string | null) => {
@@ -60,7 +93,7 @@ export async function GET() {
   if (!empresa || !portalAtivo(empresa.modulos) || !cliente) return NextResponse.json({ erro: 'Portal indisponível.' }, { status: 403 });
 
   const { data: leads } = await db.from('leads')
-    .select('id, valor_total, itens, created_at, fechado_em, valor_entrada, parcelas, vencimento, vencimentos_datas, parcelas_detalhe, cobrancas_manuais, parcelas_pagas, docuseal_assinado, docuseal_sign_url, docuseal_arquivos, contrato_manual_arquivos, contrato_manual_url')
+    .select('id, valor_total, itens, descricao, observacao_contrato, created_at, fechado_em, valor_entrada, parcelas, vencimento, vencimentos_datas, parcelas_detalhe, cobrancas_manuais, parcelas_pagas, docuseal_assinado, docuseal_sign_url, docuseal_arquivos, contrato_manual_arquivos, contrato_manual_url')
     .eq('empresa_id', sessao.empresa_id).eq('client_id', sessao.cliente_id).eq('status', 'ganho')
     .order('created_at', { ascending: false }).limit(20);
 
@@ -154,8 +187,20 @@ export async function GET() {
     const prazosItens = (Array.isArray(l.itens) ? l.itens : []).map((i: { servico?: string }) => prazoDoProduto.get(i.servico || '') || 0).filter((d: number) => d > 0);
     const prazoContratoDias = prazosItens.length ? Math.max(...prazosItens) : null;
     const prod = prods[0];
-    const entregaPrevista = prod?.previsaoEntrega || (prazoContratoDias ? somaDias(fechadoEm, prazoContratoDias).substring(0, 10) : null);
     const entrada = parcelas.find(x => x.rotulo === 'Entrada');
+
+    // Entrega: 1) a fábrica alterou a previsão à mão; 2) o que foi combinado no texto da venda,
+    // contado do fechamento e do pagamento da entrada; 3) só então a conta automática do catálogo.
+    const alteradaPelaFabrica = Boolean(prod && (eventos || []).some(e => e.producao_id === prod.id && /^Previsão de entrega alterada/.test(e.texto || '')));
+    const textoVenda = [
+      ...(Array.isArray(l.itens) ? l.itens : []).map((i: { descricao?: string }) => i.descricao || ''),
+      l.observacao_contrato || '', l.descricao || '',
+    ].join(' . ');
+    const baseCombinada = entrada ? (entrada.pago && entrada.pagoEm ? [fechadoEm, entrada.pagoEm].sort().pop() as string : null) : fechadoEm;
+    const combinada = alteradaPelaFabrica ? null : entregaCombinada(textoVenda, baseCombinada);
+    const automatica = prod?.previsaoEntrega || (prazoContratoDias ? somaDias(fechadoEm, prazoContratoDias).substring(0, 10) : null);
+    const entregaPrevista: string | null = alteradaPelaFabrica ? prod?.previsaoEntrega || null : combinada ? combinada.data : automatica;
+    const entregaTexto: string | null = combinada ? combinada.texto : entregaPrevista ? dataBR(entregaPrevista) : null;
     const naEntrega = parcelas.find(x => /\(na entrega\)$/.test(x.rotulo));
     const entregue = prod?.status === 'entregue';
     const pronto = prod && prod.status !== 'em_producao' && prod.status !== 'aguardando';
@@ -168,15 +213,15 @@ export async function GET() {
       { chave: 'producao', rotulo: 'Início da produção', situacao: prod?.inicioProducao ? 'feito' : 'pendente', data: prod?.inicioProducao || null,
         detalhe: prod?.inicioProducao ? null : prod ? 'Na fila da fábrica' : 'Produção ainda não aberta' },
       { chave: 'pronto', rotulo: 'Fabricação concluída', situacao: pronto ? 'feito' : 'previsto', data: null, detalhe: pronto ? null : 'Ao fim da última etapa' },
-      { chave: 'entrega', rotulo: 'Entrega', situacao: entregue ? 'feito' : 'previsto', data: entregue ? null : entregaPrevista,
-        detalhe: entregue ? null : prazoContratoDias ? `Previsão (contrato: ${prazoContratoDias} dias corridos)` : 'Previsão' },
+      { chave: 'entrega', rotulo: 'Entrega', situacao: entregue ? 'feito' : 'previsto', data: null,
+        detalhe: entregue ? null : entregaTexto ? `Previsão: ${entregaTexto}` : 'Previsão a confirmar' },
       ...(naEntrega ? [{ chave: 'ultima', rotulo: `${naEntrega.rotulo.replace(/\s*\(na entrega\)$/, '')} na entrega`, situacao: naEntrega.pago ? 'feito' : 'previsto',
-        data: naEntrega.pago ? naEntrega.pagoEm : entregaPrevista, detalhe: naEntrega.pago ? null : 'Paga no dia da entrega' }] : []),
+        data: naEntrega.pago ? naEntrega.pagoEm : null, detalhe: naEntrega.pago ? null : 'Paga no dia da entrega' }] : []),
     ];
 
     return {
       id: l.id, fechadoEm, valorTotal: Number(l.valor_total) || 0, itens,
-      producoes: prods, contrato, parcelas, marcos, prazoContratoDias,
+      producoes: prods, contrato, parcelas, marcos, entregaTexto,
       totalPago: parcelas.filter(p => p.pago).reduce((s, p) => s + p.valor, 0),
     };
   });

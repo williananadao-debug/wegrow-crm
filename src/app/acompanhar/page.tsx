@@ -20,6 +20,7 @@ type Producao = {
 type Pedido = {
   id: number; fechadoEm: string; valorTotal: number; itens: { nome: string; quantidade: number }[];
   producoes: Producao[]; parcelas: Parcela[]; totalPago: number;
+  entregaTexto?: string | null;
   marcos?: { chave: string; rotulo: string; situacao: 'feito' | 'pendente' | 'previsto'; data: string | null; detalhe: string | null }[];
   contrato: { assinado: boolean; linkAssinatura: string | null; arquivos: { nome: string; url: string }[] };
 };
@@ -134,8 +135,8 @@ function PedidoView({ p, etapas, cor, abrirFoto }: { p: Pedido; etapas: string[]
                 <p className="flex items-center gap-1.5"><Factory size={14} />
                   {pr.inicioProducao ? <>Início da produção: <b>{dataBr(pr.inicioProducao)}</b></> : pr.status === 'aguardando' ? <>Na fila da fábrica, <b>ainda não iniciada</b></> : <>Início da produção: <b>—</b></>}
                 </p>
-                {pr.previsaoEntrega && (
-                  <p className="flex items-center gap-1.5"><CalendarClock size={14} /> Previsão de entrega: <b>{dataBr(pr.previsaoEntrega)}</b></p>
+                {(p.entregaTexto || pr.previsaoEntrega) && (
+                  <p className="flex items-center gap-1.5"><CalendarClock size={14} /> Previsão de entrega: <b>{p.entregaTexto || dataBr(pr.previsaoEntrega)}</b></p>
                 )}
               </div>
               <ol className="space-y-2.5">

@@ -242,6 +242,7 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                     razao_social: String(clienteData?.razao_social?.trim() || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado').toLocaleUpperCase('pt-BR'),
                     cnpj: clienteData?.cnpj || leadData?.cnpj || null,
                     telefone_whatsapp: clienteData?.telefone || leadData?.telefone || null,
+                    email: String(clienteData?.email || leadData?.email || '').trim().toLowerCase() || null,
                     cidade: clienteData?.cidade || leadData?.cidade || null,
                     cep: String(clienteData?.cep || '').replace(/\D/g, '') || null,
                     agencia: job.agencia || (leadData?.tipo === 'Agência' ? leadData?.empresa : null)

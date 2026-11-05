@@ -8,7 +8,7 @@ import {
 type Parcela = { chave: string; rotulo: string; valor: number; vencimento: string | null; pago: boolean; pagoEm: string | null; boletoUrl: string | null };
 type EtapaCronograma = {
   nome: string; situacao: 'concluida' | 'andamento' | 'aguardando' | 'futura';
-  inicio: string | null; fim: string | null; prazo: string | null; inicioPrevisto: string | null; fimPrevisto: string | null;
+  inicio: string | null; fim: string | null;
   subprocessos: { nome: string; feito: boolean }[];
 };
 type Producao = {
@@ -122,7 +122,7 @@ function PedidoView({ p, etapas, cor, abrirFoto }: { p: Pedido; etapas: string[]
           // Sem o cronograma (versão antiga da API), monta só a situação de cada etapa
           const cronograma: EtapaCronograma[] = pr.cronograma?.length ? pr.cronograma : etapas.map((nome, i) => ({
             nome, situacao: concluida || i < pr.etapaAtual ? 'concluida' : i === pr.etapaAtual ? 'andamento' : 'futura',
-            inicio: null, fim: null, prazo: null, inicioPrevisto: null, fimPrevisto: null, subprocessos: [],
+            inicio: null, fim: null, subprocessos: [],
           }));
           return (
             <div key={pr.id} className="space-y-4">
@@ -146,8 +146,8 @@ function PedidoView({ p, etapas, cor, abrirFoto }: { p: Pedido; etapas: string[]
                   const datas = feita
                     ? [e.inicio && `Início ${dataBr(e.inicio)}`, e.fim && `concluída ${dataBr(e.fim)}`].filter(Boolean).join(' · ')
                     : atual
-                      ? [e.inicio && `Iniciada ${dataBr(e.inicio)}`, e.prazo && `prazo ${dataBr(e.prazo)}`].filter(Boolean).join(' · ')
-                      : e.inicioPrevisto ? `Previsto: ${dataBr(e.inicioPrevisto)} a ${dataBr(e.fimPrevisto)}` : '';
+                      ? (e.inicio ? `Iniciada ${dataBr(e.inicio)}` : '')
+                      : '';
                   return (
                     <li key={e.nome} className="flex items-start gap-2.5 text-sm">
                       {feita ? <CheckCircle2 size={18} style={{ color: cor }} className="shrink-0 mt-0.5" /> : atual ? <Loader2 size={18} className="shrink-0 mt-0.5 animate-spin text-slate-700" /> : <Circle size={18} className={`shrink-0 mt-0.5 ${esperando ? 'text-slate-600' : 'text-slate-300'}`} />}

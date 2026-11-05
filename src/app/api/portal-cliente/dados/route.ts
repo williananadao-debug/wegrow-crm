@@ -6,15 +6,15 @@ export const dynamic = 'force-dynamic';
 
 // Mesma regra de etapasFabricacaoDe (pulse/shared.ts), sem importar aquele arquivo — ele
 // puxa o client Supabase do navegador e isto aqui roda no servidor.
-type EtapaConfig = { nome: string; prazoDias: number | null; checklist: string[] };
+type EtapaConfig = { nome: string; checklist: string[] };
 function etapasFabricacaoDe(modulos: Record<string, unknown> | null | undefined): EtapaConfig[] {
   const custom = modulos?.pulse_etapas_fabricacao;
   if (!Array.isArray(custom) || custom.length === 0) {
-    return ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'].map(nome => ({ nome, prazoDias: null, checklist: [] }));
+    return ['Corte', 'Solda/Estrutura', 'Pintura', 'Montagem/Acabamento'].map(nome => ({ nome, checklist: [] }));
   }
-  return custom.map((e: string | { nome: string; prazoDias?: number | null; checklist?: string[] | null }) => typeof e === 'string'
-    ? { nome: e, prazoDias: null, checklist: [] }
-    : { nome: e.nome, prazoDias: e.prazoDias != null && e.prazoDias > 0 ? Number(e.prazoDias) : null, checklist: Array.isArray(e.checklist) ? e.checklist : [] });
+  return custom.map((e: string | { nome: string; checklist?: string[] | null }) => typeof e === 'string'
+    ? { nome: e, checklist: [] }
+    : { nome: e.nome, checklist: Array.isArray(e.checklist) ? e.checklist : [] });
 }
 
 const STATUS_PRODUCAO: Record<string, string> = { em_producao: 'Em produção', concluida: 'Pronto', entregue: 'Entregue' };
@@ -106,19 +106,7 @@ export async function GET() {
       const primeiroInicio = (eventosEtapa || []).find(e => e.producao_id === p.id && etapas[0] && (e.texto || '').startsWith(`Etapa iniciada: ${etapas[0].nome}.`));
       const inicioProducao = comecou ? (primeiroInicio?.created_at || t[etapas[0]?.nome]?.inicio || null) : null;
 
-      // Previsto: de trás pra frente a partir da previsão de entrega, com o prazo em dias de cada
-      // etapa (Configurações → Etapas de Produção). Sem entrega ou sem prazo em alguma etapa
-      // que falta, não inventa data.
-      const previsto: { inicio: string | null; fim: string | null }[] = etapas.map(() => ({ inicio: null, fim: null }));
-      if (emProducao && p.previsao_entrega && etapas.slice(idx).every(e => e.prazoDias)) {
-        let fim = new Date(String(p.previsao_entrega).substring(0, 10) + 'T12:00:00').toISOString();
-        for (let i = etapas.length - 1; i >= idx; i--) {
-          const inicio = somaDias(fim, -(etapas[i].prazoDias as number));
-          previsto[i] = { inicio, fim };
-          fim = inicio;
-        }
-      }
-
+      // Para o cliente, cada etapa mostra só quando começou e quando terminou (sem prazo por etapa)
       const marcados = (p.checklist_feito && typeof p.checklist_feito === 'object' ? p.checklist_feito : {}) as Record<string, Record<string, unknown>>;
       const cronograma = etapas.map((e, i) => {
         const real = t[e.nome] || {};
@@ -127,10 +115,6 @@ export async function GET() {
         return {
           nome: e.nome, situacao, inicio,
           fim: situacao === 'concluida' ? real.fim || null : null,
-          // Prazo da etapa em andamento: início real + prazo; senão, o fim previsto pela entrega
-          prazo: situacao === 'andamento' ? (inicio && e.prazoDias ? somaDias(inicio, e.prazoDias) : previsto[i].fim) : null,
-          inicioPrevisto: situacao === 'aguardando' || situacao === 'futura' ? previsto[i].inicio : null,
-          fimPrevisto: situacao === 'aguardando' || situacao === 'futura' ? previsto[i].fim : null,
           subprocessos: situacao === 'andamento' ? e.checklist.map(item => ({ nome: item, feito: Boolean(marcados[e.nome]?.[item]) })) : [],
         };
       });

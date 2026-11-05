@@ -235,11 +235,14 @@ export async function montarPacotesOpec(supabaseAdmin: SupabaseClient, f: Filtro
                 },
                 cliente: {
                     id_cliente: clienteData?.id || job.client_id || null,
-                    nome_fantasia: job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
-                    razao_social: clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
+                    // Nome fantasia e razão social vêm dos campos próprios do cadastro; o nome da
+                    // empresa (nome_empresa) só entra quando eles estão vazios.
+                    nome_fantasia: clienteData?.nome_fantasia?.trim() || job.cliente || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
+                    razao_social: clienteData?.razao_social?.trim() || clienteData?.nome_empresa || leadData?.empresa || 'Não Informado',
                     cnpj: clienteData?.cnpj || leadData?.cnpj || null,
                     telefone_whatsapp: clienteData?.telefone || leadData?.telefone || null,
                     cidade: clienteData?.cidade || leadData?.cidade || null,
+                    cep: String(clienteData?.cep || '').replace(/\D/g, '') || null,
                     agencia: job.agencia || (leadData?.tipo === 'Agência' ? leadData?.empresa : null)
                 }
             };

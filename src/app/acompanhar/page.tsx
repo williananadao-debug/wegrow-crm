@@ -6,8 +6,14 @@ import {
 } from 'lucide-react';
 
 type Parcela = { chave: string; rotulo: string; valor: number; vencimento: string | null; pago: boolean; pagoEm: string | null; boletoUrl: string | null };
+type EtapaCronograma = {
+  nome: string; situacao: 'concluida' | 'andamento' | 'aguardando' | 'futura';
+  inicio: string | null; fim: string | null; prazo: string | null; inicioPrevisto: string | null; fimPrevisto: string | null;
+  subprocessos: { nome: string; feito: boolean }[];
+};
 type Producao = {
   id: number; produto: string; status: string; statusLabel: string; etapaAtual: number; previsaoEntrega: string | null;
+  inicioProducao: string | null; cronograma: EtapaCronograma[];
   linhaDoTempo: { tipo: string; texto: string | null; foto: string | null; em: string }[];
   fotos: { url: string; em: string }[];
 };
@@ -91,24 +97,56 @@ function PedidoView({ p, etapas, cor, abrirFoto }: { p: Pedido; etapas: string[]
         {p.producoes.length === 0 ? (
           <p className="text-sm text-slate-500">A produção ainda não começou. Assim que iniciar, as etapas e fotos aparecem aqui.</p>
         ) : p.producoes.map(pr => {
-          const concluida = pr.status !== 'em_producao';
+          const concluida = pr.status !== 'em_producao' && pr.status !== 'aguardando';
+          // Sem o cronograma (versão antiga da API), monta só a situação de cada etapa
+          const cronograma: EtapaCronograma[] = pr.cronograma?.length ? pr.cronograma : etapas.map((nome, i) => ({
+            nome, situacao: concluida || i < pr.etapaAtual ? 'concluida' : i === pr.etapaAtual ? 'andamento' : 'futura',
+            inicio: null, fim: null, prazo: null, inicioPrevisto: null, fimPrevisto: null, subprocessos: [],
+          }));
           return (
             <div key={pr.id} className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-bold">{pr.produto}</p>
                 <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: `${cor}22`, color: '#0f172a' }}>{pr.statusLabel}</span>
               </div>
-              {pr.previsaoEntrega && (
-                <p className="text-sm text-slate-600 flex items-center gap-1.5"><CalendarClock size={14} /> Previsão de entrega: <b>{dataBr(pr.previsaoEntrega)}</b></p>
-              )}
-              <ol className="space-y-2">
-                {etapas.map((e, i) => {
-                  const feita = concluida || i < pr.etapaAtual;
-                  const atual = !concluida && i === pr.etapaAtual;
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
+                <p className="flex items-center gap-1.5"><Factory size={14} />
+                  {pr.inicioProducao ? <>Início da produção: <b>{dataBr(pr.inicioProducao)}</b></> : pr.status === 'aguardando' ? <>Na fila da fábrica, <b>ainda não iniciada</b></> : <>Início da produção: <b>—</b></>}
+                </p>
+                {pr.previsaoEntrega && (
+                  <p className="flex items-center gap-1.5"><CalendarClock size={14} /> Previsão de entrega: <b>{dataBr(pr.previsaoEntrega)}</b></p>
+                )}
+              </div>
+              <ol className="space-y-2.5">
+                {cronograma.map(e => {
+                  const feita = e.situacao === 'concluida';
+                  const atual = e.situacao === 'andamento';
+                  const esperando = e.situacao === 'aguardando';
+                  const datas = feita
+                    ? [e.inicio && `Início ${dataBr(e.inicio)}`, e.fim && `concluída ${dataBr(e.fim)}`].filter(Boolean).join(' · ')
+                    : atual
+                      ? [e.inicio && `Iniciada ${dataBr(e.inicio)}`, e.prazo && `prazo ${dataBr(e.prazo)}`].filter(Boolean).join(' · ')
+                      : e.inicioPrevisto ? `Previsto: ${dataBr(e.inicioPrevisto)} a ${dataBr(e.fimPrevisto)}` : '';
                   return (
-                    <li key={e} className={`flex items-center gap-2.5 text-sm ${feita ? 'text-slate-800' : atual ? 'font-bold text-slate-900' : 'text-slate-400'}`}>
-                      {feita ? <CheckCircle2 size={18} style={{ color: cor }} className="shrink-0" /> : atual ? <Loader2 size={18} className="shrink-0 animate-spin text-slate-700" /> : <Circle size={18} className="shrink-0" />}
-                      {e}{atual && <span className="text-[10px] font-black uppercase bg-slate-900 text-white px-1.5 py-0.5 rounded">agora</span>}
+                    <li key={e.nome} className="flex items-start gap-2.5 text-sm">
+                      {feita ? <CheckCircle2 size={18} style={{ color: cor }} className="shrink-0 mt-0.5" /> : atual ? <Loader2 size={18} className="shrink-0 mt-0.5 animate-spin text-slate-700" /> : <Circle size={18} className={`shrink-0 mt-0.5 ${esperando ? 'text-slate-600' : 'text-slate-300'}`} />}
+                      <div className="min-w-0">
+                        <p className={feita ? 'text-slate-800' : atual || esperando ? 'font-bold text-slate-900' : 'text-slate-400'}>
+                          {e.nome}
+                          {atual && <span className="ml-2 text-[10px] font-black uppercase bg-slate-900 text-white px-1.5 py-0.5 rounded">agora</span>}
+                          {esperando && <span className="ml-2 text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">próxima</span>}
+                        </p>
+                        {datas && <p className="text-xs text-slate-500 mt-0.5">{datas}</p>}
+                        {e.subprocessos.length > 0 && (
+                          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                            {e.subprocessos.map(s => (
+                              <li key={s.nome} className={`text-[11px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${s.feito ? 'border-transparent text-slate-800' : 'border-slate-200 text-slate-500'}`} style={s.feito ? { background: `${cor}22` } : undefined}>
+                                {s.feito ? <CheckCircle2 size={11} style={{ color: cor }} /> : <Circle size={11} />}{s.nome}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     </li>
                   );
                 })}

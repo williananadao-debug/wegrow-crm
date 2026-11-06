@@ -8,6 +8,10 @@ const withPWA = withPWAInit({
   // uma mistura de bundle antigo (cache) + backend novo, causando tela quebrada/travada
   // depois de navegar (ex: login → dashboard). Voltando ao padrão da lib (false).
   reloadOnOnline: true,
+  // A lib guarda a página inicial ("/") pra abrir offline: intercepta history.replaceState e faz
+  // um fetch("/") sem catch. Com rede instável no celular isso virava "TypeError: Failed to fetch"
+  // não tratado no Sentry (06/11/2026). A "/" é a página pública; o app não depende dela offline.
+  cacheStartUrl: false,
   // Malha do mapa da eleição (1,4 MB) só baixa quem abre /eleicao — fora do precache do app.
   publicExcludes: ['!noprecache/**/*', '!eleicao/**/*'],
   disable: process.env.NODE_ENV === "development", // Fica invisível enquanto você programa

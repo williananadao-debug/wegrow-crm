@@ -102,9 +102,13 @@ export default function GlobalSearch() {
     searchTimeout.current = setTimeout(() => search(query), 300);
   }, [query, search]);
 
+  // Lead abre direto na negociação, mesmo fora do período filtrado no funil (deep link ?leadId
+  // ao chegar na página; evento quando ela já está aberta — app/deals/page.tsx)
   const navigate = (r: Result) => {
     setOpen(false);
-    router.push(r.tipo === 'lead' ? '/deals' : '/customers');
+    if (r.tipo !== 'lead') { router.push('/customers'); return; }
+    if (window.location.pathname === '/deals') window.dispatchEvent(new CustomEvent('wegrow:abrir-lead', { detail: r.id }));
+    else router.push(`/deals?leadId=${r.id}`);
   };
 
   const handleKey = (e: React.KeyboardEvent) => {

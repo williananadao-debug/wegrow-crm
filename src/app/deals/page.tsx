@@ -1982,6 +1982,22 @@ export default function DealsPage() {
     setIsModalOpen(true);
   }, [perfil?.unidade, user?.id]);
 
+  // Busca geral (Ctrl+K, components/GlobalSearch) com a página já aberta: abre o lead escolhido
+  // mesmo fora do período filtrado (ex.: perdido em outro mês).
+  const leadsRef = useRef(leads);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
+  useEffect(() => {
+    const abrir = (e: Event) => {
+      const id = Number((e as CustomEvent).detail);
+      if (!id) return;
+      const lead = leadsRef.current.find(l => l.id === id);
+      if (lead) { abrirModal(lead); return; }
+      supabase.from('leads').select('*').eq('id', id).maybeSingle().then(({ data }) => { if (data) abrirModal(data as Lead); });
+    };
+    window.addEventListener('wegrow:abrir-lead', abrir);
+    return () => window.removeEventListener('wegrow:abrir-lead', abrir);
+  }, [abrirModal]);
+
   // Deep-link vindo do Dashboard: abre o lead específico (renovação clicada) ou rola até a
   // coluna/etapa pedida, depois que os leads terminam de carregar. Só uma vez por visita à página.
   useEffect(() => {

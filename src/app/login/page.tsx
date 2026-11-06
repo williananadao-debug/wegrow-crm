@@ -78,14 +78,20 @@ export default function LoginPage() {
     }
   };
 
+  // Na tela da marca dupla o formulário é mais sóbrio: rótulos normais, sem ícones nem brilho
+  const sobrio = !!marca;
+  const rotulo = sobrio ? 'block text-[13px] font-medium text-[#A1A1AA] mb-2' : 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2';
+  const campo = sobrio
+    ? 'w-full h-12 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 text-[15px] text-white outline-none focus:border-white/30 focus:bg-white/[0.06] transition-colors placeholder:text-[#52525B]'
+    : 'w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600';
   const formulario = (
-        <form onSubmit={handleAuth} className="space-y-4">
-          
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">E-mail ou login</label>
+        <form onSubmit={handleAuth} className={sobrio ? 'space-y-5' : 'space-y-4'}>
+          <div className={sobrio ? '' : 'space-y-2'}>
+            <label htmlFor="login-email" className={rotulo}>E-mail ou login</label>
             <div className="relative group">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
+              {!sobrio && <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />}
               <input
+                id="login-email"
                 type="text"
                 inputMode="email"
                 autoCapitalize="none"
@@ -94,23 +100,25 @@ export default function LoginPage() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"
-                placeholder="nome@empresa.com ou login"
+                className={campo}
+                placeholder={sobrio ? 'nome@emissora.com.br' : 'nome@empresa.com ou login'}
                 required
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Senha de Acesso</label>
+          <div className={sobrio ? '' : 'space-y-2'}>
+            <label htmlFor="login-senha" className={rotulo}>{sobrio ? 'Senha' : 'Senha de Acesso'}</label>
             <div className="relative group">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
-              <input 
-                type="password" 
+              {!sobrio && <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />}
+              <input
+                id="login-senha"
+                type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"
-                placeholder="••••••••"
+                className={campo}
+                placeholder={sobrio ? '' : '••••••••'}
                 required
                 minLength={6}
               />
@@ -118,18 +126,20 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl text-center">
+            <div className={sobrio ? 'text-[13px] text-[#F87171]' : 'bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl text-center'}>
               {error}
             </div>
           )}
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
-            className="w-full bg-[#22C55E] hover:bg-[#1da850] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(34,197,94,0.3)]"
+            className={sobrio
+              ? 'w-full h-12 rounded-xl bg-[#22C55E] hover:bg-[#2BD468] active:bg-[#1DB954] text-[#04130A] text-[15px] font-semibold transition-colors flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed'
+              : 'w-full bg-[#22C55E] hover:bg-[#1da850] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(34,197,94,0.3)]'}
           >
-            {loading ? <Loader2 className="animate-spin" size={18}/> : (
-                <>Acessar Sistema <ArrowRight size={18} /></> 
+            {loading ? <Loader2 className="animate-spin" size={18}/> : sobrio ? 'Entrar' : (
+                <>Acessar Sistema <ArrowRight size={18} /></>
             )}
           </button>
         </form>

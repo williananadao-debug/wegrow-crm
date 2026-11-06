@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { paraEmailDeLogin } from '@/lib/loginSemEmail';
 import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
-import LoginMarcaParceiro from '@/components/LoginMarcaParceiro';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 
@@ -78,20 +77,47 @@ export default function LoginPage() {
     }
   };
 
-  // Na tela da marca dupla o formulário é mais sóbrio: rótulos normais, sem ícones nem brilho
-  const sobrio = !!marca;
-  const rotulo = sobrio ? 'block text-[13px] font-medium text-[#A1A1AA] mb-2' : 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2';
-  const campo = sobrio
-    ? 'w-full h-12 bg-black/25 border border-white/[0.08] rounded-xl px-4 text-[15px] text-white outline-none focus:border-white/30 focus:bg-black/35 transition-colors placeholder:text-[#52525B]'
-    : 'w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600';
-  const formulario = (
-        <form onSubmit={handleAuth} className={sobrio ? 'space-y-5' : 'space-y-4'}>
-          <div className={sobrio ? '' : 'space-y-2'}>
-            <label htmlFor="login-email" className={rotulo}>E-mail ou login</label>
+  return (
+    <div className="min-h-screen bg-[#0B1120] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Marca dupla: uma luz verde fraca atrás do cartão, pro vidro aparecer */}
+      {marca && <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] rounded-full bg-[#22C55E]/[0.08] blur-[120px]" aria-hidden/>}
+      <div className="w-full max-w-md bg-white/[0.02] border border-white/5 p-8 rounded-[32px] shadow-2xl backdrop-blur-sm relative overflow-hidden">
+
+        {/* EFEITO DE FUNDO */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#22C55E] to-transparent opacity-50"></div>
+
+        {marca ? (
+          // Marca dupla do parceiro (ex.: "WeGrow for Manager"): mesma identidade WeGrow, com o
+          // produto do parceiro no lugar do "Acesso restrito"
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <img src="/logo.png" alt="WeGrow" className="w-10 h-10"/>
+              <span className="w-px h-7 bg-white/10" aria-hidden/>
+              {marca.logo_url
+                ? <img src={marca.logo_url} alt={marca.produto} className="w-11 h-11 object-contain"/>
+                : <span className="text-white font-black">{marca.produto}</span>}
+            </div>
+            <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
+              for <span className="text-slate-300">{marca.produto}</span>
+            </p>
+          </div>
+        ) : (
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
+               Acesso Restrito
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={handleAuth} className="space-y-4">
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">E-mail ou login</label>
             <div className="relative group">
-              {!sobrio && <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />}
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
               <input
-                id="login-email"
                 type="text"
                 inputMode="email"
                 autoCapitalize="none"
@@ -100,25 +126,23 @@ export default function LoginPage() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={campo}
-                placeholder={sobrio ? 'nome@emissora.com.br' : 'nome@empresa.com ou login'}
+                className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"
+                placeholder="nome@empresa.com ou login"
                 required
               />
             </div>
           </div>
 
-          <div className={sobrio ? '' : 'space-y-2'}>
-            <label htmlFor="login-senha" className={rotulo}>{sobrio ? 'Senha' : 'Senha de Acesso'}</label>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Senha de Acesso</label>
             <div className="relative group">
-              {!sobrio && <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />}
-              <input
-                id="login-senha"
-                type="password"
-                autoComplete="current-password"
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#22C55E] transition-colors" size={18} />
+              <input 
+                type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={campo}
-                placeholder={sobrio ? '' : '••••••••'}
+                className="w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600"
+                placeholder="••••••••"
                 required
                 minLength={6}
               />
@@ -126,47 +150,24 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className={sobrio ? 'text-[13px] text-[#F87171]' : 'bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl text-center'}>
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl text-center">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
+          <button 
+            type="submit" 
             disabled={loading}
-            className={sobrio
-              ? 'w-full h-12 rounded-xl bg-[#22C55E] hover:bg-[#2BD468] active:bg-[#1DB954] text-[#04130A] text-[15px] font-semibold transition-colors flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed'
-              : 'w-full bg-[#22C55E] hover:bg-[#1da850] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(34,197,94,0.3)]'}
+            className="w-full bg-[#22C55E] hover:bg-[#1da850] text-[#0B1120] font-black uppercase text-xs tracking-widest py-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(34,197,94,0.3)]"
           >
-            {loading ? <Loader2 className="animate-spin" size={18}/> : sobrio ? 'Entrar' : (
-                <>Acessar Sistema <ArrowRight size={18} /></>
+            {loading ? <Loader2 className="animate-spin" size={18}/> : (
+                <>Acessar Sistema <ArrowRight size={18} /></> 
             )}
           </button>
         </form>
-  );
-
-  // Marca dupla do parceiro: tela de campanha (components/LoginMarcaParceiro)
-  if (marca) return <LoginMarcaParceiro marca={marca}>{formulario}</LoginMarcaParceiro>;
-
-  return (
-    <div className="min-h-screen bg-[#0B1120] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white/[0.02] border border-white/5 p-8 rounded-[32px] shadow-2xl backdrop-blur-sm relative overflow-hidden">
-        
-        {/* EFEITO DE FUNDO */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#22C55E] to-transparent opacity-50"></div>
-
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-2">WeGrow</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">
-               Acesso Restrito
-            </p>
-          </div>
-
-
-        {formulario}
 
         <p className="text-center text-[10px] text-slate-600 font-bold uppercase mt-8">
-            Apenas para colaboradores autorizados.
+            {marca ? `Implantação, treinamento e suporte: ${marca.parceiro}` : 'Apenas para colaboradores autorizados.'}
         </p>
 
       </div>

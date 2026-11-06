@@ -25,8 +25,9 @@ export default function LoginMarcaParceiro({ marca, children }: { marca: Marca; 
             WeGrow <span className="text-[#71717A]">for</span> {marca.produto}
           </p>
 
-          <h1 className="mt-10 text-center text-[30px] sm:text-[34px] leading-[1.12] font-semibold tracking-[-0.025em] [text-wrap:balance]">
-            O comercial da sua rádio, <span className="text-[#71717A]">conectado ao {marca.produto}.</span>
+          <h1 className="mt-10 text-center text-[27px] sm:text-[30px] leading-[1.15] font-semibold tracking-[-0.025em]">
+            <span className="block">O comercial da sua rádio,</span>
+            <span className="block text-[#71717A]">conectado ao {marca.produto}.</span>
           </h1>
 
           <div className="mt-10">{children}</div>

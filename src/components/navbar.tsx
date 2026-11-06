@@ -9,7 +9,7 @@ import {
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
 } from 'lucide-react';
-import SeloMarca, { useMarcaParceiro } from '@/components/SeloMarca';
+import { useMarcaParceiro } from '@/components/SeloMarca';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
 
@@ -207,8 +207,8 @@ export default function Navbar() {
           <div className="flex items-center gap-2 min-w-0">
             <MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={32} />
             <span className="text-lg font-black italic text-white tracking-tighter truncate">{nomeMarca.toUpperCase()}</span>
-            {/* Marca dupla do parceiro (ex.: WeGrow for Manager) */}
-            {marcaParceiro?.logo_url && <img src={marcaParceiro.logo_url} alt={marcaParceiro.produto} title={`WeGrow for ${marcaParceiro.produto}`} className="w-6 h-6 object-contain shrink-0"/>}
+            {/* Marca dupla do parceiro (ex.: WeGrow for Manager), discreta como na barra do desktop */}
+            {marcaParceiro?.logo_url && <img src={marcaParceiro.logo_url} alt={marcaParceiro.produto} title={`WeGrow for ${marcaParceiro.produto}`} className="w-6 h-6 object-contain shrink-0 opacity-50"/>}
           </div>
         </div>
         {/* Celular não tem a barra de cima do desktop: mostra quem está logado aqui. */}
@@ -366,7 +366,6 @@ export default function Navbar() {
           )}
 
           <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-            <SeloMarca />
             {isDirector && (
               <Link href="/settings" onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm ${pathname === '/settings' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                 <Settings size={20} /> Configurações
@@ -546,7 +545,6 @@ export default function Navbar() {
             </nav>
 
             <div className="pt-4 border-t border-white/5 space-y-2 mt-2 shrink-0">
-              <SeloMarca compacto={isCollapsed} />
               {isDirector && (
                 <Link href="/settings" className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all group relative ${pathname === '/settings' ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'} ${isCollapsed ? 'justify-center' : ''}`}>
                   <Settings size={20} />

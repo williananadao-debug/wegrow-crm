@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 // Tela de login da marca dupla (ex.: "WeGrow for Manager" pras rádios da YoungTech), aberta por
 // /entrar/<slug> ou por quem já entrou por ela neste aparelho (app/login). Sóbria de propósito:
-// as duas marcas, uma frase e o formulário — sem cartões, gradientes ou brilho.
+// as duas marcas e o formulário — sem frase de efeito, cartões, gradientes ou brilho.
 
 type Marca = { produto: string; logo_url: string | null; parceiro: string };
 
@@ -21,13 +21,8 @@ export default function LoginMarcaParceiro({ marca, children }: { marca: Marca; 
               ? <img src={marca.logo_url} alt={marca.produto} className="w-11 h-11 object-contain"/>
               : <span className="text-lg font-semibold">{marca.produto}</span>}
           </div>
-          <p className="mt-4 text-center text-[13px] text-[#A1A1AA] tracking-[-0.01em]">
-            WeGrow <span className="text-[#71717A]">for</span> {marca.produto}
-          </p>
-
-          <h1 className="mt-10 text-center text-[27px] sm:text-[30px] leading-[1.15] font-semibold tracking-[-0.025em]">
-            <span className="block">O comercial da sua rádio,</span>
-            <span className="block text-[#71717A]">conectado ao {marca.produto}.</span>
+          <h1 className="mt-5 text-center text-[22px] font-semibold tracking-[-0.02em]">
+            WeGrow <span className="font-normal text-[#71717A]">for</span> {marca.produto}
           </h1>
 
           <div className="mt-10">{children}</div>

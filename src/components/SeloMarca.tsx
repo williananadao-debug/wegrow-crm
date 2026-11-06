@@ -48,7 +48,8 @@ function LogoParceiro({ marca, px }: { marca: MarcaParceiro; px: number }) {
   );
 }
 
-// Selo "WeGrow for <produto>" no rodapé do menu. compacto = menu recolhido (só o logo).
+// Selo "WeGrow for <produto>" (saiu do menu em 06/11/2026: a marca fica só na barra de cima,
+// ChipMarca). compacto = só o logo.
 export default function SeloMarca({ compacto = false }: { compacto?: boolean }) {
   const marca = useMarcaParceiro();
   if (!marca) return null;
@@ -70,14 +71,15 @@ export default function SeloMarca({ compacto = false }: { compacto?: boolean }) 
   );
 }
 
-// Assinatura da marca dupla na barra de cima (desktop), discreta, ao lado da busca
+// Marca dupla na barra de cima (desktop): os dois logos meio apagados, acendem ao passar o mouse
 export function ChipMarca() {
   const marca = useMarcaParceiro();
   if (!marca) return null;
   return (
-    <div className="hidden lg:flex items-center gap-2" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
-      {marca.logo_url && <img src={marca.logo_url} alt="" className="w-6 h-6 object-contain"/>}
-      <span className="text-[13px] text-slate-400">WeGrow <span className="text-slate-600">for</span> <span className="text-white font-medium">{marca.produto}</span></span>
+    <div className="hidden lg:flex items-center gap-2.5 opacity-50 hover:opacity-100 transition-opacity" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
+      <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>
+      <span className="w-px h-4 bg-white/20" aria-hidden/>
+      {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-6 h-6 object-contain"/> : <span className="text-[13px] text-white">{marca.produto}</span>}
     </div>
   );
 }

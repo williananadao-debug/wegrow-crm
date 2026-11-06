@@ -71,17 +71,19 @@ export default function SeloMarca({ compacto = false }: { compacto?: boolean }) 
   );
 }
 
-// Marca dupla na barra de cima (desktop): os dois logos e "WeGrow for <produto>" meio apagados,
-// acendem ao passar o mouse
+// Marca dupla na barra de cima (desktop): [logo] WeGrow for [logo] <produto>, meio apagado,
+// acende ao passar o mouse
 export function ChipMarca() {
   const marca = useMarcaParceiro();
   if (!marca) return null;
   return (
-    <div className="hidden lg:flex items-center gap-2.5 opacity-50 hover:opacity-100 transition-opacity" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
-      <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>
-      <span className="w-px h-4 bg-white/20" aria-hidden/>
-      {marca.logo_url && <img src={marca.logo_url} alt="" className="w-6 h-6 object-contain"/>}
-      <span className="text-[13px] text-slate-300 whitespace-nowrap">WeGrow <span className="text-slate-500">for</span> {marca.produto}</span>
+    <div className="hidden lg:flex items-center gap-2 text-[13px] whitespace-nowrap opacity-50 hover:opacity-100 transition-opacity" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
+      <span className="flex items-center gap-1.5 text-slate-300"><img src="/logo.png" alt="" className="w-5 h-5"/>WeGrow</span>
+      <span className="text-slate-500">for</span>
+      <span className="flex items-center gap-1.5 text-slate-300">
+        {marca.logo_url && <img src={marca.logo_url} alt="" className="w-6 h-6 object-contain"/>}
+        {marca.produto}
+      </span>
     </div>
   );
 }

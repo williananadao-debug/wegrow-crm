@@ -7,6 +7,7 @@ import {
   CheckCircle2, MapPin, FileText, Target, Filter, X, AlertCircle, Building2, CalendarDays, RefreshCw, Bell, Tag, Megaphone
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
+import { valorVenda, buscarAjustesVenda, type AjusteVenda } from '@/lib/vendasAjustes';
 import { paginarSupabase } from '@/lib/paginarSupabase';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -65,6 +66,8 @@ export default function DashboardPage() {
   const [evolucaoAno, setEvolucaoAno] = useState<number[] | null>(null);
   const [rawPerfis, setRawPerfis] = useState<any[]>([]);
   const [rawVisitas, setRawVisitas] = useState<any[]>([]);
+  // Contratos encurtados: diferença negativa no dia em que o cliente pediu (lib/vendasAjustes)
+  const [rawAjustes, setRawAjustes] = useState<AjusteVenda[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
   const temMidia = Boolean(empresa?.modulos?.midia);
@@ -98,7 +101,7 @@ export default function DashboardPage() {
         const leadsQuery = () => {
             let q = supabase
               .from('leads')
-              .select('id, user_id, vendedor_nome, unidade, status, created_at, fechado_em, valor_total, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
+              .select('id, user_id, vendedor_nome, unidade, status, created_at, fechado_em, valor_total, valor_fechado, desconto, checkin, etapa, tipo, contrato_fim, empresa, followup_em');
             if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
             if (!isDirector) q = q.eq('user_id', user?.id);
             return q;
@@ -150,12 +153,16 @@ export default function DashboardPage() {
             paginar(visitasQuery),
             evolucaoAno().catch(() => null),
         ]);
+        const ajustes = perfil?.empresa_id
+          ? await buscarAjustesVenda(supabase, perfil.empresa_id, iniIso, fimIso, { vendedorId: isDirector ? null : user?.id })
+          : [];
         const porId = new Map<number, any>();
         for (const l of [...criados, ...fechados, ...abertos, ...vencendo]) porId.set(l.id, l);
 
         setRawLeads(Array.from(porId.values()));
         setRawPerfis(perfisRes.data || []);
         setRawVisitas(visitas);
+        setRawAjustes(ajustes);
         if (evolucao) setEvolucaoAno(evolucao);
 
     } catch (error) {
@@ -200,11 +207,25 @@ export default function DashboardPage() {
          const chave = lead.user_id || 'sem_dono';
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Desconhecido';
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, count: 0, vendas: 0 };
-         if (lead.status === 'ganho') { acc[chave].total += (Number(lead.valor_total) || 0); acc[chave].vendas += 1; }
+         if (lead.status === 'ganho') { acc[chave].total += valorVenda(lead); acc[chave].vendas += 1; }
          acc[chave].count += 1;
          return acc;
       }, {});
-      
+
+      // Ajustes de contrato encurtado, com os mesmos filtros (vendedor da venda, unidade, dia)
+      const ajusteNoFiltro = (a: AjusteVenda, ini: string | null, fim: string | null) => {
+          if (filtroUnidade !== 'Todas' && a.unidade !== filtroUnidade) return false;
+          if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && a.vendedor_id !== vendedorSelecionado) return false;
+          const d = getLocalYYYYMMDD(new Date(a.created_at));
+          return (!ini || d >= ini) && (!fim || d <= fim);
+      };
+      const ajustesFiltrados = rawAjustes.filter(a => ajusteNoFiltro(a, dataInicio, dataFim));
+      ajustesFiltrados.forEach(a => {
+         const chave = a.vendedor_id || 'sem_dono';
+         if (!rankObj[chave]) rankObj[chave] = { id: chave, nome: nomesMap[chave] || 'Desconhecido', total: 0, count: 0, vendas: 0 };
+         rankObj[chave].total += a.valor;
+      });
+
       const rankingFinal = Object.values(rankObj).sort((a: any, b: any) => b.total - a.total) as RankingItem[];
 
       let fat = 0; let ganhos = 0; let perdidos = 0; let comVisita = 0;
@@ -215,10 +236,11 @@ export default function DashboardPage() {
           const st = l.status; const et = Number(l.etapa);
           const hasCheckin = l.checkin && l.checkin.length > 5;
           if (hasCheckin) { comVisita++; }
-          if (st === 'ganho') { fat += (Number(l.valor_total) || 0); ganhos++; funil.ganho++; totalDesconto += (Number(l.desconto) || 0); }
+          if (st === 'ganho') { fat += valorVenda(l); ganhos++; funil.ganho++; totalDesconto += (Number(l.desconto) || 0); }
           else if (st === 'perdido') { perdidos++; funil.perdido++; }
           else { if (et === 0) funil.novos++; if (et === 1) funil.contato++; if (et === 2) funil.proposta++; if (et >= 3) funil.negociacao++; }
       });
+      fat += ajustesFiltrados.reduce((acc, a) => acc + a.valor, 0);
 
       // Visitas reais (tabela visitas — mesma fonte do painel /visitas), respeitando os filtros ativos
       const visitasFiltradas = rawVisitas.filter((v: any) => {
@@ -266,7 +288,8 @@ export default function DashboardPage() {
         if (vendedorSelecionado && vendedorSelecionado !== 'Todos' && v.user_id !== vendedorSelecionado) return false;
         return d >= iniAntStr && d <= fimAntStr;
       });
-      const fatAnt = leadsAnt.filter(l => l.status === 'ganho').reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
+      const fatAnt = leadsAnt.filter(l => l.status === 'ganho').reduce((acc, l) => acc + valorVenda(l), 0)
+        + rawAjustes.filter(a => ajusteNoFiltro(a, iniAntStr, fimAntStr)).reduce((acc, a) => acc + a.valor, 0);
       const gAnt = leadsAnt.filter(l => l.status === 'ganho').length;
       const convAnt = visitasAnt.length > 0 ? (gAnt / visitasAnt.length) * 100 : 0;
       const deltaFat = fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : null;
@@ -284,7 +307,7 @@ export default function DashboardPage() {
         const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
         const valor = evolucaoAno ? evolucaoAno[i] : rawLeads
           .filter(l => l.status === 'ganho' && diaReferenciaLead(l) >= ini && diaReferenciaLead(l) <= fim2)
-          .reduce((acc, l) => acc + (Number(l.valor_total) || 0), 0);
+          .reduce((acc, l) => acc + valorVenda(l), 0);
         return { label, valor, isCurrent: i === refMes.getMonth() };
       });
 
@@ -358,7 +381,7 @@ export default function DashboardPage() {
           followupsHoje: rawLeads.filter(l => l.followup_em === getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
           followupsAtrasados: rawLeads.filter(l => l.followup_em && l.followup_em < getLocalYYYYMMDD(new Date()) && l.status !== 'ganho' && l.status !== 'perdido'),
       };
-  }, [rawLeads, rawPerfis, rawVisitas, evolucaoAno, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
+  }, [rawLeads, rawPerfis, rawVisitas, rawAjustes, evolucaoAno, vendedorSelecionado, dataInicio, dataFim, filtroUnidade]);
 
   useEffect(() => {
     if (!contratosVencendo.length || !user?.id) return;

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Download, ClipboardCopy, ArrowUpDown, AlertTriangle, TrendingUp, Lightbulb, Sparkles, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
+import { valorVenda, type AjusteVenda } from '@/lib/vendasAjustes';
 
 // Relatórios gerenciais do menu de /reports: cada um devolve um gráfico (em cima) e uma tabela
 // (embaixo), sempre no recorte de período/unidade/vendedor da tela. Os que precisam de dado fora
@@ -13,6 +14,8 @@ export type Ctx = {
   dataInicio: string; dataFim: string; filtroUnidade: string; filtroVendedor: string;
   nomesMap: Record<string, string>; leads: any[]; leadsAnt: any[]; visitas: any[]; visitasAnt: any[];
   periodoAnterior: { inicio: string; fim: string };
+  // Contratos encurtados no período (lib/vendasAjustes): entram no faturamento e na comissão do vendedor
+  ajustes?: AjusteVenda[]; ajustesAnt?: AjusteVenda[];
 };
 type Tipo = 'txt' | 'brl' | 'n' | 'pct' | 'data' | 'var';
 type Coluna = { k: string; t: string; tipo?: Tipo };
@@ -33,7 +36,17 @@ const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d
 const somaDias = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const vend = (c: Ctx, l: any) => l.vendedor_nome || c.nomesMap[l.user_id] || 'Sem vendedor';
 const ganhos = (ls: any[]) => ls.filter(l => l.status === 'ganho');
-const valor = (l: any) => Number(l.valor_total) || 0;
+const valor = (l: any) => valorVenda(l);
+// Soma os ajustes de contrato encurtado do período no faturamento de cada vendedor (não contam como venda)
+function comAjustes(c: Ctx, linhas: any[], ini: () => any) {
+  for (const a of c.ajustes || []) {
+    const k = vend(c, { vendedor_nome: a.vendedor_nome, user_id: a.vendedor_id });
+    let l = linhas.find(x => x.chave === k);
+    if (!l) { l = { chave: k, ...ini() }; linhas.push(l); }
+    l.faturamento += a.valor;
+  }
+  return linhas;
+}
 const blocos = <T,>(arr: T[], n = 150) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const somaCol = (r: Resultado | null, k: string) => (r?.linhas || []).reduce((s, l) => s + (Number(l[k]) || 0), 0);
@@ -95,7 +108,8 @@ const DEFS: Def[] = [
       return out;
     }, grupo: 'Comercial', nome: 'Vendas por vendedor', descricao: 'Faturamento, quantidade de vendas, ticket médio e conversão de cada vendedor no período.',
     gerar: c => {
-      const linhas = agrupar(c.leads, l => vend(c, l), (a, l) => { a.leads++; if (l.status === 'ganho') { a.vendas++; a.faturamento += valor(l); a.desconto += Number(l.desconto) || 0; } }, () => ({ leads: 0, vendas: 0, faturamento: 0, desconto: 0 }))
+      const ini = () => ({ leads: 0, vendas: 0, faturamento: 0, desconto: 0 });
+      const linhas = comAjustes(c, agrupar(c.leads, l => vend(c, l), (a, l) => { a.leads++; if (l.status === 'ganho') { a.vendas++; a.faturamento += valor(l); a.desconto += Number(l.desconto) || 0; } }, ini), ini)
         .map(a => ({ vendedor: a.chave, leads: a.leads, vendas: a.vendas, faturamento: a.faturamento, ticket: a.vendas ? a.faturamento / a.vendas : 0, conversao: a.leads ? a.vendas / a.leads * 100 : 0, desc_pct: a.faturamento + a.desconto ? a.desconto / (a.faturamento + a.desconto) * 100 : 0 }))
         .sort((a, b) => b.faturamento - a.faturamento);
       return { grafico: { tipo: 'barras', formato: 'brl', dados: linhas.map(l => ({ rotulo: l.vendedor, valor: l.faturamento })) },
@@ -105,7 +119,8 @@ const DEFS: Def[] = [
     insights: (r, ant) => insightTotal(r, ant, 'comissao', 'A comissão a pagar', kbrl), diretoria: true, grupo: 'Comercial', nome: 'Comissão por vendedor', descricao: 'Comissão sobre as vendas ganhas no período, com o percentual que você definir.', opcao: { k: 'pct', rotulo: 'Comissão', padrao: 5, sufixo: '%' },
     gerar: (c, op) => {
       const pct = op.pct ?? 5;
-      const linhas = agrupar(ganhos(c.leads), l => vend(c, l), (a, l) => { a.vendas++; a.faturamento += valor(l); }, () => ({ vendas: 0, faturamento: 0 }))
+      const ini = () => ({ vendas: 0, faturamento: 0 });
+      const linhas = comAjustes(c, agrupar(ganhos(c.leads), l => vend(c, l), (a, l) => { a.vendas++; a.faturamento += valor(l); }, ini), ini)
         .map(a => ({ vendedor: a.chave, vendas: a.vendas, faturamento: a.faturamento, pct, comissao: a.faturamento * pct / 100 })).sort((a, b) => b.comissao - a.comissao);
       return { grafico: { tipo: 'barras', formato: 'brl', dados: linhas.map(l => ({ rotulo: l.vendedor, valor: l.comissao })) },
         colunas: [{ k: 'vendedor', t: 'Vendedor' }, { k: 'vendas', t: 'Vendas', tipo: 'n' }, { k: 'faturamento', t: 'Faturamento', tipo: 'brl' }, { k: 'pct', t: '% comissão', tipo: 'pct' }, { k: 'comissao', t: 'Comissão', tipo: 'brl' }], linhas,
@@ -404,7 +419,7 @@ const DEFS: Def[] = [
     gerar: async c => {
       const ano = new Date().getFullYear();
       const buscar = async (a: number) => {
-        const { data } = await escopo(supabase.from('leads').select('valor_total, fechado_em, created_at, status').eq('status', 'ganho').gte('fechado_em', new Date(a, 0, 1).toISOString()).lt('fechado_em', new Date(a + 1, 0, 1).toISOString()), c).limit(5000);
+        const { data } = await escopo(supabase.from('leads').select('valor_total, valor_fechado, fechado_em, created_at, status').eq('status', 'ganho').gte('fechado_em', new Date(a, 0, 1).toISOString()).lt('fechado_em', new Date(a + 1, 0, 1).toISOString()), c).limit(5000);
         const m = Array(12).fill(0); (data || []).forEach((l: any) => { m[new Date(diaReferenciaLead(l) + 'T12:00').getMonth()] += valor(l); }); return m;
       };
       const [atual, anterior] = await Promise.all([buscar(ano), buscar(ano - 1)]);
@@ -534,7 +549,7 @@ export default function RelatoriosGerenciais({ id, ctx }: { id: string; ctx: Ctx
     setCarregando(true); setErro('');
     const c = ctxRef.current, op = def.opcao ? { [def.opcao.k]: opcao } : {};
     // Relatórios do período rodam também no período anterior (mesmo tamanho) pra comparar
-    const anterior = def.comparar ? Promise.resolve(def.gerar({ ...c, leads: c.leadsAnt, visitas: c.visitasAnt, dataInicio: c.periodoAnterior.inicio, dataFim: c.periodoAnterior.fim }, op)).catch(() => null) : Promise.resolve(null);
+    const anterior = def.comparar ? Promise.resolve(def.gerar({ ...c, leads: c.leadsAnt, visitas: c.visitasAnt, ajustes: c.ajustesAnt, dataInicio: c.periodoAnterior.inicio, dataFim: c.periodoAnterior.fim }, op)).catch(() => null) : Promise.resolve(null);
     Promise.all([Promise.resolve(def.gerar(c, op)), anterior])
       .then(([r, a]) => { if (!cancelado) { setRes(r); setAnt(a); setOrdem(null); setIa(null); } })
       .catch(e => { if (!cancelado) setErro(e?.message || 'Não foi possível gerar o relatório.'); })

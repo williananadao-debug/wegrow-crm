@@ -7,6 +7,7 @@ import { temRecurso } from '@/lib/catalogo';
 import { loginCurto, slugLogin } from '@/lib/loginSemEmail';
 import { Toast } from '@/components/Toast';
 import { useUnidades } from '@/lib/useUnidades';
+import { valorVenda, buscarAjustesVenda } from '@/lib/vendasAjustes';
 
 const CARGO_CFG: Record<string, { label: string; cor: string; vende: boolean }> = {
   diretor:      { label: 'Diretor',      cor: 'bg-purple-500/15 text-purple-300 border-purple-500/30', vende: true },
@@ -85,12 +86,15 @@ export default function TeamPage() {
       if (perfil?.empresa_id) leadsQuery = leadsQuery.eq('empresa_id', perfil.empresa_id);
       let ganhosQuery = supabase
         .from('leads')
-        .select('user_id, valor_total')
+        .select('user_id, valor_total, valor_fechado')
         .eq('status', 'ganho')
         .gte('fechado_em', inicioMes);
       if (perfil?.empresa_id) ganhosQuery = ganhosQuery.eq('empresa_id', perfil.empresa_id);
 
-      const [{ data: membersData }, { data: leadsData }, { data: ganhosData }] = await Promise.all([query, leadsQuery, ganhosQuery]);
+      const [{ data: membersData }, { data: leadsData }, { data: ganhosData }, ajustes] = await Promise.all([
+        query, leadsQuery, ganhosQuery,
+        perfil?.empresa_id ? buscarAjustesVenda(supabase, perfil.empresa_id, inicioMes, new Date(agora.getFullYear(), agora.getMonth() + 1, 1).toISOString()) : Promise.resolve([]),
+      ]);
 
       // Desativados no fim da lista.
       setMembers((membersData || []).sort((a, b) => Number(!!a.desativado_em) - Number(!!b.desativado_em)));
@@ -105,7 +109,13 @@ export default function TeamPage() {
         if (!lead.user_id) continue;
         if (!stats[lead.user_id]) stats[lead.user_id] = { leads: 0, ganhos: 0, faturamento: 0 };
         stats[lead.user_id].ganhos++;
-        stats[lead.user_id].faturamento += lead.valor_total || 0;
+        stats[lead.user_id].faturamento += valorVenda(lead);
+      }
+      // Contrato encurtado no mês: desconta do vendedor da venda (lib/vendasAjustes)
+      for (const a of ajustes) {
+        if (!a.vendedor_id) continue;
+        if (!stats[a.vendedor_id]) stats[a.vendedor_id] = { leads: 0, ganhos: 0, faturamento: 0 };
+        stats[a.vendedor_id].faturamento += a.valor;
       }
       setPerfStats(stats);
     } catch (error) {

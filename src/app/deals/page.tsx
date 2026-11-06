@@ -6,7 +6,7 @@ import {
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle,
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw,
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock,
-  Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet
+  Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet, Scissors
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
@@ -23,6 +23,7 @@ import { syncOfflineDataToCloud } from '@/lib/syncService';
 import { useUnidades } from '@/lib/useUnidades';
 import dynamic from 'next/dynamic';
 import PainelAudienciaPlano from './PainelAudienciaPlano';
+import EncurtarContrato, { type LeadEncurtar } from './EncurtarContrato';
 
 const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
@@ -93,6 +94,8 @@ type Lead = {
   criado_por?: string;
   atividades?: Atividade[];
   fechado_em?: string | null;
+  fechado_por?: string | null;
+  valor_fechado?: number | null; // valor quando foi ganha, gravado ao encurtar o contrato (EncurtarContrato)
   docuseal_submission_id?: string;
   docuseal_sign_url?: string;
   docuseal_assinado?: boolean;
@@ -282,6 +285,7 @@ export default function DealsPage() {
   const contratoJaAssinado = Boolean(leadEmEdicao?.docuseal_assinado || leadEmEdicao?.contrato_manual_url);
   const consultorAtualNome = (leadEmEdicao?.user_id && usersMap[leadEmEdicao.user_id]) || leadEmEdicao?.vendedor_nome || perfil?.nome || 'Consultor';
   const leadTravado = contratoJaAssinado && !isDirector;
+  const [encurtando, setEncurtando] = useState(false);
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
@@ -443,7 +447,7 @@ export default function DealsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
+    const COLS = 'id, empresa, valor_total, valor_fechado, fechado_por, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
     // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
     // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
@@ -2362,6 +2366,14 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
+                    {isDirector && leadEmEdicao?.status === 'ganho' && Number(leadEmEdicao.parcelas) > 1 && (
+                        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3 flex-wrap">
+                            <p className="text-amber-200/80 text-xs flex-1 min-w-[180px]">Cliente pediu menos meses do que fechou? Encurte o contrato sem mexer na meta dos meses já pagos.</p>
+                            <button type="button" onClick={() => setEncurtando(true)} className="flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                                <Scissors size={12}/> Encurtar contrato
+                            </button>
+                        </div>
+                    )}
                     {leadTravado && (
                         <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-center gap-3">
                             <Lock size={18} className="text-orange-400 shrink-0"/>
@@ -2853,6 +2865,16 @@ export default function DealsPage() {
       )}
 
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
+      {encurtando && leadEmEdicao && perfil?.empresa_id && (
+        <EncurtarContrato lead={leadEmEdicao as LeadEncurtar} empresaId={perfil.empresa_id} autorNome={perfil?.nome || 'Diretor'}
+          onFechar={() => setEncurtando(false)}
+          onSalvo={(campos, aviso) => {
+            // Fecha a venda também: o formulário aberto ainda tem os itens antigos e salvaria por cima
+            setLeads(prev => prev.map(l => l.id === leadEmEdicao.id ? { ...l, ...campos } as Lead : l));
+            setEncurtando(false); setIsModalOpen(false); setEditingLeadId(null);
+            setToastMessage(`✂️ ${aviso}`); setShowToast(true);
+          }}/>
+      )}
 
       {/* MODAL DE E-MAIL */}
       {isEmailModalOpen && emailLead && (

@@ -15,6 +15,7 @@ import { InfoTooltip } from '@/components/InfoTooltip';
 import { MaterialSemanal } from './MaterialSemanal';
 import { paginarSupabase } from '@/lib/paginarSupabase';
 import RelatoriosGerenciais, { RELATORIOS, type Ctx as CtxRelatorio } from './RelatoriosGerenciais';
+import { valorVenda, buscarAjustesVenda, type AjusteVenda } from '@/lib/vendasAjustes';
 
 const ProgressBar = ({ value, max, color }: { value: number, max: number, color: string }) => (
   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
@@ -112,6 +113,8 @@ export default function ReportsPage() {
   const [rawProfiles, setRawProfiles] = useState<any[]>([]);
   const [rawClientes, setRawClientes] = useState<any[]>([]);
   const [rawVisitas, setRawVisitas] = useState<any[]>([]);
+  // Contratos encurtados: diferença negativa no dia em que o cliente pediu (lib/vendasAjustes)
+  const [rawAjustes, setRawAjustes] = useState<AjusteVenda[]>([]);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState('leads');
@@ -125,6 +128,14 @@ export default function ReportsPage() {
   useEffect(() => { if (user && (isDirector || isGerente)) fetchReportData(); }, [user, perfil]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user && rawLeads.length > 0) fetchDadosDoPeriodo(); }, [dataInicio, dataFim]);
+  // Ajustes do período e do período anterior (mesmo recorte das vendas)
+  useEffect(() => {
+    if (!user || !perfil?.empresa_id || !(isDirector || isGerente)) return;
+    let vivo = true;
+    buscarAjustesVenda(supabase, perfil.empresa_id, new Date(inicioPeriodoAnterior() + 'T00:00:00').toISOString(), new Date(dataFim + 'T23:59:59.999').toISOString())
+      .then(a => { if (vivo) setRawAjustes(a); });
+    return () => { vivo = false; };
+  }, [user, perfil?.empresa_id, dataInicio, dataFim]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Junta os resultados de várias queries .eq() (uma por condição de visibilidade) em
   // vez de uma .or() com string montada na mão — .or() exige escapar vírgula/parênteses
@@ -168,7 +179,7 @@ export default function ReportsPage() {
     const ini = new Date(getLocalYYYYMMDD(inicioAnterior) + 'T00:00:00').toISOString();
     const fim = new Date(dataFim + 'T23:59:59.999').toISOString();
     const base = (campo: 'created_at' | 'fechado_em') => {
-      let q = supabase.from('leads').select('id, empresa, valor_total, desconto, status, unidade, user_id, vendedor_nome, created_at, fechado_em, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
+      let q = supabase.from('leads').select('id, empresa, valor_total, valor_fechado, desconto, status, unidade, user_id, vendedor_nome, created_at, fechado_em, origem, checkin, descricao, client_id, contrato_inicio, contrato_fim, etapa, itens, tipo, cidade')
         .gte(campo, ini)
         .lte(campo, fim)
         .order(campo, { ascending: false })
@@ -222,7 +233,7 @@ export default function ReportsPage() {
       const ini = new Date(inicioAno + 'T00:00:00').toISOString();
       const fim = new Date(hoje + 'T23:59:59.999').toISOString();
       const baseGrafico = (campo: 'fechado_em' | 'created_at') => {
-        let q = supabase.from('leads').select('id, valor_total, status, created_at, fechado_em, user_id, vendedor_nome, unidade')
+        let q = supabase.from('leads').select('id, valor_total, valor_fechado, status, created_at, fechado_em, user_id, vendedor_nome, unidade')
           .eq('status', 'ganho').gte(campo, ini).lte(campo, fim).order('id');
         if (campo === 'created_at') q = q.is('fechado_em', null);
         if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
@@ -309,7 +320,7 @@ export default function ReportsPage() {
     return { cidadePorId, porNome, nomes };
   }, [rawClientes]);
 
-  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo, nomesPorId, leadsAnteriores, visitasAnt, periodoAnterior } = useMemo(() => {
+  const { currentMonth, lastMonth, rankingVendedores, servicosCurva, estrategiasImpacto, performanceUnidades, mapaCidades, vendasPorDia, currentLeadsBase, visitasFunil, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo, nomesPorId, leadsAnteriores, visitasAnt, periodoAnterior, ajustesAtuais, ajustesPassados } = useMemo(() => {
       const nomesMap: Record<string, string> = {};
       for (const p of rawProfiles) nomesMap[p.id] = p.nome;
       const cidadesById = indiceClientes.cidadePorId;
@@ -339,13 +350,24 @@ export default function ReportsPage() {
       const currentLeads = baseFiltrada.filter(l => { if (!l.created_at) return false; const d = diaReferenciaLead(l); return d >= dataInicio && d <= dataFim; });
       const pastLeads = baseFiltrada.filter(l => { if (!l.created_at) return false; const d = diaReferenciaLead(l); return d >= strPastStart && d <= strPastEnd; });
 
+      // Ajustes de contrato encurtado, com os mesmos filtros das vendas
+      const ajustesBase = rawAjustes.filter(a => {
+          if (isGerente && a.unidade !== perfil?.unidade && a.vendedor_id !== user?.id) return false;
+          if (!isGerente && filtroUnidade !== 'Todas' && a.unidade !== filtroUnidade) return false;
+          if (filtroVendedor !== 'Todos' && a.vendedor_id !== filtroVendedor && a.vendedor_nome !== nomesMap[filtroVendedor]) return false;
+          return true;
+      });
+      const diaAjuste = (a: AjusteVenda) => getLocalYYYYMMDD(new Date(a.created_at));
+      const ajustesAtuais = ajustesBase.filter(a => diaAjuste(a) >= dataInicio && diaAjuste(a) <= dataFim);
+      const ajustesPassados = ajustesBase.filter(a => diaAjuste(a) >= strPastStart && diaAjuste(a) <= strPastEnd);
+
       const currentGanhos = currentLeads.filter(l => l.status === 'ganho');
-      const fatAtual = currentGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
+      const fatAtual = currentGanhos.reduce((acc, curr) => acc + valorVenda(curr), 0) + ajustesAtuais.reduce((acc, a) => acc + a.valor, 0);
       const fatDesconto = currentGanhos.reduce((acc, curr) => acc + Number(curr.desconto || 0), 0);
       const fatBruto = fatAtual + fatDesconto;
       const calcCurrent = { faturamento: fatAtual, fatBruto, fatDesconto, ticket: currentGanhos.length > 0 ? fatAtual / currentGanhos.length : 0, leads: currentLeads.length, conversao: currentLeads.length > 0 ? (currentGanhos.length / currentLeads.length) * 100 : 0 };
 
-      const lastGanhos = pastLeads.filter(l => l.status === 'ganho'); const fatPassado = lastGanhos.reduce((acc, curr) => acc + Number(curr.valor_total || 0), 0);
+      const lastGanhos = pastLeads.filter(l => l.status === 'ganho'); const fatPassado = lastGanhos.reduce((acc, curr) => acc + valorVenda(curr), 0) + ajustesPassados.reduce((acc, a) => acc + a.valor, 0);
       const calcLast = { faturamento: fatPassado, ticket: lastGanhos.length > 0 ? fatPassado / lastGanhos.length : 0, leads: pastLeads.length, conversao: pastLeads.length > 0 ? (lastGanhos.length / pastLeads.length) * 100 : 0 };
 
       const undObj = currentGanhos.reduce((acc: any, lead) => { const und = lead.unidade || 'Sem Unidade Vinculada'; if (!acc[und]) acc[und] = { nome: und, total: 0, count: 0 }; acc[und].total += Number(lead.valor_total || 0); acc[und].count += 1; return acc; }, {});
@@ -384,15 +406,25 @@ export default function ReportsPage() {
       const rankObj = currentLeads.reduce((acc: any, lead) => {
          const nomeVendedor = lead.vendedor_nome || nomesMap[lead.user_id] || 'Sem Dono'; const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
          if (!acc[chave]) acc[chave] = { id: chave, nome: nomeVendedor, total: 0, leadsCount: 0, ganhosCount: 0 };
-         acc[chave].leadsCount += 1; if (lead.status === 'ganho') { acc[chave].total += (Number(lead.valor_total) || 0); acc[chave].ganhosCount += 1; } return acc;
+         acc[chave].leadsCount += 1; if (lead.status === 'ganho') { acc[chave].total += valorVenda(lead); acc[chave].ganhosCount += 1; } return acc;
       }, {});
+      ajustesAtuais.forEach(a => {
+         const chave = a.vendedor_nome || a.vendedor_id || 'sem_dono';
+         if (!rankObj[chave]) rankObj[chave] = { id: chave, nome: a.vendedor_nome || nomesMap[a.vendedor_id || ''] || 'Sem Dono', total: 0, leadsCount: 0, ganhosCount: 0 };
+         rankObj[chave].total += a.valor;
+      });
       // Ranking com comparativo vs período anterior
       const rankObjPassado = pastLeads.reduce((acc: any, lead) => {
         const chave = lead.vendedor_nome ? lead.vendedor_nome : (lead.user_id || 'sem_dono');
         if (!acc[chave]) acc[chave] = { total: 0 };
-        if (lead.status === 'ganho') acc[chave].total += (Number(lead.valor_total) || 0);
+        if (lead.status === 'ganho') acc[chave].total += valorVenda(lead);
         return acc;
       }, {});
+      ajustesPassados.forEach(a => {
+        const chave = a.vendedor_nome || a.vendedor_id || 'sem_dono';
+        if (!rankObjPassado[chave]) rankObjPassado[chave] = { total: 0 };
+        rankObjPassado[chave].total += a.valor;
+      });
       const calcRanking = Object.values(rankObj).map((v: any) => ({
         nome: v.nome, total: Number(v.total) || 0,
         conversao: v.leadsCount > 0 ? (v.ganhosCount / v.leadsCount) * 100 : 0,
@@ -485,8 +517,8 @@ export default function ReportsPage() {
           }, 0) / currentGanhos.length)
         : 0;
 
-      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo: visitasBase, nomesPorId: nomesMap, leadsAnteriores: pastLeads, visitasAnt: visitasAnteriores, periodoAnterior: { inicio: strPastStart, fim: strPastEnd } };
-  }, [rawLeads, rawPremissas, rawProfiles, indiceClientes, rawVisitas, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
+      return { currentMonth: calcCurrent, lastMonth: calcLast, servicosCurva: calcCurva, rankingVendedores: calcRanking, estrategiasImpacto: calcImpacto, performanceUnidades: calcUnidades, mapaCidades: calcCidades, vendasPorDia: calcDiasSemana, currentLeadsBase: currentLeads, visitasFunil: calcVisitas, inadimplentes, cicloMedio, cicloGeral, visitasPeriodo: visitasBase, nomesPorId: nomesMap, leadsAnteriores: pastLeads, visitasAnt: visitasAnteriores, periodoAnterior: { inicio: strPastStart, fim: strPastEnd }, ajustesAtuais, ajustesPassados };
+  }, [rawLeads, rawPremissas, rawProfiles, indiceClientes, rawVisitas, rawAjustes, dataInicio, dataFim, filtroUnidade, filtroVendedor, isGerente]);
 
   const graficoMensal = useMemo(() => {
     const nomesMapGraf: Record<string, string> = {};
@@ -504,7 +536,7 @@ export default function ReportsPage() {
       const label = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
       if (graficoRpc) return { label, valor: graficoRpc[i], isCurrent: i === hoje.getMonth() };
       const ganhos = filtrado.filter(l => l.created_at && diaReferenciaLead(l).substring(0, 7) === `${anoAtual}-${mesStr}`);
-      return { label, valor: ganhos.reduce((s, l) => s + Number(l.valor_total || 0), 0), isCurrent: i === hoje.getMonth() };
+      return { label, valor: ganhos.reduce((s, l) => s + valorVenda(l), 0), isCurrent: i === hoje.getMonth() };
     });
   }, [rawLeadsGrafico, graficoRpc, rawProfiles, filtroVendedor, filtroUnidade, isGerente]);
 
@@ -552,8 +584,8 @@ export default function ReportsPage() {
   // (gráfico em cima, tabela embaixo, exportação), no mesmo recorte de período e filtros.
   const ctxRelatorio: CtxRelatorio = useMemo(() => ({
     empresaId: perfil?.empresa_id, userId: user?.id, isDirector, isGerente, unidadeGerente: perfil?.unidade,
-    dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: leadsAnteriores, visitas: visitasPeriodo, visitasAnt, periodoAnterior,
-  }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo, leadsAnteriores, visitasAnt, periodoAnterior]);
+    dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesMap: nomesPorId, leads: currentLeadsBase, leadsAnt: leadsAnteriores, visitas: visitasPeriodo, visitasAnt, periodoAnterior, ajustes: ajustesAtuais, ajustesAnt: ajustesPassados,
+  }), [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim, filtroUnidade, filtroVendedor, nomesPorId, currentLeadsBase, visitasPeriodo, leadsAnteriores, visitasAnt, periodoAnterior, ajustesAtuais, ajustesPassados]);
   const relatoriosVisiveis = RELATORIOS.filter(r => isDirector || !r.diretoria);
   const relatorioAtivo = relatoriosVisiveis.some(r => r.id === relatorio) ? relatorio : 'padrao';
 

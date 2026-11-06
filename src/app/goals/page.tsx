@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { dataReferenciaLead, inicioMesIso } from '@/lib/dataFechamento';
+import { valorVenda, buscarAjustesVenda } from '@/lib/vendasAjustes';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -137,7 +138,7 @@ export default function GoalsPage() {
       setMetasMensais(metasMensaisData);
 
       let vendasQuery = supabase.from('leads')
-        .select('valor_total, fechado_em, created_at')
+        .select('valor_total, valor_fechado, fechado_em, created_at')
         .eq('status', 'ganho')
         // Venda conta no mês em que foi GANHA (fechado_em), não no que o lead foi criado.
         .gte('fechado_em', inicioMesIso(anoFiltro, 1))
@@ -148,16 +149,27 @@ export default function GoalsPage() {
       // antigos sem fechado_por (antes dessa coluna existir), cai pro user_id de antes.
       if (targetUser) vendasQuery = vendasQuery.or(`fechado_por.eq.${targetUser},and(fechado_por.is.null,user_id.eq.${targetUser})`);
 
-      const { data: vendas } = await vendasQuery;
+      const [{ data: vendas }, ajustes] = await Promise.all([
+        vendasQuery,
+        perfil?.empresa_id
+          ? buscarAjustesVenda(supabase, perfil.empresa_id, inicioMesIso(anoFiltro, 1), inicioMesIso(anoFiltro + 1, 1), { vendedorId: targetUser })
+          : Promise.resolve([]),
+      ]);
       if (metasRequestIdRef.current !== minhaRequisicao) return; // superada por uma busca mais nova
 
-      const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
+      // Contrato encurtado: a venda conta o valor original no mês em que foi ganha e a
+      // diferença (negativa) entra no mês em que o cliente pediu (lib/vendasAjustes)
+      const totalAno = (vendas?.reduce((acc, v) => acc + valorVenda(v), 0) || 0) + ajustes.reduce((acc, a) => acc + a.valor, 0);
       setRealizadoAno(totalAno);
 
       const mensalMap: Record<number, number> = {};
       vendas?.forEach(v => {
         const mesVenda = new Date(dataReferenciaLead({ ...v, status: 'ganho' })).getMonth() + 1;
-        mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
+        mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + valorVenda(v);
+      });
+      ajustes.forEach(a => {
+        const mes = new Date(a.created_at).getMonth() + 1;
+        mensalMap[mes] = (mensalMap[mes] || 0) + a.valor;
       });
       setRealizadoMensalMap(mensalMap);
     } catch (err) {
@@ -173,12 +185,13 @@ export default function GoalsPage() {
     const ano = hoje.getFullYear();
     const mes = hoje.getMonth() + 1;
 
-    const [{ data: metasData }, { data: vendasData }] = await Promise.all([
+    const [{ data: metasData }, { data: vendasData }, ajustes] = await Promise.all([
       supabase.from('metas').select('user_id, valor_objetivo').eq('ano', ano).eq('mes', mes).eq('empresa_id', perfil.empresa_id),
-      supabase.from('leads').select('user_id, fechado_por, valor_total').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
+      supabase.from('leads').select('user_id, fechado_por, valor_total, valor_fechado').eq('status', 'ganho').eq('empresa_id', perfil.empresa_id)
         .gte('fechado_em', inicioMesIso(ano, mes))
         .lt('fechado_em', inicioMesIso(ano, mes + 1))
         .limit(2000),
+      buscarAjustesVenda(supabase, perfil.empresa_id, inicioMesIso(ano, mes), inicioMesIso(ano, mes + 1)),
     ]);
 
     const metaMap: Record<string, number> = {};
@@ -189,8 +202,9 @@ export default function GoalsPage() {
     const realizadoMap: Record<string, number> = {};
     (vendasData || []).forEach(v => {
       const dono = v.fechado_por || v.user_id;
-      if (dono) realizadoMap[dono] = (realizadoMap[dono] || 0) + Number(v.valor_total);
+      if (dono) realizadoMap[dono] = (realizadoMap[dono] || 0) + valorVenda(v);
     });
+    ajustes.forEach(a => { if (a.vendedor_id) realizadoMap[a.vendedor_id] = (realizadoMap[a.vendedor_id] || 0) + a.valor; });
 
     const rows = vendedores.map(v => ({
       id: v.id,
@@ -262,13 +276,14 @@ export default function GoalsPage() {
     if (!perfil?.empresa_id || !unidadeSelecionadaMeta) return;
     setLoadingUnidade(true);
     try {
-      const [{ data: metasData }, { data: vendas }] = await Promise.all([
+      const [{ data: metasData }, { data: vendas }, ajustes] = await Promise.all([
         supabase.from('metas').select('mes, valor_objetivo')
           .eq('empresa_id', perfil.empresa_id).eq('tipo', 'unidade')
           .eq('unidade', unidadeSelecionadaMeta).eq('ano', anoFiltro),
-        supabase.from('leads').select('valor_total, fechado_em, created_at')
+        supabase.from('leads').select('valor_total, valor_fechado, fechado_em, created_at')
           .eq('status', 'ganho').eq('empresa_id', perfil.empresa_id).eq('unidade', unidadeSelecionadaMeta)
           .gte('fechado_em', inicioMesIso(anoFiltro, 1)).lt('fechado_em', inicioMesIso(anoFiltro + 1, 1)),
+        buscarAjustesVenda(supabase, perfil.empresa_id, inicioMesIso(anoFiltro, 1), inicioMesIso(anoFiltro + 1, 1), { unidade: unidadeSelecionadaMeta }),
       ]);
 
       // mes=0 é o sentinela usado pra "meta do ano" (evita índice com NULL/expressão, que o
@@ -281,13 +296,17 @@ export default function GoalsPage() {
       setMetaAnoUnidade(metaAnualSalva > 0 ? metaAnualSalva : somaMeses);
       setMetasMensaisUnidade(metasMensaisDaUnidade);
 
-      const totalAno = vendas?.reduce((acc, v) => acc + Number(v.valor_total), 0) || 0;
+      const totalAno = (vendas?.reduce((acc, v) => acc + valorVenda(v), 0) || 0) + ajustes.reduce((acc, a) => acc + a.valor, 0);
       setRealizadoAnoUnidade(totalAno);
 
       const mensalMap: Record<number, number> = {};
       vendas?.forEach(v => {
         const mesVenda = new Date(dataReferenciaLead({ ...v, status: 'ganho' })).getMonth() + 1;
-        mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + Number(v.valor_total);
+        mensalMap[mesVenda] = (mensalMap[mesVenda] || 0) + valorVenda(v);
+      });
+      ajustes.forEach(a => {
+        const mes = new Date(a.created_at).getMonth() + 1;
+        mensalMap[mes] = (mensalMap[mes] || 0) + a.valor;
       });
       setRealizadoMensalMapUnidade(mensalMap);
     } finally {

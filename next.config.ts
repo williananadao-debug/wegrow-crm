@@ -11,7 +11,9 @@ const withPWA = withPWAInit({
   // A lib guarda a página inicial ("/") pra abrir offline: intercepta history.replaceState e faz
   // um fetch("/") sem catch. Com rede instável no celular isso virava "TypeError: Failed to fetch"
   // não tratado no Sentry (06/11/2026). A "/" é a página pública; o app não depende dela offline.
+  // dynamicStartUrl também precisa ir false: é ela que liga esse código no navegador (__PWA_START_URL__).
   cacheStartUrl: false,
+  dynamicStartUrl: false,
   // Malha do mapa da eleição (1,4 MB) só baixa quem abre /eleicao — fora do precache do app.
   publicExcludes: ['!noprecache/**/*', '!eleicao/**/*'],
   disable: process.env.NODE_ENV === "development", // Fica invisível enquanto você programa

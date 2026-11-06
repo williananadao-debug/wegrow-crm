@@ -82,7 +82,7 @@ export default function LoginPage() {
   const sobrio = !!marca;
   const rotulo = sobrio ? 'block text-[13px] font-medium text-[#A1A1AA] mb-2' : 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2';
   const campo = sobrio
-    ? 'w-full h-12 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 text-[15px] text-white outline-none focus:border-white/30 focus:bg-white/[0.06] transition-colors placeholder:text-[#52525B]'
+    ? 'w-full h-12 bg-black/25 border border-white/[0.08] rounded-xl px-4 text-[15px] text-white outline-none focus:border-white/30 focus:bg-black/35 transition-colors placeholder:text-[#52525B]'
     : 'w-full bg-[#0F172A] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-sm font-medium outline-none focus:border-[#22C55E] transition-all placeholder:text-slate-600';
   const formulario = (
         <form onSubmit={handleAuth} className={sobrio ? 'space-y-5' : 'space-y-4'}>

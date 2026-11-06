@@ -17,6 +17,10 @@ type EmpresaDemo = {
   created_at: string | null;
 };
 
+const hojeISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+const daquiDias = (dias: number) => new Date(Date.now() + dias * 86400000).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+const dataBR = (iso: string) => iso.split('-').reverse().join('/');
+
 function moduloTags(modulos: Record<string, any>) {
   const tags: { label: string; icon: React.ReactNode }[] = [];
   if (modulos?.pulse) tags.push({ label: 'Pulse', icon: <Package size={10}/> });
@@ -43,6 +47,8 @@ export default function DemosPage() {
   const [novoDiretorNome, setNovoDiretorNome] = useState('');
   const [novoDiretorEmail, setNovoDiretorEmail] = useState('');
   const [novoNota, setNovoNota] = useState('');
+  const [novoExpira, setNovoExpira] = useState(() => daquiDias(30));
+  const [salvandoValidadeId, setSalvandoValidadeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
 
@@ -95,6 +101,21 @@ export default function DemosPage() {
     if (res.ok) { setEditandoNotaId(null); carregar(); }
   };
 
+  // Validade da demo (modulos.demo_expira_em): depois desse dia, quem entra vê "Demonstração encerrada"
+  // (components/PendenciaCobranca). Vazio = sem validade.
+  const salvarValidade = async (e: EmpresaDemo, data: string) => {
+    setSalvandoValidadeId(e.id);
+    const novosModulos = { ...e.modulos };
+    if (data) novosModulos.demo_expira_em = data; else delete novosModulos.demo_expira_em;
+    const res = await fetch('/api/admin/empresas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: e.id, modulos: novosModulos }),
+    });
+    setSalvandoValidadeId(null);
+    if (res.ok) carregar();
+  };
+
   const criarDemo = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setSaving(true);
@@ -105,13 +126,13 @@ export default function DemosPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           nome: novoNome, diretorNome: novoDiretorNome, diretorEmail: novoDiretorEmail,
-          modulos: { demo: true, demo_nota: novoNota || undefined },
+          modulos: { demo: true, demo_nota: novoNota || undefined, demo_expira_em: novoExpira || undefined },
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setFeedback({ tipo: 'erro', msg: json.erro || `Erro ao criar (HTTP ${res.status}).` }); return; }
       setFeedback({ tipo: 'sucesso', msg: `Demo criada! Login: ${json.diretorEmail} · Senha: ${json.senhaTemp}` });
-      setNovoNome(''); setNovoDiretorNome(''); setNovoDiretorEmail(''); setNovoNota('');
+      setNovoNome(''); setNovoDiretorNome(''); setNovoDiretorEmail(''); setNovoNota(''); setNovoExpira(daquiDias(30));
       carregar();
     } catch (err: any) {
       setFeedback({ tipo: 'erro', msg: 'Erro de rede: ' + (err?.message || 'desconhecido') });
@@ -174,7 +195,16 @@ export default function DemosPage() {
                       <p className="text-[10px] text-slate-600 flex items-center gap-1"><Calendar size={9}/> criada em {new Date(e.created_at).toLocaleDateString('pt-BR')}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500" title="Depois desse dia, quem entra vê 'Demonstração encerrada'. Apague a data para não expirar.">
+                      {e.modulos?.demo_expira_em && e.modulos.demo_expira_em < hojeISO()
+                        ? <span className="text-red-400">Expirada em {dataBR(e.modulos.demo_expira_em)}</span>
+                        : 'Vale até'}
+                      <input type="date" defaultValue={e.modulos?.demo_expira_em || ''} key={e.modulos?.demo_expira_em || 'sem'}
+                        disabled={salvandoValidadeId === e.id}
+                        onChange={ev => salvarValidade(e, ev.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs font-bold outline-none focus:border-purple-400/50 [color-scheme:dark] disabled:opacity-50"/>
+                    </label>
                     <button onClick={() => entrarComoEmpresa(e.id)} disabled={entrandoComoId === e.id}
                       className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50">
                       {entrandoComoId === e.id ? <Loader2 size={11} className="animate-spin"/> : <LogIn size={11}/>} Entrar como
@@ -220,6 +250,10 @@ export default function DemosPage() {
             <form onSubmit={criarDemo} className="space-y-3">
               <input required placeholder="Nome da empresa fake *" value={novoNome} onChange={e => setNovoNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-purple-400/50"/>
               <textarea placeholder="Nota — pra qual prospect/reunião? (opcional)" value={novoNota} onChange={e => setNovoNota(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-medium outline-none focus:border-purple-400/50 resize-none placeholder:text-slate-600"/>
+              <label className="block">
+                <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Acesso vale até (vazio = sem validade)</span>
+                <input type="date" value={novoExpira} onChange={e => setNovoExpira(e.target.value)} className="mt-1 w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-purple-400/50 [color-scheme:dark]"/>
+              </label>
               <div className="border-t border-white/10 pt-3 mt-1">
                 <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-2">Login pra você entrar direto (obrigatório)</p>
                 <input required placeholder="Seu nome ou apelido pra essa demo *" value={novoDiretorNome} onChange={e => setNovoDiretorNome(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-purple-400/50 mb-3"/>

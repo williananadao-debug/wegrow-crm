@@ -5,7 +5,7 @@ import { AlertTriangle, Lock, X, LogOut, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
-type Pendencia = { bloqueado: boolean; atraso: { total: number; desde: string; url: string | null; quantidade: number } | null };
+type Pendencia = { bloqueado: boolean; atraso: { total: number; desde: string; url: string | null; quantidade: number } | null; demoExpirada?: boolean };
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim());
 const CHAVE = 'wg_pendencia';
@@ -49,6 +49,22 @@ export default function PendenciaCobranca() {
   const pendencia = valido ? registro!.dados : null;
   if (ignorar || !pendencia) return null;
   const decide = perfil?.cargo === 'diretor' || perfil?.cargo === 'gerente';
+
+  // Demo com validade vencida (data definida em /admin/demos)
+  if (pendencia.demoExpirada) {
+    return (
+      <div className="fixed inset-0 z-[200] bg-[#0B1120]/95 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#0F172A] border border-white/10 rounded-3xl p-8 text-center">
+          <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center"><Lock className="text-purple-300" size={24}/></div>
+          <h2 className="text-xl font-semibold text-white">Demonstração encerrada</h2>
+          <p className="text-sm text-slate-400 mt-2 leading-relaxed">O período deste acesso de demonstração terminou. Para continuar usando o WeGrow, fale com a equipe WeGrow.</p>
+          <div className="mt-6 flex flex-col gap-2">
+            <button onClick={signOut} className="inline-flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white py-2"><LogOut size={14}/> Sair</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (pendencia.bloqueado) {
     return (

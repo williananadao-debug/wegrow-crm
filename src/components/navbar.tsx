@@ -9,7 +9,7 @@ import {
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
 } from 'lucide-react';
-import SeloMarca from '@/components/SeloMarca';
+import SeloMarca, { useMarcaParceiro } from '@/components/SeloMarca';
 import NotificationBell from '@/components/NotificationBell';
 import { supabase } from '@/lib/supabase';
 
@@ -46,6 +46,7 @@ export default function Navbar() {
 
   // MENU NASCE FECHADO POR PADRÃO
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const marcaParceiro = useMarcaParceiro();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   // Grupos do menu (CRM / Nexus) nascem abertos — fecha só quem clica explicitamente.
   const [gruposFechados, setGruposFechados] = useState<Record<string, boolean>>({});
@@ -206,6 +207,8 @@ export default function Navbar() {
           <div className="flex items-center gap-2 min-w-0">
             <MarcaEmpresa logoUrl={empresa?.logo_url} inicial={inicialMarca} size={32} />
             <span className="text-lg font-black italic text-white tracking-tighter truncate">{nomeMarca.toUpperCase()}</span>
+            {/* Marca dupla do parceiro (ex.: WeGrow for Manager) */}
+            {marcaParceiro?.logo_url && <img src={marcaParceiro.logo_url} alt={marcaParceiro.produto} title={`WeGrow for ${marcaParceiro.produto}`} className="w-7 h-7 object-contain shrink-0 drop-shadow-[0_0_8px_rgba(74,222,128,0.6)]"/>}
           </div>
         </div>
         {/* Celular não tem a barra de cima do desktop: mostra quem está logado aqui. */}

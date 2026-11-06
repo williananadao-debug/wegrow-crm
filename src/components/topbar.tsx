@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { ehCargoRestrito } from '@/lib/publicPages';
 import { Calendar, Search } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import { ChipMarca } from '@/components/SeloMarca';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -47,6 +48,8 @@ export default function Topbar() {
       {/* A BARRA DE BUSCA FOI REMOVIDA DAQUI PARA NÃO CAUSAR CONFUSÃO */}
 
       <div className="flex items-center gap-4">
+        {/* Empresa da carteira de um parceiro com marca dupla (ex.: WeGrow for Manager) */}
+        <ChipMarca />
         {!ehCargoRestrito(auth.perfil?.cargo) && <button
           onClick={() => { const e = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }); window.dispatchEvent(e); }}
           className="hidden md:flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-slate-500 hover:text-white transition-all"

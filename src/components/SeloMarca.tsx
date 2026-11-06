@@ -39,28 +39,48 @@ export function useMarcaParceiro(): MarcaParceiro | null {
   return registro && user && registro.userId === user.id ? registro.marca : null;
 }
 
-// Selo "WeGrow for <produto>" no rodapé do menu. compacto = menu recolhido (só os logos).
+// Logo do parceiro sobre fundo escuro com brilho verde (o do Manager é transparente, com glow próprio)
+function LogoParceiro({ marca, px }: { marca: MarcaParceiro; px: number }) {
+  return (
+    <div className="relative shrink-0 rounded-xl bg-[#0B1120] border border-[#22C55E]/25 flex items-center justify-center overflow-hidden shadow-[0_0_16px_-4px_rgba(74,222,128,0.5)]" style={{ width: px, height: px }}>
+      {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-0.5"/> : <img src="/logo.png" alt="WeGrow" className="w-2/3 h-2/3"/>}
+    </div>
+  );
+}
+
+// Selo "WeGrow for <produto>" no rodapé do menu. compacto = menu recolhido (só o logo).
 export default function SeloMarca({ compacto = false }: { compacto?: boolean }) {
   const marca = useMarcaParceiro();
   if (!marca) return null;
   if (compacto) {
     return (
       <div className="flex justify-center" title={`WeGrow for ${marca.produto}`}>
-        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden">
-          {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-1"/> : <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>}
-        </div>
+        <LogoParceiro marca={marca} px={40}/>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-3 py-2.5">
-      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
-        {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-full h-full object-contain p-1"/> : <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>}
-      </div>
+    <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-[#22C55E]/10 to-white/[0.02] border border-[#22C55E]/20 px-3 py-2.5">
+      <LogoParceiro marca={marca} px={36}/>
       <div className="min-w-0 leading-tight">
-        <p className="text-[13px] font-semibold text-white truncate">WeGrow <span className="text-slate-500 font-normal">for</span> {marca.produto}</p>
+        <p className="text-[13px] font-semibold text-white truncate">WeGrow <span className="text-[#4ADE80] italic font-normal">for</span> {marca.produto}</p>
         <p className="text-[10px] text-slate-500 truncate">com {marca.parceiro}</p>
       </div>
+    </div>
+  );
+}
+
+// Chip da barra de cima (desktop): assinatura da marca dupla ao lado do título da página
+export function ChipMarca() {
+  const marca = useMarcaParceiro();
+  if (!marca) return null;
+  return (
+    <div className="hidden lg:flex items-center gap-2.5 rounded-full border border-[#22C55E]/25 bg-gradient-to-r from-[#22C55E]/10 via-white/[0.03] to-[#22C55E]/10 pl-2 pr-4 py-1.5 shadow-[0_0_24px_-8px_rgba(74,222,128,0.6)]" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
+      <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>
+      <span className="text-xs font-black italic text-white tracking-tight">WeGrow</span>
+      <span className="text-xs italic text-[#4ADE80]">for</span>
+      {marca.logo_url && <img src={marca.logo_url} alt="" className="w-7 h-7 object-contain drop-shadow-[0_0_8px_rgba(74,222,128,0.6)]"/>}
+      <span className="text-xs font-black text-white tracking-tight">{marca.produto}</span>
     </div>
   );
 }

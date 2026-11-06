@@ -49,7 +49,7 @@ export default function LoginMarcaParceiro({ marca, children }: { marca: Marca; 
       <div className="pointer-events-none absolute -bottom-48 right-[-120px] w-[620px] h-[620px] rounded-full bg-[#4ADE80]/10 blur-[140px]" aria-hidden/>
       <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(255,255,255,.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.5)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" aria-hidden/>
 
-      <div className="relative min-h-screen max-w-6xl mx-auto px-4 sm:px-6 py-10 lg:py-0 grid lg:grid-cols-[1.15fr_1fr] gap-10 lg:gap-16 items-center">
+      <div className="relative min-h-screen max-w-6xl mx-auto px-4 sm:px-6 py-8 lg:py-0 grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-8 lg:gap-16 items-center">
         {/* Campanha */}
         <section className="min-w-0">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#4ADE80]/30 bg-[#4ADE80]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#86EFAC]">
@@ -57,17 +57,18 @@ export default function LoginMarcaParceiro({ marca, children }: { marca: Marca; 
           </span>
 
           <div className="mt-6 hidden sm:block"><Assinatura marca={marca} grande/></div>
-          <div className="mt-6 sm:hidden"><Assinatura marca={marca}/></div>
+          <div className="mt-5 sm:hidden"><Assinatura marca={marca}/></div>
 
-          <h1 className="mt-8 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-[1.05] [text-wrap:balance]">
+          <h1 className="mt-6 sm:mt-8 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-[1.05] [text-wrap:balance]">
             O comercial da sua rádio,{' '}
             <span className="bg-gradient-to-r from-[#4ADE80] via-[#22C55E] to-[#A3E635] bg-clip-text text-transparent">conectado ao {marca.produto}.</span>
           </h1>
-          <p className="mt-4 text-slate-400 text-sm sm:text-base max-w-xl leading-relaxed">
+          <p className="mt-4 hidden sm:block text-slate-400 text-sm sm:text-base max-w-xl leading-relaxed">
             Do primeiro contato com o anunciante até a veiculação no ar: proposta, contrato, metas e time comercial no mesmo ritmo da sua operação.
           </p>
 
-          <ul className="mt-8 grid sm:grid-cols-2 gap-3 max-w-2xl">
+          {/* No celular a lista sai: o formulário fica logo abaixo da chamada */}
+          <ul className="mt-8 hidden lg:grid grid-cols-2 gap-3 max-w-2xl">
             {BENEFICIOS.map(({ icone: Icone, titulo, texto }) => (
               <li key={titulo} className="flex gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
                 <div className="w-9 h-9 shrink-0 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/25 flex items-center justify-center"><Icone size={16} className="text-[#4ADE80]"/></div>
@@ -79,7 +80,7 @@ export default function LoginMarcaParceiro({ marca, children }: { marca: Marca; 
             ))}
           </ul>
 
-          <p className="mt-6 flex items-center gap-2 text-xs text-slate-500">
+          <p className="mt-6 hidden lg:flex items-center gap-2 text-xs text-slate-500">
             <Headphones size={14} className="text-[#4ADE80]"/> Implantação, treinamento e suporte com a {marca.parceiro}.
           </p>
         </section>

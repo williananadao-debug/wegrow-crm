@@ -71,7 +71,8 @@ export default function SeloMarca({ compacto = false }: { compacto?: boolean }) 
   );
 }
 
-// Marca dupla na barra de cima (desktop): os dois logos meio apagados, acendem ao passar o mouse
+// Marca dupla na barra de cima (desktop): os dois logos e "WeGrow for <produto>" meio apagados,
+// acendem ao passar o mouse
 export function ChipMarca() {
   const marca = useMarcaParceiro();
   if (!marca) return null;
@@ -79,7 +80,8 @@ export function ChipMarca() {
     <div className="hidden lg:flex items-center gap-2.5 opacity-50 hover:opacity-100 transition-opacity" title={`WeGrow for ${marca.produto} · com ${marca.parceiro}`}>
       <img src="/logo.png" alt="WeGrow" className="w-6 h-6"/>
       <span className="w-px h-4 bg-white/20" aria-hidden/>
-      {marca.logo_url ? <img src={marca.logo_url} alt={marca.produto} className="w-6 h-6 object-contain"/> : <span className="text-[13px] text-white">{marca.produto}</span>}
+      {marca.logo_url && <img src={marca.logo_url} alt="" className="w-6 h-6 object-contain"/>}
+      <span className="text-[13px] text-slate-300 whitespace-nowrap">WeGrow <span className="text-slate-500">for</span> {marca.produto}</span>
     </div>
   );
 }

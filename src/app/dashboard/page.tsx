@@ -8,6 +8,10 @@ import {
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { valorVenda, buscarAjustesVenda, type AjusteVenda } from '@/lib/vendasAjustes';
+
+// O campo de data dispara onChange com ano incompleto ("0002-...") enquanto a pessoa digita: só
+// aceita data completa a partir de 2000, ou vazio (o painel volta pro mês atual).
+const dataAceita = (v: string) => v === '' || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '2000-01-01' && !isNaN(new Date(v + 'T12:00:00').getTime()));
 import { paginarSupabase } from '@/lib/paginarSupabase';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -70,6 +74,16 @@ export default function DashboardPage() {
   const [rawAjustes, setRawAjustes] = useState<AjusteVenda[]>([]);
 
   const isDirector = perfil?.cargo === 'diretor';
+  // Meta global de faturamento do ano (tela Metas: sem vendedor, sem mês), só pra diretoria
+  const [metaAno, setMetaAno] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isDirector || !perfil?.empresa_id) return;
+    let vivo = true;
+    supabase.from('metas').select('valor_objetivo').eq('empresa_id', perfil.empresa_id).eq('ano', new Date().getFullYear())
+      .eq('tipo', 'faturamento').is('user_id', null).is('mes', null).is('produto', null).maybeSingle()
+      .then(({ data }) => { if (vivo) setMetaAno(Number(data?.valor_objetivo) || null); });
+    return () => { vivo = false; };
+  }, [isDirector, perfil?.empresa_id]);
   const temMidia = Boolean(empresa?.modulos?.midia);
 
   // Janela de dados: do período anterior ao filtrado (comparativo) até hoje/fim do filtro. A
@@ -507,9 +521,9 @@ export default function DashboardPage() {
             <div className="flex items-center bg-[#0F172A] border border-white/10 rounded-xl shadow-lg h-10 overflow-hidden flex-1 xl:flex-none">
                 <Filter size={14} className="text-slate-400 ml-3 mr-2" />
                 <div className="flex items-center gap-1 px-3 border-l border-white/10 h-full">
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
+                    <input type="date" value={dataInicio} onChange={e => { if (dataAceita(e.target.value)) setDataInicio(e.target.value); }} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
                     <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
+                    <input type="date" value={dataFim} onChange={e => { if (dataAceita(e.target.value)) setDataFim(e.target.value); }} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer" />
                 </div>
                 <select value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)} className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none px-3 border-l border-white/10 h-full">
                     <option value="Todas" className="bg-[#0F172A]">Todas Unidades</option>
@@ -769,8 +783,9 @@ export default function DashboardPage() {
             {/* PREVISÃO + RENOVAÇÕES */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
-                {/* PREVISÃO DE FECHAMENTO */}
-                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl">
+                {/* PREVISÃO DE FECHAMENTO (+ meta global do ano, ao lado, pra diretoria) */}
+                <div className="bg-[#0B1120] border border-white/5 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
                         <TrendingUp size={14} className="text-purple-400"/> Previsão de Fechamento
                     </h3>
@@ -792,6 +807,30 @@ export default function DashboardPage() {
                             </div>
                         ))}
                     </div>
+                </div>
+                {isDirector && metaAno && evolucaoAno && (() => {
+                    // Vendido no ano = evolução mensal (mesma conta da tela Metas: valor de quando foi ganha + ajustes)
+                    const vendidoAno = evolucaoAno.reduce((a, v) => a + v, 0);
+                    const pctFeito = Math.min(vendidoAno / metaAno * 100, 999);
+                    const falta = Math.max(metaAno - vendidoAno, 0);
+                    const brlCompacto = (v: number) => `R$ ${v.toLocaleString('pt-BR', { notation: 'compact', maximumFractionDigits: 2 })}`;
+                    return (
+                        <div className="sm:w-[46%] shrink-0 border-t sm:border-t-0 sm:border-l border-white/5 pt-4 sm:pt-0 sm:pl-4 flex flex-col">
+                            <h3 className="text-sm font-black text-white uppercase italic flex items-center gap-2 mb-4">
+                                <Target size={14} className="text-[#22C55E]"/> Meta global {new Date().getFullYear()}
+                            </h3>
+                            <p className="text-3xl font-black text-white tracking-tight">{brlCompacto(metaAno)}</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 mb-4">Definida na tela Metas</p>
+                            <div className="h-2.5 rounded-full bg-white/5 overflow-hidden mb-3">
+                                <div className="h-full bg-[#22C55E] rounded-full" style={{ width: `${Math.min(pctFeito, 100)}%` }}/>
+                            </div>
+                            <div className="space-y-1.5 text-[9px]">
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#22C55E]"/><span className="text-slate-400 font-bold uppercase flex-1">Realizado · {brlCompacto(vendidoAno)}</span><span className="text-white font-black">{pctFeito.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</span></div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-white/20"/><span className="text-slate-400 font-bold uppercase flex-1">Falta · {brlCompacto(falta)}</span><span className="text-white font-black">{Math.max(100 - pctFeito, 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</span></div>
+                            </div>
+                        </div>
+                    );
+                })()}
                 </div>
 
                 {/* CONTRATOS VENCENDO */}

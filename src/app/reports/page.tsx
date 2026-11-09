@@ -37,6 +37,10 @@ const normalizeString = (str: string) => {
         .replace(/\s+/g, ' '); 
 };
 
+// O campo de data dispara onChange com valor vazio ou ano incompleto ("0002-...") enquanto a
+// pessoa digita; só uma data completa, a partir de 2000, vira filtro (antes quebrava a tela com
+// "Invalid time value" ao converter a data, e um ano 0002 buscaria séculos de vendas).
+const dataCompleta = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '2000-01-01' && !isNaN(new Date(v + 'T12:00:00').getTime());
 const getLocalYYYYMMDD = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -130,7 +134,7 @@ export default function ReportsPage() {
   useEffect(() => { if (user && rawLeads.length > 0) fetchDadosDoPeriodo(); }, [dataInicio, dataFim]);
   // Ajustes do período e do período anterior (mesmo recorte das vendas)
   useEffect(() => {
-    if (!user || !perfil?.empresa_id || !(isDirector || isGerente)) return;
+    if (!user || !perfil?.empresa_id || !(isDirector || isGerente) || !dataCompleta(dataInicio) || !dataCompleta(dataFim)) return;
     let vivo = true;
     buscarAjustesVenda(supabase, perfil.empresa_id, new Date(inicioPeriodoAnterior() + 'T00:00:00').toISOString(), new Date(dataFim + 'T23:59:59.999').toISOString())
       .then(a => { if (vivo) setRawAjustes(a); });
@@ -662,14 +666,14 @@ export default function ReportsPage() {
                     <input
                         type="date"
                         value={dataInicio}
-                        onChange={e => setDataInicio(e.target.value)}
+                        onChange={e => { if (dataCompleta(e.target.value)) setDataInicio(e.target.value); }}
                         className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
                     />
                     <span className="text-slate-600 text-[9px] font-black">ATÉ</span>
                     <input
                         type="date"
                         value={dataFim}
-                        onChange={e => setDataFim(e.target.value)}
+                        onChange={e => { if (dataCompleta(e.target.value)) setDataFim(e.target.value); }}
                         className="bg-transparent border-none text-slate-300 hover:text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
                     />
                 </div>

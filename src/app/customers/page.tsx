@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 type Cliente = {
-  id: number; nome_empresa: string; nome_fantasia?: string; razao_social?: string; telefone: string; email?: string; cnpj?: string;
+  id: number; nome_empresa: string; nome_fantasia?: string; razao_social?: string; telefone: string; telefone_fixo?: string; email?: string; cnpj?: string;
   inscricao_estadual?: string; cep?: string; endereco?: string; numero?: string;
   estado?: string; cidade?: string; bairro?: string; status: 'ativo' | 'inativo';
   status_risco?: string; limite_credito?: number; score_interno?: number; observacao_risco?: string;
@@ -126,7 +126,7 @@ export default function CustomersPage() {
   const [isSearchingCnpj, setIsSearchingCnpj] = useState(false);
   const [tipoPessoa, setTipoPessoa] = useState<'juridica' | 'fisica'>('juridica');
   const [formData, setFormData] = useState({
-    nome_empresa: '', nome_fantasia: '', razao_social: '', telefone: '', email: '', cnpj: '',
+    nome_empresa: '', nome_fantasia: '', razao_social: '', telefone: '', telefone_fixo: '', email: '', cnpj: '',
     inscricao_estadual: '', cep: '', endereco: '', numero: '',
     cidade: '', bairro: '', estado: '', status: 'ativo', user_id: '',
     status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: '',
@@ -513,7 +513,7 @@ export default function CustomersPage() {
       setEditingId(cliente.id);
       setTipoPessoa((cliente.cnpj || '').replace(/\D/g, '').length === 11 ? 'fisica' : 'juridica');
       setFormData({
-        nome_empresa: cliente.nome_empresa, nome_fantasia: cliente.nome_fantasia || '', razao_social: cliente.razao_social || '', telefone: cliente.telefone || '', email: cliente.email || '',
+        nome_empresa: cliente.nome_empresa, nome_fantasia: cliente.nome_fantasia || '', razao_social: cliente.razao_social || '', telefone: cliente.telefone || '', telefone_fixo: cliente.telefone_fixo || '', email: cliente.email || '',
         cnpj: cliente.cnpj || '', inscricao_estadual: cliente.inscricao_estadual || '', cep: cliente.cep || '',
         endereco: cliente.endereco || '', numero: cliente.numero || '', cidade: cliente.cidade || '',
         bairro: cliente.bairro || '', estado: cliente.estado || '', status: cliente.status || 'ativo' as any,
@@ -529,7 +529,7 @@ export default function CustomersPage() {
       setEditingId(null);
       setTipoPessoa('juridica');
       setFormData({
-        nome_empresa: '', nome_fantasia: '', razao_social: '', telefone: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '',
+        nome_empresa: '', nome_fantasia: '', razao_social: '', telefone: '', telefone_fixo: '', email: '', cnpj: '', inscricao_estadual: '', cep: '', endereco: '', numero: '',
         cidade: '', bairro: '', estado: '', status: 'ativo', user_id: isDirector ? '' : (user?.id || ''),
         status_risco: 'em_analise', limite_credito: 0, score_interno: 0, observacao_risco: '', segmento: ''
       });
@@ -847,6 +847,7 @@ export default function CustomersPage() {
                                     </span>
                                 )}
                                 {cliente.telefone && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><Phone size={10}/> {cliente.telefone}</span>}
+                                {cliente.telefone_fixo && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded" title="Telefone fixo"><Phone size={10}/> {cliente.telefone_fixo}</span>}
                                 {cliente.cnpj && <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded"><FileText size={10}/> {cliente.cnpj}</span>}
                                 {cliente.user_id && (
                                     <span className="flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">
@@ -1038,8 +1039,12 @@ export default function CustomersPage() {
                             <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)] uppercase" value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} placeholder="Preenchido automático pelo CNPJ, se disponível" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Telefone</label>
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} />
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Celular / WhatsApp</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.telefone} onChange={e => setFormData({...formData, telefone: e.target.value})} placeholder="(47) 99999-9999" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">Telefone fixo</label>
+                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold outline-none focus:border-[var(--cor-primaria)]" value={formData.telefone_fixo} onChange={e => setFormData({...formData, telefone_fixo: e.target.value})} placeholder="(47) 3333-3333" />
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-500 ml-2 mb-1 block">E-mail</label>

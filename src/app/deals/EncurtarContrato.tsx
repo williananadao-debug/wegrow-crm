@@ -13,7 +13,7 @@ import { valorVenda } from '@/lib/vendasAjustes';
 type Item = { quantidade: number; precoUnitario: number; [k: string]: unknown };
 export type LeadEncurtar = {
   id: number; empresa: string; empresa_id?: string; valor_total: number; valor_fechado?: number | null; desconto?: number;
-  itens: Item[]; parcelas?: string; contrato_inicio?: string; contrato_fim?: string; vencimentos_datas?: string[];
+  itens: Item[]; parcelas?: string; vencimento?: string; contrato_inicio?: string; contrato_fim?: string; vencimentos_datas?: string[];
   fechado_em?: string | null; user_id?: string; fechado_por?: string | null; vendedor_nome?: string; unidade?: string;
   notas?: { id: number; texto: string; created_at: string }[];
 };
@@ -35,8 +35,27 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
 }) {
   const mesesAntes = Number(lead.parcelas) > 0 ? Number(lead.parcelas) : 0;
   const valorAntes = Number(lead.valor_total) || 0;
+  // Parcelas com data: as salvas na venda ou, sem elas, mês a mês a partir do 1º vencimento.
+  // Com datas, a pessoa marca quais parcelas a vencer saem; sem datas, informa o novo nº de meses.
+  const hojeISO = new Date().toLocaleDateString('sv-SE');
+  const datasParcelas = useMemo(() => {
+    if (Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length === mesesAntes) return lead.vencimentos_datas.map(d => d.substring(0, 10));
+    if (lead.vencimento && mesesAntes > 0) {
+      const [a, m, d] = lead.vencimento.substring(0, 10).split('-').map(Number);
+      return Array.from({ length: mesesAntes }, (_, i) => {
+        const ultimoDia = new Date(a, m + i, 0).getDate(); // dia 31 vira o último dia do mês curto
+        const f = new Date(a, m - 1 + i, Math.min(d, ultimoDia));
+        return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+      });
+    }
+    return [] as string[];
+  }, [lead.vencimentos_datas, lead.vencimento, mesesAntes]);
+  const comLista = datasParcelas.length > 1;
+  const [excluidas, setExcluidas] = useState<Set<number>>(new Set());
+  const alternar = (i: number) => setExcluidas(prev => { const s = new Set(prev); if (s.has(i)) s.delete(i); else s.add(i); return s; });
+  const aVencer = datasParcelas.map((d, i) => ({ d, i })).filter(x => x.d >= hojeISO).map(x => x.i);
   const [meses, setMeses] = useState(mesesAntes > 1 ? String(mesesAntes - 1) : '');
-  const n = Number(meses);
+  const n = comLista ? mesesAntes - excluidas.size : Number(meses);
   const valorProporcional = mesesAntes > 0 && n > 0 ? r2(valorAntes * n / mesesAntes) : 0;
   const [valorDigitado, setValorDigitado] = useState<string | null>(null);
   const valorDepois = valorDigitado !== null ? Number(valorDigitado.replace(/\./g, '').replace(',', '.')) || 0 : valorProporcional;
@@ -51,7 +70,7 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
   const vendedorNome = lead.vendedor_nome || 'o vendedor da venda';
   const mesVenda = lead.fechado_em ? mesAno(new Date(lead.fechado_em)) : 'o mês da venda';
   const valorOriginal = valorVenda(lead);
-  const invalido = !(n > 0) || (mesesAntes > 0 && n >= mesesAntes) || !(valorDepois > 0) || valorDepois >= valorAntes || motivo.trim().length < 3;
+  const invalido = (comLista && excluidas.size === 0) || !(n > 0) || (mesesAntes > 0 && n >= mesesAntes) || !(valorDepois > 0) || valorDepois >= valorAntes || motivo.trim().length < 3;
 
   const itensNovos = useMemo(() => {
     const fator = mesesAntes > 0 && n > 0 ? n / mesesAntes : valorAntes ? valorDepois / valorAntes : 1;
@@ -76,7 +95,7 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
 
       const nota = {
         id: Date.now(), created_at: new Date().toISOString(),
-        texto: `✂️ Contrato encurtado por ${autorNome}: ${mesesAntes || '?'} → ${n} ${n === 1 ? 'mês' : 'meses'}, ${brl(valorAntes)} → ${brl(valorDepois)} (${brl(diferenca)}). Fim: ${dataBR(fimDepois)}. Motivo: ${motivo.trim()}`,
+        texto: `✂️ Contrato encurtado por ${autorNome}: ${mesesAntes || '?'} → ${n} ${n === 1 ? 'parcela' : 'parcelas'}${comLista ? ` (excluídas: ${[...excluidas].sort((a, b) => a - b).map(i => `${i + 1}ª de ${dataBR(datasParcelas[i])}`).join(', ')})` : ''}, ${brl(valorAntes)} → ${brl(valorDepois)} (${brl(diferenca)}). Fim: ${dataBR(fimDepois)}. Motivo: ${motivo.trim()}`,
       };
       const campos: Partial<LeadEncurtar> = {
         itens: itensNovos, valor_total: valorDepois, parcelas: String(n),
@@ -84,7 +103,9 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
         valor_fechado: lead.valor_fechado ?? valorAntes,
         notas: [nota, ...(Array.isArray(lead.notas) ? lead.notas : [])],
         ...(fimDepois ? { contrato_fim: fimDepois } : {}),
-        ...(Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length > n ? { vencimentos_datas: lead.vencimentos_datas.slice(0, n) } : {}),
+        ...(comLista
+          ? { vencimentos_datas: datasParcelas.filter((_, i) => !excluidas.has(i)) }
+          : Array.isArray(lead.vencimentos_datas) && lead.vencimentos_datas.length > n ? { vencimentos_datas: lead.vencimentos_datas.slice(0, n) } : {}),
       };
       const { error: eLead } = await supabase.from('leads').update(campos).eq('id', lead.id);
       if (eLead) throw new Error(eLead.message);
@@ -129,14 +150,40 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
         </div>
 
         <div className="space-y-3">
-          <label className="block"><span className={rotulo}>Novo nº de meses / parcelas</span>
-            <input type="number" min={1} max={mesesAntes > 0 ? mesesAntes - 1 : undefined} value={meses}
-              onChange={e => { setMeses(e.target.value); setValorDigitado(null); setFimDigitado(null); }} className={`mt-1 ${campo}`}/>
-          </label>
+          {comLista ? (
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <span className={rotulo}>Parcelas a excluir</span>
+                {aVencer.length > 0 && (
+                  <button type="button" onClick={() => { setExcluidas(new Set(aVencer)); setValorDigitado(null); setFimDigitado(null); }}
+                    className="text-[10px] font-black uppercase tracking-widest text-amber-300 hover:text-amber-200">Marcar todas a vencer</button>
+                )}
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto custom-scrollbar">
+                {datasParcelas.map((d, i) => {
+                  const vencida = d < hojeISO;
+                  const marcada = excluidas.has(i);
+                  return (
+                    <button key={i} type="button" disabled={vencida} onClick={() => { alternar(i); setValorDigitado(null); setFimDigitado(null); }}
+                      title={vencida ? 'Parcela já vencida: não pode ser excluída aqui' : marcada ? 'Manter esta parcela' : 'Excluir esta parcela'}
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:cursor-not-allowed ${marcada ? 'border-red-500/50 bg-red-500/10 text-red-300 line-through' : vencida ? 'border-white/5 bg-white/[0.02] text-slate-600' : 'border-white/10 bg-white/5 text-slate-200 hover:border-amber-400/50'}`}>
+                      <span>Parc. {i + 1}</span><span>{dataBR(d)}{vencida ? ' · vencida' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-[10px] text-slate-600">Toque nas parcelas a vencer que o cliente não vai mais pagar. Ficam {n} de {mesesAntes}.</span>
+            </div>
+          ) : (
+            <label className="block"><span className={rotulo}>Novo nº de meses / parcelas</span>
+              <input type="number" min={1} max={mesesAntes > 0 ? mesesAntes - 1 : undefined} value={meses}
+                onChange={e => { setMeses(e.target.value); setValorDigitado(null); setFimDigitado(null); }} className={`mt-1 ${campo}`}/>
+            </label>
+          )}
           <label className="block"><span className={rotulo}>Novo valor total (R$)</span>
             <input inputMode="decimal" value={valorDigitado ?? (valorProporcional ? valorProporcional.toFixed(2).replace('.', ',') : '')}
               onChange={e => setValorDigitado(e.target.value)} className={`mt-1 ${campo}`}/>
-            <span className="text-[10px] text-slate-600">Sugerido na proporção dos meses. Pode ajustar.</span>
+            <span className="text-[10px] text-slate-600">Sugerido na proporção das parcelas que ficam. Pode ajustar.</span>
           </label>
           <label className="block"><span className={rotulo}>Nova data de fim</span>
             <input type="date" value={fimDepois} onChange={e => setFimDigitado(e.target.value)} className={`mt-1 ${campo}`}/>

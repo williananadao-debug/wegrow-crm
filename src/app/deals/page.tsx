@@ -2366,7 +2366,7 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
-                    {isDirector && leadEmEdicao?.status === 'ganho' && Number(leadEmEdicao.parcelas) > 1 && (
+                    {isLideranca && leadEmEdicao?.status === 'ganho' && Number(leadEmEdicao.parcelas) > 1 && (
                         <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3 flex-wrap">
                             <p className="text-amber-200/80 text-xs flex-1 min-w-[180px]">Cliente pediu menos meses do que fechou? Encurte o contrato sem mexer na meta dos meses já pagos.</p>
                             <button type="button" onClick={() => setEncurtando(true)} className="flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">

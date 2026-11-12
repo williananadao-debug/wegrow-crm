@@ -8,7 +8,7 @@ import { valorVenda } from '@/lib/vendasAjustes';
 // ter o contrato novo (itens, valor, parcelas, fim) — OPEC, contrato e portal leem dela —, o mês
 // em que foi ganha continua contando o valor original (leads.valor_fechado) e a diferença entra
 // como ajuste negativo no mês de hoje, no nome do vendedor da venda (vendas_ajustes, lib/vendasAjustes).
-// Só diretoria. As parcelas em aberto do financeiro ligadas à venda são reduzidas a partir da última.
+// Só diretoria e gerência. As parcelas em aberto do financeiro ligadas à venda são reduzidas a partir da última.
 
 type Item = { quantidade: number; precoUnitario: number; [k: string]: unknown };
 export type LeadEncurtar = {
@@ -91,7 +91,7 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
         itens_antes: lead.itens || [], motivo: motivo.trim(),
         vendedor_id: vendedorId, vendedor_nome: lead.vendedor_nome || null, unidade: lead.unidade || null, user_id: user?.id || null,
       });
-      if (eAjuste) throw new Error(eAjuste.message.includes('row-level security') ? 'Só a diretoria pode encurtar contrato.' : eAjuste.message);
+      if (eAjuste) throw new Error(eAjuste.message.includes('row-level security') ? 'Só a diretoria e a gerência podem encurtar contrato.' : eAjuste.message);
 
       const nota = {
         id: Date.now(), created_at: new Date().toISOString(),

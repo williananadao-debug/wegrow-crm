@@ -12,17 +12,6 @@ type Leitura = { id: string; nome: string; sku: string; ok: boolean; mensagem: s
 type Linha = { servicoId: number; nome: string; sku: string; unidade: string; saldo: number; quantidade: number };
 type Comprovante = { codigo: string; data: string; solicitante: string; retiradoPor: string; motivo: string; destino: string; observacao: string; linhas: (Linha & { saldoDepois: number })[] };
 
-// Grava a saída já com "quem retirou". Se o banco ainda não tem a coluna (migration
-// 20261118100000 não rodou), grava sem ela e põe o nome na observação, assim a saída
-// nunca falha por causa do campo novo.
-async function inserirMovimentacoes(rows: Record<string, any>[]) {
-  const r = await supabase.from('estoque_movimentacoes').insert(rows).select('id');
-  if (!r.error || !/retirado_por/.test(r.error.message)) return r;
-  return supabase.from('estoque_movimentacoes').insert(rows.map(({ retirado_por, ...x }) => ({
-    ...x, observacao: retirado_por ? [x.observacao, `Retirado por: ${retirado_por}`].filter(Boolean).join(' · ') : x.observacao,
-  }))).select('id');
-}
-
 const MOTIVOS = [
   { v: 'producao', l: 'Uso em produção / obra' }, { v: 'uso_interno', l: 'Uso interno' }, { v: 'perda', l: 'Perda / quebra' },
   { v: 'retrabalho', l: 'Retrabalho' }, { v: 'amostra', l: 'Amostra / brinde' },
@@ -198,12 +187,11 @@ export default function SaidaRapidaPage() {
     const novo = atual - qtd;
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
-    const { data: movs } = await inserirMovimentacoes([{
+    const { data: mov } = await supabase.from('estoque_movimentacoes').insert([{
       empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: -qtd, tipo: 'ajuste', motivo, destino: destino || null,
       producao_id: producaoId ? Number(producaoId) : null, user_id: user?.id, observacao: 'Saída via leitor de código de barras.',
       retirado_por: retiradoPor.trim() || null,
-    }]);
-    const mov = movs?.[0];
+    }]).select('id').single();
     alertarEstoqueBaixoSeCruzou(s.id, atual, novo, s.estoque_minimo ?? 5);
     tocar(true);
     registrarLeitura({ nome: s.nome, sku, ok: true, mensagem: `Saída de ${qtd} registrada — estoque agora: ${novo}`, servicoId: s.id, movimentoId: mov?.id, quantidade: qtd });
@@ -281,7 +269,7 @@ export default function SaidaRapidaPage() {
       if (l.quantidade > atual) { falha = `${l.nome}: estoque mudou e agora só há ${atual}.`; break; }
       const novo = atual - l.quantidade;
       const e1 = await supabase.from('servicos').update({ estoque: novo }).eq('id', l.servicoId);
-      const e2 = await inserirMovimentacoes([{
+      const e2 = await supabase.from('estoque_movimentacoes').insert([{
         empresa_id: perfil.empresa_id, servico_id: l.servicoId, quantidade: -l.quantidade, tipo: 'ajuste', motivo, destino: destino.trim() || null,
         producao_id: producaoId ? Number(producaoId) : null, requisicao_id: reqId, user_id: user?.id,
         observacao: observacao.trim() || `Requisição ${reqId.slice(0, 8).toUpperCase()}`,

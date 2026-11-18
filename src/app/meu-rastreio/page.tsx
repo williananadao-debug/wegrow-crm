@@ -1,0 +1,330 @@
+"use client";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { Loader2, Navigation, Bell, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X } from 'lucide-react';
+import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, type Veiculo } from '../rastreio/shared';
+import type { PontoTrajeto } from '../rastreio/MapaRastreio';
+
+const MapaRastreio = dynamic(() => import('../rastreio/MapaRastreio'), { ssr: false });
+
+type Dados = {
+  empresa: { nome: string; logo: string | null; cor: string };
+  cliente: { nome: string; suspenso: boolean; temPin: boolean };
+  veiculos: Veiculo[];
+  alertas: { id: number; veiculo_id: string; tipo: string; mensagem: string; ocorrido_em: string }[];
+};
+type Aba = 'mapa' | 'trajeto' | 'alertas';
+
+const MOTIVOS = ['Meu veículo foi roubado ou furtado', 'Não reconheço o uso agora', 'Outro motivo'];
+const hojeISO = () => new Date().toLocaleDateString('en-CA');
+
+async function post(caminho: string, corpo: unknown) {
+  const r = await fetch(`/api/rastreio/app/${caminho}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Erro ${r.status}`);
+  return j;
+}
+
+export default function MeuRastreioPage() {
+  const [dados, setDados] = useState<Dados | null>(null);
+  const [semSessao, setSemSessao] = useState(false);
+  const [aba, setAba] = useState<Aba>('mapa');
+  const [selId, setSelId] = useState<string | null>(null);
+  const [dia, setDia] = useState(hojeISO());
+  const [trajeto, setTrajeto] = useState<PontoTrajeto[]>([]);
+  const [carregandoTrajeto, setCarregandoTrajeto] = useState(false);
+  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin'>(null);
+  const [motivo, setMotivo] = useState(0);
+  const [pin, setPin] = useState('');
+  const [pinNovo, setPinNovo] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [vistos, setVistos] = useState<number>(0);
+
+  const carregar = useCallback(async () => {
+    const r = await fetch('/api/rastreio/app/dados', { cache: 'no-store' }).catch(() => null);
+    if (!r) return;
+    if (r.status === 401) { setSemSessao(true); return; }
+    if (r.ok) setDados(await r.json());
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(carregar);
+    try { setVistos(Number(localStorage.getItem('rastreio_alertas_vistos') || 0)); } catch { /* sem storage */ }
+    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 15000);
+    return () => clearInterval(t);
+  }, [carregar]);
+
+  const veiculo = useMemo(() => dados?.veiculos.find(v => v.id === selId) || dados?.veiculos[0] || null, [dados, selId]);
+  const novos = (dados?.alertas || []).filter(a => a.id > vistos).length;
+
+  useEffect(() => {
+    if (aba !== 'trajeto' || !veiculo) return;
+    const ini = new Date(`${dia}T00:00:00`), fim = new Date(`${dia}T23:59:59.999`);
+    void Promise.resolve().then(() => setCarregandoTrajeto(true));
+    fetch(`/api/rastreio/app/trajeto?veiculo=${veiculo.id}&ini=${ini.toISOString()}&fim=${fim.toISOString()}`, { cache: 'no-store' })
+      .then(r => r.json()).then(j => setTrajeto(j.pontos || [])).catch(() => setTrajeto([]))
+      .finally(() => setCarregandoTrajeto(false));
+  }, [aba, veiculo, dia]);
+
+  const abrirAlertas = () => {
+    setAba('alertas');
+    const maior = Math.max(0, ...(dados?.alertas || []).map(a => a.id));
+    setVistos(maior);
+    try { localStorage.setItem('rastreio_alertas_vistos', String(maior)); } catch { /* sem storage */ }
+  };
+
+  const compartilhar = async () => {
+    if (!veiculo?.ultima_lat) return;
+    const url = linkMapa(veiculo.ultima_lat, veiculo.ultima_lng!);
+    const texto = `Localização do veículo ${veiculo.placa} (${haQuanto(veiculo.ultima_posicao_em)})`;
+    try {
+      if (navigator.share) await navigator.share({ title: veiculo.placa, text: texto, url });
+      else window.open(`https://wa.me/?text=${encodeURIComponent(`${texto}: ${url}`)}`, '_blank');
+    } catch { /* cancelado */ }
+  };
+
+  const enviarComando = async () => {
+    if (!veiculo || !modal || modal === 'pin') return;
+    setEnviando(true); setMsg(null);
+    try {
+      const r = await post('comando', { veiculoId: veiculo.id, tipo: modal, motivo: modal === 'bloquear' ? MOTIVOS[motivo] : 'Desbloqueio pelo app', pin });
+      setMsg({ ok: true, texto: modal === 'bloquear' ? `${veiculo.placa} bloqueado. ${r.mensagem}` : `${veiculo.placa} desbloqueado.` });
+      setModal(null); setPin('');
+      carregar();
+    } catch (e) {
+      setMsg({ ok: false, texto: (e as Error).message });
+    } finally { setEnviando(false); }
+  };
+
+  const salvarPin = async () => {
+    setEnviando(true); setMsg(null);
+    try {
+      await post('pin', { pin: pinNovo, pinAtual: pin });
+      setMsg({ ok: true, texto: 'PIN salvo. Ele será pedido para bloquear ou desbloquear.' });
+      setModal(null); setPin(''); setPinNovo('');
+      carregar();
+    } catch (e) {
+      setMsg({ ok: false, texto: (e as Error).message });
+    } finally { setEnviando(false); }
+  };
+
+  const sair = async () => {
+    if (!confirm('Sair do app neste celular? Para entrar de novo, peça um novo link para a central.')) return;
+    await post('sair', {}).catch(() => null);
+    setSemSessao(true);
+  };
+
+  if (semSessao) {
+    return (
+      <main className="min-h-[100dvh] bg-[#0B1120] text-white flex flex-col items-center justify-center p-6 text-center gap-3">
+        <Navigation size={40} className="text-sky-400" />
+        <h1 className="text-xl font-black">Acesso ao rastreamento</h1>
+        <p className="text-slate-300 text-sm max-w-xs">Para entrar, abra o link de acesso que a sua central de rastreamento enviou pelo WhatsApp. Se ele venceu, peça um novo.</p>
+      </main>
+    );
+  }
+  if (!dados) return <main className="min-h-[100dvh] bg-[#0B1120] flex items-center justify-center"><Loader2 size={28} className="animate-spin text-slate-500" /></main>;
+
+  const cor = dados.empresa.cor || '#38BDF8';
+  const s = veiculo ? situacao(veiculo) : 'sem_sinal';
+  const km = trajeto.reduce((t, p, i) => {
+    if (!i) return 0;
+    const a = trajeto[i - 1], r = Math.PI / 180;
+    const h = Math.sin((p.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(p.lat * r) * Math.sin((p.lng - a.lng) * r / 2) ** 2;
+    return t + 12742 * Math.asin(Math.sqrt(h));
+  }, 0);
+  const velMax = trajeto.reduce((m, p) => Math.max(m, Number(p.velocidade || 0)), 0);
+
+  return (
+    <main className="min-h-[100dvh] bg-[#0B1120] text-white flex flex-col max-w-lg mx-auto" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <header className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {dados.empresa.logo
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={dados.empresa.logo} alt="" className="w-10 h-10 rounded-xl object-contain bg-white/5" />
+            : <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-[#0B1120]" style={{ background: cor }}>{dados.empresa.nome.slice(0, 2).toUpperCase()}</div>}
+          <div className="min-w-0">
+            <p className="font-black truncate">{dados.empresa.nome}</p>
+            <p className="text-xs text-slate-400 truncate">Olá, {dados.cliente.nome.split(' ')[0]}</p>
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); setMsg(null); }} aria-label="Meu PIN de bloqueio" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><KeyRound size={18} /></button>
+          <button onClick={sair} aria-label="Sair" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><LogOut size={18} /></button>
+        </div>
+      </header>
+
+      {dados.cliente.suspenso && (
+        <div className="mx-4 mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Há uma pendência na sua mensalidade. Fale com a central para regularizar.</div>
+      )}
+      {!dados.cliente.temPin && (
+        <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); }} className="mx-4 mb-2 rounded-xl border border-sky-400/40 bg-sky-400/10 px-4 py-3 text-sm text-sky-200 text-left font-bold">
+          Crie seu PIN de bloqueio para poder bloquear o veículo pelo app →
+        </button>
+      )}
+      {msg && (
+        <div role="status" className={`mx-4 mb-2 rounded-xl border px-4 py-3 text-sm font-bold flex justify-between gap-2 ${msg.ok ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-red-500/40 bg-red-500/10 text-red-200'}`}>
+          <span>{msg.texto}</span><button onClick={() => setMsg(null)} aria-label="Fechar"><X size={14} /></button>
+        </div>
+      )}
+
+      {dados.veiculos.length === 0 ? (
+        <p className="px-6 py-16 text-center text-slate-400 text-sm">Nenhum veículo ativo no seu cadastro. Fale com a central.</p>
+      ) : (
+        <>
+          {dados.veiculos.length > 1 && (
+            <div className="px-4 flex gap-2 overflow-x-auto pb-1">
+              {dados.veiculos.map(v => (
+                <button key={v.id} onClick={() => setSelId(v.id)}
+                  className="shrink-0 min-h-11 px-4 rounded-xl border text-sm font-black tracking-wider"
+                  style={v.id === veiculo?.id ? { borderColor: cor, background: `${cor}1F` } : { borderColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1' }}>
+                  {v.placa}{v.descricao ? <span className="font-semibold tracking-normal text-xs text-slate-400"> · {v.descricao}</span> : null}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1 px-4 pt-3 pb-24 space-y-3">
+            {veiculo && aba === 'mapa' && (
+              <>
+                {veiculo.ultima_lat != null
+                  ? <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} chaveEnquadrar={veiculo.id} altura="h-[42vh] min-h-[260px]" />
+                  : <div className="h-[42vh] min-h-[260px] rounded-2xl border border-white/10 flex items-center justify-center text-slate-400 text-sm px-6 text-center">Aguardando o primeiro sinal do rastreador.</div>}
+                <section aria-label="Situação" className="grid grid-cols-3 gap-2 bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Agora</p>
+                    <p className="font-black" style={{ color: veiculo.bloqueado ? '#F87171' : SITUACAO_INFO[s].cor }}>{veiculo.bloqueado ? 'Bloqueado' : SITUACAO_INFO[s].label}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Gauge size={11} /> Veloc.</p>
+                    <p className="font-black">{Math.round(Number(veiculo.ultima_velocidade || 0))} km/h</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Power size={11} /> Ignição</p>
+                    <p className="font-black">{veiculo.ignicao == null ? '—' : veiculo.ignicao ? 'Ligada' : 'Desligada'}</p>
+                  </div>
+                  <p className="col-span-3 text-xs text-slate-400">Atualizado {haQuanto(veiculo.ultima_comunicacao_em || veiculo.ultima_posicao_em)}</p>
+                </section>
+                <div className="grid grid-cols-2 gap-2">
+                  {veiculo.tem_bloqueio && (veiculo.bloqueado
+                    ? <button onClick={() => { setModal('desbloquear'); setPin(''); setMsg(null); }} className="min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2"><Unlock size={18} /> Desbloquear</button>
+                    : <button onClick={() => { setModal('bloquear'); setPin(''); setMotivo(0); setMsg(null); }} className="min-h-14 rounded-2xl bg-red-600 font-black uppercase text-sm flex items-center justify-center gap-2"><Lock size={18} /> Bloquear</button>)}
+                  <button onClick={compartilhar} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
+                </div>
+              </>
+            )}
+
+            {veiculo && aba === 'trajeto' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dia</label>
+                  <input type="date" value={dia} max={hojeISO()} onChange={e => setDia(e.target.value || hojeISO())}
+                    className="min-h-11 bg-white/[0.03] border border-white/10 rounded-xl px-3 text-sm text-white [color-scheme:dark]" />
+                </div>
+                <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} trajeto={trajeto} chaveEnquadrar={`${veiculo.id}|${dia}|${trajeto.length > 0}`} altura="h-[42vh] min-h-[260px]" />
+                <section aria-label="Resumo do dia" className="grid grid-cols-3 gap-2">
+                  <Caixa titulo="Rodou" valor={carregandoTrajeto ? '…' : `${km.toFixed(1)} km`} />
+                  <Caixa titulo="Máxima" valor={carregandoTrajeto ? '…' : `${Math.round(velMax)} km/h`} />
+                  <Caixa titulo="Período" valor={trajeto.length ? `${fmtHora(trajeto[0].registrado_em!)}–${fmtHora(trajeto[trajeto.length - 1].registrado_em!)}` : '—'} />
+                </section>
+                {!carregandoTrajeto && trajeto.length === 0 && <p className="text-center text-sm text-slate-400">Nenhum deslocamento nesse dia.</p>}
+              </>
+            )}
+
+            {aba === 'alertas' && (
+              <section aria-label="Alertas" className="space-y-2">
+                {dados.alertas.length === 0 && <p className="text-center text-sm text-slate-400 py-10">Nenhum alerta ainda.</p>}
+                {dados.alertas.map(a => {
+                  const urgente = a.tipo === 'alarme';
+                  return (
+                    <article key={a.id} className={`rounded-2xl border p-4 ${urgente ? 'border-red-500/40 bg-red-500/10' : 'border-white/10 bg-[#0F172A]'}`}>
+                      <p className={`text-[11px] font-black uppercase tracking-widest ${urgente ? 'text-red-300' : 'text-slate-400'}`}>{urgente ? 'Urgente · ' : ''}{fmtDataHora(a.ocorrido_em)}</p>
+                      <p className="font-bold mt-1 flex items-start gap-2">{urgente && <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />}{a.mensagem}</p>
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </div>
+        </>
+      )}
+
+      <nav aria-label="Menu" className="fixed bottom-0 inset-x-0 bg-[#0B1120]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="max-w-lg mx-auto grid grid-cols-3">
+          {([['mapa', 'Mapa', Navigation], ['trajeto', 'Trajeto', Route], ['alertas', 'Alertas', Bell]] as const).map(([k, nome, Icone]) => (
+            <button key={k} onClick={() => (k === 'alertas' ? abrirAlertas() : setAba(k))} aria-current={aba === k ? 'page' : undefined}
+              className="min-h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-black relative"
+              style={{ color: aba === k ? cor : '#94A3B8' }}>
+              <Icone size={20} />{nome}
+              {k === 'alertas' && novos > 0 && <span className="absolute top-2 left-1/2 ml-2 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">{novos}</span>}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" onClick={() => !enviando && setModal(null)}>
+          <div role="dialog" aria-modal="true" className="w-full max-w-lg bg-[#0F172A] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
+            {modal === 'pin' ? (
+              <>
+                <h2 className="text-xl font-black">{dados.cliente.temPin ? 'Trocar PIN de bloqueio' : 'Criar PIN de bloqueio'}</h2>
+                <p className="text-sm text-slate-300">O PIN (4 a 6 números) é pedido sempre que você bloquear ou desbloquear o veículo.</p>
+                {dados.cliente.temPin && <CampoPin rotulo="PIN atual" valor={pin} onChange={setPin} />}
+                <CampoPin rotulo="Novo PIN" valor={pinNovo} onChange={setPinNovo} />
+                <button onClick={salvarPin} disabled={enviando || pinNovo.length < 4} className="w-full min-h-14 rounded-2xl font-black uppercase text-[#0B1120] disabled:opacity-40 flex items-center justify-center gap-2" style={{ background: cor }}>
+                  {enviando && <Loader2 size={16} className="animate-spin" />} Salvar PIN
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className={`text-xl font-black ${modal === 'bloquear' ? 'text-red-400' : ''}`}>{modal === 'bloquear' ? `Bloquear ${veiculo?.placa}?` : `Desbloquear ${veiculo?.placa}?`}</h2>
+                {modal === 'bloquear' && (
+                  <>
+                    <p className="text-sm text-slate-300">O veículo fica sem conseguir dar partida até ser desbloqueado.</p>
+                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">Por segurança, o bloqueio só é enviado com o veículo <b>parado ou abaixo de 20 km/h</b>.</p>
+                    <fieldset className="space-y-2">
+                      <legend className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Motivo</legend>
+                      {MOTIVOS.map((m, i) => (
+                        <button key={m} onClick={() => setMotivo(i)} className="w-full min-h-12 text-left px-4 rounded-xl border text-sm font-bold"
+                          style={i === motivo ? { borderColor: '#EF4444', background: 'rgba(239,68,68,0.12)' } : { borderColor: 'rgba(255,255,255,0.12)' }}>{m}</button>
+                      ))}
+                    </fieldset>
+                  </>
+                )}
+                {!dados.cliente.temPin
+                  ? <p className="text-sm text-sky-200">Crie seu PIN primeiro (ícone de chave no topo).</p>
+                  : <CampoPin rotulo="Seu PIN" valor={pin} onChange={setPin} />}
+                <button onClick={enviarComando} disabled={enviando || pin.length < 4 || !dados.cliente.temPin}
+                  className={`w-full min-h-14 rounded-2xl font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2 ${modal === 'bloquear' ? 'bg-red-600' : 'text-[#0B1120]'}`}
+                  style={modal === 'bloquear' ? undefined : { background: cor }}>
+                  {enviando && <Loader2 size={16} className="animate-spin" />} {modal === 'bloquear' ? 'Confirmar bloqueio' : 'Confirmar desbloqueio'}
+                </button>
+              </>
+            )}
+            <button onClick={() => setModal(null)} disabled={enviando} className="w-full min-h-12 text-sm font-bold text-slate-300">Cancelar</button>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function Caixa({ titulo, valor }: { titulo: string; valor: string }) {
+  return (
+    <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-3">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{titulo}</p>
+      <p className="font-black mt-1">{valor}</p>
+    </div>
+  );
+}
+
+function CampoPin({ rotulo, valor, onChange }: { rotulo: string; valor: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{rotulo}</span>
+      <input type="password" inputMode="numeric" autoComplete="off" value={valor} onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        className="mt-1 w-full min-h-14 bg-white/[0.03] border border-white/10 rounded-2xl px-4 text-2xl tracking-[0.5em] text-white outline-none focus:border-sky-400" />
+    </label>
+  );
+}

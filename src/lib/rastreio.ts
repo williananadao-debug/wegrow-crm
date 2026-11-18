@@ -159,3 +159,62 @@ export async function usuarioRastreio(db: SupabaseClient, req: Request) {
   if (!(empresa?.modulos as Record<string, unknown> | null)?.rastreio) return null;
   return { id: user.id, nome: perfil.nome || user.email || 'usuário', cargo: perfil.cargo as string | null, empresaId: perfil.empresa_id as string };
 }
+
+// ── Comando de bloqueio (painel e app do cliente usam a mesma regra) ────────────────────────
+
+type Autor = { userId: string | null; nome: string; origem: 'painel' | 'app' };
+
+/** Aplica as travas, envia ao Traccar e registra tudo (inclusive recusas). */
+export async function executarComando(
+  db: SupabaseClient,
+  p: { veiculoId: string; empresaId: string; clienteId?: string; tipo: 'bloquear' | 'desbloquear'; motivo: string; autor: Autor },
+): Promise<{ ok: true; naFila: boolean; mensagem: string } | { ok: false; erro: string; status: number }> {
+  let q = db.from('rastreio_veiculos')
+    .select('id, empresa_id, cliente_id, placa, imei, tem_bloqueio, traccar_device_id, ultima_velocidade, ultima_posicao_em, ultima_lat, ultima_lng')
+    .eq('id', p.veiculoId).eq('empresa_id', p.empresaId).eq('status', 'ativo');
+  if (p.clienteId) q = q.eq('cliente_id', p.clienteId);
+  const { data: v } = await q.maybeSingle();
+  if (!v) return { ok: false, erro: 'Veículo não encontrado.', status: 404 };
+
+  const motivo = p.motivo.trim().slice(0, 300);
+  const log = (status: 'enviado' | 'recusado' | 'erro', detalhe: string) => db.from('rastreio_comandos').insert({
+    empresa_id: v.empresa_id, veiculo_id: v.id, tipo: p.tipo, status, motivo, detalhe, origem: p.autor.origem,
+    velocidade_no_momento: v.ultima_velocidade, lat: v.ultima_lat, lng: v.ultima_lng, user_id: p.autor.userId, user_nome: p.autor.nome,
+  });
+  const recusar = async (erro: string, status = 409) => { await log('recusado', erro); return { ok: false as const, erro, status }; };
+
+  if (!motivo) return { ok: false, erro: 'Informe o motivo.', status: 400 };
+  if (!v.tem_bloqueio) return recusar('Este veículo não tem relé de bloqueio instalado.');
+  if (p.tipo === 'bloquear') {
+    const idadeMin = v.ultima_posicao_em ? (Date.now() - new Date(v.ultima_posicao_em).getTime()) / 60000 : Infinity;
+    if (idadeMin > POSICAO_RECENTE_MIN) {
+      return recusar(`Última posição tem mais de ${POSICAO_RECENTE_MIN} min — sem como garantir que o veículo está parado. Aguarde o rastreador comunicar ou ligue para a central.`);
+    }
+    if (Number(v.ultima_velocidade || 0) > VELOCIDADE_MAX_BLOQUEIO) {
+      return recusar(`Veículo a ${v.ultima_velocidade} km/h. Por segurança o bloqueio só é enviado abaixo de ${VELOCIDADE_MAX_BLOQUEIO} km/h.`);
+    }
+  }
+  if (!traccarConfigurado()) return recusar('Servidor de rastreio ainda não configurado.', 503);
+
+  try {
+    let deviceId = v.traccar_device_id as number | null;
+    if (!deviceId) {
+      deviceId = await garantirDispositivoTraccar(v.imei, v.placa);
+      await db.from('rastreio_veiculos').update({ traccar_device_id: deviceId }).eq('id', v.id);
+    }
+    const { naFila } = await enviarComandoTraccar(deviceId, p.tipo);
+    const mensagem = naFila ? 'Aparelho sem sinal agora: o comando fica na fila e executa quando ele comunicar.' : 'Comando entregue ao aparelho.';
+    await log('enviado', mensagem);
+    await db.from('rastreio_veiculos').update({ bloqueado: p.tipo === 'bloquear' }).eq('id', v.id);
+    await db.from('rastreio_eventos').insert({
+      empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'comando', lido: p.autor.origem === 'painel',
+      mensagem: `${v.placa}: ${p.tipo === 'bloquear' ? 'BLOQUEIO' : 'desbloqueio'} enviado por ${p.autor.nome}${p.autor.origem === 'app' ? ' (app do cliente)' : ''} — ${motivo}`,
+      lat: v.ultima_lat, lng: v.ultima_lng,
+    });
+    return { ok: true, naFila, mensagem };
+  } catch (err) {
+    const msg = (err as Error).message;
+    await log('erro', msg);
+    return { ok: false, erro: `Falha ao enviar: ${msg}`, status: 502 };
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone, Smartphone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, fmtMoeda, mascaraPlaca, mascaraDocumento, apiRastreio,
@@ -162,6 +162,27 @@ export default function RastreioClientesPage() {
     }
   };
 
+  // Link de uso único do app do cliente (/meu-rastreio), mandado pelo WhatsApp do instalador.
+  const [gerandoAcesso, setGerandoAcesso] = useState<string | null>(null);
+  const enviarAcesso = async (c: ClienteRastreio) => {
+    setGerandoAcesso(c.id);
+    try {
+      const r = await apiRastreio('convite', { clienteId: c.id });
+      const texto = `Olá, ${c.nome.split(' ')[0]}! Aqui está o seu acesso ao app de rastreamento do seu veículo. Toque no link para entrar (vale por ${r.validadeDias} dias e só uma vez):
+${r.link}
+
+Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
+      const fone = String(c.telefone || '').replace(/\D/g, '');
+      if (fone) window.open(`https://wa.me/${fone.length <= 11 ? `55${fone}` : fone}?text=${encodeURIComponent(texto)}`, '_blank');
+      else { await navigator.clipboard?.writeText(texto).catch(() => null); }
+      setAviso(fone ? 'WhatsApp aberto com o link de acesso.' : 'Cliente sem telefone: o link de acesso foi copiado — cole onde quiser enviar.');
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setGerandoAcesso(null);
+    }
+  };
+
   const desativarVeiculo = async (v: Veiculo) => {
     if (!confirm(`Desativar ${v.placa}? O rastreador para de aparecer no mapa (o histórico fica guardado).`)) return;
     await supabase.from('rastreio_veiculos').update({ status: 'inativo' }).eq('id', v.id);
@@ -218,6 +239,9 @@ export default function RastreioClientesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-[#22C55E]">{fmtMoeda(c.mensalidade)}/mês</span>
+                  <button onClick={() => enviarAcesso(c)} disabled={gerandoAcesso === c.id || c.status === 'cancelado'} className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-[10px] font-black uppercase inline-flex items-center gap-1 disabled:opacity-40" title="Manda pelo WhatsApp o link para o cliente entrar no app">
+                    {gerandoAcesso === c.id ? <Loader2 size={12} className="animate-spin" /> : <Smartphone size={12} />} Acesso ao app
+                  </button>
                   <button onClick={() => abrirCliente(c)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10" title="Editar cliente"><Pencil size={13} /></button>
                   <button onClick={() => abrirInstalacao(c.id)} className="px-3 py-2 rounded-lg bg-sky-400/10 text-sky-300 hover:bg-sky-400/20 text-[10px] font-black uppercase inline-flex items-center gap-1"><Plus size={12} /> Veículo</button>
                 </div>

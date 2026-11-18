@@ -128,6 +128,10 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
         ultima_posicao_em: quando, ultima_comunicacao_em: agora,
         ...(!v.traccar_device_id && corpo.device?.id ? { traccar_device_id: corpo.device.id } : {}),
       }).eq('id', v.id);
+      if (!corpo.event) {
+        const cercas = await verificarCercas(db, v, pos.latitude, pos.longitude, quando);
+        if (cercas) feito.push(cercas);
+      }
     }
   } else {
     await db.from('rastreio_veiculos').update({ ultima_comunicacao_em: agora }).eq('id', v.id);
@@ -145,6 +149,53 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
     }
   }
   return `${v.placa}: ${feito.join(', ') || 'comunicação'}`;
+}
+
+/** Cercas virtuais (círculos) do veículo: avisa só quando troca de dentro↔fora. */
+async function verificarCercas(
+  db: SupabaseClient, v: { id: string; empresa_id: string; placa: string }, lat: number, lng: number, quando: string,
+): Promise<string | null> {
+  const { data: cercas, error } = await db.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, dentro')
+    .eq('veiculo_id', v.id).eq('ativo', true).limit(50);
+  if (error || !cercas?.length) return null;
+  const avisos: string[] = [];
+  for (const c of cercas) {
+    const dentro = distanciaMetros(lat, lng, c.lat, c.lng) <= c.raio_m;
+    if (c.dentro === dentro) continue;
+    await db.from('rastreio_cercas').update({ dentro }).eq('id', c.id);
+    if (c.dentro === null) continue; // primeira leitura: só registra o estado
+    await db.from('rastreio_eventos').insert({
+      empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'cerca',
+      mensagem: `${v.placa}: ${dentro ? 'entrou em' : 'saiu de'} ${c.nome}`, lat, lng, ocorrido_em: quando,
+    });
+    avisos.push(`cerca ${c.nome}`);
+  }
+  return avisos.join(', ') || null;
+}
+
+export function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const r = Math.PI / 180;
+  const h = Math.sin((lat2 - lat1) * r / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lng2 - lng1) * r / 2) ** 2;
+  return 12742000 * Math.asin(Math.sqrt(h));
+}
+
+/** Situação do aparelho no Traccar (status, última conexão, protocolo) — para o diagnóstico. */
+export async function diagnosticoTraccar(imei: string) {
+  const busca = await traccar('GET', `/devices?uniqueId=${encodeURIComponent(imei)}`);
+  const d = Array.isArray(busca.dados) ? busca.dados[0] : null;
+  if (!d) return { cadastrado: false as const };
+  let posicao: { protocol?: string; fixTime?: string; valid?: boolean; attributes?: Record<string, unknown> } | null = null;
+  if (d.positionId) {
+    const p = await traccar('GET', `/positions?id=${d.positionId}`).catch(() => null);
+    posicao = Array.isArray(p?.dados) ? p.dados[0] : null;
+  }
+  return {
+    cadastrado: true as const, deviceId: d.id as number, status: String(d.status || 'unknown'),
+    ultimaConexao: (d.lastUpdate as string | null) || null,
+    protocolo: posicao?.protocol || null, ultimoGps: posicao?.fixTime || null, gpsValido: posicao?.valid ?? null,
+    satelites: posicao?.attributes?.sat != null ? Number(posicao.attributes.sat) : null,
+    sinal: posicao?.attributes?.rssi != null ? Number(posicao.attributes.rssi) : null,
+  };
 }
 
 /** Usuário logado (Bearer do Supabase) com empresa e cargo — para as rotas do módulo. */

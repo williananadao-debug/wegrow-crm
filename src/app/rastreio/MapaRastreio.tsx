@@ -1,11 +1,15 @@
 "use client";
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { situacao, SITUACAO_INFO, type Veiculo } from './shared';
 
 export type PontoTrajeto = { lat: number; lng: number; velocidade?: number | null; registrado_em?: string };
+export type CercaMapa = { id: string; nome: string; lat: number; lng: number; raio_m: number; ativo?: boolean };
+export type ParadaMapa = { lat: number; lng: number; ini: string; minutos: number };
+
+const hora = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 // Seta girada pelo curso quando anda; bolinha quando parado. Cadeado vermelho se bloqueado.
 function iconeVeiculo(v: Veiculo, selecionado: boolean) {
@@ -25,6 +29,18 @@ function iconeVeiculo(v: Veiculo, selecionado: boolean) {
   });
 }
 
+const iconeInicio = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid #38BDF8"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+const iconeParada = (n: number) => L.divIcon({
+  className: '',
+  html: `<div style="width:22px;height:22px;border-radius:50%;background:#F59E0B;color:#0B1120;font:900 11px system-ui;display:flex;align-items:center;justify-content:center;border:2px solid #0B1120">${n}</div>`,
+  iconSize: [22, 22], iconAnchor: [11, 11],
+});
+const iconeReplay = L.divIcon({
+  className: '',
+  html: '<div style="width:20px;height:20px;border-radius:50%;background:#fff;border:4px solid #22C55E;box-shadow:0 0 0 6px rgba(34,197,94,.25)"></div>',
+  iconSize: [20, 20], iconAnchor: [10, 10],
+});
+
 function Enquadrar({ pontos, chave }: { pontos: [number, number][]; chave: string }) {
   const map = useMap();
   useEffect(() => {
@@ -37,9 +53,31 @@ function Enquadrar({ pontos, chave }: { pontos: [number, number][]; chave: strin
   return null;
 }
 
-export default function MapaRastreio({ veiculos, selecionadoId, onSelecionar, trajeto, altura = 'h-[55vh] min-h-[320px]', chaveEnquadrar }: {
+function Clique({ onClick }: { onClick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click: e => onClick(e.latlng.lat, e.latlng.lng) });
+  return null;
+}
+
+// Trajeto em trechos: vermelho onde passou do limite de velocidade.
+function trechos(p: PontoTrajeto[], limite: number | null | undefined) {
+  const out: { cor: string; pts: [number, number][] }[] = [];
+  for (let i = 1; i < p.length; i++) {
+    const cor = limite && Number(p[i].velocidade || 0) > limite ? '#EF4444' : '#38BDF8';
+    const ult = out[out.length - 1];
+    if (ult && ult.cor === cor) ult.pts.push([p[i].lat, p[i].lng]);
+    else out.push({ cor, pts: [[p[i - 1].lat, p[i - 1].lng], [p[i].lat, p[i].lng]] });
+  }
+  return out;
+}
+
+export default function MapaRastreio({
+  veiculos, selecionadoId, onSelecionar, trajeto, altura = 'h-[55vh] min-h-[320px]', chaveEnquadrar,
+  limiteVelocidade, paradas, cercas, replay, onClickMapa,
+}: {
   veiculos: Veiculo[]; selecionadoId?: string | null; onSelecionar?: (id: string) => void;
   trajeto?: PontoTrajeto[]; altura?: string; chaveEnquadrar: string;
+  limiteVelocidade?: number | null; paradas?: ParadaMapa[]; cercas?: CercaMapa[];
+  replay?: PontoTrajeto | null; onClickMapa?: (lat: number, lng: number) => void;
 }) {
   const comPosicao = veiculos.filter(v => v.ultima_lat != null && v.ultima_lng != null);
   const linha: [number, number][] = (trajeto || []).map(p => [p.lat, p.lng]);
@@ -47,17 +85,36 @@ export default function MapaRastreio({ veiculos, selecionadoId, onSelecionar, tr
   const centro: [number, number] = pontos[0] || [-25.4284, -49.2733]; // Curitiba
 
   return (
-    <div className={`${altura} rounded-2xl overflow-hidden border border-white/10 relative z-0`}>
+    <div className={`${altura} rounded-2xl overflow-hidden border border-white/10 relative z-0 ${onClickMapa ? 'cursor-crosshair' : ''}`}>
       <MapContainer center={centro} zoom={pontos.length ? 13 : 11} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
         <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <Enquadrar pontos={pontos} chave={chaveEnquadrar} />
-        {linha.length > 1 && <Polyline positions={linha} pathOptions={{ color: '#38BDF8', weight: 4, opacity: 0.85 }} />}
+        {onClickMapa && <Clique onClick={onClickMapa} />}
+        {(cercas || []).map(c => (
+          <Circle key={c.id} center={[c.lat, c.lng]} radius={c.raio_m}
+            pathOptions={{ color: c.ativo === false ? '#64748B' : '#A78BFA', weight: 2, fillOpacity: 0.08, dashArray: c.ativo === false ? '6 6' : undefined }}>
+            <Tooltip>Cerca: {c.nome} ({c.raio_m >= 1000 ? `${(c.raio_m / 1000).toFixed(1)} km` : `${c.raio_m} m`})</Tooltip>
+          </Circle>
+        ))}
+        {linha.length > 1 && trechos(trajeto!, limiteVelocidade).map((t, i) => (
+          <Polyline key={i} positions={t.pts} pathOptions={{ color: t.cor, weight: 4, opacity: 0.85 }} />
+        ))}
         {linha.length > 1 && (
-          <Marker position={linha[0]} icon={L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid #38BDF8"></div>', iconSize: [14, 14], iconAnchor: [7, 7] })}>
-            <Tooltip>Início do trajeto{trajeto?.[0]?.registrado_em ? ` · ${new Date(trajeto[0].registrado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</Tooltip>
+          <Marker position={linha[0]} icon={iconeInicio}>
+            <Tooltip>Início do trajeto{trajeto?.[0]?.registrado_em ? ` · ${hora(trajeto[0].registrado_em)}` : ''}</Tooltip>
           </Marker>
         )}
-        {comPosicao.map(v => (
+        {(paradas || []).map((p, i) => (
+          <Marker key={`p${i}`} position={[p.lat, p.lng]} icon={iconeParada(i + 1)}>
+            <Tooltip>Parada {i + 1} · {hora(p.ini)} · {p.minutos} min</Tooltip>
+          </Marker>
+        ))}
+        {replay && (
+          <Marker position={[replay.lat, replay.lng]} icon={iconeReplay} zIndexOffset={1000}>
+            <Tooltip permanent direction="top" offset={[0, -12]}>{hora(replay.registrado_em)} · {Math.round(Number(replay.velocidade || 0))} km/h</Tooltip>
+          </Marker>
+        )}
+        {!replay && comPosicao.map(v => (
           <Marker key={v.id} position={[v.ultima_lat!, v.ultima_lng!]} icon={iconeVeiculo(v, v.id === selecionadoId)}
             eventHandlers={onSelecionar ? { click: () => onSelecionar(v.id) } : undefined}>
             <Tooltip direction="top" offset={[0, -14]}>

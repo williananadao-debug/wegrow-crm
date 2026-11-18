@@ -78,3 +78,19 @@ export function conferePin(pin: string, guardado: string | null) {
   return esperado.length === calc.length && timingSafeEqual(calc, esperado);
 }
 export const pinValido = (pin: unknown) => typeof pin === 'string' && /^\d{4,6}$/.test(pin);
+
+// Link de localização ao vivo (família, polícia, seguradora). Expira sozinho; só o hash fica no banco.
+export const HORAS_COMPARTILHAR = [1, 8, 24, 72] as const;
+
+export async function criarCompartilhamento(
+  db: SupabaseClient, p: { empresaId: string; veiculoId: string; horas: number; criadoPor: string; origem: 'painel' | 'app' },
+) {
+  const horas = (HORAS_COMPARTILHAR as readonly number[]).includes(p.horas) ? p.horas : 1;
+  const token = novoToken();
+  const expira = new Date(Date.now() + horas * 3600_000).toISOString();
+  const { error } = await db.from('rastreio_compartilhamentos').insert({
+    empresa_id: p.empresaId, veiculo_id: p.veiculoId, token_hash: hashToken(token), expira_em: expira, criado_por: p.criadoPor, origem: p.origem,
+  });
+  if (error) throw new Error('Não foi possível criar o link agora.');
+  return { token, expira };
+}

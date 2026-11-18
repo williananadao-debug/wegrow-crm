@@ -2,13 +2,16 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil, Play, Pause, Share2, ParkingCircle, Timer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, apiRastreio,
   type Veiculo, type Evento,
 } from '../../shared';
 import type { PontoTrajeto } from '../../MapaRastreio';
+import { analisarTrajeto, fmtDuracao } from '../../analise';
+import Instalacao from './Instalacao';
+import Cercas, { type Cerca } from './Cercas';
 
 const MapaRastreio = dynamic(() => import('../../MapaRastreio'), { ssr: false });
 
@@ -16,16 +19,8 @@ type Comando = { id: number; tipo: string; status: string; motivo: string | null
 
 const hojeISO = () => new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD no fuso local
 
-// Distância total do trajeto (haversine), em km.
-function kmTrajeto(p: PontoTrajeto[]) {
-  let total = 0;
-  for (let i = 1; i < p.length; i++) {
-    const r = Math.PI / 180, a = p[i - 1], b = p[i];
-    const h = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
-    total += 12742 * Math.asin(Math.sqrt(h));
-  }
-  return total;
-}
+const VELOCIDADES_REPLAY = [1, 5, 20];
+const HORAS_LINK = [1, 8, 24, 72];
 
 export default function VeiculoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -43,6 +38,14 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
   const [motivo, setMotivo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [cercas, setCercas] = useState<Cerca[]>([]);
+  const [escolhendoCerca, setEscolhendoCerca] = useState(false);
+  const [pontoCerca, setPontoCerca] = useState<{ lat: number; lng: number } | null>(null);
+  const [replayIdx, setReplayIdx] = useState<number | null>(null);
+  const [tocando, setTocando] = useState(false);
+  const [velReplay, setVelReplay] = useState(5);
+  const [modalLink, setModalLink] = useState(false);
+  const [gerandoLink, setGerandoLink] = useState(false);
 
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('rastreio_veiculos').select(COLUNAS_VEICULO).eq('id', id).maybeSingle();
@@ -60,6 +63,13 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
     setComandos((cm as Comando[]) || []);
   }, [id]);
 
+  const carregarCercas = useCallback(async () => {
+    const { data } = await supabase.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, ativo, dentro').eq('veiculo_id', id).order('created_at');
+    setCercas((data as Cerca[]) || []);
+  }, [id]);
+
+  useEffect(() => { void Promise.resolve().then(carregarCercas); }, [carregarCercas]);
+
   useEffect(() => {
     carregar().then(d => {
       if (d?.cliente_id) supabase.from('rastreio_clientes').select('nome, telefone').eq('id', d.cliente_id).maybeSingle().then(({ data }) => setCliente(data));
@@ -76,8 +86,38 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
     supabase.from('rastreio_posicoes').select('lat, lng, velocidade, registrado_em')
       .eq('veiculo_id', id).gte('registrado_em', ini.toISOString()).lte('registrado_em', fim.toISOString())
       .order('registrado_em').limit(5000)
-      .then(({ data }) => { setTrajeto((data as PontoTrajeto[]) || []); setCarregandoTrajeto(false); });
+      .then(({ data }) => { setTrajeto((data as PontoTrajeto[]) || []); setCarregandoTrajeto(false); setReplayIdx(null); setTocando(false); });
   }, [id, dia]);
+
+  // Replay: anda pelos pontos do dia; a velocidade escolhida é quantos pontos por passo.
+  useEffect(() => {
+    if (!tocando) return;
+    const t = setInterval(() => {
+      setReplayIdx(i => {
+        const prox = (i ?? 0) + velReplay;
+        if (prox >= trajeto.length - 1) { setTocando(false); return trajeto.length - 1; }
+        return prox;
+      });
+    }, 250);
+    return () => clearInterval(t);
+  }, [tocando, velReplay, trajeto.length]);
+
+  const gerarLink = async (horas: number) => {
+    if (!v) return;
+    setGerandoLink(true);
+    try {
+      const r = await apiRastreio('compartilhar', { veiculoId: v.id, horas });
+      const texto = `Localização ao vivo do veículo ${v.placa} (vale ${horas} h)`;
+      setModalLink(false);
+      if (navigator.share) await navigator.share({ title: v.placa, text: texto, url: r.link }).catch(() => null);
+      else {
+        await navigator.clipboard.writeText(r.link).catch(() => null);
+        setAviso({ ok: true, texto: `Link copiado (vale ${horas} h): ${r.link}` });
+      }
+    } catch (err) {
+      setAviso({ ok: false, texto: (err as Error).message });
+    } finally { setGerandoLink(false); }
+  };
 
   const enviarComando = async () => {
     if (!modal || !v) return;
@@ -101,8 +141,10 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
   if (!temRastreio || !v) return <div className="p-8 text-slate-400 text-sm">Veículo não encontrado. <Link href="/rastreio" className="text-sky-400 underline">Voltar</Link></div>;
 
   const s = situacao(v);
-  const km = kmTrajeto(trajeto);
-  const velMax = trajeto.reduce((m, p) => Math.max(m, Number(p.velocidade || 0)), 0);
+  const an = analisarTrajeto(trajeto);
+  const km = an.km;
+  const velMax = an.velMax;
+  const pontoReplay = replayIdx != null ? trajeto[replayIdx] : null;
 
   return (
     <div className="md:p-8 pb-20 text-white">
@@ -116,6 +158,7 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
         <div className="flex flex-wrap gap-2 items-center">
           <span className={`text-[11px] font-black uppercase px-3 py-1.5 rounded-full border ${SITUACAO_INFO[s].classe}`}>{SITUACAO_INFO[s].label}</span>
           {v.bloqueado && <span className="text-[11px] font-black uppercase px-3 py-1.5 rounded-full border text-red-400 bg-red-500/10 border-red-500/30 inline-flex items-center gap-1"><Lock size={12} /> Bloqueado</span>}
+          <button onClick={() => setModalLink(true)} className="inline-flex items-center gap-1 text-[11px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10 text-slate-300 hover:bg-white/5"><Share2 size={12} /> Link ao vivo</button>
           <Link href={`/rastreio/clientes?veiculo=${v.id}`} className="inline-flex items-center gap-1 text-[11px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10 text-slate-300 hover:bg-white/5"><Pencil size={12} /> Editar</Link>
         </div>
       </header>
@@ -144,10 +187,61 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
               <a href={linkMapa(v.ultima_lat, v.ultima_lng!)} target="_blank" rel="noreferrer" className="ml-auto text-[11px] font-black uppercase text-sky-400 hover:underline inline-flex items-center gap-1">Abrir no Google Maps <ExternalLink size={11} /></a>
             )}
           </div>
-          <MapaRastreio veiculos={[v]} selecionadoId={v.id} trajeto={trajeto} chaveEnquadrar={`${dia}|${trajeto.length > 0}`} altura="h-[55vh] min-h-[320px]" />
+          <MapaRastreio veiculos={[v]} selecionadoId={v.id} trajeto={trajeto} chaveEnquadrar={`${dia}|${trajeto.length > 0}`} altura="h-[55vh] min-h-[320px]"
+            limiteVelocidade={v.limite_velocidade} paradas={an.paradas} cercas={cercas} replay={pontoReplay}
+            onClickMapa={escolhendoCerca ? (lat, lng) => { setPontoCerca({ lat, lng }); setEscolhendoCerca(false); } : undefined} />
+
+          {trajeto.length > 1 && (
+            <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-3 flex flex-wrap items-center gap-3">
+              <button onClick={() => { if (replayIdx == null || replayIdx >= trajeto.length - 1) setReplayIdx(0); setTocando(t => !t); }}
+                className="w-10 h-10 shrink-0 rounded-full bg-emerald-500 text-[#0B1120] flex items-center justify-center" title={tocando ? 'Pausar' : 'Reproduzir o dia'}>
+                {tocando ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+              </button>
+              <input type="range" min={0} max={trajeto.length - 1} value={replayIdx ?? 0}
+                onChange={e => { setTocando(false); setReplayIdx(Number(e.target.value)); }} className="flex-1 min-w-[120px] accent-emerald-500" />
+              <span className="text-xs text-slate-300 text-right tabular-nums">{pontoReplay ? `${fmtHora(pontoReplay.registrado_em!)} · ${Math.round(Number(pontoReplay.velocidade || 0))} km/h` : 'Replay do dia'}</span>
+              <div className="flex gap-1">
+                {VELOCIDADES_REPLAY.map(x => (
+                  <button key={x} onClick={() => setVelReplay(x)} className={`px-2 py-1 rounded-md text-[10px] font-black ${velReplay === x ? 'bg-white/15 text-white' : 'text-slate-500'}`}>{x}x</button>
+                ))}
+              </div>
+              {replayIdx != null && <button onClick={() => { setTocando(false); setReplayIdx(null); }} className="text-[10px] font-black uppercase text-slate-500 hover:text-white">sair</button>}
+            </div>
+          )}
+
+          {trajeto.length > 1 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Info icone={<Route size={14} />} label="Rodou" valor={`${km.toFixed(1)} km`} />
+              <Info icone={<Timer size={14} />} label="Em movimento" valor={fmtDuracao(an.minutosMovimento)} />
+              <Info icone={<ParkingCircle size={14} />} label="Paradas" valor={String(an.paradas.length)} />
+              <Info icone={<Gauge size={14} />} label="Máxima" valor={`${Math.round(velMax)} km/h`} destaque={v.limite_velocidade && velMax > v.limite_velocidade ? 'text-red-400' : undefined} />
+            </div>
+          )}
+
+          {(an.viagens.length > 0 || an.paradas.length > 0) && (
+            <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Linha do tempo do dia</p>
+              <ul className="text-xs divide-y divide-white/5">
+                {[
+                  ...an.viagens.map(x => ({ t: x.ini, el: (
+                    <button onClick={() => { setTocando(false); setReplayIdx(x.iIni); }} className="w-full py-2 flex items-center gap-2 text-left hover:bg-white/[0.02]">
+                      <Route size={13} className="text-sky-400 shrink-0" />
+                      <span className="flex-1"><b className="text-slate-200">Viagem</b> <span className="text-slate-400">{fmtHora(x.ini)}–{fmtHora(x.fim)} · {x.km.toFixed(1)} km · {fmtDuracao(x.minutos)} · máx {Math.round(x.velMax)} km/h</span></span>
+                    </button>) })),
+                  ...an.paradas.map((x, i) => ({ t: x.ini, el: (
+                    <a href={linkMapa(x.lat, x.lng)} target="_blank" rel="noreferrer" className="py-2 flex items-center gap-2 hover:bg-white/[0.02]">
+                      <span className="w-5 h-5 rounded-full bg-amber-500 text-[#0B1120] text-[10px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                      <span className="flex-1"><b className="text-slate-200">Parada</b> <span className="text-slate-400">{fmtHora(x.ini)}–{fmtHora(x.fim)} · {fmtDuracao(x.minutos)}</span></span>
+                      <ExternalLink size={11} className="text-slate-500" />
+                    </a>) })),
+                ].sort((a, b) => a.t.localeCompare(b.t)).map((x, i) => <li key={i}>{x.el}</li>)}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
+          <Instalacao v={v} />
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Lock size={13} /> Bloqueio</p>
             {!v.tem_bloqueio ? (
@@ -176,6 +270,8 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
             )}
           </div>
 
+          <Cercas v={v} cercas={cercas} onMudou={carregarCercas} escolhendo={escolhendoCerca} setEscolhendo={setEscolhendoCerca} ponto={pontoCerca} setPonto={setPontoCerca} />
+
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><History size={13} /> Eventos</p>
             {eventos.length === 0 ? <p className="text-xs text-slate-500">Nenhum evento ainda.</p> : (
@@ -201,6 +297,23 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
           </div>
         </div>
       </div>
+
+      {modalLink && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !gerandoLink && setModalLink(false)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-black uppercase mb-1 flex items-center gap-2"><Share2 size={18} /> Localização ao vivo</h2>
+            <p className="text-sm text-slate-400 mb-4">Gera um link que mostra só a posição atual do {v.placa}, atualizando sozinho. Serve para família, polícia ou seguradora. Expira no prazo escolhido.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {HORAS_LINK.map(h => (
+                <button key={h} onClick={() => gerarLink(h)} disabled={gerandoLink} className="bg-white/5 border border-white/10 rounded-xl py-3 font-black text-sm hover:bg-white/10 disabled:opacity-40">
+                  {h < 24 ? `${h} hora${h > 1 ? 's' : ''}` : `${h / 24} dia${h > 24 ? 's' : ''}`}
+                </button>
+              ))}
+            </div>
+            {gerandoLink && <p className="text-xs text-slate-400 mt-3 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> gerando…</p>}
+          </div>
+        </div>
+      )}
 
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !enviando && setModal(null)}>

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { Loader2, Navigation, Bell, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X } from 'lucide-react';
 import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, type Veiculo } from '../rastreio/shared';
 import type { PontoTrajeto } from '../rastreio/MapaRastreio';
+import { analisarTrajeto, fmtDuracao } from '../rastreio/analise';
 
 const MapaRastreio = dynamic(() => import('../rastreio/MapaRastreio'), { ssr: false });
 
@@ -33,7 +34,7 @@ export default function MeuRastreioPage() {
   const [dia, setDia] = useState(hojeISO());
   const [trajeto, setTrajeto] = useState<PontoTrajeto[]>([]);
   const [carregandoTrajeto, setCarregandoTrajeto] = useState(false);
-  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin'>(null);
+  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin' | 'compartilhar'>(null);
   const [motivo, setMotivo] = useState(0);
   const [pin, setPin] = useState('');
   const [pinNovo, setPinNovo] = useState('');
@@ -74,10 +75,19 @@ export default function MeuRastreioPage() {
     try { localStorage.setItem('rastreio_alertas_vistos', String(maior)); } catch { /* sem storage */ }
   };
 
-  const compartilhar = async () => {
+  // Link ao vivo (atualiza sozinho e expira). Se o servidor falhar, cai no link fixo do Google Maps.
+  const compartilhar = async (horas: number) => {
     if (!veiculo?.ultima_lat) return;
-    const url = linkMapa(veiculo.ultima_lat, veiculo.ultima_lng!);
-    const texto = `Localização do veículo ${veiculo.placa} (${haQuanto(veiculo.ultima_posicao_em)})`;
+    setEnviando(true);
+    let url = linkMapa(veiculo.ultima_lat, veiculo.ultima_lng!);
+    let texto = `Localização do veículo ${veiculo.placa} (${haQuanto(veiculo.ultima_posicao_em)})`;
+    try {
+      const r = await post('compartilhar', { veiculoId: veiculo.id, horas });
+      url = r.link;
+      texto = `Acompanhe o veículo ${veiculo.placa} ao vivo (link vale ${horas < 24 ? `${horas} h` : `${horas / 24} dia${horas > 24 ? 's' : ''}`})`;
+    } catch { /* usa o link fixo */ }
+    setEnviando(false);
+    setModal(null);
     try {
       if (navigator.share) await navigator.share({ title: veiculo.placa, text: texto, url });
       else window.open(`https://wa.me/?text=${encodeURIComponent(`${texto}: ${url}`)}`, '_blank');
@@ -128,13 +138,9 @@ export default function MeuRastreioPage() {
 
   const cor = dados.empresa.cor || '#38BDF8';
   const s = veiculo ? situacao(veiculo) : 'sem_sinal';
-  const km = trajeto.reduce((t, p, i) => {
-    if (!i) return 0;
-    const a = trajeto[i - 1], r = Math.PI / 180;
-    const h = Math.sin((p.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(p.lat * r) * Math.sin((p.lng - a.lng) * r / 2) ** 2;
-    return t + 12742 * Math.asin(Math.sqrt(h));
-  }, 0);
-  const velMax = trajeto.reduce((m, p) => Math.max(m, Number(p.velocidade || 0)), 0);
+  const an = analisarTrajeto(trajeto);
+  const km = an.km;
+  const velMax = an.velMax;
 
   return (
     <main className="min-h-[100dvh] bg-[#0B1120] text-white flex flex-col max-w-lg mx-auto" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -210,7 +216,7 @@ export default function MeuRastreioPage() {
                   {veiculo.tem_bloqueio && (veiculo.bloqueado
                     ? <button onClick={() => { setModal('desbloquear'); setPin(''); setMsg(null); }} className="min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2"><Unlock size={18} /> Desbloquear</button>
                     : <button onClick={() => { setModal('bloquear'); setPin(''); setMotivo(0); setMsg(null); }} className="min-h-14 rounded-2xl bg-red-600 font-black uppercase text-sm flex items-center justify-center gap-2"><Lock size={18} /> Bloquear</button>)}
-                  <button onClick={compartilhar} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
+                  <button onClick={() => { setModal('compartilhar'); setMsg(null); }} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
                 </div>
               </>
             )}
@@ -222,12 +228,29 @@ export default function MeuRastreioPage() {
                   <input type="date" value={dia} max={hojeISO()} onChange={e => setDia(e.target.value || hojeISO())}
                     className="min-h-11 bg-white/[0.03] border border-white/10 rounded-xl px-3 text-sm text-white [color-scheme:dark]" />
                 </div>
-                <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} trajeto={trajeto} chaveEnquadrar={`${veiculo.id}|${dia}|${trajeto.length > 0}`} altura="h-[42vh] min-h-[260px]" />
-                <section aria-label="Resumo do dia" className="grid grid-cols-3 gap-2">
+                <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} trajeto={trajeto} paradas={an.paradas} chaveEnquadrar={`${veiculo.id}|${dia}|${trajeto.length > 0}`} altura="h-[42vh] min-h-[260px]" />
+                <section aria-label="Resumo do dia" className="grid grid-cols-2 gap-2">
                   <Caixa titulo="Rodou" valor={carregandoTrajeto ? '…' : `${km.toFixed(1)} km`} />
                   <Caixa titulo="Máxima" valor={carregandoTrajeto ? '…' : `${Math.round(velMax)} km/h`} />
+                  <Caixa titulo="Em movimento" valor={carregandoTrajeto ? '…' : fmtDuracao(an.minutosMovimento)} />
                   <Caixa titulo="Período" valor={trajeto.length ? `${fmtHora(trajeto[0].registrado_em!)}–${fmtHora(trajeto[trajeto.length - 1].registrado_em!)}` : '—'} />
                 </section>
+                {an.paradas.length > 0 && (
+                  <section aria-label="Paradas" className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Paradas ({an.paradas.length})</p>
+                    <ol className="divide-y divide-white/5 text-sm">
+                      {an.paradas.map((x, i) => (
+                        <li key={i}>
+                          <a href={linkMapa(x.lat, x.lng)} target="_blank" rel="noreferrer" className="min-h-11 flex items-center gap-3">
+                            <span className="w-6 h-6 rounded-full bg-amber-500 text-[#0B1120] text-xs font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                            <span className="flex-1">{fmtHora(x.ini)}–{fmtHora(x.fim)}</span>
+                            <span className="text-slate-400">{fmtDuracao(x.minutos)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
                 {!carregandoTrajeto && trajeto.length === 0 && <p className="text-center text-sm text-slate-400">Nenhum deslocamento nesse dia.</p>}
               </>
             )}
@@ -266,7 +289,20 @@ export default function MeuRastreioPage() {
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" onClick={() => !enviando && setModal(null)}>
           <div role="dialog" aria-modal="true" className="w-full max-w-lg bg-[#0F172A] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
-            {modal === 'pin' ? (
+            {modal === 'compartilhar' ? (
+              <>
+                <h2 className="text-xl font-black">Compartilhar localização ao vivo</h2>
+                <p className="text-sm text-slate-300">Quem receber o link vê só a posição atual do {veiculo?.placa}, atualizando sozinha, até o link expirar. Não dá acesso ao bloqueio nem ao histórico.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 8, 24].map(h => (
+                    <button key={h} onClick={() => compartilhar(h)} disabled={enviando} className="min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black disabled:opacity-40">
+                      {h < 24 ? `${h} h` : '1 dia'}
+                    </button>
+                  ))}
+                </div>
+                {enviando && <p className="text-sm text-slate-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> gerando link…</p>}
+              </>
+            ) : modal === 'pin' ? (
               <>
                 <h2 className="text-xl font-black">{dados.cliente.temPin ? 'Trocar PIN de bloqueio' : 'Criar PIN de bloqueio'}</h2>
                 <p className="text-sm text-slate-300">O PIN (4 a 6 números) é pedido sempre que você bloquear ou desbloquear o veículo.</p>

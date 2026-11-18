@@ -10,7 +10,18 @@ import { ServicoConfig, alertarEstoqueBaixoSeCruzou } from '../../shared';
 
 type Leitura = { id: string; nome: string; sku: string; ok: boolean; mensagem: string; hora: string; servicoId?: number; movimentoId?: number; desfeita?: boolean; quantidade?: number };
 type Linha = { servicoId: number; nome: string; sku: string; unidade: string; saldo: number; quantidade: number };
-type Comprovante = { codigo: string; data: string; solicitante: string; motivo: string; destino: string; observacao: string; linhas: (Linha & { saldoDepois: number })[] };
+type Comprovante = { codigo: string; data: string; solicitante: string; retiradoPor: string; motivo: string; destino: string; observacao: string; linhas: (Linha & { saldoDepois: number })[] };
+
+// Grava a saída já com "quem retirou". Se o banco ainda não tem a coluna (migration
+// 20261118100000 não rodou), grava sem ela e põe o nome na observação, assim a saída
+// nunca falha por causa do campo novo.
+async function inserirMovimentacoes(rows: Record<string, any>[]) {
+  const r = await supabase.from('estoque_movimentacoes').insert(rows).select('id');
+  if (!r.error || !/retirado_por/.test(r.error.message)) return r;
+  return supabase.from('estoque_movimentacoes').insert(rows.map(({ retirado_por, ...x }) => ({
+    ...x, observacao: retirado_por ? [x.observacao, `Retirado por: ${retirado_por}`].filter(Boolean).join(' · ') : x.observacao,
+  }))).select('id');
+}
 
 const MOTIVOS = [
   { v: 'producao', l: 'Uso em produção / obra' }, { v: 'uso_interno', l: 'Uso interno' }, { v: 'perda', l: 'Perda / quebra' },
@@ -50,6 +61,8 @@ export default function SaidaRapidaPage() {
   const [destino, setDestino] = useState('');
   const [producaoId, setProducaoId] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [retiradoPor, setRetiradoPor] = useState('');
+  const [pessoasRecentes, setPessoasRecentes] = useState<string[]>([]);
   const [producoes, setProducoes] = useState<{ id: number; produto_final_nome: string }[]>([]);
   const [comprovante, setComprovante] = useState<Comprovante | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -122,10 +135,22 @@ export default function SaidaRapidaPage() {
       supabase.from('servicos').select(`${COLUNAS_SERVICO}, localizacao`).not('estoque', 'is', null)
         .then(r => (r.error && /localizacao/.test(r.error.message) ? supabase.from('servicos').select(COLUNAS_SERVICO).not('estoque', 'is', null) : r)),
       supabase.from('pulse_producoes').select('id, produto_final_nome').eq('status', 'em_producao').order('created_at', { ascending: false }).limit(60),
-    ]).then(([s, p]) => {
+      // Nomes já usados em "Quem retirou" nos últimos 90 dias, pra sugerir e evitar
+      // "Fabricio" / "Fabrício" / "fabricio" virarem três pessoas na busca.
+      supabase.from('estoque_movimentacoes').select('retirado_por').not('retirado_por', 'is', null)
+        .gte('created_at', new Date(Date.now() - 90 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(500),
+    ]).then(([s, p, r]) => {
       if (s.data) setServicos(ordenarPorNome(s.data as ServicoConfig[]));
       if (s.error) setErro(`Erro ao carregar os produtos: ${s.error.message}`);
       if (p.data) setProducoes(p.data as { id: number; produto_final_nome: string }[]);
+      if (r.data) {
+        const vistos = new Map<string, string>();
+        for (const { retirado_por } of r.data as { retirado_por: string }[]) {
+          const k = retirado_por.trim().toLowerCase();
+          if (k && !vistos.has(k)) vistos.set(k, retirado_por.trim());
+        }
+        setPessoasRecentes(Array.from(vistos.values()).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      }
       setLoading(false);
     });
   }, [perfil?.empresa_id]);
@@ -173,10 +198,12 @@ export default function SaidaRapidaPage() {
     const novo = atual - qtd;
     setServicos(prev => prev.map(x => x.id === s.id ? { ...x, estoque: novo } : x));
     await supabase.from('servicos').update({ estoque: novo }).eq('id', s.id);
-    const { data: mov } = await supabase.from('estoque_movimentacoes').insert([{
+    const { data: movs } = await inserirMovimentacoes([{
       empresa_id: perfil?.empresa_id, servico_id: s.id, quantidade: -qtd, tipo: 'ajuste', motivo, destino: destino || null,
       producao_id: producaoId ? Number(producaoId) : null, user_id: user?.id, observacao: 'Saída via leitor de código de barras.',
-    }]).select('id').single();
+      retirado_por: retiradoPor.trim() || null,
+    }]);
+    const mov = movs?.[0];
     alertarEstoqueBaixoSeCruzou(s.id, atual, novo, s.estoque_minimo ?? 5);
     tocar(true);
     registrarLeitura({ nome: s.nome, sku, ok: true, mensagem: `Saída de ${qtd} registrada — estoque agora: ${novo}`, servicoId: s.id, movimentoId: mov?.id, quantidade: qtd });
@@ -254,10 +281,11 @@ export default function SaidaRapidaPage() {
       if (l.quantidade > atual) { falha = `${l.nome}: estoque mudou e agora só há ${atual}.`; break; }
       const novo = atual - l.quantidade;
       const e1 = await supabase.from('servicos').update({ estoque: novo }).eq('id', l.servicoId);
-      const e2 = await supabase.from('estoque_movimentacoes').insert([{
+      const e2 = await inserirMovimentacoes([{
         empresa_id: perfil.empresa_id, servico_id: l.servicoId, quantidade: -l.quantidade, tipo: 'ajuste', motivo, destino: destino.trim() || null,
         producao_id: producaoId ? Number(producaoId) : null, requisicao_id: reqId, user_id: user?.id,
         observacao: observacao.trim() || `Requisição ${reqId.slice(0, 8).toUpperCase()}`,
+        retirado_por: retiradoPor.trim() || null,
       }]);
       if (e1.error || e2.error) { falha = e1.error?.message || e2.error?.message || 'Erro ao gravar.'; break; }
       alertarEstoqueBaixoSeCruzou(l.servicoId, atual, novo, fresco?.estoque_minimo ?? 5);
@@ -269,19 +297,22 @@ export default function SaidaRapidaPage() {
     tocar(true);
     const prod = producoes.find(p => String(p.id) === producaoId);
     setComprovante({
-      codigo: reqId.slice(0, 8).toUpperCase(), data: new Date().toLocaleString('pt-BR'), solicitante: perfil?.nome || user?.email || '—',
+      codigo: reqId.slice(0, 8).toUpperCase(), data: new Date().toLocaleString('pt-BR'), solicitante: perfil?.nome || user?.email || '—', retiradoPor: retiradoPor.trim(),
       motivo: MOTIVO_LABEL[motivo] || motivo, destino: [destino.trim(), prod ? `Produção #${prod.id} — ${prod.produto_final_nome}` : ''].filter(Boolean).join(' · ') || '—',
       observacao: observacao.trim(), linhas: finais,
     });
-    setLinhas([]); setObservacao('');
+    const nome = retiradoPor.trim();
+    if (nome && !pessoasRecentes.some(p => p.toLowerCase() === nome.toLowerCase()))
+      setPessoasRecentes(prev => [...prev, nome].sort((a, b) => a.localeCompare(b, 'pt-BR')));
+    setLinhas([]); setObservacao(''); setRetiradoPor('');
   };
 
   const imprimir = (c: Comprovante) => {
     const w = window.open('', '_blank', 'width=720,height=800'); if (!w) return;
     w.document.write(`<html><head><title>Requisição ${c.codigo}</title><style>body{font-family:Arial;padding:28px;color:#111}h1{font-size:18px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}th,td{border-bottom:1px solid #ccc;padding:7px 4px;text-align:left}th:last-child,td:last-child,td:nth-child(3),th:nth-child(3){text-align:right}.m{font-size:12px;color:#555;line-height:1.6}.ass{margin-top:60px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11px;text-align:center}</style></head><body>
-      <h1>Requisição de material — ${c.codigo}</h1><div class="m">${c.data} · Solicitante: ${c.solicitante}<br>Motivo: ${c.motivo}<br>Destino: ${c.destino}${c.observacao ? `<br>Obs.: ${c.observacao}` : ''}</div>
+      <h1>Requisição de material — ${c.codigo}</h1><div class="m">${c.data} · Registrado por: ${c.solicitante}${c.retiradoPor ? `<br>Retirado por: <b>${c.retiradoPor}</b>` : ''}<br>Motivo: ${c.motivo}<br>Destino: ${c.destino}${c.observacao ? `<br>Obs.: ${c.observacao}` : ''}</div>
       <table><tr><th>Item</th><th>SKU</th><th>Qtd</th><th>Saldo após</th></tr>${c.linhas.map(l => `<tr><td>${l.nome}</td><td>${l.sku || '—'}</td><td>${l.quantidade} ${l.unidade}</td><td>${l.saldoDepois}</td></tr>`).join('')}</table>
-      <div class="ass"><div>Quem retirou</div><div>Almoxarifado</div></div></body></html>`);
+      <div class="ass"><div>Quem retirou${c.retiradoPor ? ` — ${c.retiradoPor}` : ''}</div><div>Almoxarifado</div></div></body></html>`);
     w.document.close(); w.focus(); w.print();
   };
 
@@ -387,6 +418,10 @@ export default function SaidaRapidaPage() {
           <div className="xl:col-span-2 space-y-5">
             <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-5 space-y-3">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Motivo e destino {modo === 'imediato' && <span className="text-slate-600 normal-case font-bold">(vale pra próxima leitura)</span>}</p>
+              <label className="block"><span className={lbl}>Quem retirou</span>
+                <input value={retiradoPor} onChange={e => setRetiradoPor(e.target.value)} list="pessoas-retirada" placeholder="Nome de quem está levando (ex: Fabrício)" className={inp} />
+                <datalist id="pessoas-retirada">{pessoasRecentes.map(p => <option key={p} value={p} />)}</datalist>
+              </label>
               <label className="block"><span className={lbl}>Motivo</span><select value={motivo} onChange={e => setMotivo(e.target.value)} className={inp}>{MOTIVOS.map(m => <option key={m.v} value={m.v} className="bg-[#0B1120]">{m.l}</option>)}</select></label>
               <label className="block"><span className={lbl}>Vincular a uma produção (opcional)</span>
                 <select value={producaoId} onChange={e => setProducaoId(e.target.value)} className={inp}><option value="" className="bg-[#0B1120]">Nenhuma</option>{producoes.map(p => <option key={p.id} value={p.id} className="bg-[#0B1120]">#{p.id} — {p.produto_final_nome}</option>)}</select></label>
@@ -402,7 +437,7 @@ export default function SaidaRapidaPage() {
             {comprovante && (
               <div className="bg-emerald-500/5 border border-emerald-500/30 rounded-3xl p-5">
                 <p className="text-emerald-300 font-black text-sm flex items-center gap-2"><CheckCircle2 size={16} /> Requisição {comprovante.codigo} registrada</p>
-                <p className="text-[11px] text-slate-400 mt-1">{comprovante.linhas.length} item(ns) · {comprovante.motivo} · {comprovante.destino}</p>
+                <p className="text-[11px] text-slate-400 mt-1">{comprovante.linhas.length} item(ns){comprovante.retiradoPor ? ` · retirado por ${comprovante.retiradoPor}` : ''} · {comprovante.motivo} · {comprovante.destino}</p>
                 <div className="flex gap-2 mt-3">
                   <button onClick={() => imprimir(comprovante)} className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-[11px] font-black uppercase flex items-center justify-center gap-1.5"><Printer size={13} /> Imprimir comprovante</button>
                   <button onClick={() => setComprovante(null)} className="px-3 rounded-xl bg-white/5 text-slate-400 hover:text-white"><XCircle size={15} /></button>

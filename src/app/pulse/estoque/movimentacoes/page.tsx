@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Loader2, Activity, ListTree, ArrowLeft, Filter, X, Search, TrendingUp, TrendingDown } from 'lucide-react';
+import { Loader2, Activity, ListTree, ArrowLeft, Filter, X, Search, TrendingUp, TrendingDown, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ordenarPorNome } from '@/lib/ordenacao';
 import { usePulseAccess } from '../../usePulseAccess';
@@ -13,7 +13,7 @@ type Movimentacao = {
   nf_numero: string | null; nf_serie: string | null; nf_chave_acesso: string | null;
   lead_id: number | null; destino?: string | null; requisicao_id?: string | null;
   created_at: string; tipo: string; motivo: string | null; observacao: string | null;
-  user_id: string | null;
+  user_id: string | null; retirado_por?: string | null;
 };
 
 const TIPO_LABEL: Record<string, { label: string; cor: string }> = {
@@ -34,8 +34,16 @@ const MOTIVO_LABEL: Record<string, string> = {
 };
 
 const PERIODOS = [
-  { id: '7d', label: '7 dias' }, { id: '30d', label: '30 dias' }, { id: '90d', label: '90 dias' }, { id: 'tudo', label: 'Tudo' },
+  { id: 'hoje', label: 'Hoje' }, { id: '7d', label: '7 dias' }, { id: '30d', label: '30 dias' }, { id: '90d', label: '90 dias' },
+  { id: 'tudo', label: 'Tudo' }, { id: 'datas', label: 'Escolher datas' },
 ] as const;
+
+const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const semAcento = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Quem levou o item. Saídas antigas (antes da coluna retirado_por) tinham o nome escrito no
+// Destino ou na Observação; a busca por pessoa olha os três pra não perder o histórico.
+const textoPessoa = (m: Movimentacao) => semAcento([m.retirado_por, m.destino, m.observacao].filter(Boolean).join(' '));
 
 export default function KardexPage() {
   const { authLoading, temPulse, perfil } = usePulseAccess();
@@ -49,31 +57,61 @@ export default function KardexPage() {
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [filtroUsuario, setFiltroUsuario] = useState<string>('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState<typeof PERIODOS[number]['id']>('30d');
+  const [dataDe, setDataDe] = useState(hojeISO);
+  const [dataAte, setDataAte] = useState(hojeISO);
   const [busca, setBusca] = useState('');
+  const [pessoa, setPessoa] = useState('');
   // Resumo de saídas agrupado — "por dia/mês/usuário/produto" que o Kardex (lista crua de
   // movimentações) não respondia sozinho, só linha a linha.
-  const [agrupamento, setAgrupamento] = useState<'usuario' | 'produto' | 'dia' | 'mes'>('usuario');
+  const [agrupamento, setAgrupamento] = useState<'pessoa' | 'usuario' | 'produto' | 'dia' | 'mes'>('pessoa');
 
   useEffect(() => {
     if (!perfil?.empresa_id) return;
-    setLoading(true);
     Promise.all([
       supabase.from('servicos').select('*').eq('empresa_id', perfil.empresa_id).order('nome'),
-      supabase.from('estoque_movimentacoes').select('*').eq('empresa_id', perfil.empresa_id).order('created_at', { ascending: false }).limit(1000),
       supabase.from('profiles').select('id, nome').eq('empresa_id', perfil.empresa_id),
-    ]).then(([resServicos, resMov, resUsuarios]) => {
+    ]).then(([resServicos, resUsuarios]) => {
       if (resServicos.data) setServicos(ordenarPorNome(resServicos.data as ServicoConfig[]));
-      if (resMov.data) setMovimentacoes(resMov.data as Movimentacao[]);
       if (resUsuarios.data) setUsuarios(resUsuarios.data as { id: string; nome: string }[]);
-      setLoading(false);
     });
   }, [perfil?.empresa_id]);
+
+  // Movimentações: só o período escolhido vem do banco (antes vinham as 1000 mais recentes de
+  // todos os tempos e o período era filtrado no navegador).
+  useEffect(() => {
+    if (!perfil?.empresa_id) return;
+    if (filtroPeriodo === 'datas' && (!dataDe || !dataAte)) return;
+    setLoading(true);
+    let q = supabase.from('estoque_movimentacoes').select('*').eq('empresa_id', perfil.empresa_id);
+    if (filtroPeriodo === 'datas') {
+      const [de, ate] = dataDe <= dataAte ? [dataDe, dataAte] : [dataAte, dataDe];
+      q = q.gte('created_at', new Date(de + 'T00:00:00').toISOString()).lte('created_at', new Date(ate + 'T23:59:59.999').toISOString());
+    } else if (filtroPeriodo === 'hoje') {
+      q = q.gte('created_at', new Date(hojeISO() + 'T00:00:00').toISOString());
+    } else if (filtroPeriodo !== 'tudo') {
+      q = q.gte('created_at', new Date(Date.now() - { '7d': 7, '30d': 30, '90d': 90 }[filtroPeriodo] * 86400000).toISOString());
+    }
+    let cancelado = false;
+    q.order('created_at', { ascending: false }).limit(1000).then(res => {
+      if (cancelado) return;
+      setMovimentacoes((res.data as Movimentacao[]) || []);
+      setLoading(false);
+    });
+    return () => { cancelado = true; };
+  }, [perfil?.empresa_id, filtroPeriodo, dataDe, dataAte]);
 
   const servicoPorId = useMemo(() => Object.fromEntries(servicos.map(s => [s.id, s])), [servicos]);
   const nomePorUsuario = useMemo(() => Object.fromEntries(usuarios.map(u => [u.id, u.nome])), [usuarios]);
 
+  // Nomes já registrados em "Quem retirou" no período, pra sugerir na busca por pessoa.
+  const pessoas = useMemo(() => {
+    const vistos = new Map<string, string>();
+    for (const m of movimentacoes) { const n = m.retirado_por?.trim(); if (n && !vistos.has(n.toLowerCase())) vistos.set(n.toLowerCase(), n); }
+    return Array.from(vistos.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [movimentacoes]);
+
   const filtradas = useMemo(() => {
-    const limite = filtroPeriodo === 'tudo' ? null : Date.now() - { '7d': 7, '30d': 30, '90d': 90 }[filtroPeriodo] * 86400000;
+    const alvoPessoa = semAcento(pessoa.trim());
     return movimentacoes.filter(m => {
       // Produto sob encomenda (estoque null, ex: trailer) não tem estoque físico — qualquer
       // movimentação ligada a ele é sobra de um bug já corrigido (NF de saída gravando
@@ -81,7 +119,7 @@ export default function KardexPage() {
       // em quantidade de verdade (mesma fronteira já usada no relatório de estoque).
       const servico = servicoPorId[m.servico_id];
       if (servico && (servico.estoque === null || servico.estoque === undefined)) return false;
-      if (limite && new Date(m.created_at).getTime() < limite) return false;
+      if (alvoPessoa && !textoPessoa(m).includes(alvoPessoa)) return false;
       if (filtroProduto !== 'todos' && m.servico_id !== filtroProduto) return false;
       if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
       if (filtroUsuario !== 'todos' && m.user_id !== filtroUsuario) return false;
@@ -89,12 +127,12 @@ export default function KardexPage() {
         const alvo = busca.trim().toLowerCase();
         const nomeServico = servicoPorId[m.servico_id]?.nome?.toLowerCase() || '';
         const osTexto = m.lead_id ? formatId(m.lead_id).toLowerCase() : '';
-        const matchTexto = nomeServico.includes(alvo) || (m.fornecedor || '').toLowerCase().includes(alvo) || (m.nf_numero || '').includes(alvo) || (m.observacao || '').toLowerCase().includes(alvo) || osTexto.includes(alvo);
+        const matchTexto = nomeServico.includes(alvo) || (m.fornecedor || '').toLowerCase().includes(alvo) || (m.nf_numero || '').includes(alvo) || (m.observacao || '').toLowerCase().includes(alvo) || (m.destino || '').toLowerCase().includes(alvo) || (m.retirado_por || '').toLowerCase().includes(alvo) || osTexto.includes(alvo);
         if (!matchTexto) return false;
       }
       return true;
     });
-  }, [movimentacoes, filtroProduto, filtroTipo, filtroUsuario, filtroPeriodo, busca, servicoPorId]);
+  }, [movimentacoes, filtroProduto, filtroTipo, filtroUsuario, pessoa, busca, servicoPorId]);
 
   const totais = useMemo(() => {
     const entradas = filtradas.filter(m => m.quantidade > 0);
@@ -112,7 +150,11 @@ export default function KardexPage() {
     const grupos = new Map<string, Grupo>();
     for (const m of saidas) {
       let chave: string; let label: string;
-      if (agrupamento === 'usuario') {
+      if (agrupamento === 'pessoa') {
+        const n = m.retirado_por?.trim();
+        chave = n ? n.toLowerCase() : 'sem-pessoa';
+        label = n || 'Sem "quem retirou"';
+      } else if (agrupamento === 'usuario') {
         chave = m.user_id || 'sem-usuario';
         label = m.user_id ? (nomePorUsuario[m.user_id] || 'Usuário removido') : 'Sem usuário registrado';
       } else if (agrupamento === 'produto') {
@@ -194,6 +236,12 @@ export default function KardexPage() {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por produto, fornecedor/cliente, NF, OS da venda ou observação..." className="flex-1 bg-transparent outline-none text-white text-sm" />
           {busca && <button onClick={() => setBusca('')} className="text-slate-500 hover:text-white"><X size={14} /></button>}
         </div>
+        <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-[var(--cor-primaria)]">
+          <User size={14} className="text-slate-500 flex-shrink-0" />
+          <input value={pessoa} onChange={e => setPessoa(e.target.value)} list="kardex-pessoas" placeholder="Quem retirou? Digite o nome (ex: Fabrício) pra ver tudo o que a pessoa pegou" className="flex-1 bg-transparent outline-none text-white text-sm" />
+          <datalist id="kardex-pessoas">{pessoas.map(p => <option key={p} value={p} />)}</datalist>
+          {pessoa && <button onClick={() => setPessoa('')} className="text-slate-500 hover:text-white"><X size={14} /></button>}
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Filter size={11} /> Filtros:</span>
           <select value={filtroProduto} onChange={e => setFiltroProduto(e.target.value === 'todos' ? 'todos' : Number(e.target.value))} className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[var(--cor-primaria)]">
@@ -205,7 +253,7 @@ export default function KardexPage() {
             {Object.entries(TIPO_LABEL).map(([k, v]) => <option key={k} value={k} className="bg-[#0B1120]">{v.label}</option>)}
           </select>
           <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} className="bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[var(--cor-primaria)]">
-            <option value="todos" className="bg-[#0B1120]">Todos os usuários</option>
+            <option value="todos" className="bg-[#0B1120]">Registrado por: todos</option>
             {usuarios.map(u => <option key={u.id} value={u.id} className="bg-[#0B1120]">{u.nome}</option>)}
           </select>
           <div className="flex gap-1 bg-black/30 border border-white/10 rounded-lg p-1">
@@ -215,6 +263,12 @@ export default function KardexPage() {
               </button>
             ))}
           </div>
+          {filtroPeriodo === 'datas' && (
+            <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 uppercase">
+              De <input type="date" value={dataDe} max={dataAte || undefined} onChange={e => setDataDe(e.target.value)} className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[var(--cor-primaria)] [color-scheme:dark]" />
+              até <input type="date" value={dataAte} min={dataDe || undefined} onChange={e => setDataAte(e.target.value)} className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[var(--cor-primaria)] [color-scheme:dark]" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -224,7 +278,7 @@ export default function KardexPage() {
         <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-3">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><TrendingDown size={11} className="text-red-400" /> Resumo de saídas — agrupado por</p>
           <div className="flex gap-1 bg-black/30 border border-white/10 rounded-lg p-1">
-            {([['usuario', 'Usuário'], ['produto', 'Produto'], ['dia', 'Dia'], ['mes', 'Mês']] as const).map(([id, label]) => (
+            {([['pessoa', 'Quem retirou'], ['usuario', 'Registrado por'], ['produto', 'Produto'], ['dia', 'Dia'], ['mes', 'Mês']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setAgrupamento(id)} className={`px-2.5 py-1 rounded text-[10px] font-black uppercase transition-all ${agrupamento === id ? 'bg-red-500 text-white' : 'text-slate-400 hover:text-white'}`}>
                 {label}
               </button>
@@ -244,7 +298,7 @@ export default function KardexPage() {
                     <p className="text-white font-bold text-sm truncate capitalize">{g.label}</p>
                     <p className="text-slate-500 text-[10px] mt-0.5 truncate">
                       Última: {data.toLocaleDateString('pt-BR')} às {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      {agrupamento !== 'usuario' && ` · ${listar(g.usuarios)}`}
+                      {agrupamento !== 'usuario' && agrupamento !== 'pessoa' && ` · ${listar(g.usuarios)}`}
                       {agrupamento !== 'produto' && ` · ${listar(g.produtos)}`}
                     </p>
                   </div>
@@ -287,12 +341,13 @@ export default function KardexPage() {
                       {m.nf_numero && <span title={m.nf_chave_acesso || ''} className="text-purple-400 font-bold">NF {m.nf_numero}{m.nf_serie ? `/${m.nf_serie}` : ''}</span>}
                       {m.lead_id && <span className="text-[var(--cor-primaria)] font-bold">OS {formatId(m.lead_id)}</span>}
                       {m.valor_unitario != null && <span>R$ {m.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un</span>}
+                      {m.retirado_por && <span className="text-[8px] font-black bg-amber-500/10 text-amber-300 px-1.5 py-0.5 rounded uppercase flex items-center gap-1"><User size={9} /> {m.retirado_por}</span>}
                       {m.destino && <span className="text-[8px] font-black bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded uppercase">→ {m.destino}</span>}
                       {m.requisicao_id && <span className="text-[8px] font-black bg-white/5 text-slate-500 px-1.5 py-0.5 rounded uppercase font-mono" title="Requisição de saída">REQ {m.requisicao_id.slice(0, 8)}</span>}
                       {m.observacao && <span className="italic">{m.observacao}</span>}
                     </div>
                   </div>
-                  <span className="text-slate-600 text-[10px] shrink-0">{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                  <span className="text-slate-600 text-[10px] shrink-0 text-right">{new Date(m.created_at).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' })}<br />{new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               );
             })}
@@ -300,7 +355,7 @@ export default function KardexPage() {
         )}
       </div>
       {!loading && movimentacoes.length >= 1000 && (
-        <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 movimentações mais recentes — refine os filtros pra achar algo mais antigo.</p>
+        <p className="text-slate-600 text-[10px] text-center mt-3">Mostrando as 1000 movimentações mais recentes do período — escolha datas menores pra ver tudo.</p>
       )}
     </div>
   );

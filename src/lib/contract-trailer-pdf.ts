@@ -358,21 +358,35 @@ export function gerarContratoTrailerBuffer(data: ContratoTrailerData): Promise<C
       );
       doc.moveDown(0.6);
 
+      // ── 7ª – USO DE IMAGEM E DEPOIMENTOS ─────────────────────────────
+      // Pedido de 18/11/2026: a fábrica posta fotos do trailer, da entrega e depoimentos de
+      // clientes nas redes sociais e queria isso coberto no contrato. Base: art. 20 do Código
+      // Civil (imagem) e LGPD. O item (v) existe porque o consentimento da LGPD não pode ser
+      // condição do negócio: recusar ou revogar não muda preço nem prazo, senão a autorização
+      // pode ser anulada. Fotos só do produto, sem identificar o cliente, seguem liberadas.
+      clausula('7ª', 'DO USO DE IMAGEM E DEPOIMENTOS');
+      doc.font('Helvetica').fontSize(8).fillColor('#000').text(
+        'O CONTRATANTE autoriza a CONTRATADA, a título gratuito, a captar e divulgar fotos e vídeos do trailer objeto deste contrato, durante a fabricação e na entrega, as imagens do CONTRATANTE e de seus acompanhantes registradas na entrega ou em visitas à fábrica, e os depoimentos e avaliações que o CONTRATANTE fornecer sobre o produto e o atendimento, para divulgação nas redes sociais, no site, em catálogos e nos demais materiais institucionais e publicitários da CONTRATADA, sem limite de território e enquanto esta autorização não for revogada, nos termos do art. 20 do Código Civil e da Lei 13.709/2018 (LGPD). Para tanto, fica estabelecido que: (i) a CONTRATADA não divulgará valores pagos, condições comerciais, documentos, endereço, placa ou outros dados pessoais do CONTRATANTE, além do primeiro nome e da cidade, salvo autorização específica; (ii) os depoimentos poderão ser editados apenas para adequação de tamanho e formato, sem alteração do seu sentido; (iii) as imagens não serão utilizadas de forma que ofenda a honra, a reputação ou a dignidade do CONTRATANTE; (iv) o CONTRATANTE poderá revogar esta autorização a qualquer tempo, mediante comunicação por escrito, hipótese em que a CONTRATADA deixará de realizar novas publicações e removerá de seus perfis e canais próprios, em até 15 (quinze) dias, as publicações que identifiquem o CONTRATANTE, não respondendo por compartilhamentos já realizados por terceiros; (v) a concessão, a recusa ou a revogação desta autorização não alteram o preço, os prazos nem as demais condições deste contrato. Fotos e vídeos exclusivamente do trailer, sem identificação do CONTRATANTE, poderão continuar sendo utilizados pela CONTRATADA mesmo após eventual revogação, por se tratar de produto por ela fabricado.',
+        { align: 'justify' }
+      );
+      doc.moveDown(0.6);
+
       // Cláusulas adicionais digitadas na venda (campo observacao_contrato). Cada bloco que
       // começa com "CLÁUSULA – TÍTULO" vira uma cláusula numerada; texto antes do primeiro
       // título sai como "OBSERVAÇÕES". Asteriscos/### de texto colado do WhatsApp/Word são
       // removidos; linha que estava toda entre asteriscos vira subtítulo em negrito.
       const extras = separarClausulasExtras(data.observacao || '');
       extras.forEach((c, i) => {
-        clausula(`${7 + i}ª`, c.titulo);
+        clausula(`${8 + i}ª`, c.titulo);
         for (const p of c.paragrafos) {
           doc.font(p.negrito ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor('#000').text(normalizarTexto(p.texto), { align: 'justify' });
           doc.moveDown(p.negrito ? 0.2 : 0.4);
         }
         doc.moveDown(0.2);
       });
-      // +1 pela cláusula de acompanhamento (6ª) e +1 por cláusula adicional (7ª em diante).
-      const nClausula = (base: number) => base + 1 + extras.length;
+      // +1 pela cláusula de acompanhamento (6ª), +1 pela de imagem (7ª) e +1 por cláusula
+      // adicional (8ª em diante).
+      const nClausula = (base: number) => base + 2 + extras.length;
 
       // ── DOCUMENTAÇÃO E EMPLACAMENTO ───────────────────────────────────
       clausula(`${nClausula(6)}ª`, 'DA DOCUMENTAÇÃO E EMPLACAMENTO');

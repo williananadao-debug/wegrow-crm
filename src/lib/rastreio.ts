@@ -17,7 +17,7 @@ export function traccarConfigurado() {
   return Boolean(process.env.TRACCAR_URL && process.env.TRACCAR_USER && process.env.TRACCAR_PASSWORD);
 }
 
-async function traccar(metodo: 'GET' | 'POST', caminho: string, corpo?: unknown) {
+async function traccar(metodo: 'GET' | 'POST' | 'DELETE', caminho: string, corpo?: unknown) {
   const base = String(process.env.TRACCAR_URL || '').replace(/\/$/, '');
   const auth = Buffer.from(`${process.env.TRACCAR_USER}:${process.env.TRACCAR_PASSWORD}`).toString('base64');
   const r = await fetch(`${base}/api${caminho}`, {
@@ -38,6 +38,10 @@ export async function garantirDispositivoTraccar(imei: string, nome: string): Pr
   if (existente?.id) return existente.id;
   const criado = await traccar('POST', '/devices', { name: nome, uniqueId: imei });
   return criado.dados.id;
+}
+
+export async function removerDispositivoTraccar(deviceId: number) {
+  await traccar('DELETE', `/devices/${deviceId}`);
 }
 
 /** engineStop / engineResume. 200 = entregue; 202 = aparelho offline, fica na fila do Traccar. */

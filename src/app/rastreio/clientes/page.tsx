@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone, Smartphone } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone, Smartphone, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, fmtMoeda, mascaraPlaca, mascaraDocumento, apiRastreio,
@@ -21,7 +21,7 @@ type Modal =
   | { tipo: 'cliente'; cliente: ClienteRastreio };      // editar cliente
 
 export default function RastreioClientesPage() {
-  const { authLoading, perfil, temRastreio } = useRastreioAccess();
+  const { authLoading, perfil, temRastreio, podeBloquear } = useRastreioAccess();
   const empresaId = perfil?.empresa_id as string | undefined;
 
   const [clientes, setClientes] = useState<ClienteRastreio[]>([]);
@@ -190,6 +190,20 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
     carregar();
   };
 
+  const excluirVeiculo = async (v: Veiculo) => {
+    const digitado = prompt(`Excluir ${v.placa} DE VEZ? Apaga também todo o histórico (trajetos, alertas, bloqueios). Isso não tem volta.\n\nPara confirmar, digite a placa:`);
+    if (digitado == null) return;
+    if (digitado.trim().toUpperCase() !== v.placa) { alert('Placa não confere. Nada foi excluído.'); return; }
+    try {
+      const r = await apiRastreio('veiculo-excluir', { veiculoId: v.id });
+      setAviso(r.mensagem);
+      setModal(null);
+      carregar();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
   if (!temRastreio) return <div className="p-8 text-slate-400 text-sm">O módulo Rastreio não está ativo pra sua empresa.</div>;
 
@@ -261,6 +275,9 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
                           {v.status === 'inativo' ? <span className="text-[10px] font-black uppercase text-slate-500">inativo</span>
                             : <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${v.bloqueado ? 'text-red-400 bg-red-500/10 border-red-500/30' : SITUACAO_INFO[s].classe}`}>{v.bloqueado ? <Lock size={10} className="inline" /> : SITUACAO_INFO[s].label}</span>}
                           <button onClick={() => abrirVeiculo(v)} className="p-1.5 rounded-lg hover:bg-white/10" title="Editar veículo"><Pencil size={12} /></button>
+                          {v.status === 'inativo' && podeBloquear && (
+                            <button onClick={() => excluirVeiculo(v)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400/80" title="Excluir de vez"><Trash2 size={12} /></button>
+                          )}
                         </div>
                       </div>
                     );
@@ -346,6 +363,9 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
             <div className="flex flex-wrap gap-2 mt-5">
               {modal.tipo === 'veiculo' && modal.veiculo.status === 'ativo' && (
                 <button onClick={() => desativarVeiculo(modal.veiculo)} className="px-4 py-3 rounded-xl border border-red-500/30 text-red-400 text-xs font-black uppercase hover:bg-red-500/10">Desativar veículo</button>
+              )}
+              {modal.tipo === 'veiculo' && podeBloquear && (
+                <button onClick={() => excluirVeiculo(modal.veiculo)} className="px-4 py-3 rounded-xl text-red-400/80 text-xs font-black uppercase hover:bg-red-500/10 inline-flex items-center gap-1"><Trash2 size={13} /> Excluir de vez</button>
               )}
               <button onClick={() => setModal(null)} disabled={salvando} className="ml-auto px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-xs font-black uppercase">Cancelar</button>
               <button onClick={salvar} disabled={salvando} className="px-6 py-3 rounded-xl bg-sky-400 text-[#0B1120] text-xs font-black uppercase disabled:opacity-50 inline-flex items-center gap-2">

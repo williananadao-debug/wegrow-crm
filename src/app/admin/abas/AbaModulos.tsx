@@ -123,6 +123,7 @@ export default function AbaModulos({ empresa, token, onAtualizado }: AbaProps) {
       <Toggle label="THOR" chave="thor" corAtivo="bg-purple-500/10 border-purple-500/40 text-purple-400" />
       <Toggle label="Max" chave="max" corAtivo="bg-rose-500/10 border-rose-500/40 text-rose-400" />
       <Toggle label="Obras" chave="obras" corAtivo="bg-orange-500/10 border-orange-500/40 text-orange-400" />
+      <Toggle label="Rastreio veicular" chave="rastreio" corAtivo="bg-sky-500/10 border-sky-500/40 text-sky-400" />
 
       <Toggle
         label="Argus (torre de controle)" chave="argus" corAtivo="bg-yellow-500/10 border-yellow-500/40 text-yellow-400"

@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ehCargoRestrito, cargoPodeAcessar } from '@/lib/publicPages';
 import { useState, useEffect } from 'react';
-import {
+import { Navigation,
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
@@ -72,6 +72,7 @@ export default function Navbar() {
   const mostrarThor = Boolean(modulos.thor) && !isCargoRestrito;
   const mostrarMax = Boolean(modulos.max) && !isCargoRestrito;
   const mostrarObras = Boolean(modulos.obras) && !isCargoRestrito;
+  const mostrarRastreio = Boolean(modulos.rastreio) && !isCargoRestrito;
   const mostrarArgus = Boolean(modulos.argus) && !isCargoRestrito;
   const mostrarRedesSociais = Boolean(modulos.redes_sociais) && !isCargoRestrito;
   const mostrarFinanceiro = Boolean(modulos.financeiro) && !isCargoRestrito;
@@ -162,6 +163,7 @@ export default function Navbar() {
   const thorItem = { name: 'THOR', icon: <Bot size={20} />, href: '/thor' };
   const maxItem = { name: 'Max', icon: <Radio size={20} />, href: '/max' };
   const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
+  const rastreioItem = { name: 'Rastreio', icon: <Navigation size={20} />, href: '/rastreio' };
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
   const midiaItem = { name: 'Demais FM Comercial', icon: <Megaphone size={20} />, href: '/midia' };
   const redesSociaisItem = { name: 'Redes Sociais', icon: <TrendingUp size={20} />, href: '/marketing' };
@@ -184,6 +186,7 @@ export default function Navbar() {
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
+      ...(mostrarRastreio ? [rastreioItem] : []),
       ...(mostrarArgus ? [argusItem] : []),
       ...(mostrarFinanceiro ? [financeiroItem] : []),
       ...(mostrarRedesSociais ? [redesSociaisItem] : []),
@@ -326,6 +329,12 @@ export default function Navbar() {
           {mostrarObras && (
             <Link href={obrasItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === obrasItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {obrasItem.icon} {obrasItem.name}
+            </Link>
+          )}
+
+          {mostrarRastreio && (
+            <Link href={rastreioItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(rastreioItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              {rastreioItem.icon} {rastreioItem.name}
             </Link>
           )}
 
@@ -496,6 +505,13 @@ export default function Navbar() {
                     <Link href={obrasItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === obrasItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{obrasItem.icon}</div>
                       <span className="text-sm font-semibold">{obrasItem.name}</span>
+                    </Link>
+                  )}
+
+                  {mostrarRastreio && (
+                    <Link href={rastreioItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(rastreioItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      <div className="min-w-[20px]">{rastreioItem.icon}</div>
+                      <span className="text-sm font-semibold">{rastreioItem.name}</span>
                     </Link>
                   )}
 

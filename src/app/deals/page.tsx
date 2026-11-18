@@ -6,10 +6,11 @@ import {
   Sparkles, Crosshair, Calendar, CalendarDays, AlertTriangle,
   Building2, FileText, Hash, CheckCircle2, WifiOff, RefreshCcw,
   Info, Lock, Megaphone, Smartphone, Headphones, ArrowLeft, Package, Newspaper, Filter, Clock,
-  Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet, Scissors
+  Mail, Send, Loader2, PenLine, Link, ExternalLink, Wallet, Scissors, Search
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
+import { consultarCnpj, enderecoEmLinha } from '@/lib/consultaCnpj';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
 import ItensFabrica from './ItensFabrica';
 import BotaoDitado, { juntarTexto } from '@/components/BotaoDitado';
@@ -335,6 +336,7 @@ export default function DealsPage() {
   const [novoCnpj, setNovoCnpj] = useState('');
   const [novoEndereco, setNovoEndereco] = useState('');
   const [cnpjError, setCnpjError] = useState(false);
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [novoIE, setNovoIE] = useState('');
   const [parcelas, setParcelas] = useState('1');
   const [vencimento, setVencimento] = useState('');
@@ -1688,6 +1690,54 @@ export default function DealsPage() {
       setShowClientDropdown(false);
   };
 
+  // Lupa do CNPJ no próprio lead — antes era preciso ir ao Cadastro de Clientes, buscar lá
+  // e voltar. Se o CNPJ já é de um cliente cadastrado, seleciona ele (não cria duplicado);
+  // senão preenche com os dados da Receita e o cliente é cadastrado ao salvar o lead.
+  const buscarCnpjNaReceita = async (cnpjDigitado: string) => {
+      const digitos = cnpjDigitado.replace(/\D/g, '');
+      if (digitos.length !== 14) return alert('⚠️ Digite os 14 números do CNPJ.');
+      if (!validarCNPJ(digitos)) { setCnpjError(true); return alert('⚠️ CNPJ inválido — verifique os dígitos.'); }
+      const mascarado = maskCnpj(digitos);
+      setBuscandoCnpj(true);
+      try {
+          if (!selectedClientId) {
+              let q = supabase.from('clientes')
+                  .select('id, nome_empresa, telefone, cnpj, inscricao_estadual, email, cidade, endereco, razao_social, nome_fantasia, status_risco')
+                  .eq('status', 'ativo').in('cnpj', [mascarado, digitos]).limit(1);
+              if (perfil?.empresa_id) q = q.eq('empresa_id', perfil.empresa_id);
+              const { data: existente } = await q.maybeSingle();
+              if (existente) {
+                  selecionarCliente({ ...existente, risco: existente.status_risco } as ClienteOpcao);
+                  setToastMessage(`Cliente já cadastrado: ${existente.nome_empresa}`);
+                  setShowToast(true);
+                  return;
+              }
+          }
+          const d = await consultarCnpj(digitos);
+          setNovoCnpj(mascarado);
+          setCnpjError(false);
+          if (d.razao_social) setNovaRazaoSocial(d.razao_social);
+          if (d.nome_fantasia) setNovoNomeFantasia(d.nome_fantasia);
+          const endereco = enderecoEmLinha(d);
+          if (endereco) setNovoEndereco(endereco);
+          if (d.cidade) setNovaCidade(d.cidade);
+          if (d.inscricao_estadual) setNovoIE(d.inscricao_estadual);
+          // Cliente já escolhido mantém o nome dele; cliente novo ganha o nome da Receita
+          // (inclusive quando o que foi digitado no campo era o próprio CNPJ).
+          if (!selectedClientId) setNovaEmpresa(d.nome_fantasia || d.razao_social || novaEmpresa);
+          setMostrarDetalhes(true);
+          setShowClientDropdown(false);
+          setToastMessage(d.enderecoOculto
+              ? 'Dados puxados da Receita. O endereço é oculto (MEI) — preencha à mão.'
+              : 'Dados puxados da Receita ✔');
+          setShowToast(true);
+      } catch (err) {
+          alert((err as Error)?.message || 'Não foi possível buscar os dados do CNPJ.');
+      } finally {
+          setBuscandoCnpj(false);
+      }
+  };
+
   const salvarLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Você precisa estar logado para salvar um lead!");
@@ -1702,6 +1752,8 @@ export default function DealsPage() {
                 .from('clientes')
                 .insert([{
                     nome_empresa: novaEmpresa,
+                    razao_social: novaRazaoSocial || null,
+                    nome_fantasia: novoNomeFantasia || null,
                     cnpj: novoCnpj || null,
                     inscricao_estadual: novoIE || null,
                     telefone: novoTelefone || null,
@@ -2420,6 +2472,12 @@ export default function DealsPage() {
                                             {c.cnpj && <span className="text-slate-500 text-[9px] font-mono mt-0.5">CNPJ: {c.cnpj}</span>}
                                         </div>
                                 ))}
+                                {!clientesBuscando && clientesOpcoes.length === 0 && novaEmpresa.replace(/\D/g, '').length === 14 && (
+                                    <button type="button" onMouseDown={e => { e.preventDefault(); buscarCnpjNaReceita(novaEmpresa); }} disabled={buscandoCnpj}
+                                        className="w-full px-4 py-3 border-b border-white/5 flex items-center justify-center gap-2 text-[var(--cor-primaria)] text-xs font-black uppercase hover:bg-white/5 disabled:opacity-50">
+                                        {buscandoCnpj ? <Loader2 size={13} className="animate-spin"/> : <Search size={13}/>} Buscar este CNPJ na Receita
+                                    </button>
+                                )}
                                 {!clientesBuscando && novaEmpresa.length >= 2 && clientesOpcoes.length === 0 && (
                                     <div className="px-4 py-4 text-center text-blue-400 text-xs font-bold uppercase">Novo Cliente Detectado!<br/><span className="text-[9px] text-slate-500 font-normal normal-case mt-1 block">Basta salvar que ele será cadastrado automaticamente.</span></div>
                                 )}
@@ -2475,8 +2533,9 @@ export default function DealsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">CNPJ</label>
+                                    <div className="flex gap-2">
                                     <input
-                                        className={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-white text-sm font-bold outline-none ${cnpjError ? 'border-red-500 focus:border-red-400' : 'border-white/10 focus:border-[var(--cor-primaria)]'}`}
+                                        className={`flex-1 min-w-0 bg-white/[0.03] border rounded-xl px-4 py-3 text-white text-sm font-bold outline-none ${cnpjError ? 'border-red-500 focus:border-red-400' : 'border-white/10 focus:border-[var(--cor-primaria)]'}`}
                                         value={novoCnpj}
                                         onChange={e => {
                                             const masked = maskCnpj(e.target.value);
@@ -2484,8 +2543,15 @@ export default function DealsPage() {
                                             const digits = masked.replace(/\D/g, '');
                                             setCnpjError(digits.length === 14 && !validarCNPJ(masked));
                                         }}
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarCnpjNaReceita(novoCnpj); } }}
                                         placeholder="00.000.000/0001-00"
                                     />
+                                    <button type="button" onClick={() => buscarCnpjNaReceita(novoCnpj)} disabled={buscandoCnpj || leadTravado}
+                                        title="Buscar dados do CNPJ na Receita (razão social, endereço, IE)"
+                                        className="shrink-0 w-12 flex items-center justify-center bg-[var(--cor-primaria)] text-[#0B1120] rounded-xl hover:brightness-110 disabled:opacity-40">
+                                        {buscandoCnpj ? <Loader2 size={16} className="animate-spin"/> : <Search size={16}/>}
+                                    </button>
+                                    </div>
                                     {cnpjError && <p className="text-red-400 text-[9px] font-bold uppercase mt-1 ml-2">CNPJ inválido — verifique os dígitos</p>}
                                 </div>
                                 <div>

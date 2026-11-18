@@ -10,6 +10,7 @@ import { NexusCategoria, NexusArquivo, NEXUS_CATS, NEXUS_CAT_LABEL, NEXUS_CAT_BG
 import { SkeletonRow } from '@/components/Skeleton';
 import ClienteDocumentos from '@/components/ClienteDocumentos';
 import { supabase } from '@/lib/supabase';
+import { consultarCnpj } from '@/lib/consultaCnpj';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 type Cliente = {
@@ -413,95 +414,33 @@ export default function CustomersPage() {
       }
   };
 
-  const fetchWithTimeout = async (url: string, ms = 6000) => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), ms);
-    try { return await fetch(url, { signal: controller.signal }); }
-    finally { clearTimeout(id); }
-  };
-
-  // MOTOR HÍBRIDO (Plano A + Plano B)
+  // Lupa do CNPJ: consulta a Receita (cnpj.ws, com plano B na BrasilAPI) — mesma função
+  // usada na tela de lead (lib/consultaCnpj).
   const buscarDadosCNPJ = async () => {
-    const cnpj = formData.cnpj.replace(/\D/g, '');
-    if (cnpj.length !== 14) return alert("⚠️ Digite os 14 números do CNPJ.");
-
     setIsSearchingCnpj(true);
     try {
-        const res1 = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${cnpj}`);
-        
-        if (res1.ok) {
-            const data = await res1.json();
-            const est = data.estabelecimento;
-            const inscricao = est.inscricoes_estaduais && est.inscricoes_estaduais.length > 0 ? est.inscricoes_estaduais[0].inscricao_estadual : "ISENTO";
-            const ruaFormatada = `${est.tipo_logradouro || ''} ${est.logradouro || ''}`.trim();
-
-            const analise = avaliarRisco(data.capital_social, est.data_inicio_atividade);
-
-            // 👇 CORREÇÃO AQUI: Usando formData em vez de prev 👇
-            const nomeFantasiaLimpo = est.nome_fantasia ? String(est.nome_fantasia).trim() : '';
-            const razaoSocialLimpa = data.razao_social ? String(data.razao_social).trim() : '';
-            const nomeFinal = nomeFantasiaLimpo || razaoSocialLimpa || formData.nome_empresa;
-
-            setFormData(prev => ({
-                ...prev,
-                nome_empresa: nomeFinal,
-                nome_fantasia: nomeFantasiaLimpo || prev.nome_fantasia || "",
-                razao_social: razaoSocialLimpa || prev.razao_social || "",
-                cep: est.cep || prev.cep || "",
-                endereco: ruaFormatada || prev.endereco || "",
-                numero: est.numero || prev.numero || "",
-                bairro: est.bairro || prev.bairro || "",
-                cidade: est.cidade?.nome || prev.cidade || "",
-                estado: est.estado?.sigla || prev.estado || "",
-                inscricao_estadual: inscricao,
-                ...analise 
-            }));
-
-            if (!est.logradouro && !est.cep) {
-                alert("ℹ️ A Receita ocultou o endereço desta empresa (comum em MEI devido à LGPD). Preencha manualmente.");
-            }
-            setIsSearchingCnpj(false);
-            return;
+        const d = await consultarCnpj(formData.cnpj);
+        const analise = avaliarRisco(d.capital_social, d.data_inicio_atividade);
+        setFormData(prev => ({
+            ...prev,
+            nome_empresa: d.nome_fantasia || d.razao_social || prev.nome_empresa,
+            nome_fantasia: d.nome_fantasia || prev.nome_fantasia || "",
+            razao_social: d.razao_social || prev.razao_social || "",
+            cep: d.cep || prev.cep || "",
+            endereco: d.logradouro || prev.endereco || "",
+            numero: d.numero || prev.numero || "",
+            bairro: d.bairro || prev.bairro || "",
+            cidade: d.cidade || prev.cidade || "",
+            estado: d.estado || prev.estado || "",
+            inscricao_estadual: d.inscricao_estadual ?? prev.inscricao_estadual,
+            ...analise
+        }));
+        if (d.enderecoOculto) {
+            alert("ℹ️ A Receita ocultou o endereço desta empresa (comum em MEI devido à LGPD). Preencha manualmente.");
         }
-
-        const res2 = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-        
-        if (res2.ok) {
-            const data2 = await res2.json();
-            const analise = avaliarRisco(data2.capital_social, data2.data_inicio_atividade);
-
-            // 👇 CORREÇÃO AQUI: Usando formData em vez de prev 👇
-            const nomeFantasiaLimpo2 = data2.nome_fantasia ? String(data2.nome_fantasia).trim() : '';
-            const razaoSocialLimpa2 = data2.razao_social ? String(data2.razao_social).trim() : '';
-            const nomeFinal2 = nomeFantasiaLimpo2 || razaoSocialLimpa2 || formData.nome_empresa;
-
-            setFormData(prev => ({
-                ...prev,
-                nome_empresa: nomeFinal2,
-                nome_fantasia: nomeFantasiaLimpo2 || prev.nome_fantasia || "",
-                razao_social: razaoSocialLimpa2 || prev.razao_social || "",
-                cep: data2.cep || prev.cep || "",
-                endereco: data2.logradouro || prev.endereco || "",
-                numero: data2.numero || prev.numero || "",
-                bairro: data2.bairro || prev.bairro || "",
-                cidade: data2.municipio || prev.cidade || "",
-                estado: data2.uf || prev.estado || "",
-                ...analise 
-            }));
-
-            console.warn("Plano B ativado (BrasilAPI). Inscrição Estadual precisará ser manual.");
-
-            if (!data2.logradouro && !data2.cep) {
-                alert("ℹ️ A Receita ocultou o endereço desta empresa (comum em MEI devido à LGPD). Preencha manualmente.");
-            }
-            setIsSearchingCnpj(false);
-            return; 
-        }
-
-        throw new Error("CNPJ não encontrado nas bases da Receita Federal. Verifique o número digitado.");
-
-    } catch (err: any) {
-        alert("Não foi possível buscar os dados do CNPJ. Tente novamente ou preencha manualmente.");
+    } catch (err) {
+        const msg = (err as Error)?.message || '';
+        alert(msg.startsWith('Digite') ? `⚠️ ${msg}` : "Não foi possível buscar os dados do CNPJ. Tente novamente ou preencha manualmente.");
     } finally {
         setIsSearchingCnpj(false);
     }

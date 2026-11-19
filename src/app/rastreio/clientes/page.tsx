@@ -204,6 +204,18 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
     }
   };
 
+  const excluirCliente = async (c: ClienteRastreio) => {
+    if (!confirm(`Excluir ${c.nome} de vez? Some da lista, perde o acesso ao app e, se tiver cobrança automática, ela é cancelada. Veículos inativos dele continuam guardados, sem dono.`)) return;
+    try {
+      const r = await apiRastreio('cliente-excluir', { clienteId: c.id });
+      setAviso(r.mensagem);
+      setModal(null);
+      carregar();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
   if (!temRastreio) return <div className="p-8 text-slate-400 text-sm">O módulo Rastreio não está ativo pra sua empresa.</div>;
 
@@ -363,6 +375,9 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
             <div className="flex flex-wrap gap-2 mt-5">
               {modal.tipo === 'veiculo' && modal.veiculo.status === 'ativo' && (
                 <button onClick={() => desativarVeiculo(modal.veiculo)} className="px-4 py-3 rounded-xl border border-red-500/30 text-red-400 text-xs font-black uppercase hover:bg-red-500/10">Desativar veículo</button>
+              )}
+              {modal.tipo === 'cliente' && podeBloquear && (
+                <button onClick={() => excluirCliente(modal.cliente)} className="px-4 py-3 rounded-xl text-red-400/80 text-xs font-black uppercase hover:bg-red-500/10 inline-flex items-center gap-1"><Trash2 size={13} /> Excluir cliente</button>
               )}
               {modal.tipo === 'veiculo' && podeBloquear && (
                 <button onClick={() => excluirVeiculo(modal.veiculo)} className="px-4 py-3 rounded-xl text-red-400/80 text-xs font-black uppercase hover:bg-red-500/10 inline-flex items-center gap-1"><Trash2 size={13} /> Excluir de vez</button>

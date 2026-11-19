@@ -12,6 +12,7 @@ import type { PontoTrajeto } from '../../MapaRastreio';
 import { analisarTrajeto, fmtDuracao } from '../../analise';
 import Instalacao from './Instalacao';
 import Cercas, { type Cerca } from './Cercas';
+import Manutencao from './Manutencao';
 
 const MapaRastreio = dynamic(() => import('../../MapaRastreio'), { ssr: false });
 
@@ -269,6 +270,8 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
               </ul>
             )}
           </div>
+
+          <Manutencao v={v} />
 
           <Cercas v={v} cercas={cercas} onMudou={carregarCercas} escolhendo={escolhendoCerca} setEscolhendo={setEscolhendoCerca} ponto={pontoCerca} setPonto={setPontoCerca} />
 

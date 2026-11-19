@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Navigation, Bell, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X } from 'lucide-react';
+import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X } from 'lucide-react';
 import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, type Veiculo } from '../rastreio/shared';
 import type { PontoTrajeto } from '../rastreio/MapaRastreio';
 import { analisarTrajeto, fmtDuracao } from '../rastreio/analise';
@@ -35,7 +35,9 @@ export default function MeuRastreioPage() {
   const [dia, setDia] = useState(hojeISO());
   const [trajeto, setTrajeto] = useState<PontoTrajeto[]>([]);
   const [carregandoTrajeto, setCarregandoTrajeto] = useState(false);
-  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin' | 'compartilhar'>(null);
+  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin' | 'compartilhar' | 'alertas'>(null);
+  const [prefs, setPrefs] = useState<{ alertas: Record<string, boolean>; nomes: Record<string, string> } | null>(null);
+  const [linkConvite, setLinkConvite] = useState('');
   const [motivo, setMotivo] = useState(0);
   const [pin, setPin] = useState('');
   const [pinNovo, setPinNovo] = useState('');
@@ -56,6 +58,33 @@ export default function MeuRastreioPage() {
     const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 15000);
     return () => clearInterval(t);
   }, [carregar]);
+
+  useEffect(() => {
+    if (!dados) return;
+    type Cap = { isNativePlatform?: () => boolean; getPlatform?: () => string; Plugins?: Record<string, {
+      requestPermissions: () => Promise<{ receive: string }>; register: () => Promise<void>;
+      addListener: (ev: string, cb: (x: { value?: string }) => void) => void; createChannel?: (c: Record<string, unknown>) => Promise<void>;
+    }> };
+    const cap = (window as unknown as { Capacitor?: Cap }).Capacitor;
+    const push = cap?.isNativePlatform?.() ? cap.Plugins?.PushNotifications : undefined;
+    if (!push) return;
+    push.addListener('registration', t => {
+      if (t.value) fetch('/api/rastreio/app/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t.value, plataforma: cap?.getPlatform?.() || 'android' }) }).catch(() => null);
+    });
+    push.createChannel?.({ id: 'alarmes', name: 'Alarmes do veículo', importance: 5, vibration: true }).catch(() => null);
+    push.createChannel?.({ id: 'alertas', name: 'Alertas', importance: 3 }).catch(() => null);
+    push.requestPermissions().then(r => { if (r.receive === 'granted') push.register(); }).catch(() => null);
+  }, [dados]);
+
+  const abrirPrefs = async () => {
+    setModal('alertas'); setMsg(null);
+    const r = await fetch('/api/rastreio/app/push', { cache: 'no-store' }).catch(() => null);
+    if (r?.ok) setPrefs(await r.json());
+  };
+  const salvarPrefs = async (alertas: Record<string, boolean>) => {
+    setPrefs(p => (p ? { ...p, alertas } : p));
+    await post('push', { alertas }).catch(() => null);
+  };
 
   const veiculo = useMemo(() => dados?.veiculos.find(v => v.id === selId) || dados?.veiculos[0] || null, [dados, selId]);
   const novos = (dados?.alertas || []).filter(a => a.id > vistos).length;
@@ -132,6 +161,13 @@ export default function MeuRastreioPage() {
         <Navigation size={40} className="text-sky-400" />
         <h1 className="text-xl font-black">Acesso ao rastreamento</h1>
         <p className="text-slate-300 text-sm max-w-xs">Para entrar, abra o link de acesso que a sua central de rastreamento enviou pelo WhatsApp. Se ele venceu, peça um novo.</p>
+        <div className="w-full max-w-xs mt-4 space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Ou cole o link aqui</p>
+          <input value={linkConvite} onChange={e => setLinkConvite(e.target.value)} placeholder="https://…/meu-rastreio/entrar?t=…"
+            className="w-full min-h-12 bg-white/5 border border-white/15 rounded-xl px-4 text-sm text-white outline-none focus:border-sky-400" />
+          <button onClick={() => { const t = linkConvite.match(/[?&]t=([A-Za-z0-9_-]{20,})/)?.[1]; if (t) window.location.href = `/meu-rastreio/entrar?t=${t}`; }}
+            disabled={!/[?&]t=[A-Za-z0-9_-]{20,}/.test(linkConvite)} className="w-full min-h-12 rounded-xl bg-sky-400 text-[#0B1120] font-black uppercase text-sm disabled:opacity-40">Entrar</button>
+        </div>
       </main>
     );
   }
@@ -157,6 +193,7 @@ export default function MeuRastreioPage() {
           </div>
         </div>
         <div className="flex gap-1">
+          <button onClick={abrirPrefs} aria-label="Notificações" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><BellRing size={18} /></button>
           <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); setMsg(null); }} aria-label="Meu PIN de bloqueio" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><KeyRound size={18} /></button>
           <button onClick={sair} aria-label="Sair" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><LogOut size={18} /></button>
         </div>
@@ -297,7 +334,25 @@ export default function MeuRastreioPage() {
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" onClick={() => !enviando && setModal(null)}>
           <div role="dialog" aria-modal="true" className="w-full max-w-lg bg-[#0F172A] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
-            {modal === 'compartilhar' ? (
+            {modal === 'alertas' ? (
+              <>
+                <h2 className="text-xl font-black">Notificações no celular</h2>
+                <p className="text-sm text-slate-300">Escolha quais alertas chegam como notificação. Todos continuam aparecendo na aba Alertas.</p>
+                {!prefs ? <Loader2 className="animate-spin text-slate-500" /> : (
+                  <ul className="divide-y divide-white/10">
+                    {Object.entries(prefs.nomes).map(([k, nome]) => (
+                      <li key={k}>
+                        <label className="min-h-12 flex items-center justify-between gap-3 text-sm font-bold">
+                          {nome}
+                          <input type="checkbox" checked={Boolean(prefs.alertas[k])} onChange={e => salvarPrefs({ ...prefs.alertas, [k]: e.target.checked })} className="w-5 h-5" style={{ accentColor: cor }} />
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs text-slate-500">As notificações funcionam no app instalado da loja (Android e iPhone).</p>
+              </>
+            ) : modal === 'compartilhar' ? (
               <>
                 <h2 className="text-xl font-black">Compartilhar localização ao vivo</h2>
                 <p className="text-sm text-slate-300">Quem receber o link vê só a posição atual do {veiculo?.placa}, atualizando sozinha, até o link expirar. Não dá acesso ao bloqueio nem ao histórico.</p>

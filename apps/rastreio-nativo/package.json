@@ -1,0 +1,22 @@
+{
+  "name": "wegrow-rastreio-nativo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App nativo (Android/iPhone) do cliente final do Rastreio. Carrega /meu-rastreio do WeGrow e adiciona notificação no celular.",
+  "scripts": {
+    "android": "npx cap sync android && npx cap open android",
+    "ios": "npx cap sync ios && npx cap open ios",
+    "icones": "npx @capacitor/assets generate --iconBackgroundColor '#0B1120' --splashBackgroundColor '#0B1120'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Loader2, Navigation, Search, Lock, Bell, Users, Plus, Gauge, Power, ChevronRight, CheckCheck, Wallet } from 'lucide-react';
+import { Loader2, Navigation, Search, Lock, Bell, Users, Plus, Gauge, Power, ChevronRight, CheckCheck, Wallet, FileBarChart } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, haQuanto, fmtDataHora,
@@ -103,6 +103,9 @@ export default function RastreioFrotaPage() {
           </Link>
           <Link href="/rastreio/financeiro" className="inline-flex items-center gap-2 bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest">
             <Wallet size={14} /> Financeiro
+          </Link>
+          <Link href="/rastreio/relatorios" className="inline-flex items-center gap-2 bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest">
+            <FileBarChart size={14} /> Relatórios
           </Link>
           <Link href="/rastreio/clientes?nova=1" className="inline-flex items-center gap-2 bg-sky-400 text-[#0B1120] hover:scale-105 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
             <Plus size={14} /> Nova instalação

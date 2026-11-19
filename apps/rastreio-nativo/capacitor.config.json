@@ -1,0 +1,16 @@
+{
+  "appId": "br.app.wegrow.rastreio",
+  "appName": "WeGrow Rastreio",
+  "webDir": "www",
+  "server": {
+    "url": "https://www.wegrow.app.br/meu-rastreio",
+    "cleartext": false,
+    "allowNavigation": ["www.wegrow.app.br", "wegrow.app.br", "*.asaas.com", "www.google.com", "maps.google.com"]
+  },
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "always" },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
+    "SplashScreen": { "launchShowDuration": 1200, "backgroundColor": "#0B1120", "showSpinner": false }
+  }
+}

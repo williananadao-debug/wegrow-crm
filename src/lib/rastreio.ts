@@ -5,6 +5,31 @@
 //   TRACCAR_USER / TRACCAR_PASSWORD   usuário admin do Traccar
 //   TRACCAR_WEBHOOK_TOKEN  segredo que vai na URL do forward (?token=...)
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { notificarCliente } from '@/lib/rastreioPush';
+
+type NovoEvento = {
+  empresa_id: string; veiculo_id: string; tipo: string; mensagem: string;
+  lat?: number | null; lng?: number | null; ocorrido_em?: string; lido?: boolean;
+};
+
+const TITULO_ALERTA: Record<string, string> = {
+  alarme: '🚨 Alerta do rastreador', cerca: '📍 Cerca virtual', velocidade: '⚠️ Excesso de velocidade',
+  comando: '🔒 Bloqueio', offline: '📡 Rastreador sem sinal', online: '📡 Rastreador voltou', manutencao: '🔧 Manutenção',
+  ignicao_ligada: '🔑 Ignição ligada', ignicao_desligada: '🔑 Ignição desligada',
+};
+
+/** Grava o alerta e avisa o celular do dono do veículo (se ele quiser esse tipo de alerta). */
+export async function registrarEvento(db: SupabaseClient, ev: NovoEvento) {
+  await db.from('rastreio_eventos').insert(ev);
+  try {
+    const { data: v } = await db.from('rastreio_veiculos').select('cliente_id').eq('id', ev.veiculo_id).maybeSingle();
+    if (v?.cliente_id) {
+      await notificarCliente(db, { clienteId: v.cliente_id, tipo: ev.tipo, titulo: TITULO_ALERTA[ev.tipo] || 'Rastreamento', corpo: ev.mensagem, veiculoId: ev.veiculo_id });
+    }
+  } catch (e) {
+    console.error('[rastreio/push]', (e as Error).message); // alerta já gravado; push é bônus
+  }
+}
 
 // Bloqueio só com o veículo parado ou quase: cortar combustível em movimento causa acidente.
 export const VELOCIDADE_MAX_BLOQUEIO = 20; // km/h
@@ -114,7 +139,7 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
 
       // Alerta de velocidade só na subida (não repete a cada posição acima do limite).
       if (v.limite_velocidade && kmh > v.limite_velocidade && Number(v.ultima_velocidade || 0) <= v.limite_velocidade) {
-        await db.from('rastreio_eventos').insert({
+        await registrarEvento(db, {
           empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'velocidade',
           mensagem: `${v.placa}: ${kmh} km/h (limite ${v.limite_velocidade})`, lat: pos.latitude, lng: pos.longitude, ocorrido_em: quando,
         });
@@ -145,7 +170,7 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
   if (ev?.type && TEXTO_EVENTO[ev.type]) {
     const r = TEXTO_EVENTO[ev.type](v.placa, ev.attributes || {});
     if (r) {
-      await db.from('rastreio_eventos').insert({
+      await registrarEvento(db, {
         empresa_id: v.empresa_id, veiculo_id: v.id, tipo: r[0], mensagem: r[1],
         lat: pos?.latitude ?? null, lng: pos?.longitude ?? null, ocorrido_em: ev.eventTime || agora,
       });
@@ -168,7 +193,7 @@ async function verificarCercas(
     if (c.dentro === dentro) continue;
     await db.from('rastreio_cercas').update({ dentro }).eq('id', c.id);
     if (c.dentro === null) continue; // primeira leitura: só registra o estado
-    await db.from('rastreio_eventos').insert({
+    await registrarEvento(db, {
       empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'cerca',
       mensagem: `${v.placa}: ${dentro ? 'entrou em' : 'saiu de'} ${c.nome}`, lat, lng, ocorrido_em: quando,
     });
@@ -261,7 +286,7 @@ export async function executarComando(
     const mensagem = naFila ? 'Aparelho sem sinal agora: o comando fica na fila e executa quando ele comunicar.' : 'Comando entregue ao aparelho.';
     await log('enviado', mensagem);
     await db.from('rastreio_veiculos').update({ bloqueado: p.tipo === 'bloquear' }).eq('id', v.id);
-    await db.from('rastreio_eventos').insert({
+    await registrarEvento(db, {
       empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'comando', lido: p.autor.origem === 'painel',
       mensagem: `${v.placa}: ${p.tipo === 'bloquear' ? 'BLOQUEIO' : 'desbloqueio'} enviado por ${p.autor.nome}${p.autor.origem === 'app' ? ' (app do cliente)' : ''} — ${motivo}`,
       lat: v.ultima_lat, lng: v.ultima_lng,

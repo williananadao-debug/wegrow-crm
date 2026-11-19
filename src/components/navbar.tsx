@@ -1,4 +1,5 @@
 "use client";
+import ThemeToggle from '@/components/ThemeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -380,6 +381,7 @@ export default function Navbar() {
                 <Settings size={20} /> Configurações
               </Link>
             )}
+            <ThemeToggle />
             <button onClick={() => { setIsMobileOpen(false); signOut(); }} className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm text-red-500 hover:bg-red-500/10">
               <LogOut size={20} /> Sair
             </button>
@@ -572,6 +574,7 @@ export default function Navbar() {
                   )}
                 </Link>
               )}
+              <ThemeToggle compacto={isCollapsed} className="px-3 py-3" />
               <button onClick={signOut} className={`w-full flex items-center gap-4 px-3 py-3 rounded-2xl transition-all text-red-500 hover:bg-red-500/10 cursor-pointer group relative ${isCollapsed ? 'justify-center' : ''}`}>
                 <LogOut size={20} />
                 <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>Sair</span>

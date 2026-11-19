@@ -116,3 +116,89 @@ body {
   from { transform: translateX(24px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* ───────────── TEMA CLARO (opcional; escuro é o padrão) ─────────────
+   O sistema foi desenhado no escuro com classes fixas (bg-[#0F172A], text-white, border-white/10…).
+   Em vez de reescrever cada tela, o tema claro troca essas classes por equivalentes claros, só
+   dentro da casca logada ([data-shell]) — páginas públicas, propostas e apps de cliente não mudam.
+   Botões coloridos (bg-red-500 text-white etc.) continuam com texto branco: a troca de text-white
+   só vale em elemento sem fundo próprio ou com fundo escuro/neutro do tema. */
+html[data-theme="light"] body { background-color: #EEF2F7; }
+html[data-theme="light"] [data-shell] { color-scheme: light; color: #0F172A; }
+
+/* Fundos */
+html[data-theme="light"] [data-shell] .bg-\[\#0B1120\],
+html[data-theme="light"] [data-shell].bg-\[\#0B1120\] { background-color: #EEF2F7 !important; }
+html[data-theme="light"] [data-shell] .bg-\[\#0B1120\]\/95 { background-color: rgba(238, 242, 247, .95) !important; }
+html[data-theme="light"] [data-shell] .bg-\[\#0F172A\],
+html[data-theme="light"] [data-shell] .bg-\[\#111827\],
+html[data-theme="light"] [data-shell] .bg-\[\#1E293B\],
+html[data-theme="light"] [data-shell] .bg-slate-900,
+html[data-theme="light"] [data-shell] .bg-slate-800 { background-color: #FFFFFF !important; }
+html[data-theme="light"] [data-shell] .bg-\[\#0F172A\]\/60 { background-color: rgba(255, 255, 255, .7) !important; }
+html[data-theme="light"] [data-shell] .bg-white\/5,
+html[data-theme="light"] [data-shell] .bg-white\/\[0\.04\],
+html[data-theme="light"] [data-shell] .hover\:bg-white\/5:hover,
+html[data-theme="light"] [data-shell] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(15, 23, 42, .05) !important; }
+html[data-theme="light"] [data-shell] .bg-white\/\[0\.03\],
+html[data-theme="light"] [data-shell] .bg-white\/\[0\.02\],
+html[data-theme="light"] [data-shell] .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(15, 23, 42, .03) !important; }
+html[data-theme="light"] [data-shell] .bg-white\/10,
+html[data-theme="light"] [data-shell] .bg-white\/15,
+html[data-theme="light"] [data-shell] .hover\:bg-white\/10:hover { background-color: rgba(15, 23, 42, .08) !important; }
+
+/* Bordas e divisórias */
+html[data-theme="light"] [data-shell] .border-white\/10,
+html[data-theme="light"] [data-shell] .border-white\/15,
+html[data-theme="light"] [data-shell] .hover\:border-white\/10:hover,
+html[data-theme="light"] [data-shell] .hover\:border-white\/20:hover { border-color: rgba(15, 23, 42, .12) !important; }
+html[data-theme="light"] [data-shell] .border-white\/5,
+html[data-theme="light"] [data-shell] .border-white\/\[0\.06\] { border-color: rgba(15, 23, 42, .08) !important; }
+html[data-theme="light"] [data-shell] .divide-white\/5 > * + * { border-color: rgba(15, 23, 42, .08) !important; }
+
+/* Texto */
+html[data-theme="light"] [data-shell] .text-white:not([class^="bg-"]):not([class*=" bg-"]),
+html[data-theme="light"] [data-shell] .text-white[class*="bg-[#0F172A]"],
+html[data-theme="light"] [data-shell] .text-white[class*="bg-[#0B1120]"],
+html[data-theme="light"] [data-shell] .text-white[class*="bg-white/"],
+html[data-theme="light"] [data-shell] .text-white[class*="bg-transparent"],
+html[data-theme="light"] [data-shell] .hover\:text-white:hover { color: #0F172A !important; }
+html[data-theme="light"] [data-shell] .text-slate-100,
+html[data-theme="light"] [data-shell] .text-slate-200 { color: #1E293B !important; }
+html[data-theme="light"] [data-shell] .text-slate-300 { color: #334155 !important; }
+html[data-theme="light"] [data-shell] .text-slate-400 { color: #475569 !important; }
+html[data-theme="light"] [data-shell] .text-slate-500 { color: #64748B !important; }
+html[data-theme="light"] [data-shell] .text-slate-600 { color: #94A3B8 !important; }
+
+/* Cores claras pensadas para fundo escuro → tons fortes no claro */
+html[data-theme="light"] [data-shell] .text-emerald-200,
+html[data-theme="light"] [data-shell] .text-emerald-300,
+html[data-theme="light"] [data-shell] .text-emerald-400 { color: #047857 !important; }
+html[data-theme="light"] [data-shell] .text-sky-200,
+html[data-theme="light"] [data-shell] .text-sky-300,
+html[data-theme="light"] [data-shell] .text-sky-400 { color: #0369A1 !important; }
+html[data-theme="light"] [data-shell] .text-red-200,
+html[data-theme="light"] [data-shell] .text-red-300,
+html[data-theme="light"] [data-shell] .text-red-400 { color: #B91C1C !important; }
+html[data-theme="light"] [data-shell] .text-amber-100,
+html[data-theme="light"] [data-shell] .text-amber-200,
+html[data-theme="light"] [data-shell] .text-amber-300,
+html[data-theme="light"] [data-shell] .text-amber-400 { color: #B45309 !important; }
+html[data-theme="light"] [data-shell] .text-violet-200,
+html[data-theme="light"] [data-shell] .text-violet-300 { color: #6D28D9 !important; }
+html[data-theme="light"] [data-shell] .text-blue-300,
+html[data-theme="light"] [data-shell] .text-blue-400 { color: #1D4ED8 !important; }
+html[data-theme="light"] [data-shell] .text-purple-300,
+html[data-theme="light"] [data-shell] .text-purple-400 { color: #7E22CE !important; }
+html[data-theme="light"] [data-shell] .text-orange-300,
+html[data-theme="light"] [data-shell] .text-orange-400 { color: #C2410C !important; }
+html[data-theme="light"] [data-shell] .text-\[\#4ADE80\] { color: #15803D !important; }
+
+/* Campos, placeholders e scrollbar */
+html[data-theme="light"] [data-shell] input::placeholder,
+html[data-theme="light"] [data-shell] textarea::placeholder { color: #94A3B8 !important; }
+html[data-theme="light"] [data-shell] [class*="color-scheme:dark"] { color-scheme: light !important; }
+html[data-theme="light"] [data-shell] select option { background: #fff; color: #0F172A; }
+html[data-theme="light"] [data-shell] .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .18); }
+html[data-theme="light"] [data-shell] .shadow-2xl,
+html[data-theme="light"] [data-shell] .shadow-xl { --tw-shadow-color: rgba(15, 23, 42, .12); }

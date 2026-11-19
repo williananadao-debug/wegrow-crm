@@ -30,7 +30,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   }
 
   return (
-    <div className="flex h-screen bg-[#0B1120] overflow-hidden text-white">
+    <div data-shell className="flex h-screen bg-[#0B1120] overflow-hidden text-white">
       {/* Menu Lateral */}
       <div className="z-40 relative">
         <Navbar />

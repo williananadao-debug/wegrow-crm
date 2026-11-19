@@ -44,7 +44,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-br">
+    <html lang="pt-br" data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/* Tema escolhido pela pessoa (ThemeToggle) aplicado antes da primeira pintura. Padrão: escuro. */}
+        <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('wg_tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}" }} />
+      </head>
       <body className={`${inter.className} bg-[#0B1120] text-white antialiased`}>
         <AuthProvider>
           <LayoutWrapper>

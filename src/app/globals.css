@@ -18,7 +18,7 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Aplica o scroll escuro na página inteira também */
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) var(--wg-bg);
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 /* --- SCROLLBAR CUSTOMIZADA --- */
@@ -202,3 +202,15 @@ html[data-theme="light"] [data-shell] select option { background: #fff; color: #
 html[data-theme="light"] [data-shell] .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .18); }
 html[data-theme="light"] [data-shell] .shadow-2xl,
 html[data-theme="light"] [data-shell] .shadow-xl { --tw-shadow-color: rgba(15, 23, 42, .12); }
+
+/* Barras de rolagem no tema claro: o body define scrollbar-color (que é HERDADO por todo
+   elemento) com trilho escuro — no claro isso virava faixa preta em toda coluna/lista. */
+html[data-theme="light"] body,
+html[data-theme="light"] [data-shell],
+html[data-theme="light"] [data-shell] * {
+  scrollbar-color: rgba(15, 23, 42, .22) transparent;
+}
+html[data-theme="light"] [data-shell] ::-webkit-scrollbar-track,
+html[data-theme="light"] [data-shell] ::-webkit-scrollbar-corner { background: transparent !important; }
+html[data-theme="light"] [data-shell] ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .22) !important; border-radius: 10px; }
+html[data-theme="light"] [data-shell] ::-webkit-scrollbar-thumb:hover { background: var(--wg-green) !important; }

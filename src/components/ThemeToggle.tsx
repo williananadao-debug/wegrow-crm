@@ -11,7 +11,7 @@ export function lerTema(): 'dark' | 'light' {
   return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
 }
 
-export default function ThemeToggle({ compacto = false, className = '' }: { compacto?: boolean; className?: string }) {
+export default function ThemeToggle({ className = '' }: { className?: string }) {
   const [tema, setTema] = useState<'dark' | 'light'>('dark');
   useEffect(() => { void Promise.resolve().then(() => setTema(lerTema())); }, []);
 
@@ -22,13 +22,13 @@ export default function ThemeToggle({ compacto = false, className = '' }: { comp
     setTema(novo);
   };
 
+  // No escuro mostra o sol (vai pro claro); no claro mostra a lua (volta pro escuro).
   const Icone = tema === 'dark' ? Sun : Moon;
-  const rotulo = tema === 'dark' ? 'Tema claro' : 'Tema escuro';
+  const rotulo = tema === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
   return (
     <button onClick={trocar} title={rotulo} aria-label={rotulo}
-      className={`w-full flex items-center gap-4 rounded-2xl transition-all font-semibold text-sm text-slate-400 hover:text-white hover:bg-white/5 ${compacto ? 'justify-center px-3 py-3' : 'px-4 py-3.5'} ${className}`}>
-      <Icone size={20} />
-      {!compacto && <span>{rotulo}</span>}
+      className={`flex items-center justify-center w-10 h-10 rounded-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors ${className}`}>
+      <Icone size={19} />
     </button>
   );
 }

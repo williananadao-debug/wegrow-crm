@@ -1,5 +1,6 @@
 "use client";
 
+import ThemeToggle from '@/components/ThemeToggle';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ehCargoRestrito } from '@/lib/publicPages';
@@ -59,6 +60,7 @@ export default function Topbar() {
           <span className="text-[10px] font-bold uppercase tracking-widest">Buscar</span>
           <kbd className="text-[9px] font-black bg-white/10 px-1.5 py-0.5 rounded border border-white/10">Ctrl K</kbd>
         </button>}
+        <ThemeToggle />
         <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors cursor-pointer">
             <NotificationBell />
         </div>

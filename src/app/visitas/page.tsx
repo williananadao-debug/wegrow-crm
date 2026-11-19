@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MapPin, Plus, X, CheckCircle2, Clock, Zap,
   ArrowLeft, Loader2,
@@ -413,8 +413,14 @@ export default function VisitasPage() {
     setShowToast(true);
   }, []);
 
+  // Cada mudança de data dispara uma busca (digitar a data no campo gera várias, ex.: ano
+  // "0002" no meio da digitação = período gigante). Só a busca mais nova pode gravar na tela —
+  // antes uma resposta atrasada de período velho sobrescrevia e aparecia visita de outubro.
+  const buscaVisitasRef = useRef(0);
+
   const carregarVisitas = useCallback(async () => {
     if (!perfil?.empresa_id) return;
+    const minhaBusca = ++buscaVisitasRef.current;
     setLoading(true);
     let query = supabase
       .from('visitas')
@@ -422,8 +428,12 @@ export default function VisitasPage() {
       .eq('empresa_id', perfil.empresa_id)
       .order('created_at', { ascending: false });
 
-    if (dataInicio) query = query.gte('created_at', dataInicio);
-    if (dataFim) query = query.lte('created_at', `${dataFim}T23:59:59`);
+    // Com o fuso local: sem offset o banco compara em UTC e as bordas andam 3 h.
+    const offsetMin = -new Date().getTimezoneOffset();
+    const tz = `${offsetMin >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, '0')}:${String(Math.abs(offsetMin) % 60).padStart(2, '0')}`;
+    const dataValida = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number(d.slice(0, 4)) >= 2000;
+    if (dataInicio && dataValida(dataInicio)) query = query.gte('created_at', `${dataInicio}T00:00:00${tz}`);
+    if (dataFim && dataValida(dataFim)) query = query.lte('created_at', `${dataFim}T23:59:59.999${tz}`);
 
     if (!isDirector) {
       if (isGerente && perfil?.unidade) query = query.eq('unidade', perfil.unidade);
@@ -431,6 +441,7 @@ export default function VisitasPage() {
     }
 
     const { data, error } = await query;
+    if (minhaBusca !== buscaVisitasRef.current) return; // chegou uma busca mais nova
     if (!error && data) setVisitas(data as Visita[]);
     setLoading(false);
   }, [perfil?.empresa_id, perfil?.unidade, user?.id, isDirector, isGerente, dataInicio, dataFim]);

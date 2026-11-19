@@ -249,6 +249,10 @@ const validarCNPJ = (cnpj: string) => {
 
 const rotuloDocumento = (doc: string) => (doc || '').replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ';
 
+// Ganhos/perdidos do período: busca em páginas até esse teto (um mês da Demais FM passa de 200).
+const LIMITE_FECHADOS = 2000;
+const PAGINA_FECHADOS = 500;
+
 export default function DealsPage() {
   const auth = useAuth() || {};
   const user = auth.user;
@@ -375,6 +379,7 @@ export default function DealsPage() {
       return getLocalYYYYMMDD(ultimoDia);
   });
 
+  const buscaLeadsRef = useRef(0);
   const dataInicioRef = useRef(dataInicio);
   const dataFimRef = useRef(dataFim);
   useEffect(() => { dataInicioRef.current = dataInicio; }, [dataInicio]);
@@ -448,6 +453,9 @@ export default function DealsPage() {
   }, [perfil?.empresa_id]);
 
   const fetchData = useCallback(async () => {
+    // Trocar as duas datas dispara duas buscas seguidas; se a primeira (período velho)
+    // responder depois, sobrescrevia a lista do período novo e lead "sumia" do filtro.
+    const minhaBusca = ++buscaLeadsRef.current;
     setLoading(true);
     const COLS = 'id, empresa, valor_total, valor_fechado, fechado_por, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
 
@@ -478,6 +486,17 @@ export default function DealsPage() {
     const tz = `${offsetMin >= 0 ? '+' : '-'}${String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, '0')}:${String(Math.abs(offsetMin) % 60).padStart(2, '0')}`;
     const inicioTz = dataInicioRef.current + 'T00:00:00' + tz;
     const fimTz = dataFimRef.current + 'T23:59:59.999' + tz;
+
+    const buscarPaginado = async (montar: () => any) => {
+        const linhas: any[] = [];
+        for (let de = 0; de < LIMITE_FECHADOS; de += PAGINA_FECHADOS) {
+            const r = await montar().range(de, de + PAGINA_FECHADOS - 1);
+            if (r.error) return { data: linhas, error: r.error };
+            linhas.push(...(r.data || []));
+            if ((r.data || []).length < PAGINA_FECHADOS) break;
+        }
+        return { data: linhas, error: null };
+    };
 
     const mesclarResultados = (resultados: { data: any[] | null; error: any }[], limite: number) => {
         const erro = resultados.find(r => r.error)?.error || null;
@@ -515,10 +534,13 @@ export default function DealsPage() {
         Promise.all(buildQs().map(q => q.lte('etapa', 3).order('created_at', { ascending: false }).limit(500))),
         // Ganho/perdido entram no período em que foram FECHADOS (fechado_em), não no que foram
         // criados — lead aberto em setembro e ganho em outubro aparece em outubro.
-        Promise.all(buildQs().map(q => q.gte('etapa', 4).gte('fechado_em', inicioTz).lte('fechado_em', fimTz).order('fechado_em', { ascending: false }).limit(200))),
+        // Paginado: antes era limit(200) e a Demais FM fecha 200+ por mês — os mais antigos do
+        // período ficavam de fora (ex.: ganho de outubro que só achava pesquisando o nome).
+        Promise.all(buildQs().map((_, i) => buscarPaginado(() => buildQs()[i].gte('etapa', 4).gte('fechado_em', inicioTz).lte('fechado_em', fimTz).order('fechado_em', { ascending: false }).order('id', { ascending: false })))),
     ]);
+    if (minhaBusca !== buscaLeadsRef.current) return; // chegou uma busca mais nova
     const openRes = mesclarResultados(resAbertos, 500);
-    const closedRes = mesclarResultados(resFechados, 200);
+    const closedRes = mesclarResultados(resFechados, LIMITE_FECHADOS);
 
     if (openRes.error) console.error('[fetchData] open leads:', openRes.error.message);
     if (closedRes.error) console.error('[fetchData] closed leads:', closedRes.error.message);
@@ -569,6 +591,7 @@ export default function DealsPage() {
     // uma fila de 5 consultas seguidas, e o Kanban só aparecia no fim de todas — pior página no
     // Speed Insights).
     const [{ data: perfisData }, { data: metaData }, riscoRes, { data: servicosData }] = await auxPromise;
+    if (minhaBusca !== buscaLeadsRef.current) return;
     if (perfisData) {
         const mapa = perfisData.reduce((acc: any, p) => ({...acc, [p.id]: p.nome}), {});
         setUsersMap(mapa);
@@ -629,6 +652,9 @@ export default function DealsPage() {
   const datasMontadasRef = useRef(false);
   useEffect(() => {
     if (!datasMontadasRef.current) { datasMontadasRef.current = true; return; }
+    // Enquanto digita a data o campo passa por anos como "0002": não busca período absurdo.
+    const valida = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number(d.slice(0, 4)) >= 2000;
+    if (!valida(dataInicio) || !valida(dataFim)) return;
     if (user) fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicio, dataFim]);

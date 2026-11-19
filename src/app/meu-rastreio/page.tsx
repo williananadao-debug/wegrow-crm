@@ -11,6 +11,7 @@ const MapaRastreio = dynamic(() => import('../rastreio/MapaRastreio'), { ssr: fa
 type Dados = {
   empresa: { nome: string; logo: string | null; cor: string };
   cliente: { nome: string; suspenso: boolean; temPin: boolean };
+  cobrancas?: { id: number; valor: number; vencimento: string; status: string; invoice_url: string | null }[];
   veiculos: Veiculo[];
   alertas: { id: number; veiculo_id: string; tipo: string; mensagem: string; ocorrido_em: string }[];
 };
@@ -162,8 +163,15 @@ export default function MeuRastreioPage() {
       </header>
 
       {dados.cliente.suspenso && (
-        <div className="mx-4 mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Há uma pendência na sua mensalidade. Fale com a central para regularizar.</div>
+        <div className="mx-4 mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Há uma pendência na sua mensalidade.{(dados.cobrancas || []).some(c => c.invoice_url) ? ' Pague abaixo e o acesso volta sozinho.' : ' Fale com a central para regularizar.'}</div>
       )}
+      {(dados.cobrancas || []).filter(c => c.invoice_url).map(c => (
+        <a key={c.id} href={c.invoice_url!} target="_blank" rel="noreferrer"
+          className={`mx-4 mb-2 rounded-xl border px-4 py-3 text-sm font-bold flex items-center justify-between gap-3 ${c.status === 'OVERDUE' ? 'border-red-500/40 bg-red-500/10 text-red-200' : 'border-white/15 bg-white/5 text-slate-200'}`}>
+          <span>Mensalidade {c.status === 'OVERDUE' ? 'vencida em' : 'vence em'} {c.vencimento.split('-').reverse().join('/')} · {Number(c.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          <span className="shrink-0 rounded-lg px-3 py-1.5 text-[#0B1120] font-black text-xs uppercase" style={{ background: cor }}>Pagar</span>
+        </a>
+      ))}
       {!dados.cliente.temPin && (
         <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); }} className="mx-4 mb-2 rounded-xl border border-sky-400/40 bg-sky-400/10 px-4 py-3 text-sm text-sky-200 text-left font-bold">
           Crie seu PIN de bloqueio para poder bloquear o veículo pelo app →

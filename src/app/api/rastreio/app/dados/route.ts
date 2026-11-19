@@ -24,11 +24,17 @@ export async function GET(req: NextRequest) {
         .in('veiculo_id', ids).neq('tipo', 'online').order('ocorrido_em', { ascending: false }).limit(30)
     : { data: [] };
 
+  // Mensalidades em aberto (para o botão "Pagar"): vencidas e a que vence nos próximos 10 dias.
+  const limite = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
+  const { data: cobrancas } = await db.from('rastreio_cobrancas').select('id, valor, vencimento, status, invoice_url')
+    .eq('cliente_id', s.clienteId).in('status', ['PENDING', 'OVERDUE']).lte('vencimento', limite).order('vencimento').limit(3);
+
   const r = NextResponse.json({
     empresa: { nome: empresa?.nome || 'Rastreamento', logo: empresa?.logo_url || null, cor: empresa?.cor_primaria || '#38BDF8' },
     cliente: { nome: cliente?.nome || '', suspenso: cliente?.status === 'suspenso', temPin: Boolean(cliente?.app_pin_hash) },
     veiculos: veiculos || [],
     alertas: alertas || [],
+    cobrancas: cobrancas || [],
   });
   if (cookie) r.cookies.set(COOKIE_APP, cookie, opcoesCookie()); // empurra o vencimento do cookie
   return r;

@@ -114,7 +114,9 @@ export default function RastreioClientesPage() {
   const validarVeiculo = () => {
     const d = dadosVeiculo();
     if (d.placa.length < 7) return 'Placa incompleta (7 caracteres).';
-    if (!/^\d{10,17}$/.test(d.imei)) return 'IMEI deve ter só números (normalmente 15). Está na etiqueta do rastreador.';
+    // 6 a 20 dígitos: IMEI de rastreador tem 15, mas o ID de alguns modelos (H02) e do app
+    // Traccar Client (teste com celular) é menor.
+    if (!/^\d{6,20}$/.test(d.imei)) return 'IMEI deve ter só números (o do rastreador costuma ter 15). Está na etiqueta do rastreador.';
     return '';
   };
 

@@ -76,6 +76,7 @@ export default function Instalacao({ v }: { v: Veiculo }) {
     { ok: Boolean(v.ultima_posicao_em), txt: 'Posição chegou no WeGrow', det: v.ultima_posicao_em ? haQuanto(v.ultima_posicao_em) : 'aguardando' },
   ];
   const dica = !diag ? null
+    : t?.protocolo === 'osmand' ? 'A última posição veio de um TESTE (celular/navegador, protocolo osmand), não do rastreador. Para o aparelho de verdade, o protocolo aparece como gt06, h02, suntech ou teltonika.'
     : diag.configurado === false ? 'Servidor de rastreio ainda não configurado.'
     : diag.erro ? `Não consegui consultar o servidor: ${diag.erro}`
     : !passos[1].ok ? 'O aparelho nunca falou com o servidor. Confira: chip com internet (abrir um site no celular com Wi-Fi desligado), APN da operadora, comando do servidor aceito e IMEI da etiqueta igual ao cadastrado. Depois mande RESET# e STATUS#.'

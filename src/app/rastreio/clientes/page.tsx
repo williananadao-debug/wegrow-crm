@@ -11,7 +11,7 @@ import {
 const CLIENTE_VAZIO = { tipo: 'PF' as 'PF' | 'PJ', nome: '', documento: '', telefone: '', email: '', endereco: '', cidade: '', mensalidade: '', dia_vencimento: '10', status: 'ativo', observacoes: '', relatorio_email: '' };
 const VEICULO_VAZIO = {
   placa: '', descricao: '', tipo: 'carro', imei: '', modelo_rastreador: '', chip_numero: '', chip_operadora: '',
-  tem_bloqueio: true, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '',
+  tem_bloqueio: true, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '', odometro: '',
 };
 const TIPOS = [['carro', 'Carro'], ['moto', 'Moto'], ['caminhao', 'Caminhão'], ['van', 'Van/Utilitário'], ['maquina', 'Máquina'], ['outro', 'Outro']];
 
@@ -86,7 +86,7 @@ export default function RastreioClientesPage() {
       placa: v.placa, descricao: v.descricao || '', tipo: v.tipo, imei: v.imei, modelo_rastreador: v.modelo_rastreador || '',
       chip_numero: v.chip_numero || '', chip_operadora: v.chip_operadora || '', tem_bloqueio: v.tem_bloqueio,
       instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '',
-      grupo: v.grupo || '',
+      grupo: v.grupo || '', odometro: v.odometro_km ? String(Math.round(Number(v.odometro_km))) : '',
     });
     setErro('');
     setModal({ tipo: 'veiculo', veiculo: v });
@@ -107,6 +107,12 @@ export default function RastreioClientesPage() {
     mensalidade: Number(String(cf.mensalidade).replace(',', '.')) || 0, dia_vencimento: Number(cf.dia_vencimento) || null,
     status: cf.status, observacoes: cf.observacoes.trim() || null, relatorio_email: cf.relatorio_email || null,
   });
+  // Hodômetro informado = novo ponto de partida (o cron soma os km do rastreador a partir de hoje).
+  const dadosOdometro = (anterior?: number | null) => {
+    const km = Number(vf.odometro.replace(/\D/g, ''));
+    if (!vf.odometro.trim() || !(km >= 0) || Math.round(Number(anterior || 0)) === km) return {};
+    return { odometro_base_km: km, odometro_base_em: new Date().toLocaleDateString('en-CA'), odometro_km: km };
+  };
   const dadosVeiculo = () => ({
     placa: mascaraPlaca(vf.placa), descricao: vf.descricao.trim() || null, tipo: vf.tipo, imei: vf.imei.replace(/\s/g, ''),
     modelo_rastreador: vf.modelo_rastreador.trim() || null, chip_numero: vf.chip_numero.trim() || null, chip_operadora: vf.chip_operadora.trim() || null,
@@ -138,7 +144,7 @@ export default function RastreioClientesPage() {
         if (msg) throw new Error(msg);
         let veiculoId: string;
         if (modal.tipo === 'veiculo') {
-          const { error } = await supabase.from('rastreio_veiculos').update(dadosVeiculo()).eq('id', modal.veiculo.id);
+          const { error } = await supabase.from('rastreio_veiculos').update({ ...dadosVeiculo(), ...dadosOdometro(modal.veiculo.odometro_km) }).eq('id', modal.veiculo.id);
           if (error) throw error;
           veiculoId = modal.veiculo.id;
         } else {
@@ -149,7 +155,7 @@ export default function RastreioClientesPage() {
             if (error) throw error;
             clienteId = data.id;
           }
-          const { data, error } = await supabase.from('rastreio_veiculos').insert({ empresa_id: empresaId, cliente_id: clienteId, ...dadosVeiculo() }).select('id').single();
+          const { data, error } = await supabase.from('rastreio_veiculos').insert({ empresa_id: empresaId, cliente_id: clienteId, ...dadosVeiculo(), ...dadosOdometro() }).select('id').single();
           if (error) throw error;
           veiculoId = data.id;
         }
@@ -515,6 +521,10 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                   <div><label className={lbl}>Operadora</label><input value={vf.chip_operadora} onChange={e => setVf({ ...vf, chip_operadora: e.target.value })} className={inp} placeholder="Vivo, Claro…" /></div>
                   <div><label className={lbl}>Alerta acima de (km/h)</label><input value={vf.limite_velocidade} onChange={e => setVf({ ...vf, limite_velocidade: e.target.value.replace(/\D/g, '').slice(0, 3) })} className={inp} inputMode="numeric" placeholder="vazio = sem" /></div>
                   <div><label className={lbl}>Instalado em</label><input type="date" value={vf.instalado_em} onChange={e => setVf({ ...vf, instalado_em: e.target.value })} className={`${inp} [color-scheme:dark]`} /></div>
+                  <div className="col-span-2">
+                    <label className={lbl}>Hodômetro atual (km do painel)</label>
+                    <input value={vf.odometro} onChange={e => setVf({ ...vf, odometro: e.target.value.replace(/\D/g, '').slice(0, 7) })} className={inp} inputMode="numeric" placeholder="Ex.: 85400 — depois soma sozinho" />
+                  </div>
                   <div className="col-span-2">
                     <label className={lbl}>Grupo (opcional)</label>
                     <input value={vf.grupo} onChange={e => setVf({ ...vf, grupo: e.target.value })} className={inp} list="grupos-rastreio" placeholder="Ex.: Entregas, Diretoria" />

@@ -394,7 +394,7 @@ function Sensores({ v }: { v: Veiculo }) {
     { icone: <Satellite size={13} />, rot: 'Satélites', val: v.satelites != null ? `${v.satelites}${v.satelites < 4 ? ' (fraco)' : ''}` : '—', ruim: v.satelites != null && v.satelites < 4 },
     { icone: <Signal size={13} />, rot: 'Sinal do chip', val: barras != null ? `${barras} de 4` : '—', ruim: barras != null && barras <= 1 },
     { icone: v.carregando ? <BatteryCharging size={13} /> : <Battery size={13} />, rot: 'Bateria interna', val: v.bateria_interna != null ? `${v.bateria_interna}%${v.carregando ? ' · carregando' : v.carregando === false ? ' · sem energia do veículo' : ''}` : '—', ruim: v.carregando === false },
-    { icone: <Milestone size={13} />, rot: 'Hodômetro', val: v.odometro_km ? `${Math.round(Number(v.odometro_km)).toLocaleString('pt-BR')} km` : '—', ruim: false },
+    { icone: <Milestone size={13} />, rot: 'Hodômetro', val: v.odometro_km ? `${Math.round(Number(v.odometro_km)).toLocaleString('pt-BR')} km` : 'informar em Editar', ruim: !v.odometro_km },
   ];
   return (
     <div className="grid grid-cols-2 gap-2 mb-2">

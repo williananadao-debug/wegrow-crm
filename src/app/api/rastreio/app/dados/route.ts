@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
-import { COOKIE_APP, obterSessaoApp, opcoesCookie } from '@/lib/rastreioApp';
+import { COOKIE_APP, obterSessaoApp, opcoesCookie, soVeiculosDaSessao } from '@/lib/rastreioApp';
 
 export const dynamic = 'force-dynamic';
 
-const COLS = 'id, placa, descricao, tipo, tem_bloqueio, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em';
+const COLS = 'id, placa, descricao, tipo, tem_bloqueio, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em, limite_velocidade, satelites, sinal_gsm, bateria_interna, carregando, endereco, odometro_km, grupo';
 
 // Tudo que a tela inicial do app precisa: marca do instalador, cliente, veículos e alertas.
 export async function GET(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const [{ data: empresa }, { data: cliente }, { data: veiculos }] = await Promise.all([
     db.from('empresas').select('nome, logo_url, cor_primaria').eq('id', s.empresaId).maybeSingle(),
     db.from('rastreio_clientes').select('nome, status, app_pin_hash').eq('id', s.clienteId).maybeSingle(),
-    db.from('rastreio_veiculos').select(COLS).eq('cliente_id', s.clienteId).eq('empresa_id', s.empresaId).eq('status', 'ativo').order('placa'),
+    soVeiculosDaSessao(db.from('rastreio_veiculos').select(COLS).eq('status', 'ativo'), s).order('placa'),
   ]);
   const ids = (veiculos || []).map(v => v.id);
   const { data: alertas } = ids.length
@@ -31,7 +31,10 @@ export async function GET(req: NextRequest) {
 
   const r = NextResponse.json({
     empresa: { nome: empresa?.nome || 'Rastreamento', logo: empresa?.logo_url || null, cor: empresa?.cor_primaria || '#38BDF8' },
-    cliente: { nome: cliente?.nome || '', suspenso: cliente?.status === 'suspenso', temPin: Boolean(cliente?.app_pin_hash) },
+    cliente: {
+      nome: s.nome || cliente?.nome || '', suspenso: cliente?.status === 'suspenso', temPin: Boolean(cliente?.app_pin_hash),
+      titular: !s.nome, podeBloquear: s.podeBloquear,
+    },
     veiculos: veiculos || [],
     alertas: alertas || [],
     cobrancas: cobrancas || [],

@@ -154,6 +154,11 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
         ...(ignicao !== null ? { ignicao } : {}),
         ...(attrs.power != null ? { bateria_externa: Number(attrs.power) } : {}),
         ...(typeof attrs.blocked === 'boolean' ? { bloqueado: attrs.blocked } : {}),
+        // Sensores (cada tipo de pacote do GT06 traz uma parte: só sobrescreve o que veio).
+        ...(attrs.sat != null ? { satelites: Number(attrs.sat) } : {}),
+        ...(attrs.rssi != null ? { sinal_gsm: Number(attrs.rssi) } : {}),
+        ...(attrs.batteryLevel != null ? { bateria_interna: Math.round(Number(attrs.batteryLevel)) } : {}),
+        ...(typeof attrs.charge === 'boolean' ? { carregando: attrs.charge } : {}),
         ultima_posicao_em: quando, ultima_comunicacao_em: agora,
         ...(!v.traccar_device_id && corpo.device?.id ? { traccar_device_id: corpo.device.id } : {}),
       }).eq('id', v.id);
@@ -184,12 +189,15 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
 async function verificarCercas(
   db: SupabaseClient, v: { id: string; empresa_id: string; placa: string }, lat: number, lng: number, quando: string,
 ): Promise<string | null> {
-  const { data: cercas, error } = await db.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, dentro')
+  const { data: cercas, error } = await db.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, dentro, tipo, poligono')
     .eq('veiculo_id', v.id).eq('ativo', true).limit(50);
   if (error || !cercas?.length) return null;
   const avisos: string[] = [];
   for (const c of cercas) {
-    const dentro = distanciaMetros(lat, lng, c.lat, c.lng) <= c.raio_m;
+    const pertoDoCentro = distanciaMetros(lat, lng, c.lat, c.lng) <= c.raio_m;
+    const dentro = c.tipo === 'poligono' && Array.isArray(c.poligono)
+      ? pertoDoCentro && pontoNoPoligono(lat, lng, c.poligono as [number, number][])
+      : pertoDoCentro;
     if (c.dentro === dentro) continue;
     await db.from('rastreio_cercas').update({ dentro }).eq('id', c.id);
     if (c.dentro === null) continue; // primeira leitura: só registra o estado
@@ -200,6 +208,16 @@ async function verificarCercas(
     avisos.push(`cerca ${c.nome}`);
   }
   return avisos.join(', ') || null;
+}
+
+/** Ray casting: o ponto está dentro do polígono [[lat,lng],...]? */
+export function pontoNoPoligono(lat: number, lng: number, pol: [number, number][]) {
+  let dentro = false;
+  for (let i = 0, j = pol.length - 1; i < pol.length; j = i++) {
+    const [yi, xi] = pol[i], [yj, xj] = pol[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) dentro = !dentro;
+  }
+  return dentro;
 }
 
 export function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number) {

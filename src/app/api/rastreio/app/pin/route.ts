@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   const db = supabaseAdmin();
   const s = await obterSessaoApp(db, req.cookies.get(COOKIE_APP)?.value);
   if (!s) return NextResponse.json({ error: 'sem_sessao' }, { status: 401 });
+  if (s.nome) return NextResponse.json({ error: 'Só o titular da conta cria ou troca o PIN.' }, { status: 403 });
   const { pin, pinAtual } = await req.json().catch(() => ({}));
   if (!pinValido(pin)) return NextResponse.json({ error: 'O PIN deve ter de 4 a 6 números.' }, { status: 400 });
   const { data: c } = await db.from('rastreio_clientes').select('app_pin_hash').eq('id', s.clienteId).maybeSingle();

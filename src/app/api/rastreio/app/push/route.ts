@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   if (token.length < 20 || token.length > 4096) return NextResponse.json({ error: 'Token inválido.' }, { status: 400 });
   const plataforma = ['android', 'ios', 'web'].includes(corpo.plataforma) ? corpo.plataforma : 'android';
   const { error } = await db.from('rastreio_push_tokens').upsert(
-    { token, plataforma, empresa_id: s.empresaId, cliente_id: s.clienteId, ultimo_uso: new Date().toISOString() },
+    { token, plataforma, empresa_id: s.empresaId, cliente_id: s.clienteId, sessao_id: s.id, ultimo_uso: new Date().toISOString() },
     { onConflict: 'token' },
   );
   if (error) return NextResponse.json({ error: 'Não foi possível registrar.' }, { status: 500 });

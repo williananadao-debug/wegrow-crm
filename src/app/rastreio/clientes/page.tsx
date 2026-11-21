@@ -1,17 +1,17 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone, Smartphone, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Search, Users, Car, Pencil, X, Lock, Phone, Smartphone, Trash2, Copy, Check, MessageCircle, Mail, UserPlus, ShieldOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, fmtMoeda, mascaraPlaca, mascaraDocumento, apiRastreio,
   type ClienteRastreio, type Veiculo,
 } from '../shared';
 
-const CLIENTE_VAZIO = { tipo: 'PF' as 'PF' | 'PJ', nome: '', documento: '', telefone: '', email: '', endereco: '', cidade: '', mensalidade: '', dia_vencimento: '10', status: 'ativo', observacoes: '' };
+const CLIENTE_VAZIO = { tipo: 'PF' as 'PF' | 'PJ', nome: '', documento: '', telefone: '', email: '', endereco: '', cidade: '', mensalidade: '', dia_vencimento: '10', status: 'ativo', observacoes: '', relatorio_email: '' };
 const VEICULO_VAZIO = {
   placa: '', descricao: '', tipo: 'carro', imei: '', modelo_rastreador: '', chip_numero: '', chip_operadora: '',
-  tem_bloqueio: true, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '',
+  tem_bloqueio: true, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '',
 };
 const TIPOS = [['carro', 'Carro'], ['moto', 'Moto'], ['caminhao', 'Caminhão'], ['van', 'Van/Utilitário'], ['maquina', 'Máquina'], ['outro', 'Outro']];
 
@@ -72,6 +72,8 @@ export default function RastreioClientesPage() {
       .some(x => String(x || '').toLowerCase().includes(q)));
   }, [clientes, busca, porCliente]);
 
+  const gruposExistentes = useMemo(() => [...new Set(veiculos.map(v => v.grupo).filter(Boolean) as string[])].sort(), [veiculos]);
+
   const receitaMensal = clientes.filter(c => c.status === 'ativo').reduce((s, c) => s + Number(c.mensalidade || 0), 0);
   const ativos = veiculos.filter(v => v.status === 'ativo').length;
 
@@ -84,6 +86,7 @@ export default function RastreioClientesPage() {
       placa: v.placa, descricao: v.descricao || '', tipo: v.tipo, imei: v.imei, modelo_rastreador: v.modelo_rastreador || '',
       chip_numero: v.chip_numero || '', chip_operadora: v.chip_operadora || '', tem_bloqueio: v.tem_bloqueio,
       instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '',
+      grupo: v.grupo || '',
     });
     setErro('');
     setModal({ tipo: 'veiculo', veiculo: v });
@@ -92,7 +95,7 @@ export default function RastreioClientesPage() {
     setCf({
       tipo: c.tipo, nome: c.nome, documento: c.documento ? mascaraDocumento(c.documento) : '', telefone: c.telefone || '', email: c.email || '',
       endereco: c.endereco || '', cidade: c.cidade || '', mensalidade: String(c.mensalidade ?? ''), dia_vencimento: String(c.dia_vencimento ?? '10'),
-      status: c.status, observacoes: c.observacoes || '',
+      status: c.status, observacoes: c.observacoes || '', relatorio_email: c.relatorio_email || '',
     });
     setErro('');
     setModal({ tipo: 'cliente', cliente: c });
@@ -102,13 +105,13 @@ export default function RastreioClientesPage() {
     tipo: cf.tipo, nome: cf.nome.trim(), documento: cf.documento.replace(/\D/g, '') || null, telefone: cf.telefone.trim() || null,
     email: cf.email.trim() || null, endereco: cf.endereco.trim() || null, cidade: cf.cidade.trim() || null,
     mensalidade: Number(String(cf.mensalidade).replace(',', '.')) || 0, dia_vencimento: Number(cf.dia_vencimento) || null,
-    status: cf.status, observacoes: cf.observacoes.trim() || null,
+    status: cf.status, observacoes: cf.observacoes.trim() || null, relatorio_email: cf.relatorio_email || null,
   });
   const dadosVeiculo = () => ({
     placa: mascaraPlaca(vf.placa), descricao: vf.descricao.trim() || null, tipo: vf.tipo, imei: vf.imei.replace(/\s/g, ''),
     modelo_rastreador: vf.modelo_rastreador.trim() || null, chip_numero: vf.chip_numero.trim() || null, chip_operadora: vf.chip_operadora.trim() || null,
     tem_bloqueio: vf.tem_bloqueio, instalado_em: vf.instalado_em || null, instalado_por: vf.instalado_por.trim() || null,
-    limite_velocidade: Number(vf.limite_velocidade) || null,
+    limite_velocidade: Number(vf.limite_velocidade) || null, grupo: vf.grupo.trim().slice(0, 40) || null,
   });
 
   const validarVeiculo = () => {
@@ -164,8 +167,12 @@ export default function RastreioClientesPage() {
     }
   };
 
-  // Link de uso único do app do cliente (/meu-rastreio), mandado pelo WhatsApp do instalador.
+  // Link de uso único do app do cliente (/meu-rastreio). Fica na tela com "Copiar" e "WhatsApp":
+  // copiar/abrir janela depois de esperar o servidor é bloqueado em silêncio pelo Safari, então
+  // a ação final é sempre um toque do usuário.
   const [gerandoAcesso, setGerandoAcesso] = useState<string | null>(null);
+  const [linkAcesso, setLinkAcesso] = useState<{ nome: string; link: string; texto: string; fone: string; dias: number } | null>(null);
+  const [copiado, setCopiado] = useState(false);
   const enviarAcesso = async (c: ClienteRastreio) => {
     setGerandoAcesso(c.id);
     try {
@@ -173,15 +180,63 @@ export default function RastreioClientesPage() {
       const texto = `Olá, ${c.nome.split(' ')[0]}! Aqui está o seu acesso ao app de rastreamento do seu veículo. Toque no link para entrar (vale por ${r.validadeDias} dias e só uma vez):
 ${r.link}
 
-Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
+Abra no Chrome ou no Safari (não dentro do WhatsApp). No iPhone, se for usar pelo ícone da tela inicial, abra o ícone e cole este link no campo "Ou cole o link aqui".`;
       const fone = String(c.telefone || '').replace(/\D/g, '');
-      if (fone) window.open(`https://wa.me/${fone.length <= 11 ? `55${fone}` : fone}?text=${encodeURIComponent(texto)}`, '_blank');
-      else { await navigator.clipboard?.writeText(texto).catch(() => null); }
-      setAviso(fone ? 'WhatsApp aberto com o link de acesso.' : 'Cliente sem telefone: o link de acesso foi copiado — cole onde quiser enviar.');
+      setCopiado(false);
+      setLinkAcesso({ nome: c.nome, link: r.link, texto, fone: fone ? (fone.length <= 11 ? `55${fone}` : fone) : '', dias: r.validadeDias });
     } catch (err) {
       alert((err as Error).message);
     } finally {
       setGerandoAcesso(null);
+    }
+  };
+  const [enviandoRelatorio, setEnviandoRelatorio] = useState(false);
+  const enviarRelatorioTeste = async (clienteId: string) => {
+    setEnviandoRelatorio(true);
+    try {
+      const r = await apiRastreio('relatorio-email', { clienteId, frequencia: cf.relatorio_email || 'semanal' });
+      alert(`Relatório enviado para ${r.email}.`);
+    } catch (err) { alert((err as Error).message); } finally { setEnviandoRelatorio(false); }
+  };
+
+  // Acessos ao app: celulares logados (revogar) + convite para outra pessoa (PJ: motorista/gestor).
+  type Sessao = { id: number; nome: string | null; veiculo_ids: string[] | null; pode_bloquear: boolean; dispositivo: string | null; ultimo_acesso: string | null; created_at: string };
+  const [acessos, setAcessos] = useState<{ cliente: ClienteRastreio; sessoes: Sessao[]; pendentes: number } | null>(null);
+  const [extra, setExtra] = useState({ nome: '', telefone: '', veiculoIds: [] as string[], podeBloquear: false });
+  const [carregandoAcessos, setCarregandoAcessos] = useState(false);
+  const abrirAcessos = async (c: ClienteRastreio, revogar?: number) => {
+    setCarregandoAcessos(true);
+    try {
+      const r = await apiRastreio('acessos', { clienteId: c.id, revogar });
+      setAcessos({ cliente: c, sessoes: r.sessoes, pendentes: r.convitesPendentes.length });
+    } catch (err) { alert((err as Error).message); } finally { setCarregandoAcessos(false); }
+  };
+  const convidarExtra = async () => {
+    if (!acessos || !extra.nome.trim()) return;
+    setCarregandoAcessos(true);
+    try {
+      const c = acessos.cliente;
+      const r = await apiRastreio('convite', { clienteId: c.id, extra });
+      const fone = extra.telefone.replace(/\D/g, '');
+      const texto = `Olá, ${extra.nome.split(' ')[0]}! Aqui está o seu acesso ao app de rastreamento (${c.nome}). Toque no link para entrar (vale por ${r.validadeDias} dias e só uma vez):
+${r.link}
+
+Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
+      setAcessos(null);
+      setExtra({ nome: '', telefone: '', veiculoIds: [], podeBloquear: false });
+      setCopiado(false);
+      setLinkAcesso({ nome: extra.nome, link: r.link, texto, fone: fone ? (fone.length <= 11 ? `55${fone}` : fone) : '', dias: r.validadeDias });
+    } catch (err) { alert((err as Error).message); } finally { setCarregandoAcessos(false); }
+  };
+
+  const copiarLink = async () => {
+    if (!linkAcesso) return;
+    const ok = await navigator.clipboard?.writeText(linkAcesso.link).then(() => true).catch(() => false);
+    if (ok) setCopiado(true);
+    else {
+      // Sem permissão de área de transferência: seleciona o texto para o usuário copiar na mão.
+      const el = document.getElementById('link-acesso') as HTMLInputElement | null;
+      el?.focus(); el?.select();
     }
   };
 
@@ -270,6 +325,7 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
                   <button onClick={() => enviarAcesso(c)} disabled={gerandoAcesso === c.id || c.status === 'cancelado'} className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-[10px] font-black uppercase inline-flex items-center gap-1 disabled:opacity-40" title="Manda pelo WhatsApp o link para o cliente entrar no app">
                     {gerandoAcesso === c.id ? <Loader2 size={12} className="animate-spin" /> : <Smartphone size={12} />} Acesso ao app
                   </button>
+                  <button onClick={() => abrirAcessos(c)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10" title="Celulares com acesso e acessos extras (motorista, gestor)"><UserPlus size={13} /></button>
                   <button onClick={() => abrirCliente(c)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10" title="Editar cliente"><Pencil size={13} /></button>
                   <button onClick={() => abrirInstalacao(c.id)} className="px-3 py-2 rounded-lg bg-sky-400/10 text-sky-300 hover:bg-sky-400/20 text-[10px] font-black uppercase inline-flex items-center gap-1"><Plus size={12} /> Veículo</button>
                 </div>
@@ -284,6 +340,7 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
                           <Car size={14} className="shrink-0 text-slate-500" />
                           <span className="font-black tracking-wider">{v.placa}</span>
                           <span className="text-xs text-slate-400 truncate">{v.descricao}</span>
+                          {v.grupo && <span className="text-[10px] font-black uppercase text-violet-300 bg-violet-500/10 px-1.5 py-0.5 rounded">{v.grupo}</span>}
                         </Link>
                         <div className="flex items-center gap-2 shrink-0">
                           {v.status === 'inativo' ? <span className="text-[10px] font-black uppercase text-slate-500">inativo</span>
@@ -301,6 +358,85 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
             </div>
           ))}
           {lista.length === 0 && <p className="text-center text-sm text-slate-500 py-10">{clientes.length ? 'Nada encontrado.' : 'Nenhum cliente ainda — comece por "Nova instalação".'}</p>}
+        </div>
+      )}
+
+      {acessos && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-start md:items-center justify-center p-4 overflow-y-auto" onClick={() => setAcessos(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-lg my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-black uppercase flex items-center gap-2"><Smartphone size={18} /> Acessos · {acessos.cliente.nome}</h2>
+              <button onClick={() => setAcessos(null)} className="p-2 rounded-lg hover:bg-white/10"><X size={16} /></button>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Celulares logados ({acessos.sessoes.length})</p>
+            {acessos.sessoes.length === 0 ? <p className="text-xs text-slate-500 mb-4">Nenhum celular entrou ainda.{acessos.pendentes ? ` ${acessos.pendentes} link(s) gerado(s) ainda sem uso.` : ''}</p> : (
+              <ul className="divide-y divide-white/5 text-xs mb-4">
+                {acessos.sessoes.map(se => {
+                  const placas = se.veiculo_ids?.map(id => veiculos.find(v => v.id === id)?.placa).filter(Boolean).join(', ');
+                  return (
+                    <li key={se.id} className="py-2 flex items-center gap-2">
+                      <span className="flex-1 min-w-0">
+                        <b className="text-slate-200">{se.nome || 'Titular'}</b>
+                        <span className="text-slate-500"> · {se.dispositivo || 'celular'} · entrou {new Date(se.created_at).toLocaleDateString('pt-BR')}</span>
+                        <span className="block text-slate-500">{placas ? `Só ${placas}` : 'Todos os veículos'}{se.pode_bloquear ? ' · pode bloquear' : ' · sem bloqueio'}{se.ultimo_acesso ? ` · último uso ${new Date(se.ultimo_acesso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+                      </span>
+                      <button onClick={() => { if (confirm('Desconectar este celular? Ele vai precisar de um link novo para entrar.')) abrirAcessos(acessos.cliente, se.id); }}
+                        className="text-[10px] font-black uppercase text-red-400/80 hover:text-red-300 inline-flex items-center gap-1"><ShieldOff size={12} /> Revogar</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+              <p className="text-[11px] font-black uppercase tracking-widest text-sky-400">Acesso para outra pessoa</p>
+              <p className="text-[11px] text-slate-500">Ex.: motorista ou gestor da empresa cliente. Vê só os veículos marcados; o PIN de bloqueio é o do titular.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={extra.nome} onChange={e => setExtra({ ...extra, nome: e.target.value })} placeholder="Nome" className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-sky-400" />
+                <input value={extra.telefone} onChange={e => setExtra({ ...extra, telefone: e.target.value })} placeholder="WhatsApp (opcional)" inputMode="tel" className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-sky-400" />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(porCliente[acessos.cliente.id] || []).filter(v => v.status === 'ativo').map(v => {
+                  const on = extra.veiculoIds.includes(v.id);
+                  return (
+                    <button key={v.id} onClick={() => setExtra({ ...extra, veiculoIds: on ? extra.veiculoIds.filter(x => x !== v.id) : [...extra.veiculoIds, v.id] })}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-black border ${on ? 'bg-sky-400 text-[#0B1120] border-sky-400' : 'border-white/10 text-slate-300'}`}>{v.placa}</button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-500">{extra.veiculoIds.length ? `${extra.veiculoIds.length} veículo(s) marcado(s)` : 'Nenhum marcado = vê todos os veículos'}</p>
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={extra.podeBloquear} onChange={e => setExtra({ ...extra, podeBloquear: e.target.checked })} className="accent-sky-400" /> Pode bloquear/desbloquear
+              </label>
+              <button onClick={convidarExtra} disabled={!extra.nome.trim() || carregandoAcessos}
+                className="w-full rounded-xl py-2.5 font-black text-xs uppercase bg-sky-400 text-[#0B1120] disabled:opacity-40 inline-flex items-center justify-center gap-2">
+                {carregandoAcessos && <Loader2 size={13} className="animate-spin" />} Gerar link de acesso
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkAcesso && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setLinkAcesso(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-black uppercase flex items-center gap-2"><Smartphone size={18} /> Acesso ao app</h2>
+              <button onClick={() => setLinkAcesso(null)} className="p-2 rounded-lg hover:bg-white/10"><X size={16} /></button>
+            </div>
+            <p className="text-sm text-slate-400 mb-3">Link novo para <b className="text-white">{linkAcesso.nome}</b>. Funciona <b className="text-white">uma vez, em um celular</b>, por {linkAcesso.dias} dias. Links gerados antes continuam valendo até serem usados.</p>
+            <input id="link-acesso" readOnly value={linkAcesso.link} onFocus={e => e.currentTarget.select()}
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-slate-200 font-mono outline-none focus:border-sky-400 mb-3" />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={copiarLink} className="rounded-xl py-3 font-black text-xs uppercase bg-white/5 border border-white/10 hover:bg-white/10 inline-flex items-center justify-center gap-2">
+                {copiado ? <><Check size={14} className="text-emerald-400" /> Copiado</> : <><Copy size={14} /> Copiar link</>}
+              </button>
+              <a href={`https://wa.me/${linkAcesso.fone}?text=${encodeURIComponent(linkAcesso.texto)}`} target="_blank" rel="noreferrer"
+                className="rounded-xl py-3 font-black text-xs uppercase bg-emerald-500 text-[#0B1120] inline-flex items-center justify-center gap-2">
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            </div>
+            {!linkAcesso.fone && <p className="text-[11px] text-slate-500 mt-3">Cliente sem telefone cadastrado: o WhatsApp abre para você escolher o contato.</p>}
+          </div>
         </div>
       )}
 
@@ -340,6 +476,22 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
                       </select>
                     </div>
                   )}
+                  <div className="col-span-2">
+                    <label className={lbl}>Relatório por e-mail</label>
+                    <select value={cf.relatorio_email} onChange={e => setCf({ ...cf, relatorio_email: e.target.value })} className={inp}>
+                      <option value="" className="bg-[#0B1120]">Não enviar</option>
+                      <option value="semanal" className="bg-[#0B1120]">Semanal (toda segunda)</option>
+                      <option value="mensal" className="bg-[#0B1120]">Mensal (todo dia 1)</option>
+                    </select>
+                  </div>
+                  {modal.tipo === 'cliente' && cf.email && (
+                    <div className="col-span-2 flex items-end">
+                      <button type="button" onClick={() => enviarRelatorioTeste(modal.cliente.id)} disabled={enviandoRelatorio}
+                        className="w-full px-3 py-2.5 rounded-xl border border-white/10 text-xs font-black uppercase text-slate-300 hover:bg-white/5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
+                        {enviandoRelatorio ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />} Enviar relatório agora
+                      </button>
+                    </div>
+                  )}
                   <div className="col-span-2 md:col-span-4"><label className={lbl}>Observações</label><input value={cf.observacoes} onChange={e => setCf({ ...cf, observacoes: e.target.value })} className={inp} /></div>
                 </div>
               </section>
@@ -363,6 +515,11 @@ Depois de abrir, use "Adicionar à tela inicial" para ter o app no celular.`;
                   <div><label className={lbl}>Operadora</label><input value={vf.chip_operadora} onChange={e => setVf({ ...vf, chip_operadora: e.target.value })} className={inp} placeholder="Vivo, Claro…" /></div>
                   <div><label className={lbl}>Alerta acima de (km/h)</label><input value={vf.limite_velocidade} onChange={e => setVf({ ...vf, limite_velocidade: e.target.value.replace(/\D/g, '').slice(0, 3) })} className={inp} inputMode="numeric" placeholder="vazio = sem" /></div>
                   <div><label className={lbl}>Instalado em</label><input type="date" value={vf.instalado_em} onChange={e => setVf({ ...vf, instalado_em: e.target.value })} className={`${inp} [color-scheme:dark]`} /></div>
+                  <div className="col-span-2">
+                    <label className={lbl}>Grupo (opcional)</label>
+                    <input value={vf.grupo} onChange={e => setVf({ ...vf, grupo: e.target.value })} className={inp} list="grupos-rastreio" placeholder="Ex.: Entregas, Diretoria" />
+                    <datalist id="grupos-rastreio">{gruposExistentes.map(g => <option key={g} value={g} />)}</datalist>
+                  </div>
                   <div><label className={lbl}>Instalador</label><input value={vf.instalado_por} onChange={e => setVf({ ...vf, instalado_por: e.target.value })} className={inp} /></div>
                   <label className="col-span-2 flex items-center gap-2 text-sm text-slate-300 mt-5 cursor-pointer">
                     <input type="checkbox" checked={vf.tem_bloqueio} onChange={e => setVf({ ...vf, tem_bloqueio: e.target.checked })} className="accent-sky-400 w-4 h-4" />

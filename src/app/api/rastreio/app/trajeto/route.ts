@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
-import { COOKIE_APP, obterSessaoApp } from '@/lib/rastreioApp';
+import { COOKIE_APP, obterSessaoApp, soVeiculosDaSessao } from '@/lib/rastreioApp';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +15,7 @@ export async function GET(req: NextRequest) {
   if (isNaN(+ini) || isNaN(+fim) || +fim - +ini > 2 * 86400_000 || +fim < +ini) {
     return NextResponse.json({ error: 'Período inválido.' }, { status: 400 });
   }
-  const { data: v } = await db.from('rastreio_veiculos').select('id')
-    .eq('id', veiculoId).eq('cliente_id', s.clienteId).eq('empresa_id', s.empresaId).maybeSingle();
+  const { data: v } = await soVeiculosDaSessao(db.from('rastreio_veiculos').select('id').eq('id', veiculoId), s).maybeSingle();
   if (!v) return NextResponse.json({ error: 'Veículo não encontrado.' }, { status: 404 });
   const { data } = await db.from('rastreio_posicoes').select('lat, lng, velocidade, ignicao, registrado_em')
     .eq('veiculo_id', v.id).gte('registrado_em', ini.toISOString()).lte('registrado_em', fim.toISOString())

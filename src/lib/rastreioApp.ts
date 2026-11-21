@@ -20,19 +20,25 @@ export function opcoesCookie() {
   return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: SESSAO_DIAS * 86400 };
 }
 
-export async function criarConvite(db: SupabaseClient, p: { empresaId: string; clienteId: string; criadoPor: string }) {
+// Acesso extra (PJ: motorista, gestor): nome de quem usa, veículos permitidos (nulo = todos) e
+// se pode bloquear. Sem "extra" = acesso do titular (todos os veículos, pode bloquear).
+export type AcessoExtra = { nome: string; veiculoIds: string[] | null; podeBloquear: boolean };
+
+export async function criarConvite(db: SupabaseClient, p: { empresaId: string; clienteId: string; criadoPor: string; extra?: AcessoExtra }) {
   const token = novoToken();
-  await db.from('rastreio_app_convites').insert({
+  const { error } = await db.from('rastreio_app_convites').insert({
     empresa_id: p.empresaId, cliente_id: p.clienteId, token_hash: hashToken(token), criado_por: p.criadoPor,
     expira_em: new Date(Date.now() + CONVITE_DIAS * 86400_000).toISOString(),
+    ...(p.extra ? { nome: p.extra.nome, veiculo_ids: p.extra.veiculoIds?.length ? p.extra.veiculoIds : null, pode_bloquear: p.extra.podeBloquear } : {}),
   });
+  if (error) throw new Error('Não foi possível gerar o convite agora.');
   return token;
 }
 
 /** Troca o convite (uso único) por uma sessão. Retorna o valor do cookie ou null. */
-export async function trocarConvite(db: SupabaseClient, token: string): Promise<string | null> {
+export async function trocarConvite(db: SupabaseClient, token: string, dispositivo?: string): Promise<string | null> {
   if (!token || token.length < 20) return null;
-  const { data: c } = await db.from('rastreio_app_convites').select('id, empresa_id, cliente_id, expira_em, usado_em')
+  const { data: c } = await db.from('rastreio_app_convites').select('id, empresa_id, cliente_id, expira_em, usado_em, nome, veiculo_ids, pode_bloquear')
     .eq('token_hash', hashToken(token)).maybeSingle();
   if (!c || c.usado_em || new Date(c.expira_em).getTime() < Date.now()) return null;
   // Marca como usado antes de criar a sessão (corrida de dois cliques: só um vence).
@@ -43,17 +49,43 @@ export async function trocarConvite(db: SupabaseClient, token: string): Promise<
   await db.from('rastreio_app_sessoes').insert({
     empresa_id: c.empresa_id, cliente_id: c.cliente_id, sessao_hash: hashToken(sessao),
     expira_em: new Date(Date.now() + SESSAO_DIAS * 86400_000).toISOString(), ultimo_acesso: new Date().toISOString(),
+    nome: c.nome, veiculo_ids: c.veiculo_ids, pode_bloquear: c.pode_bloquear ?? true, dispositivo: descreverDispositivo(dispositivo),
   });
   return sessao;
 }
 
-export type SessaoApp = { id: number; empresaId: string; clienteId: string };
+/** "Android · Chrome", "iPhone · Safari"... para o instalador reconhecer o celular na lista de acessos. */
+function descreverDispositivo(ua?: string) {
+  if (!ua) return null;
+  const so = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : 'Outro';
+  const nav = /wv\)|WeGrowRastreio/.test(ua) ? 'app' : /Edg\//.test(ua) ? 'Edge' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox/.test(ua) ? 'Firefox' : 'navegador';
+  return `${so} · ${nav}`;
+}
+
+export type SessaoApp = {
+  id: number; empresaId: string; clienteId: string;
+  /** Nome de quem usa (acesso extra) ou null (titular). */
+  nome: string | null;
+  /** Veículos permitidos; null = todos do cliente. */
+  veiculoIds: string[] | null;
+  podeBloquear: boolean;
+};
+
+/** Restringe uma consulta de rastreio_veiculos (ou tabela com veiculo_id) ao que a sessão pode ver. */
+export function soVeiculosDaSessao<Q>(q: Q, s: SessaoApp, coluna = 'id'): Q {
+  type Filtro = { eq: (c: string, v: string) => Filtro; in: (c: string, v: string[]) => Filtro };
+  const base = (q as unknown as Filtro).eq('cliente_id', s.clienteId).eq('empresa_id', s.empresaId);
+  return (s.veiculoIds ? base.in(coluna, s.veiculoIds) : base) as unknown as Q;
+}
+
+/** O veículo está liberado para esta sessão? (para rotas que recebem veiculoId) */
+export const veiculoLiberado = (s: SessaoApp, veiculoId: string) => !s.veiculoIds || s.veiculoIds.includes(veiculoId);
 
 export async function obterSessaoApp(db: SupabaseClient, cookie: string | undefined): Promise<SessaoApp | null> {
   if (!cookie) return null;
-  const { data: s } = await db.from('rastreio_app_sessoes').select('id, empresa_id, cliente_id, expira_em, ultimo_acesso')
+  const { data: s } = await db.from('rastreio_app_sessoes').select('id, empresa_id, cliente_id, expira_em, ultimo_acesso, nome, veiculo_ids, pode_bloquear, revogado_em')
     .eq('sessao_hash', hashToken(cookie)).maybeSingle();
-  if (!s || new Date(s.expira_em).getTime() < Date.now()) return null;
+  if (!s || s.revogado_em || new Date(s.expira_em).getTime() < Date.now()) return null;
   // Cliente cancelado perde o acesso; suspenso (inadimplente) continua vendo, mas a tela avisa.
   const { data: cli } = await db.from('rastreio_clientes').select('status').eq('id', s.cliente_id).maybeSingle();
   if (!cli || cli.status === 'cancelado') return null;
@@ -62,7 +94,10 @@ export async function obterSessaoApp(db: SupabaseClient, cookie: string | undefi
     await db.from('rastreio_app_sessoes').update({ ultimo_acesso: agora, expira_em: new Date(Date.now() + SESSAO_DIAS * 86400_000).toISOString() }).eq('id', s.id);
     await db.from('rastreio_clientes').update({ app_ultimo_acesso: agora }).eq('id', s.cliente_id);
   }
-  return { id: s.id, empresaId: s.empresa_id, clienteId: s.cliente_id };
+  return {
+    id: s.id, empresaId: s.empresa_id, clienteId: s.cliente_id, nome: s.nome || null,
+    veiculoIds: Array.isArray(s.veiculo_ids) && s.veiculo_ids.length ? s.veiculo_ids : null, podeBloquear: s.pode_bloquear !== false,
+  };
 }
 
 // PIN de bloqueio (4 a 6 dígitos), guardado como scrypt "salt:hash".

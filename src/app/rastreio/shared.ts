@@ -5,6 +5,7 @@ export type ClienteRastreio = {
   id: string; empresa_id: string; tipo: 'PF' | 'PJ'; nome: string; documento: string | null;
   telefone: string | null; email: string | null; endereco: string | null; cidade: string | null;
   mensalidade: number; dia_vencimento: number | null; status: 'ativo' | 'suspenso' | 'cancelado'; observacoes: string | null;
+  relatorio_email?: 'semanal' | 'mensal' | null;
 };
 
 export type Veiculo = {
@@ -14,12 +15,14 @@ export type Veiculo = {
   limite_velocidade: number | null; status: 'ativo' | 'inativo'; bloqueado: boolean;
   ultima_lat: number | null; ultima_lng: number | null; ultima_velocidade: number | null; ultimo_curso: number | null;
   ignicao: boolean | null; bateria_externa: number | null; ultima_posicao_em: string | null; ultima_comunicacao_em: string | null;
+  satelites?: number | null; sinal_gsm?: number | null; bateria_interna?: number | null; carregando?: boolean | null;
+  endereco?: string | null; grupo?: string | null; odometro_km?: number | null;
 };
 
 export type Evento = { id: number; veiculo_id: string; tipo: string; mensagem: string; lat: number | null; lng: number | null; lido: boolean; ocorrido_em: string };
 
 // Colunas que o mapa precisa — nunca select('*') de posições (tabela grande).
-export const COLUNAS_VEICULO = 'id, empresa_id, cliente_id, placa, descricao, tipo, imei, modelo_rastreador, chip_numero, chip_operadora, tem_bloqueio, traccar_device_id, instalado_em, instalado_por, limite_velocidade, status, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em';
+export const COLUNAS_VEICULO = 'id, empresa_id, cliente_id, placa, descricao, tipo, imei, modelo_rastreador, chip_numero, chip_operadora, tem_bloqueio, traccar_device_id, instalado_em, instalado_por, limite_velocidade, status, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em, satelites, sinal_gsm, bateria_interna, carregando, endereco, grupo, odometro_km';
 
 export const OFFLINE_MIN = 30; // sem comunicação há mais que isso = offline
 
@@ -62,6 +65,15 @@ export function mascaraDocumento(s: string) {
 }
 
 export const linkMapa = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat},${lng}`;
+export const linkStreetView = (lat: number, lng: number) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+
+/** Sinal do chip em barras 0-4 (GT06 manda 0-4; outros mandam 0-31 ou dBm negativo). */
+export function barrasSinal(s: number | null | undefined) {
+  if (s == null) return null;
+  if (s < 0) return s >= -70 ? 4 : s >= -85 ? 3 : s >= -100 ? 2 : s >= -110 ? 1 : 0;
+  if (s <= 5) return Math.min(4, Math.round(s));
+  return Math.min(4, Math.round((s / 31) * 4));
+}
 
 /** POST nas rotas /api/rastreio/* com o token da sessão. */
 export async function apiRastreio(caminho: string, corpo: unknown) {

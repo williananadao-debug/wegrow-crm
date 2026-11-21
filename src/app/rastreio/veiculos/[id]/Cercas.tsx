@@ -1,8 +1,9 @@
 "use client";
 import { useState } from 'react';
-import { Shield, Plus, Trash2, Loader2, MapPin, Crosshair, X } from 'lucide-react';
+import { Shield, Plus, Trash2, Loader2, MapPin, Crosshair, X, Undo2, Circle as IconeCirculo, Hexagon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Veiculo } from '../../shared';
+import { distKm } from '../../analise';
 import type { CercaMapa } from '../../MapaRastreio';
 
 export type Cerca = CercaMapa & { ativo: boolean; dentro: boolean | null };
@@ -11,16 +12,20 @@ const RAIOS = [100, 300, 500, 1000, 3000, 10000];
 const fmtRaio = (m: number) => (m >= 1000 ? `${m / 1000} km` : `${m} m`);
 
 // Cercas virtuais: o servidor avisa (alerta no painel e no app) quando o veículo entra ou sai.
-export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, ponto, setPonto }: {
+export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, ponto, setPonto, tipo, setTipo, desenho, setDesenho }: {
   v: Veiculo; cercas: Cerca[]; onMudou: () => void;
   escolhendo: boolean; setEscolhendo: (b: boolean) => void;
   ponto: { lat: number; lng: number } | null; setPonto: (p: { lat: number; lng: number } | null) => void;
+  /** círculo (centro + raio) ou polígono (cliques no mapa = vértices) */
+  tipo: 'circulo' | 'poligono'; setTipo: (t: 'circulo' | 'poligono') => void;
+  desenho: [number, number][]; setDesenho: (d: [number, number][]) => void;
 }) {
   const [nome, setNome] = useState('');
   const [raio, setRaio] = useState(300);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
-  const formAberto = ponto !== null || escolhendo;
+  const formAberto = ponto !== null || escolhendo || desenho.length > 0;
+  const limpar = () => { setPonto(null); setEscolhendo(false); setNome(''); setDesenho([]); };
 
   const usarPosicaoAtual = () => {
     if (v.ultima_lat == null) return;
@@ -29,16 +34,27 @@ export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, 
   };
 
   const salvar = async () => {
-    if (!ponto || !nome.trim()) return;
+    if (!nome.trim()) return;
+    let linha: Record<string, unknown>;
+    if (tipo === 'poligono') {
+      if (desenho.length < 3) return;
+      // Centro = média dos vértices; raio = até o vértice mais longe (filtro rápido no servidor).
+      const lat = desenho.reduce((s, p) => s + p[0], 0) / desenho.length;
+      const lng = desenho.reduce((s, p) => s + p[1], 0) / desenho.length;
+      const raioM = Math.max(50, Math.ceil(Math.max(...desenho.map(p => distKm({ lat, lng }, { lat: p[0], lng: p[1] }))) * 1000) + 10);
+      linha = { tipo: 'poligono', poligono: desenho, lat, lng, raio_m: Math.min(raioM, 500000) };
+    } else {
+      if (!ponto) return;
+      linha = { tipo: 'circulo', lat: ponto.lat, lng: ponto.lng, raio_m: raio };
+    }
     setSalvando(true); setErro('');
-    const { error } = await supabase.from('rastreio_cercas').insert({
-      empresa_id: v.empresa_id, veiculo_id: v.id, nome: nome.trim().slice(0, 60), lat: ponto.lat, lng: ponto.lng, raio_m: raio,
-    });
+    const { error } = await supabase.from('rastreio_cercas').insert({ empresa_id: v.empresa_id, veiculo_id: v.id, nome: nome.trim().slice(0, 60), ...linha });
     setSalvando(false);
     if (error) { setErro('Não deu para salvar a cerca.'); return; }
-    setNome(''); setPonto(null); setEscolhendo(false);
+    limpar();
     onMudou();
   };
+  const podeSalvar = nome.trim() && (tipo === 'poligono' ? desenho.length >= 3 : ponto);
 
   const alternar = async (c: Cerca) => {
     await supabase.from('rastreio_cercas').update({ ativo: !c.ativo, dentro: null }).eq('id', c.id);
@@ -55,13 +71,28 @@ export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, 
       <div className="flex items-center justify-between mb-3">
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Shield size={13} /> Cercas virtuais</p>
         {!formAberto && (
-          <button onClick={() => { setEscolhendo(true); setPonto(null); }} className="text-[10px] font-black uppercase text-violet-300 flex items-center gap-1"><Plus size={12} /> Nova</button>
+          <button onClick={() => { setEscolhendo(true); setPonto(null); setDesenho([]); }} className="text-[10px] font-black uppercase text-violet-300 flex items-center gap-1"><Plus size={12} /> Nova</button>
         )}
       </div>
 
       {formAberto && (
         <div className="mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 space-y-2">
-          {!ponto ? (
+          <div className="grid grid-cols-2 gap-1">
+            {([['circulo', 'Círculo', <IconeCirculo key="c" size={12} />], ['poligono', 'Desenhar área', <Hexagon key="p" size={12} />]] as const).map(([t, rot, ic]) => (
+              <button key={t} onClick={() => { setTipo(t); setPonto(null); setDesenho([]); setEscolhendo(true); }}
+                className={`py-1.5 rounded-lg text-[11px] font-black uppercase flex items-center justify-center gap-1 border ${tipo === t ? 'bg-violet-400 text-[#0B1120] border-violet-400' : 'border-white/10 text-slate-300'}`}>{ic} {rot}</button>
+            ))}
+          </div>
+          {tipo === 'poligono' ? (
+            <>
+              <p className="text-xs text-violet-200 flex items-center gap-1"><Crosshair size={13} /> Clique no mapa os cantos da área ({desenho.length} ponto{desenho.length === 1 ? '' : 's'}{desenho.length < 3 ? ', mínimo 3' : ''})</p>
+              {desenho.length > 0 && <button onClick={() => setDesenho(desenho.slice(0, -1))} className="text-[11px] font-black uppercase text-sky-400 flex items-center gap-1"><Undo2 size={12} /> desfazer último ponto</button>}
+              {desenho.length >= 3 && (
+                <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome (ex.: Bairro, Pátio, Cidade)"
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-400" />
+              )}
+            </>
+          ) : !ponto ? (
             <>
               <p className="text-xs text-violet-200 flex items-center gap-1"><Crosshair size={13} /> Clique no mapa onde fica o centro da cerca</p>
               {v.ultima_lat != null && <button onClick={usarPosicaoAtual} className="text-[11px] font-black uppercase text-sky-400 flex items-center gap-1"><MapPin size={12} /> ou usar a posição atual do veículo</button>}
@@ -80,8 +111,8 @@ export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, 
           )}
           {erro && <p className="text-xs text-red-300">{erro}</p>}
           <div className="flex gap-2 pt-1">
-            <button onClick={() => { setPonto(null); setEscolhendo(false); setNome(''); }} className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2 text-[11px] font-black uppercase flex items-center justify-center gap-1"><X size={12} /> Cancelar</button>
-            <button onClick={salvar} disabled={!ponto || !nome.trim() || salvando} className="flex-1 bg-violet-400 text-[#0B1120] rounded-lg py-2 text-[11px] font-black uppercase disabled:opacity-40 flex items-center justify-center gap-1">
+            <button onClick={limpar} className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2 text-[11px] font-black uppercase flex items-center justify-center gap-1"><X size={12} /> Cancelar</button>
+            <button onClick={salvar} disabled={!podeSalvar || salvando} className="flex-1 bg-violet-400 text-[#0B1120] rounded-lg py-2 text-[11px] font-black uppercase disabled:opacity-40 flex items-center justify-center gap-1">
               {salvando && <Loader2 size={12} className="animate-spin" />} Salvar cerca
             </button>
           </div>
@@ -97,7 +128,7 @@ export default function Cercas({ v, cercas, onMudou, escolhendo, setEscolhendo, 
               <span className={`w-2 h-2 rounded-full shrink-0 ${c.ativo ? 'bg-violet-400' : 'bg-slate-600'}`} />
               <span className="flex-1 min-w-0">
                 <span className={`font-bold ${c.ativo ? 'text-slate-200' : 'text-slate-500 line-through'}`}>{c.nome}</span>
-                <span className="text-slate-500"> · {fmtRaio(c.raio_m)}{c.ativo && c.dentro != null ? ` · veículo ${c.dentro ? 'dentro' : 'fora'}` : ''}</span>
+                <span className="text-slate-500"> · {c.tipo === 'poligono' ? 'área desenhada' : fmtRaio(c.raio_m)}{c.ativo && c.dentro != null ? ` · veículo ${c.dentro ? 'dentro' : 'fora'}` : ''}</span>
               </span>
               <button onClick={() => alternar(c)} className="text-[10px] font-black uppercase text-slate-400 hover:text-white">{c.ativo ? 'Pausar' : 'Ativar'}</button>
               <button onClick={() => excluir(c)} title="Excluir" className="p-1 text-slate-500 hover:text-red-400"><Trash2 size={13} /></button>

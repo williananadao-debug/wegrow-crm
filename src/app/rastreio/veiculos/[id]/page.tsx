@@ -2,10 +2,10 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil, Play, Pause, Share2, ParkingCircle, Timer } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil, Play, Pause, Share2, ParkingCircle, Timer, Satellite, Signal, BatteryCharging, LocateFixed, Eye, Milestone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
-  useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, apiRastreio,
+  useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, linkStreetView, barrasSinal, apiRastreio,
   type Veiculo, type Evento,
 } from '../../shared';
 import type { PontoTrajeto } from '../../MapaRastreio';
@@ -13,6 +13,7 @@ import { analisarTrajeto, fmtDuracao } from '../../analise';
 import Instalacao from './Instalacao';
 import Cercas, { type Cerca } from './Cercas';
 import Manutencao from './Manutencao';
+import GraficoVelocidade from '../../GraficoVelocidade';
 
 const MapaRastreio = dynamic(() => import('../../MapaRastreio'), { ssr: false });
 
@@ -47,6 +48,10 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
   const [velReplay, setVelReplay] = useState(5);
   const [modalLink, setModalLink] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
+  const [tipoCerca, setTipoCerca] = useState<'circulo' | 'poligono'>('circulo');
+  const [desenho, setDesenho] = useState<[number, number][]>([]);
+  const [seguir, setSeguir] = useState(false);
+  const [endereco, setEndereco] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('rastreio_veiculos').select(COLUNAS_VEICULO).eq('id', id).maybeSingle();
@@ -65,11 +70,21 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
   }, [id]);
 
   const carregarCercas = useCallback(async () => {
-    const { data } = await supabase.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, ativo, dentro').eq('veiculo_id', id).order('created_at');
+    const { data } = await supabase.from('rastreio_cercas').select('id, nome, lat, lng, raio_m, ativo, dentro, tipo, poligono').eq('veiculo_id', id).order('created_at');
     setCercas((data as Cerca[]) || []);
   }, [id]);
 
   useEffect(() => { void Promise.resolve().then(carregarCercas); }, [carregarCercas]);
+
+  // Endereço da posição atual: o servidor só consulta de novo se o veículo andou (cache no veículo).
+  const latAtual = v?.ultima_lat, lngAtual = v?.ultima_lng;
+  useEffect(() => {
+    if (latAtual == null || lngAtual == null) return;
+    const t = setTimeout(() => {
+      apiRastreio('endereco', { veiculoId: id }).then(r => setEndereco(r.endereco || null)).catch(() => null);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [id, latAtual, lngAtual]);
 
   useEffect(() => {
     carregar().then(d => {
@@ -185,12 +200,23 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
               {carregandoTrajeto ? 'carregando…' : trajeto.length ? `${km.toFixed(1)} km · máx ${Math.round(velMax)} km/h · ${trajeto.length} pontos · ${fmtHora(trajeto[0].registrado_em!)}–${fmtHora(trajeto[trajeto.length - 1].registrado_em!)}` : 'sem deslocamento registrado'}
             </span>
             {v.ultima_lat != null && (
-              <a href={linkMapa(v.ultima_lat, v.ultima_lng!)} target="_blank" rel="noreferrer" className="ml-auto text-[11px] font-black uppercase text-sky-400 hover:underline inline-flex items-center gap-1">Abrir no Google Maps <ExternalLink size={11} /></a>
+              <span className="ml-auto flex items-center gap-3">
+                <button onClick={() => setSeguir(x => !x)} className={`text-[11px] font-black uppercase inline-flex items-center gap-1 ${seguir ? 'text-emerald-400' : 'text-slate-400 hover:text-white'}`} title="Manter o veículo no centro do mapa">
+                  <LocateFixed size={12} /> {seguir ? 'Seguindo' : 'Seguir'}
+                </button>
+                <a href={linkStreetView(v.ultima_lat, v.ultima_lng!)} target="_blank" rel="noreferrer" className="text-[11px] font-black uppercase text-sky-400 hover:underline inline-flex items-center gap-1"><Eye size={11} /> Street View</a>
+                <a href={linkMapa(v.ultima_lat, v.ultima_lng!)} target="_blank" rel="noreferrer" className="text-[11px] font-black uppercase text-sky-400 hover:underline inline-flex items-center gap-1">Google Maps <ExternalLink size={11} /></a>
+              </span>
             )}
           </div>
+          {endereco && <p className="text-sm text-slate-300 flex items-start gap-1.5 -mt-1"><MapPin size={14} className="text-sky-400 mt-0.5 shrink-0" /> {endereco}</p>}
           <MapaRastreio veiculos={[v]} selecionadoId={v.id} trajeto={trajeto} chaveEnquadrar={`${dia}|${trajeto.length > 0}`} altura="h-[55vh] min-h-[320px]"
             limiteVelocidade={v.limite_velocidade} paradas={an.paradas} cercas={cercas} replay={pontoReplay}
-            onClickMapa={escolhendoCerca ? (lat, lng) => { setPontoCerca({ lat, lng }); setEscolhendoCerca(false); } : undefined} />
+            desenho={tipoCerca === 'poligono' ? desenho : undefined} seguirId={seguir && replayIdx == null ? v.id : null}
+            onClickMapa={escolhendoCerca ? (lat, lng) => {
+              if (tipoCerca === 'poligono') setDesenho(d => [...d, [lat, lng]]);
+              else { setPontoCerca({ lat, lng }); setEscolhendoCerca(false); }
+            } : undefined} />
 
           {trajeto.length > 1 && (
             <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-3 flex flex-wrap items-center gap-3">
@@ -208,6 +234,11 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
               </div>
               {replayIdx != null && <button onClick={() => { setTocando(false); setReplayIdx(null); }} className="text-[10px] font-black uppercase text-slate-500 hover:text-white">sair</button>}
             </div>
+          )}
+
+          {trajeto.length > 1 && (
+            <GraficoVelocidade pontos={trajeto} limite={v.limite_velocidade} indice={replayIdx}
+              onEscolher={i => { setTocando(false); setReplayIdx(i); }} />
           )}
 
           {trajeto.length > 1 && (
@@ -273,7 +304,8 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
 
           <Manutencao v={v} />
 
-          <Cercas v={v} cercas={cercas} onMudou={carregarCercas} escolhendo={escolhendoCerca} setEscolhendo={setEscolhendoCerca} ponto={pontoCerca} setPonto={setPontoCerca} />
+          <Cercas v={v} cercas={cercas} onMudou={carregarCercas} escolhendo={escolhendoCerca} setEscolhendo={setEscolhendoCerca} ponto={pontoCerca} setPonto={setPontoCerca}
+            tipo={tipoCerca} setTipo={setTipoCerca} desenho={desenho} setDesenho={setDesenho} />
 
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><History size={13} /> Eventos</p>
@@ -291,6 +323,7 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
 
           <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4 text-xs space-y-1.5">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Cpu size={13} /> Aparelho</p>
+            <Sensores v={v} />
             <Linha k="IMEI" v={v.imei} />
             <Linha k="Modelo" v={v.modelo_rastreador} />
             <Linha k="Chip" v={[v.chip_numero, v.chip_operadora].filter(Boolean).join(' · ')} />
@@ -351,6 +384,26 @@ function Info({ icone, label, valor, destaque }: { icone: React.ReactNode; label
     <div className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">{icone} {label}</p>
       <p className={`text-lg font-black ${destaque || 'text-white'}`}>{valor}</p>
+    </div>
+  );
+}
+
+function Sensores({ v }: { v: Veiculo }) {
+  const barras = barrasSinal(v.sinal_gsm);
+  const itens = [
+    { icone: <Satellite size={13} />, rot: 'Satélites', val: v.satelites != null ? `${v.satelites}${v.satelites < 4 ? ' (fraco)' : ''}` : '—', ruim: v.satelites != null && v.satelites < 4 },
+    { icone: <Signal size={13} />, rot: 'Sinal do chip', val: barras != null ? `${barras} de 4` : '—', ruim: barras != null && barras <= 1 },
+    { icone: v.carregando ? <BatteryCharging size={13} /> : <Battery size={13} />, rot: 'Bateria interna', val: v.bateria_interna != null ? `${v.bateria_interna}%${v.carregando ? ' · carregando' : v.carregando === false ? ' · sem energia do veículo' : ''}` : '—', ruim: v.carregando === false },
+    { icone: <Milestone size={13} />, rot: 'Hodômetro', val: v.odometro_km ? `${Math.round(Number(v.odometro_km)).toLocaleString('pt-BR')} km` : '—', ruim: false },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2 mb-2">
+      {itens.map(i => (
+        <div key={i.rot} className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
+          <p className="text-[10px] text-slate-500 uppercase font-black flex items-center gap-1">{i.icone} {i.rot}</p>
+          <p className={`text-sm font-black ${i.ruim ? 'text-amber-400' : 'text-slate-100'}`}>{i.val}</p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { executarComando } from '@/lib/rastreio';
-import { COOKIE_APP, obterSessaoApp, conferePin } from '@/lib/rastreioApp';
+import { COOKIE_APP, obterSessaoApp, conferePin, veiculoLiberado } from '@/lib/rastreioApp';
 
 const MAX_PIN_ERRADO = 5;      // por 15 minutos, por cliente
 const JANELA_MIN = 15;
@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: 'sem_sessao' }, { status: 401 });
   const { veiculoId, tipo, motivo, pin } = await req.json().catch(() => ({}));
   if (!veiculoId || !['bloquear', 'desbloquear'].includes(tipo)) return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
+  if (!s.podeBloquear) return NextResponse.json({ error: 'Seu acesso não permite bloquear. Fale com o titular da conta.' }, { status: 403 });
+  if (!veiculoLiberado(s, veiculoId)) return NextResponse.json({ error: 'Veículo não encontrado.' }, { status: 404 });
 
   const { data: cli } = await db.from('rastreio_clientes').select('nome, app_pin_hash').eq('id', s.clienteId).maybeSingle();
   if (!cli?.app_pin_hash) return NextResponse.json({ error: 'Crie seu PIN de bloqueio primeiro.' }, { status: 409 });
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (ids.includes(veiculoId)) {
       await db.from('rastreio_comandos').insert({
         empresa_id: s.empresaId, veiculo_id: veiculoId, tipo, status: 'recusado', detalhe: 'PIN incorreto',
-        origem: 'app', user_nome: cli.nome, motivo: String(motivo || '').slice(0, 300),
+        origem: 'app', user_nome: s.nome ? `${s.nome} (${cli.nome})` : cli.nome, motivo: String(motivo || '').slice(0, 300),
       });
     }
     return NextResponse.json({ error: 'PIN incorreto.' }, { status: 403 });
@@ -40,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const r = await executarComando(db, {
     veiculoId, empresaId: s.empresaId, clienteId: s.clienteId, tipo, motivo: String(motivo || ''),
-    autor: { userId: null, nome: cli.nome, origem: 'app' },
+    autor: { userId: null, nome: s.nome ? `${s.nome} (${cli.nome})` : cli.nome, origem: 'app' },
   });
   return r.ok ? NextResponse.json(r) : NextResponse.json({ error: r.erro }, { status: r.status });
 }

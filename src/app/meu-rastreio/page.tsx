@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X } from 'lucide-react';
-import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, type Veiculo } from '../rastreio/shared';
+import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X, MapPin, Satellite, Signal, Battery, BatteryCharging } from 'lucide-react';
+import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, barrasSinal, type Veiculo } from '../rastreio/shared';
+import GraficoVelocidade from '../rastreio/GraficoVelocidade';
 import type { PontoTrajeto } from '../rastreio/MapaRastreio';
 import { analisarTrajeto, fmtDuracao } from '../rastreio/analise';
 
@@ -10,7 +11,7 @@ const MapaRastreio = dynamic(() => import('../rastreio/MapaRastreio'), { ssr: fa
 
 type Dados = {
   empresa: { nome: string; logo: string | null; cor: string };
-  cliente: { nome: string; suspenso: boolean; temPin: boolean };
+  cliente: { nome: string; suspenso: boolean; temPin: boolean; titular?: boolean; podeBloquear?: boolean };
   cobrancas?: { id: number; valor: number; vencimento: string; status: string; invoice_url: string | null }[];
   veiculos: Veiculo[];
   alertas: { id: number; veiculo_id: string; tipo: string; mensagem: string; ocorrido_em: string }[];
@@ -44,6 +45,7 @@ export default function MeuRastreioPage() {
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [vistos, setVistos] = useState<number>(0);
+  const [endereco, setEndereco] = useState<Record<string, string>>({});
 
   const carregar = useCallback(async () => {
     const r = await fetch('/api/rastreio/app/dados', { cache: 'no-store' }).catch(() => null);
@@ -88,6 +90,17 @@ export default function MeuRastreioPage() {
 
   const veiculo = useMemo(() => dados?.veiculos.find(v => v.id === selId) || dados?.veiculos[0] || null, [dados, selId]);
   const novos = (dados?.alertas || []).filter(a => a.id > vistos).length;
+
+  // Endereço da posição atual (o servidor só consulta de novo quando o veículo andou).
+  const vId = veiculo?.id, vLat = veiculo?.ultima_lat, vLng = veiculo?.ultima_lng;
+  useEffect(() => {
+    if (!vId || vLat == null || vLng == null) return;
+    const t = setTimeout(() => {
+      fetch(`/api/rastreio/app/endereco?veiculo=${vId}`, { cache: 'no-store' }).then(r => r.json())
+        .then(j => { if (j.endereco) setEndereco(e => ({ ...e, [vId]: j.endereco })); }).catch(() => null);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [vId, vLat, vLng]);
 
   useEffect(() => {
     if (aba !== 'trajeto' || !veiculo) return;
@@ -194,7 +207,7 @@ export default function MeuRastreioPage() {
         </div>
         <div className="flex gap-1">
           <button onClick={abrirPrefs} aria-label="Notificações" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><BellRing size={18} /></button>
-          <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); setMsg(null); }} aria-label="Meu PIN de bloqueio" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><KeyRound size={18} /></button>
+          {dados.cliente.titular !== false && <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); setMsg(null); }} aria-label="Meu PIN de bloqueio" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><KeyRound size={18} /></button>}
           <button onClick={sair} aria-label="Sair" className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center text-slate-300"><LogOut size={18} /></button>
         </div>
       </header>
@@ -209,7 +222,7 @@ export default function MeuRastreioPage() {
           <span className="shrink-0 rounded-lg px-3 py-1.5 text-[#0B1120] font-black text-xs uppercase" style={{ background: cor }}>Pagar</span>
         </a>
       ))}
-      {!dados.cliente.temPin && (
+      {!dados.cliente.temPin && dados.cliente.titular !== false && (
         <button onClick={() => { setModal('pin'); setPin(''); setPinNovo(''); }} className="mx-4 mb-2 rounded-xl border border-sky-400/40 bg-sky-400/10 px-4 py-3 text-sm text-sky-200 text-left font-bold">
           Crie seu PIN de bloqueio para poder bloquear o veículo pelo app →
         </button>
@@ -255,13 +268,27 @@ export default function MeuRastreioPage() {
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Power size={11} /> Ignição</p>
                     <p className="font-black">{veiculo.ignicao == null ? '—' : veiculo.ignicao ? 'Ligada' : 'Desligada'}</p>
                   </div>
+                  {(endereco[veiculo.id] || veiculo.endereco) && (
+                    <p className="col-span-3 text-sm text-slate-200 flex items-start gap-1.5"><MapPin size={14} className="mt-0.5 shrink-0" style={{ color: cor }} /> {endereco[veiculo.id] || veiculo.endereco}</p>
+                  )}
                   <p className="col-span-3 text-xs text-slate-400">Atualizado {haQuanto(veiculo.ultima_comunicacao_em || veiculo.ultima_posicao_em)}</p>
+                  {(veiculo.satelites != null || veiculo.sinal_gsm != null || veiculo.bateria_interna != null) && (
+                    <div className="col-span-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 border-t border-white/5 pt-2">
+                      {veiculo.satelites != null && <span className="inline-flex items-center gap-1"><Satellite size={12} /> {veiculo.satelites} satélites</span>}
+                      {barrasSinal(veiculo.sinal_gsm) != null && <span className="inline-flex items-center gap-1"><Signal size={12} /> sinal {barrasSinal(veiculo.sinal_gsm)}/4</span>}
+                      {veiculo.bateria_interna != null && (
+                        <span className={`inline-flex items-center gap-1 ${veiculo.carregando === false ? 'text-amber-300' : ''}`}>
+                          {veiculo.carregando ? <BatteryCharging size={12} /> : <Battery size={12} />} rastreador {veiculo.bateria_interna}%{veiculo.carregando === false ? ' · sem energia do veículo' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </section>
                 <div className="grid grid-cols-2 gap-2">
-                  {veiculo.tem_bloqueio && (veiculo.bloqueado
+                  {veiculo.tem_bloqueio && dados.cliente.podeBloquear !== false && (veiculo.bloqueado
                     ? <button onClick={() => { setModal('desbloquear'); setPin(''); setMsg(null); }} className="min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2"><Unlock size={18} /> Desbloquear</button>
                     : <button onClick={() => { setModal('bloquear'); setPin(''); setMotivo(0); setMsg(null); }} className="min-h-14 rounded-2xl bg-red-600 font-black uppercase text-sm flex items-center justify-center gap-2"><Lock size={18} /> Bloquear</button>)}
-                  <button onClick={() => { setModal('compartilhar'); setMsg(null); }} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
+                  <button onClick={() => { setModal('compartilhar'); setMsg(null); }} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio && dados.cliente.podeBloquear !== false ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
                 </div>
               </>
             )}
@@ -274,6 +301,7 @@ export default function MeuRastreioPage() {
                     className="min-h-11 bg-white/[0.03] border border-white/10 rounded-xl px-3 text-sm text-white [color-scheme:dark]" />
                 </div>
                 <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} trajeto={trajeto} paradas={an.paradas} chaveEnquadrar={`${veiculo.id}|${dia}|${trajeto.length > 0}`} altura="h-[42vh] min-h-[260px]" />
+                {trajeto.length > 1 && <GraficoVelocidade pontos={trajeto} limite={veiculo.limite_velocidade} />}
                 <section aria-label="Resumo do dia" className="grid grid-cols-2 gap-2">
                   <Caixa titulo="Rodou" valor={carregandoTrajeto ? '…' : `${km.toFixed(1)} km`} />
                   <Caixa titulo="Máxima" valor={carregandoTrajeto ? '…' : `${Math.round(velMax)} km/h`} />
@@ -392,8 +420,8 @@ export default function MeuRastreioPage() {
                   </>
                 )}
                 {!dados.cliente.temPin
-                  ? <p className="text-sm text-sky-200">Crie seu PIN primeiro (ícone de chave no topo).</p>
-                  : <CampoPin rotulo="Seu PIN" valor={pin} onChange={setPin} />}
+                  ? <p className="text-sm text-sky-200">{dados.cliente.titular === false ? 'O titular da conta ainda não criou o PIN de bloqueio.' : 'Crie seu PIN primeiro (ícone de chave no topo).'}</p>
+                  : <CampoPin rotulo={dados.cliente.titular === false ? 'PIN do titular' : 'Seu PIN'} valor={pin} onChange={setPin} />}
                 <button onClick={enviarComando} disabled={enviando || pin.length < 4 || !dados.cliente.temPin}
                   className={`w-full min-h-14 rounded-2xl font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2 ${modal === 'bloquear' ? 'bg-red-600' : 'text-[#0B1120]'}`}
                   style={modal === 'bloquear' ? undefined : { background: cor }}>

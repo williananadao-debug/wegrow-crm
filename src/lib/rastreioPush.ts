@@ -61,8 +61,22 @@ export async function notificarCliente(
   if (!cli || cli.status === 'cancelado') return 0;
   const prefs = { ...ALERTAS_PADRAO, ...((cli.app_alertas as Record<string, boolean> | null) || {}) };
   if (!prefs[p.tipo]) return 0;
-  const { data: tokens } = await db.from('rastreio_push_tokens').select('id, token').eq('cliente_id', p.clienteId).limit(10);
-  if (!tokens?.length) return 0;
+  const { data: todos } = await db.from('rastreio_push_tokens').select('id, token, sessao_id').eq('cliente_id', p.clienteId).limit(20);
+  if (!todos?.length) return 0;
+  // Celular de acesso extra: só alerta de veículo liberado; sessão revogada não recebe mais.
+  const idsSessao = [...new Set(todos.map(t => t.sessao_id).filter(Boolean))] as number[];
+  const { data: sessoes } = idsSessao.length
+    ? await db.from('rastreio_app_sessoes').select('id, veiculo_ids, revogado_em').in('id', idsSessao)
+    : { data: [] };
+  const porId = new Map((sessoes || []).map(s => [s.id as number, s]));
+  const tokens = todos.filter(t => {
+    if (!t.sessao_id) return true;
+    const s = porId.get(t.sessao_id);
+    if (!s || s.revogado_em) return false;
+    const ids = s.veiculo_ids as string[] | null;
+    return !ids?.length || !p.veiculoId || ids.includes(p.veiculoId);
+  });
+  if (!tokens.length) return 0;
 
   const acesso = await tokenGoogle(c);
   let enviados = 0;

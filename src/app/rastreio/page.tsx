@@ -24,6 +24,7 @@ export default function RastreioFrotaPage() {
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Situacao | 'bloqueado' | 'todos'>('todos');
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [grupo, setGrupo] = useState<string>('');
   const [, setTique] = useState(0); // re-render pro "há X min"
 
   const carregar = useCallback(async () => {
@@ -53,14 +54,17 @@ export default function RastreioFrotaPage() {
     return c;
   }, [veiculos]);
 
+  const grupos = useMemo(() => [...new Set(veiculos.map(v => v.grupo).filter(Boolean) as string[])].sort(), [veiculos]);
+
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return veiculos.filter(v => {
+      if (grupo && (v.grupo || '') !== grupo) return false;
       if (filtro === 'bloqueado' ? !v.bloqueado : filtro !== 'todos' && situacao(v) !== filtro) return false;
       if (!q) return true;
-      return [v.placa, v.descricao, v.imei, v.cliente_id ? clientes[v.cliente_id] : ''].some(x => String(x || '').toLowerCase().includes(q));
+      return [v.placa, v.descricao, v.imei, v.grupo, v.cliente_id ? clientes[v.cliente_id] : ''].some(x => String(x || '').toLowerCase().includes(q));
     });
-  }, [veiculos, busca, filtro, clientes]);
+  }, [veiculos, busca, filtro, clientes, grupo]);
 
   const marcarLidos = async () => {
     const ids = alertas.map(a => a.id);
@@ -138,7 +142,7 @@ export default function RastreioFrotaPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             <MapaRastreio veiculos={lista} selecionadoId={selecionado} onSelecionar={setSelecionado}
-              chaveEnquadrar={`${filtro}|${selecionado ? '' : lista.length}`} />
+              chaveEnquadrar={`${filtro}|${grupo}|${selecionado ? '' : lista.length}`} />
 
             {alertas.length > 0 && (
               <div className="bg-[#0F172A] border border-amber-500/30 rounded-2xl p-4">
@@ -166,6 +170,14 @@ export default function RastreioFrotaPage() {
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Placa, cliente ou IMEI"
                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-sky-400" />
             </div>
+            {grupos.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {['', ...grupos].map(g => (
+                  <button key={g || '_todos'} onClick={() => setGrupo(g)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${grupo === g ? 'bg-violet-400 text-[#0B1120] border-violet-400' : 'border-white/10 text-slate-300'}`}>{g || 'Todos os grupos'}</button>
+                ))}
+              </div>
+            )}
             <ul className="overflow-y-auto space-y-2 pr-1">
               {lista.map(v => {
                 const s = situacao(v);

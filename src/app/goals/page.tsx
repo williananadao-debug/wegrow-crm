@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { dataReferenciaLead, inicioMesIso } from '@/lib/dataFechamento';
 import { valorVenda, buscarAjustesVenda } from '@/lib/vendasAjustes';
+import { globalSomaVendedores, buscarMetaGlobalSomada } from '@/lib/metasGlobal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useUnidades } from '@/lib/useUnidades';
@@ -36,6 +37,8 @@ export default function GoalsPage() {
   const [mesAtualVisual] = useState(new Date().getMonth() + 1);
   
   const [metaAno, setMetaAno] = useState(0);
+  // Rádio nova: a meta global é a soma das metas dos vendedores (só leitura no Global)
+  const [somaVendedores, setSomaVendedores] = useState(false);
   const [metasMensais, setMetasMensais] = useState<MetaMensal[]>([]);
   const [realizadoAno, setRealizadoAno] = useState(0);
   const [realizadoMensalMap, setRealizadoMensalMap] = useState<Record<number, number>>({});
@@ -122,11 +125,16 @@ export default function GoalsPage() {
     try {
       const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
 
+      const soma = !targetUser && await globalSomaVendedores(supabase, perfil?.empresa_id);
+      setSomaVendedores(Boolean(soma));
+
       let metaQuery = supabase.from('metas').select('*').eq('ano', anoFiltro).eq('tipo', 'faturamento');
       if (targetUser) metaQuery = metaQuery.eq('user_id', targetUser);
       else metaQuery = metaQuery.is('user_id', null);
 
-      const { data: metasData } = await metaQuery;
+      const { data: metasData } = soma && perfil?.empresa_id
+        ? { data: await buscarMetaGlobalSomada(supabase, perfil.empresa_id, anoFiltro) }
+        : await metaQuery;
       if (metasRequestIdRef.current !== minhaRequisicao) return; // superada por uma busca mais nova
 
       const metasMensaisData = metasData?.filter(m => m.mes !== null) || [];
@@ -381,6 +389,7 @@ export default function GoalsPage() {
   const handleUpdateMeta = async (mes: number | null, valor: number) => {
     if (!isDirector) return;
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
+    if (!targetUser && somaVendedores) return; // global calculado: edita-se no vendedor
 
     const { error } = await supabase.from('metas').upsert({
       user_id: targetUser, 
@@ -405,6 +414,7 @@ export default function GoalsPage() {
 
   const distribuirMetaAno = async () => {
     if (!metaAno || metaAno <= 0) return;
+    if (vendedorSelecionado === 'global' && somaVendedores) return;
     if (!confirm(`Dividir R$ ${metaAno.toLocaleString('pt-BR')} igualmente entre os 12 meses?`)) return;
 
     const targetUser = vendedorSelecionado === 'global' ? null : vendedorSelecionado;
@@ -426,6 +436,7 @@ export default function GoalsPage() {
     fetchMetasERealizado();
   };
 
+  const globalCalculado = vendedorSelecionado === 'global' && somaVendedores;
   const percentAno = metaAno > 0 ? (realizadoAno / metaAno) * 100 : 0;
   const percentAnoUnidade = metaAnoUnidade > 0 ? (realizadoAnoUnidade / metaAnoUnidade) * 100 : 0;
 
@@ -526,9 +537,9 @@ export default function GoalsPage() {
           </div>
 
           <div className="flex flex-col items-end">
-            <p className="text-[10px] font-black text-slate-500 uppercase mb-1">Definir Meta do Ano</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{globalCalculado ? 'Meta do Ano · soma dos vendedores' : 'Definir Meta do Ano'}</p>
             <div className="flex items-center gap-3">
-              {isDirector && (
+              {isDirector && !globalCalculado && (
                 <button onClick={distribuirMetaAno} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all"><RefreshCcw size={16}/></button>
               )}
               <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus-within:border-[var(--cor-primaria)]">
@@ -541,7 +552,8 @@ export default function GoalsPage() {
                   onChange={(e) => setMetaAno(parseMilhar(e.target.value))}
                   onBlur={(e) => handleUpdateMeta(null, parseMilhar(e.target.value))}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                  disabled={!isDirector}
+                  disabled={!isDirector || globalCalculado}
+                  title={globalCalculado ? 'Calculada pela soma das metas dos vendedores. Para mudar, ajuste a meta de cada vendedor.' : undefined}
                 />
               </div>
             </div>
@@ -621,7 +633,7 @@ export default function GoalsPage() {
                           onChange={(e) => { e.currentTarget.value = fmtMilhar(parseMilhar(e.currentTarget.value)); }}
                           onBlur={(e) => handleUpdateMeta(mes, parseMilhar(e.target.value))}
                           onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                          disabled={!isDirector}
+                          disabled={!isDirector || globalCalculado}
                         />
                       </div>
                     </div>

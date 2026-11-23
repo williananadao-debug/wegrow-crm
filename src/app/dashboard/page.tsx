@@ -14,6 +14,7 @@ import { valorVenda, buscarAjustesVenda, type AjusteVenda } from '@/lib/vendasAj
 const dataAceita = (v: string) => v === '' || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '2000-01-01' && !isNaN(new Date(v + 'T12:00:00').getTime()));
 import { paginarSupabase } from '@/lib/paginarSupabase';
 import { supabase } from '@/lib/supabase';
+import { globalSomaVendedores, buscarMetaGlobalSomada } from '@/lib/metasGlobal';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { SkeletonDashboard } from '@/components/Skeleton';
@@ -79,9 +80,18 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isDirector || !perfil?.empresa_id) return;
     let vivo = true;
-    supabase.from('metas').select('valor_objetivo').eq('empresa_id', perfil.empresa_id).eq('ano', new Date().getFullYear())
-      .eq('tipo', 'faturamento').is('user_id', null).is('mes', null).is('produto', null).maybeSingle()
-      .then(({ data }) => { if (vivo) setMetaAno(Number(data?.valor_objetivo) || null); });
+    const empresaId = perfil.empresa_id, ano = new Date().getFullYear();
+    (async () => {
+      // Rádio nova: meta global = soma das metas dos vendedores (lib/metasGlobal)
+      if (await globalSomaVendedores(supabase, empresaId)) {
+        const somadas = await buscarMetaGlobalSomada(supabase, empresaId, ano);
+        if (vivo) setMetaAno(somadas.find(m => m.mes == null)?.valor_objetivo || null);
+        return;
+      }
+      const { data } = await supabase.from('metas').select('valor_objetivo').eq('empresa_id', empresaId).eq('ano', ano)
+        .eq('tipo', 'faturamento').is('user_id', null).is('mes', null).is('produto', null).maybeSingle();
+      if (vivo) setMetaAno(Number(data?.valor_objetivo) || null);
+    })();
     return () => { vivo = false; };
   }, [isDirector, perfil?.empresa_id]);
   const temMidia = Boolean(empresa?.modulos?.midia);

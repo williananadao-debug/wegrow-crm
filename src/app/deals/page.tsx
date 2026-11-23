@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { diaReferenciaLead } from '@/lib/dataFechamento';
 import { supabase } from '@/lib/supabase';
+import { globalSomaVendedores, somarMetasVendedores } from '@/lib/metasGlobal';
 import { consultarCnpj, enderecoEmLinha } from '@/lib/consultaCnpj';
 import { processarVendaCrmNoPulse } from '../pulse/shared';
 import ItensFabrica from './ItensFabrica';
@@ -517,13 +518,15 @@ export default function DealsPage() {
     let perfisQuery = supabase.from('profiles').select('*').order('nome', { ascending: true });
     if (perfil?.empresa_id) perfisQuery = perfisQuery.eq('empresa_id', perfil.empresa_id);
     const anoAtual = new Date().getFullYear();
-    let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano')
+    let metaQuery = supabase.from('metas').select('valor_objetivo, mes, ano, user_id')
         .eq('ano', anoAtual)
         .eq('tipo', 'faturamento')
         .is('produto', null)
         .is('unidade', null);
     if (perfil?.empresa_id) metaQuery = metaQuery.eq('empresa_id', perfil.empresa_id);
-    metaQuery = isDirector ? metaQuery.is('user_id', null) : metaQuery.eq('user_id', user?.id);
+    // Diretor: traz global + vendedores; rádio nova usa a soma dos vendedores (lib/metasGlobal)
+    if (!isDirector) metaQuery = metaQuery.eq('user_id', user?.id);
+    const somaPromise = isDirector ? globalSomaVendedores(supabase, perfil?.empresa_id) : Promise.resolve(false);
     // Só id + status_risco para os semáforos de risco nos cards (leve)
     const auxPromise = Promise.all([
         perfisQuery,
@@ -604,7 +607,13 @@ export default function DealsPage() {
         setUsersEmailMap(mapaEmail);
         setUsersDesativados(new Set(perfisData.filter((p: any) => p.desativado_em).map((p: any) => p.id)));
     }
-    if (metaData) setMetasBase(metaData);
+    if (metaData) {
+        const soma = await somaPromise;
+        if (minhaBusca !== buscaLeadsRef.current) return;
+        setMetasBase(!isDirector ? metaData
+            : soma ? somarMetasVendedores(metaData, anoAtual)
+            : metaData.filter((m: any) => m.user_id == null));
+    }
     if (riscoRes?.data) {
         const rm: Record<number, string> = {};
         riscoRes.data.forEach((c: any) => { rm[c.id] = c.status_risco || 'verde'; });

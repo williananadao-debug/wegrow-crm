@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ehCargoRestrito, cargoPodeAcessar } from '@/lib/publicPages';
 import { useState, useEffect } from 'react';
-import { Navigation,
+import { Navigation, Wallet, FileBarChart, Map as IconeMapa,
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
@@ -170,6 +170,17 @@ export default function Navbar() {
   const maxItem = { name: 'Max', icon: <Radio size={20} />, href: '/max' };
   const obrasItem = { name: 'Obras', icon: <HardHat size={20} />, href: '/obras' };
   const rastreioItem = { name: 'Rastreio', icon: <Navigation size={20} />, href: '/rastreio' };
+  // Rastreio aberto em itens próprios (antes era um item só, com o resto em botões dentro da tela)
+  const rastreioItens = [
+    { name: 'Mapa da frota', icon: <IconeMapa size={20} />, href: '/rastreio' },
+    { name: isCDL ? 'Associados e veículos' : 'Clientes e veículos', icon: <Users size={20} />, href: '/rastreio/clientes' },
+    { name: 'Financeiro do rastreio', icon: <Wallet size={20} />, href: '/rastreio/financeiro' },
+    { name: 'Relatórios', icon: <FileBarChart size={20} />, href: '/rastreio/relatorios' },
+  ];
+  // /rastreio/veiculos/... é detalhe da frota → marca "Mapa da frota"
+  const rastreioAtivo = (href: string) => href === '/rastreio'
+    ? pathname === '/rastreio' || pathname.startsWith('/rastreio/veiculos')
+    : pathname.startsWith(href);
   const argusItem = { name: 'Argus', icon: <Radar size={20} />, href: '/argus' };
   const midiaItem = { name: 'Demais FM Comercial', icon: <Megaphone size={20} />, href: '/midia' };
   const redesSociaisItem = { name: 'Redes Sociais', icon: <TrendingUp size={20} />, href: '/marketing' };
@@ -192,7 +203,7 @@ export default function Navbar() {
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
-      ...(mostrarRastreio ? [rastreioItem] : []),
+      ...(mostrarRastreio ? rastreioItens : []),
       ...(mostrarArgus ? [argusItem] : []),
       ...(mostrarFinanceiro ? [financeiroItem] : []),
       ...(mostrarRedesSociais ? [redesSociaisItem] : []),
@@ -340,9 +351,14 @@ export default function Navbar() {
           )}
 
           {mostrarRastreio && (
-            <Link href={rastreioItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname.startsWith(rastreioItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              {rastreioItem.icon} {rastreioItem.name}
-            </Link>
+            <div className="mb-1">
+              {!soRastreio && <p className="px-4 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">{rastreioItem.icon && <Navigation size={12} />} {rastreioItem.name}</p>}
+              {rastreioItens.map(it => (
+                <Link key={it.href} href={it.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${rastreioAtivo(it.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  {it.icon} {it.name}
+                </Link>
+              ))}
+            </div>
           )}
 
           {mostrarArgus && (
@@ -414,7 +430,7 @@ export default function Navbar() {
             <nav className={`flex flex-col gap-2 flex-1 min-h-0 ${isCollapsed ? 'overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'overflow-y-auto overflow-x-hidden custom-scrollbar'}`}>
               {isCollapsed ? (
                 flatItems.map((item) => (
-                  <Link key={item.href} href={item.href} title={item.name} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all shrink-0 justify-center ${pathname === item.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                  <Link key={item.href} href={item.href} title={item.name} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all shrink-0 justify-center ${(item.href.startsWith('/rastreio') ? rastreioAtivo(item.href) : pathname === item.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                     <div className="min-w-[20px]">{item.icon}</div>
                   </Link>
                 ))
@@ -516,10 +532,15 @@ export default function Navbar() {
                   )}
 
                   {mostrarRastreio && (
-                    <Link href={rastreioItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname.startsWith(rastreioItem.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                      <div className="min-w-[20px]">{rastreioItem.icon}</div>
-                      <span className="text-sm font-semibold">{rastreioItem.name}</span>
-                    </Link>
+                    <div className="mb-1">
+                      {!soRastreio && <p className="px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><Navigation size={12} /> {rastreioItem.name}</p>}
+                      {rastreioItens.map(it => (
+                        <Link key={it.href} href={it.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${rastreioAtivo(it.href) ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                          <div className="min-w-[20px]">{it.icon}</div>
+                          <span className="text-sm font-semibold">{it.name}</span>
+                        </Link>
+                      ))}
+                    </div>
                   )}
 
                   {mostrarArgus && (

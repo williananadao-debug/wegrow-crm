@@ -806,6 +806,18 @@ export default function DealsPage() {
     if (novoStatus === 'ganho' || novaEtapa === 4) {
         if (lead?.status_aprovacao === 'pendente') return alert("⚠️ NEGÓCIO BLOQUEADO: Aguardando aprovação.");
         if (lead?.status_aprovacao === 'recusado') return alert("❌ O desconto foi RECUSADO. Ajuste antes de dar o Ganho.");
+        // Sem CNPJ (ou CPF, cliente pessoa física) não vira Ganho: contrato, NF e cobrança
+        // dependem do documento. Se o lead não tem, tenta o cadastro do cliente vinculado.
+        if (lead && lead.status !== 'ganho') {
+            let doc = (lead.cnpj || '').replace(/\D/g, '');
+            if (doc.length !== 14 && doc.length !== 11 && lead.client_id) {
+                const { data: cli } = await supabase.from('clientes').select('cnpj').eq('id', lead.client_id).maybeSingle();
+                doc = (cli?.cnpj || '').replace(/\D/g, '');
+            }
+            if (doc.length !== 14 && doc.length !== 11) {
+                return alert("⚠️ Informe o CNPJ do cliente antes de marcar como Ganho.\n\nAbra o lead, preencha o CNPJ (ou CPF, se for pessoa física) e salve.");
+            }
+        }
     }
     
     if (lead && lead.etapa === 0 && novaEtapa > 0 && !lead.checkin) {

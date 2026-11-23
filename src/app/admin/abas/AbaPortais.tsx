@@ -14,6 +14,9 @@ export default function AbaPortais({ empresa, token }: AbaProps) {
   const [novoNome, setNovoNome] = useState('');
   const [criando, setCriando] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [slugEditado, setSlugEditado] = useState(false);
+  // "Onda Demo" → "onda-demo" (sugestão; o usuário pode trocar)
+  const slugDe = (n: string) => n.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -30,9 +33,11 @@ export default function AbaPortais({ empresa, token }: AbaProps) {
     await fetch('/api/admin/portais', {
       method: 'POST',
       headers: headersAuth(token),
-      body: JSON.stringify({ empresa_id: empresa.id, slug: novoSlug.trim(), nome_portal: novoNome.trim(), cor_primaria: '#22C55E', logo_texto: 'W', tipos_cadastro: [{ nome: 'Padrão', desc: '', valor: 0 }], segmentos: [], etapas: ['Recebido', 'Em análise', 'Proposta enviada', 'Em negociação', 'Concluído'], ativo: true }),
+      // Já nasce com a marca do cliente: cor do cadastro da empresa e inicial do nome (o logo
+      // em imagem vem do cadastro da empresa na hora de mostrar o portal).
+      body: JSON.stringify({ empresa_id: empresa.id, slug: novoSlug.trim(), nome_portal: novoNome.trim(), cor_primaria: empresa.cor_primaria || '#22C55E', logo_texto: (novoNome.trim()[0] || 'W').toUpperCase(), tipos_cadastro: [{ nome: 'Padrão', desc: '', valor: 0 }], segmentos: [], etapas: ['Recebido', 'Em análise', 'Proposta enviada', 'Em negociação', 'Concluído'], ativo: true }),
     });
-    setCriando(false); setNovoSlug(''); setNovoNome('');
+    setCriando(false); setNovoSlug(''); setNovoNome(''); setSlugEditado(false);
     carregar();
   };
 
@@ -82,8 +87,8 @@ export default function AbaPortais({ empresa, token }: AbaProps) {
       <div className="border-t border-white/5 pt-4 space-y-3">
         <p className="text-xs font-medium text-slate-400">Criar novo portal</p>
         <div className="grid grid-cols-2 gap-2">
-          <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome do portal" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
-          <input value={novoSlug} onChange={e => setNovoSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="slug-unico" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+          <input value={novoNome} onChange={e => { const n = e.target.value; if (!slugEditado) setNovoSlug(slugDe(n)); setNovoNome(n); }} placeholder="Nome do portal" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
+          <input value={novoSlug} onChange={e => { setSlugEditado(true); setNovoSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); }} placeholder="slug-unico" className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-white outline-none focus:border-[#22C55E] transition-colors placeholder:text-slate-600"/>
         </div>
         <button onClick={criarPortal} disabled={criando || !novoSlug.trim() || !novoNome.trim()} className="w-full bg-[#22C55E]/10 hover:bg-[#22C55E]/20 border border-[#22C55E]/30 text-[#22C55E] py-2.5 rounded-xl font-black text-xs uppercase transition-all disabled:opacity-50 flex items-center justify-center gap-2">
           {criando ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>}

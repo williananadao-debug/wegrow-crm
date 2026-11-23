@@ -13,6 +13,7 @@ type PortalConfig = {
   descricao: string | null;
   cor_primaria: string;
   logo_texto: string;
+  logo_url?: string | null;
   tipos_cadastro: { nome: string; desc: string; valor: number }[];
   segmentos: string[];
   texto_boas_vindas: string | null;
@@ -167,9 +168,14 @@ export default function PortalGenerico() {
       {/* Header */}
       <div className="w-full max-w-3xl mx-auto pt-14 px-6 relative z-10 flex flex-col items-center gap-4 mb-8">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-[#0B1120] text-xl shadow-lg" style={{ background: cor }}>
-            {logo}
-          </div>
+          {config.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={config.logo_url} alt={config.nome_portal} className="w-16 h-16 rounded-2xl object-contain bg-white p-1.5 shadow-lg" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-[#0B1120] text-xl shadow-lg" style={{ background: cor }}>
+              {logo}
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none">{config.nome_portal}</h1>
             {config.descricao && <p className="text-[11px] font-bold uppercase tracking-widest mt-1" style={{ color: cor }}>{config.descricao}</p>}

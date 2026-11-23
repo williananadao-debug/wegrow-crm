@@ -28,7 +28,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const portal = await getPortal(slug);
     if (!portal) return NextResponse.json({ erro: 'Portal não encontrado.' }, { status: 404 });
     const { empresa_id, alert_email, ...pub } = portal;
-    return NextResponse.json(pub);
+    // Logo da empresa (cadastro da empresa): o portal mostra a marca do cliente no lugar da letra.
+    const { data: emp } = await db().from('empresas').select('logo_url').eq('id', empresa_id).maybeSingle();
+    return NextResponse.json({ ...pub, logo_url: emp?.logo_url || null });
 }
 
 // POST — criar lead

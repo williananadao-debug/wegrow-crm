@@ -29,8 +29,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     if (!portal) return NextResponse.json({ erro: 'Portal não encontrado.' }, { status: 404 });
     const { empresa_id, alert_email, ...pub } = portal;
     // Logo da empresa (cadastro da empresa): o portal mostra a marca do cliente no lugar da letra.
-    const { data: emp } = await db().from('empresas').select('logo_url').eq('id', empresa_id).maybeSingle();
-    return NextResponse.json({ ...pub, logo_url: emp?.logo_url || null });
+    // Cor: portal ainda no verde padrão (criado antes de herdar a cor) usa a cor da empresa.
+    const { data: emp } = await db().from('empresas').select('logo_url, cor_primaria').eq('id', empresa_id).maybeSingle();
+    const corPadrao = !pub.cor_primaria || String(pub.cor_primaria).toUpperCase() === '#22C55E';
+    return NextResponse.json({
+        ...pub,
+        logo_url: emp?.logo_url || null,
+        cor_primaria: corPadrao && emp?.cor_primaria ? emp.cor_primaria : pub.cor_primaria,
+    });
 }
 
 // POST — criar lead

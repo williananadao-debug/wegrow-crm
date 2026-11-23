@@ -13,6 +13,7 @@ import { analisarTrajeto, fmtDuracao } from '../../analise';
 import Instalacao from './Instalacao';
 import Cercas, { type Cerca } from './Cercas';
 import Manutencao from './Manutencao';
+import Aparelho from './Aparelho';
 import GraficoVelocidade from '../../GraficoVelocidade';
 
 const MapaRastreio = dynamic(() => import('../../MapaRastreio'), { ssr: false });
@@ -63,7 +64,7 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
   const carregarHistorico = useCallback(async () => {
     const [{ data: ev }, { data: cm }] = await Promise.all([
       supabase.from('rastreio_eventos').select('id, veiculo_id, tipo, mensagem, lat, lng, lido, ocorrido_em').eq('veiculo_id', id).order('ocorrido_em', { ascending: false }).limit(40),
-      supabase.from('rastreio_comandos').select('id, tipo, status, motivo, detalhe, velocidade_no_momento, user_nome, created_at').eq('veiculo_id', id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('rastreio_comandos').select('id, tipo, status, motivo, detalhe, velocidade_no_momento, user_nome, created_at').eq('veiculo_id', id).in('tipo', ['bloquear', 'desbloquear']).order('created_at', { ascending: false }).limit(20),
     ]);
     setEventos((ev as Evento[]) || []);
     setComandos((cm as Comando[]) || []);
@@ -303,6 +304,8 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
           </div>
 
           <Manutencao v={v} />
+
+          {podeBloquear && <Aparelho v={v} />}
 
           <Cercas v={v} cercas={cercas} onMudou={carregarCercas} escolhendo={escolhendoCerca} setEscolhendo={setEscolhendoCerca} ponto={pontoCerca} setPonto={setPontoCerca}
             tipo={tipoCerca} setTipo={setTipoCerca} desenho={desenho} setDesenho={setDesenho} />

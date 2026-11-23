@@ -32,7 +32,7 @@ export default function RastreioFrotaPage() {
     const [{ data: vs }, { data: ev }] = await Promise.all([
       supabase.from('rastreio_veiculos').select(COLUNAS_VEICULO).eq('empresa_id', empresaId).eq('status', 'ativo').order('placa'),
       supabase.from('rastreio_eventos').select('id, veiculo_id, tipo, mensagem, lat, lng, lido, ocorrido_em')
-        .eq('empresa_id', empresaId).eq('lido', false).order('ocorrido_em', { ascending: false }).limit(30),
+        .eq('empresa_id', empresaId).eq('lido', false).neq('tipo', 'resposta_aparelho').order('ocorrido_em', { ascending: false }).limit(30),
     ]);
     setVeiculos((vs as Veiculo[]) || []);
     setAlertas((ev as Evento[]) || []);

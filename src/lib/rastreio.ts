@@ -69,6 +69,12 @@ export async function removerDispositivoTraccar(deviceId: number) {
   await traccar('DELETE', `/devices/${deviceId}`);
 }
 
+/** Comando em texto (o mesmo do SMS) pela internet: tipo "custom" do Traccar. */
+export async function enviarTextoTraccar(deviceId: number, texto: string) {
+  const r = await traccar('POST', '/commands/send', { deviceId, type: 'custom', attributes: { data: texto } });
+  return { naFila: r.status === 202 };
+}
+
 /** engineStop / engineResume. 200 = entregue; 202 = aparelho offline, fica na fila do Traccar. */
 export async function enviarComandoTraccar(deviceId: number, tipo: 'bloquear' | 'desbloquear') {
   const r = await traccar('POST', '/commands/send', { deviceId, type: tipo === 'bloquear' ? 'engineStop' : 'engineResume' });
@@ -90,7 +96,8 @@ const TEXTO_EVENTO: Record<string, (placa: string, attrs: Record<string, unknown
   deviceOnline: placa => ['online', `${placa}: rastreador voltou a comunicar`],
   geofenceEnter: placa => ['cerca', `${placa}: entrou na área cadastrada`],
   geofenceExit: placa => ['cerca', `${placa}: saiu da área cadastrada`],
-  commandResult: (placa, a) => ['comando', `${placa}: aparelho respondeu ao comando${a.result ? ` (${String(a.result).slice(0, 80)})` : ''}`],
+  // Resposta de comando (STATUS#, PARAM#...): fica só no painel, sem push pro cliente
+  commandResult: (placa, a) => ['resposta_aparelho', `${placa}: resposta do aparelho${a.result ? `: ${String(a.result).slice(0, 500)}` : ''}`],
   alarm: (placa, a) => {
     const tipo = String(a.alarm || '');
     const nomes: Record<string, string> = {
@@ -255,7 +262,7 @@ export async function usuarioRastreio(db: SupabaseClient, req: Request) {
   if (!perfil?.empresa_id) return null;
   const { data: empresa } = await db.from('empresas').select('modulos').eq('id', perfil.empresa_id).maybeSingle();
   if (!(empresa?.modulos as Record<string, unknown> | null)?.rastreio) return null;
-  return { id: user.id, nome: perfil.nome || user.email || 'usuário', cargo: perfil.cargo as string | null, empresaId: perfil.empresa_id as string };
+  return { id: user.id, nome: perfil.nome || user.email || 'usuário', cargo: perfil.cargo as string | null, empresaId: perfil.empresa_id as string, email: user.email || null };
 }
 
 // ── Comando de bloqueio (painel e app do cliente usam a mesma regra) ────────────────────────

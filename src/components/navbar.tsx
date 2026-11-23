@@ -83,6 +83,11 @@ export default function Navbar() {
   // Macro do produto de pipeline/vendas. Ausente no JSON conta como ligado — empresas
   // criadas antes desse flag existir não podem perder o menu inteiro só por não ter a chave.
   const mostrarCRM = modulos.crm !== false && !isCargoRestrito;
+  // Empresa que só usa o Rastreio (ex.: instalador) já tem a própria lista de clientes em
+  // Rastreio → Clientes; a carteira do CRM (/customers) ficaria sempre vazia e confunde.
+  const soRastreio = mostrarRastreio && !mostrarCRM && !mostrarNexus && !mostrarPulse && !mostrarFinanceiro
+    && !mostrarArgus && !mostrarObras && !mostrarMax && !mostrarThor && !isCDL && !mostrarAdvocacia;
+  const mostrarClientes = !isCargoRestrito && !soRastreio;
 
   // Marca no menu é por tenant, não fixa "WeGrow" — cada empresa vê o próprio nome aqui,
   // WeGrow é só o fornecedor por trás.
@@ -183,7 +188,7 @@ export default function Navbar() {
       ...(mostrarCRM ? crmItems : []),
       ...(mostrarNexus ? nexusItems : []),
       ...(mostrarPulse ? pulseItems : []),
-      ...(isCargoRestrito ? [] : [clientesItem]),
+      ...(mostrarClientes ? [clientesItem] : []),
       ...(mostrarThor ? [thorItem] : []),
       ...(mostrarMax ? [maxItem] : []),
       ...(mostrarObras ? [obrasItem] : []),
@@ -310,7 +315,7 @@ export default function Navbar() {
             );
           })()}
 
-          {!isCargoRestrito && (
+          {mostrarClientes && (
             <Link href={clientesItem.href} onClick={() => setIsMobileOpen(false)} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-semibold text-sm mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
               {clientesItem.icon} {clientesItem.name}
             </Link>
@@ -482,7 +487,7 @@ export default function Navbar() {
                     );
                   })()}
 
-                  {!isCargoRestrito && (
+                  {mostrarClientes && (
                     <Link href={clientesItem.href} className={`flex items-center gap-4 px-3 py-3 rounded-2xl transition-all mb-1 ${pathname === clientesItem.href ? 'bg-[rgb(var(--cor-primaria-rgb)/10%)] text-[var(--cor-primaria)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                       <div className="min-w-[20px]">{clientesItem.icon}</div>
                       <span className="text-sm font-semibold">{clientesItem.name}</span>

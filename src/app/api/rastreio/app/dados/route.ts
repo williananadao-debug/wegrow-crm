@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const ids = (veiculos || []).map(v => v.id);
   const { data: alertas } = ids.length
     ? await db.from('rastreio_eventos').select('id, veiculo_id, tipo, mensagem, lat, lng, ocorrido_em')
-        .in('veiculo_id', ids).neq('tipo', 'online').order('ocorrido_em', { ascending: false }).limit(30)
+        .in('veiculo_id', ids).not('tipo', 'in', '(online,resposta_aparelho)').order('ocorrido_em', { ascending: false }).limit(30)
     : { data: [] };
 
   // Mensalidades em aberto (para o botão "Pagar"): vencidas e a que vence nos próximos 10 dias.

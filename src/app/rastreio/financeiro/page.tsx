@@ -1,21 +1,28 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Wallet, RefreshCw, PlugZap, CheckCircle2, AlertTriangle, ExternalLink, Send, FileText, Settings2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Wallet, RefreshCw, PlugZap, CheckCircle2, AlertTriangle, ExternalLink, Send, FileText, Settings2, X, Plus, Banknote, Trash2, FileSignature, Copy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRastreioAccess, apiRastreio, fmtMoeda } from '../shared';
 
 type Status = {
   conectado: boolean; ambiente: string | null; webhook: boolean; splitAtivo: boolean; podeGerir: boolean; ehDiretor: boolean;
-  config: { taxa_wegrow_pct: number; dias_suspensao: number; multa_pct: number; juros_mes_pct: number; nfse_automatica: boolean; nfse_servico_codigo: string | null; nfse_servico_descricao: string | null };
+  config: {
+    taxa_wegrow_pct: number; dias_suspensao: number; multa_pct: number; juros_mes_pct: number; nfse_automatica: boolean; nfse_servico_codigo: string | null; nfse_servico_descricao: string | null;
+    emp_razao: string | null; emp_documento: string | null; emp_endereco: string | null; emp_cidade: string | null; emp_uf: string | null; emp_telefone: string | null; emp_email: string | null;
+    contrato_fidelidade_meses: number; contrato_valor_equipamento: number; contrato_taxa_instalacao: number; contrato_texto_extra: string | null;
+  };
 };
+type Contrato = { id: number; cliente_id: string; status: string; link_empresa: string | null; link_cliente: string | null; created_at: string; assinado_em: string | null; arquivos: { nome: string; path: string }[] | null };
+type Avulsa = { clienteId: string; nome: string; descricao: string; valor: string; vencimento: string; forma: string; parcelas: number };
+const DESCRICOES = ['Instalação do rastreador', 'Equipamento (rastreador)', 'Visita técnica', 'Troca/reinstalação do rastreador', 'Mensalidade avulsa'];
 type Cli = {
   id: string; nome: string; telefone: string | null; documento: string | null; mensalidade: number; dia_vencimento: number | null; status: string;
   asaas_assinatura_id: string | null; assinatura_status: string | null; forma_pagamento: string; em_atraso_desde: string | null; suspenso_automatico: boolean;
 };
 type Cob = {
   id: number; cliente_id: string; valor: number; valor_liquido: number | null; taxa_wegrow: number | null; vencimento: string | null; pago_em: string | null;
-  status: string; forma: string | null; invoice_url: string | null; nf_url: string | null;
+  status: string; forma: string | null; invoice_url: string | null; nf_url: string | null; descricao: string | null; asaas_assinatura_id: string | null;
 };
 
 const FORMAS: Record<string, string> = { UNDEFINED: 'Cliente escolhe (boleto, Pix ou cartão)', BOLETO: 'Boleto', PIX: 'Pix', CREDIT_CARD: 'Cartão recorrente' };
@@ -45,6 +52,9 @@ export default function RastreioFinanceiroPage() {
   const [cfgAberta, setCfgAberta] = useState(false);
   const [cfg, setCfg] = useState<Status['config'] | null>(null);
   const [formas, setFormas] = useState<Record<string, string>>({});
+  const [contratos, setContratos] = useState<Record<string, Contrato>>({});
+  const [avulsa, setAvulsa] = useState<Avulsa | null>(null);
+  const [links, setLinks] = useState<{ titulo: string; nome: string; telefone: string | null; itens: { rotulo: string; url: string }[] } | null>(null);
 
   const carregarStatus = useCallback(async () => {
     try { const s = await apiRastreio('financeiro', { acao: 'status' }); setSt(s); setCfg(s.config); } catch (e) { setAviso({ ok: false, t: (e as Error).message }); }
@@ -59,12 +69,21 @@ export default function RastreioFinanceiroPage() {
     const [a, m] = mes.split('-').map(Number);
     const ini = `${mes}-01`, fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
     const { data } = await supabase.from('rastreio_cobrancas')
-      .select('id, cliente_id, valor, valor_liquido, taxa_wegrow, vencimento, pago_em, status, forma, invoice_url, nf_url')
+      .select('id, cliente_id, valor, valor_liquido, taxa_wegrow, vencimento, pago_em, status, forma, invoice_url, nf_url, descricao, asaas_assinatura_id')
       .gte('vencimento', ini).lte('vencimento', fim).neq('status', 'DELETED').order('vencimento').limit(2000);
     setCobs((data as Cob[]) || []);
   }, [mes]);
 
-  useEffect(() => { void Promise.resolve().then(() => { carregarStatus(); carregarClientes(); }); }, [carregarStatus, carregarClientes]);
+  // Último contrato de cada cliente (antes da migration a tabela não existe: fica vazio)
+  const carregarContratos = useCallback(async () => {
+    const { data } = await supabase.from('rastreio_contratos').select('id, cliente_id, status, link_empresa, link_cliente, created_at, assinado_em, arquivos')
+      .neq('status', 'cancelado').order('created_at', { ascending: false }).limit(1000);
+    const m: Record<string, Contrato> = {};
+    for (const c of (data as Contrato[]) || []) if (!m[c.cliente_id]) m[c.cliente_id] = c;
+    setContratos(m);
+  }, []);
+
+  useEffect(() => { void Promise.resolve().then(() => { carregarStatus(); carregarClientes(); carregarContratos(); }); }, [carregarStatus, carregarClientes, carregarContratos]);
   useEffect(() => { void Promise.resolve().then(carregarCobs); }, [carregarCobs]);
 
   const acao = async (nome: string, corpo: Record<string, unknown>, ok: (r: Record<string, unknown>) => string) => {
@@ -72,8 +91,9 @@ export default function RastreioFinanceiroPage() {
     try {
       const r = await apiRastreio('financeiro', { acao: nome, ...corpo });
       setAviso({ ok: true, t: ok(r) });
-      await Promise.all([carregarStatus(), carregarClientes(), carregarCobs()]);
-    } catch (e) { setAviso({ ok: false, t: (e as Error).message }); }
+      await Promise.all([carregarStatus(), carregarClientes(), carregarCobs(), carregarContratos()]);
+      return r as Record<string, unknown>;
+    } catch (e) { setAviso({ ok: false, t: (e as Error).message }); return null; }
     finally { setOcupado(''); }
   };
 
@@ -91,6 +111,33 @@ export default function RastreioFinanceiroPage() {
       semAssinatura: clientes.filter(c => c.assinatura_status !== 'ativa' && Number(c.mensalidade) > 0).length,
     };
   }, [cobs, clientes]);
+
+  const emitirAvulsa = async () => {
+    if (!avulsa) return;
+    const r = await acao('avulsa', {
+      clienteId: avulsa.clienteId, descricao: avulsa.descricao, valor: Number(avulsa.valor.replace(/\./g, '').replace(',', '.')),
+      vencimento: avulsa.vencimento, forma: avulsa.forma, parcelas: avulsa.parcelas,
+    }, () => `${avulsa.nome}: cobrança criada.`);
+    if (!r) return;
+    const cli = nomeCli[avulsa.clienteId];
+    setAvulsa(null);
+    if (r.link) setLinks({ titulo: 'Cobrança criada', nome: avulsa.nome, telefone: cli?.telefone || null, itens: [{ rotulo: avulsa.descricao, url: String(r.link) }] });
+  };
+
+  const mandarContrato = async (c: Cli) => {
+    if (contratos[c.id]?.status === 'enviado' && !confirm(`${c.nome} já tem um contrato esperando assinatura. Gerar um novo (o anterior deixa de valer)?`)) return;
+    const r = await acao('contrato', { clienteId: c.id }, () => `${c.nome}: contrato gerado. Assine primeiro e depois mande o link para o cliente.`);
+    if (!r) return;
+    setLinks({ titulo: 'Contrato para assinatura', nome: c.nome, telefone: c.telefone, itens: [
+      ...(r.linkEmpresa ? [{ rotulo: 'Sua assinatura (empresa assina primeiro)', url: String(r.linkEmpresa) }] : []),
+      ...(r.linkCliente ? [{ rotulo: 'Link do cliente para assinar o contrato', url: String(r.linkCliente) }] : []),
+    ] });
+  };
+
+  const abrirContratoAssinado = async (ct: Contrato) => {
+    const r = await acao('contrato_arquivo', { contratoId: ct.id }, () => 'Abrindo o contrato assinado…');
+    if (r?.url) window.location.assign(String(r.url));
+  };
 
   const cobrarWhats = (c: Cob) => {
     const cli = nomeCli[c.cliente_id];
@@ -200,8 +247,33 @@ export default function RastreioFinanceiroPage() {
                       <button onClick={() => confirm(`Cancelar a cobrança automática de ${c.nome}? As mensalidades em aberto são removidas no Asaas.`) && acao('cancelar', { clienteId: c.id }, () => `${c.nome}: cobrança cancelada.`)}
                         disabled={!!ocupado} className="text-[10px] font-black uppercase text-slate-500 hover:text-red-400">Cancelar</button>
                     )}
+                    <button onClick={() => setAvulsa({ clienteId: c.id, nome: c.nome, descricao: DESCRICOES[0], valor: st.config.contrato_taxa_instalacao ? String(st.config.contrato_taxa_instalacao).replace('.', ',') : '', vencimento: new Date(Date.now() + 3 * 86400_000).toLocaleDateString('en-CA'), forma: 'UNDEFINED', parcelas: 1 })}
+                      disabled={!!ocupado} title="Cobrança avulsa: instalação, equipamento, visita..." className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-lg font-black text-[10px] uppercase disabled:opacity-40"><Plus size={12} /> Avulsa</button>
                   </div>
                 )}
+                {st.podeGerir && (() => {
+                  const ct = contratos[c.id];
+                  if (ct?.status === 'assinado') return (
+                    <button onClick={() => abrirContratoAssinado(ct)} disabled={!!ocupado} className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border text-emerald-300 bg-emerald-500/10 border-emerald-500/30 w-fit">
+                      <FileSignature size={12} /> Contrato assinado
+                    </button>
+                  );
+                  return (
+                    <div className="flex items-center gap-1">
+                      {ct?.status === 'enviado' && (
+                        <button onClick={() => setLinks({ titulo: 'Contrato aguardando assinatura', nome: c.nome, telefone: c.telefone, itens: [
+                          ...(ct.link_empresa ? [{ rotulo: 'Sua assinatura (empresa assina primeiro)', url: ct.link_empresa }] : []),
+                          ...(ct.link_cliente ? [{ rotulo: 'Link do cliente para assinar o contrato', url: ct.link_cliente }] : []),
+                        ] })} className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border text-amber-300 bg-amber-500/10 border-amber-500/30">
+                          <FileSignature size={12} /> Aguardando assinatura
+                        </button>
+                      )}
+                      <button onClick={() => mandarContrato(c)} disabled={!!ocupado} className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-lg font-black text-[10px] uppercase disabled:opacity-40">
+                        {ocupado === 'contrato' + c.id ? <Loader2 size={12} className="animate-spin" /> : <FileSignature size={12} />}{ct ? 'Novo contrato' : 'Gerar contrato'}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -211,10 +283,10 @@ export default function RastreioFinanceiroPage() {
 
       <section className="bg-[#0F172A] border border-white/10 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3 gap-2">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Mensalidades do mês</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Cobranças do mês</p>
           <input type="month" value={mes} onChange={e => setMes(e.target.value || mesAtual())} className="bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1.5 text-sm [color-scheme:dark]" />
         </div>
-        {cobs.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">Nenhuma mensalidade com vencimento neste mês.</p> : (
+        {cobs.length === 0 ? <p className="text-sm text-slate-500 py-6 text-center">Nenhuma cobrança com vencimento neste mês.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-[10px] uppercase text-slate-500 text-left"><th className="py-2 pr-3">Cliente</th><th className="pr-3">Vence</th><th className="pr-3">Valor</th><th className="pr-3">Situação</th><th className="pr-3">Pago em</th><th></th></tr></thead>
@@ -223,7 +295,9 @@ export default function RastreioFinanceiroPage() {
                   const si = STATUS_INFO[c.status] || { t: c.status, c: 'text-slate-400 bg-white/5 border-white/10' };
                   return (
                     <tr key={c.id}>
-                      <td className="py-2 pr-3 font-bold">{nomeCli[c.cliente_id]?.nome || '—'}</td>
+                      <td className="py-2 pr-3 font-bold">{nomeCli[c.cliente_id]?.nome || '—'}
+                        <span className="block text-[11px] font-normal text-slate-500">{c.asaas_assinatura_id ? 'Mensalidade' : (c.descricao || 'Avulsa')}{c.forma === 'CREDIT_CARD' ? ' · cartão' : c.forma === 'PIX' ? ' · Pix' : c.forma === 'BOLETO' ? ' · boleto' : ''}</span>
+                      </td>
                       <td className="pr-3 text-slate-300">{dataBR(c.vencimento)}</td>
                       <td className="pr-3">{fmtMoeda(c.valor)}</td>
                       <td className="pr-3"><span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${si.c}`}>{si.t}</span></td>
@@ -232,6 +306,14 @@ export default function RastreioFinanceiroPage() {
                         {c.invoice_url && <a href={c.invoice_url} target="_blank" rel="noreferrer" title="Abrir fatura" className="inline-flex p-1.5 text-slate-400 hover:text-white"><ExternalLink size={14} /></a>}
                         {c.invoice_url && !PAGOS.includes(c.status) && <button onClick={() => cobrarWhats(c)} title="Mandar cobrança pelo WhatsApp" className="inline-flex p-1.5 text-emerald-400 hover:text-emerald-300"><Send size={14} /></button>}
                         {c.nf_url && <a href={c.nf_url} target="_blank" rel="noreferrer" title="Nota fiscal" className="inline-flex p-1.5 text-sky-400"><FileText size={14} /></a>}
+                        {st.podeGerir && !PAGOS.includes(c.status) && c.status !== 'REFUNDED' && (
+                          <>
+                            <button onClick={() => confirm(`Dar baixa de ${fmtMoeda(c.valor)} como recebido em mãos (dinheiro/maquininha)?`) && acao('receber_dinheiro', { cobrancaId: c.id }, () => 'Baixa registrada.')}
+                              disabled={!!ocupado} title="Recebi em mãos" className="inline-flex p-1.5 text-amber-300 hover:text-amber-200 disabled:opacity-40"><Banknote size={14} /></button>
+                            <button onClick={() => confirm('Cancelar esta cobrança? O link/boleto deixa de valer.') && acao('cancelar_cobranca', { cobrancaId: c.id }, () => 'Cobrança cancelada.')}
+                              disabled={!!ocupado} title="Cancelar cobrança" className="inline-flex p-1.5 text-slate-500 hover:text-red-400 disabled:opacity-40"><Trash2 size={14} /></button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
@@ -263,15 +345,108 @@ export default function RastreioFinanceiroPage() {
                 <p className="text-[11px] text-amber-200/80 flex gap-1"><AlertTriangle size={12} className="shrink-0 mt-0.5" /> Antes, configure a emissão de notas no Asaas (Notas Fiscais → Configurações) com os dados da prefeitura. Vale para as cobranças criadas ou atualizadas depois de ligar.</p>
               </div>
             )}
+            <div className="border-t border-white/10 mt-5 pt-4">
+              <p className="font-black uppercase text-sm mb-1 flex items-center gap-2"><FileSignature size={16} /> Dados do contrato</p>
+              <p className="text-[11px] text-slate-500 mb-3">Vão no contrato de rastreamento que o cliente assina pelo celular. Modelo padrão com comodato do equipamento, bloqueio e LGPD: vale revisar com um advogado.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <TextoCfg l="Razão social (ou nome do MEI)" v={cfg.emp_razao} on={x => setCfg({ ...cfg, emp_razao: x })} cls="col-span-2" />
+                <TextoCfg l="CNPJ" v={cfg.emp_documento} on={x => setCfg({ ...cfg, emp_documento: x })} />
+                <TextoCfg l="Telefone" v={cfg.emp_telefone} on={x => setCfg({ ...cfg, emp_telefone: x })} />
+                <TextoCfg l="Endereço" v={cfg.emp_endereco} on={x => setCfg({ ...cfg, emp_endereco: x })} cls="col-span-2" />
+                <TextoCfg l="Cidade (foro)" v={cfg.emp_cidade} on={x => setCfg({ ...cfg, emp_cidade: x })} />
+                <TextoCfg l="UF" v={cfg.emp_uf} on={x => setCfg({ ...cfg, emp_uf: x.toUpperCase().slice(0, 2) })} />
+                <TextoCfg l="E-mail de quem assina pela empresa" v={cfg.emp_email} on={x => setCfg({ ...cfg, emp_email: x })} cls="col-span-2" />
+              </div>
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                <Campo l="Fidelidade (meses, 0 = sem)" v={cfg.contrato_fidelidade_meses} on={x => setCfg({ ...cfg, contrato_fidelidade_meses: x })} />
+                <Campo l="Valor do equipamento (R$)" v={cfg.contrato_valor_equipamento} on={x => setCfg({ ...cfg, contrato_valor_equipamento: x })} />
+                <Campo l="Taxa de instalação (R$)" v={cfg.contrato_taxa_instalacao} on={x => setCfg({ ...cfg, contrato_taxa_instalacao: x })} />
+              </div>
+              <label className="block mt-3">
+                <span className="text-[10px] font-black uppercase text-slate-500">Cláusulas adicionais (opcional, uma por linha)</span>
+                <textarea value={cfg.contrato_texto_extra || ''} onChange={e => setCfg({ ...cfg, contrato_texto_extra: e.target.value })} rows={3} className={`${inp} mt-1`} />
+              </label>
+            </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setCfgAberta(false)} className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 font-black text-xs uppercase">Fechar</button>
-              <button onClick={() => acao('config', { config: cfg }, () => 'Regras salvas.').then(() => setCfgAberta(false))} disabled={!!ocupado}
+              <button onClick={() => acao('config', { config: { ...cfg, contrato: cfg } }, () => 'Regras salvas.').then(() => setCfgAberta(false))} disabled={!!ocupado}
                 className="flex-1 bg-[#22C55E] text-[#0B1120] rounded-xl py-3 font-black text-xs uppercase disabled:opacity-40">Salvar</button>
             </div>
           </div>
         </div>
       )}
+      {avulsa && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !ocupado && setAvulsa(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md space-y-3" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-black uppercase flex items-center gap-2"><Plus size={18} /> Cobrança avulsa</h2>
+            <p className="text-sm text-slate-400 -mt-2">{avulsa.nome}</p>
+            <label className="block"><span className="text-[10px] font-black uppercase text-slate-500">Descrição</span>
+              <input list="desc-avulsa" value={avulsa.descricao} onChange={e => setAvulsa({ ...avulsa, descricao: e.target.value })} className={`${inp} mt-1`} />
+              <datalist id="desc-avulsa">{DESCRICOES.map(d => <option key={d} value={d} />)}</datalist>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block"><span className="text-[10px] font-black uppercase text-slate-500">Valor total (R$)</span>
+                <input value={avulsa.valor} onChange={e => setAvulsa({ ...avulsa, valor: e.target.value.replace(/[^\d,.]/g, '') })} inputMode="decimal" placeholder="150,00" className={`${inp} mt-1`} />
+              </label>
+              <label className="block"><span className="text-[10px] font-black uppercase text-slate-500">Vencimento</span>
+                <input type="date" value={avulsa.vencimento} min={new Date().toLocaleDateString('en-CA')} onChange={e => setAvulsa({ ...avulsa, vencimento: e.target.value })} className={`${inp} mt-1 [color-scheme:dark]`} />
+              </label>
+              <label className="block"><span className="text-[10px] font-black uppercase text-slate-500">Forma</span>
+                <select value={avulsa.forma} onChange={e => setAvulsa({ ...avulsa, forma: e.target.value, parcelas: e.target.value === 'PIX' ? 1 : avulsa.parcelas })} className={`${inp} mt-1 [color-scheme:dark]`}>
+                  <option value="UNDEFINED">Cliente escolhe</option><option value="BOLETO">Boleto</option><option value="PIX">Pix</option><option value="CREDIT_CARD">Cartão de crédito</option>
+                </select>
+              </label>
+              <label className="block"><span className="text-[10px] font-black uppercase text-slate-500">Parcelas</span>
+                <select value={avulsa.parcelas} disabled={avulsa.forma === 'PIX'} onChange={e => setAvulsa({ ...avulsa, parcelas: Number(e.target.value) })} className={`${inp} mt-1 [color-scheme:dark] disabled:opacity-40`}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? 'À vista' : `${n}x`}</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="text-[11px] text-slate-500">O cliente recebe o link para pagar. No cartão parcelado o Asaas cobra as parcelas no cartão sozinho; no boleto parcelado vai um boleto por mês.</p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setAvulsa(null)} disabled={!!ocupado} className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 font-black text-xs uppercase">Cancelar</button>
+              <button onClick={emitirAvulsa} disabled={!!ocupado || !avulsa.valor || !avulsa.descricao.trim()} className="flex-1 bg-[#22C55E] text-[#0B1120] rounded-xl py-3 font-black text-xs uppercase disabled:opacity-40 inline-flex items-center justify-center gap-2">
+                {ocupado.startsWith('avulsa') && <Loader2 size={14} className="animate-spin" />} Emitir cobrança
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {links && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setLinks(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md space-y-3" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-black uppercase">{links.titulo}</h2>
+            <p className="text-sm text-slate-400 -mt-2">{links.nome}</p>
+            {links.itens.map(it => {
+              const fone = String(links.telefone || '').replace(/\D/g, '');
+              const txt = `Olá ${links.nome.split(' ')[0]}! ${it.rotulo}: ${it.url}`;
+              return (
+                <div key={it.url} className="rounded-xl border border-white/10 p-3 space-y-2">
+                  <p className="text-[11px] font-black uppercase text-slate-400">{it.rotulo}</p>
+                  <input readOnly value={it.url} onFocus={e => e.currentTarget.select()} className={`${inp} text-xs font-mono`} />
+                  <div className="flex gap-2">
+                    <button onClick={() => navigator.clipboard?.writeText(it.url).then(() => setAviso({ ok: true, t: 'Link copiado.' })).catch(() => null)} className="flex-1 inline-flex items-center justify-center gap-1 bg-white/5 border border-white/10 rounded-lg py-2 text-[11px] font-black uppercase"><Copy size={12} /> Copiar</button>
+                    <a href={it.url} target="_blank" rel="noreferrer" className="flex-1 inline-flex items-center justify-center gap-1 bg-white/5 border border-white/10 rounded-lg py-2 text-[11px] font-black uppercase"><ExternalLink size={12} /> Abrir</a>
+                    {!it.rotulo.startsWith('Sua') && <a href={fone ? `https://wa.me/55${fone}?text=${encodeURIComponent(txt)}` : `https://wa.me/?text=${encodeURIComponent(txt)}`} target="_blank" rel="noreferrer" className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-600 rounded-lg py-2 text-[11px] font-black uppercase"><Send size={12} /> WhatsApp</a>}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={() => setLinks(null)} className="w-full bg-white/5 border border-white/10 rounded-xl py-3 font-black text-xs uppercase">Fechar</button>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TextoCfg({ l, v, on, cls }: { l: string; v: string | null; on: (x: string) => void; cls?: string }) {
+  return (
+    <label className={`block ${cls || ''}`}>
+      <span className="text-[10px] font-black uppercase text-slate-500">{l}</span>
+      <input value={v || ''} onChange={e => on(e.target.value)} className="w-full mt-1 bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none" />
+    </label>
   );
 }
 

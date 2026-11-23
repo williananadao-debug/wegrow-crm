@@ -3,7 +3,9 @@ import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { usuarioRastreio } from '@/lib/rastreio';
 import {
   carregarConfig, integracaoAsaas, conectarAsaas, salvarAssinatura, cancelarAssinatura, sincronizarEmpresa,
+  criarCobrancaAvulsa, receberEmDinheiro, cancelarCobranca,
 } from '@/lib/rastreioCobranca';
+import { enviarContrato, linkArquivoContrato } from '@/lib/rastreioContrato';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -44,6 +46,32 @@ export async function POST(req: NextRequest) {
       await cancelarAssinatura(db, u.empresaId, String(corpo.clienteId || ''));
       return NextResponse.json({ ok: true });
     }
+    if (acao === 'avulsa') {
+      const r = await criarCobrancaAvulsa(db, u.empresaId, String(corpo.clienteId || ''), {
+        valor: Number(corpo.valor), descricao: String(corpo.descricao || ''), vencimento: String(corpo.vencimento || ''),
+        forma: corpo.forma, parcelas: Number(corpo.parcelas) || 1,
+      });
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (acao === 'receber_dinheiro') {
+      await receberEmDinheiro(db, u.empresaId, Number(corpo.cobrancaId));
+      return NextResponse.json({ ok: true });
+    }
+    if (acao === 'cancelar_cobranca') {
+      await cancelarCobranca(db, u.empresaId, Number(corpo.cobrancaId));
+      return NextResponse.json({ ok: true });
+    }
+    if (acao === 'contrato') {
+      const r = await enviarContrato(db, u.empresaId, String(corpo.clienteId || ''), { nome: u.nome, email: u.email });
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (acao === 'contrato_arquivo') {
+      const { data: ct } = await db.from('rastreio_contratos').select('arquivos').eq('id', Number(corpo.contratoId)).eq('empresa_id', u.empresaId).maybeSingle();
+      const arq = (ct?.arquivos as { nome: string; path: string }[] | null)?.find(a => a.nome === (corpo.nome || 'contrato_assinado.pdf'));
+      const url = arq ? await linkArquivoContrato(db, arq.path) : null;
+      if (!url) return NextResponse.json({ error: 'Arquivo ainda não disponível.' }, { status: 404 });
+      return NextResponse.json({ ok: true, url });
+    }
     if (acao === 'sincronizar') {
       return NextResponse.json({ ok: true, ...(await sincronizarEmpresa(db, u.empresaId)) });
     }
@@ -60,6 +88,18 @@ export async function POST(req: NextRequest) {
         nfse_automatica: Boolean(c.nfse_automatica),
         nfse_servico_codigo: String(c.nfse_servico_codigo || '').trim().slice(0, 30) || null,
         nfse_servico_descricao: String(c.nfse_servico_descricao || '').trim().slice(0, 200) || null,
+        ...(c.contrato ? (() => {
+          const k = c.contrato as Record<string, unknown>;
+          const t = (x: unknown, max = 200) => String(x || '').trim().slice(0, max) || null;
+          return {
+            emp_razao: t(k.emp_razao), emp_documento: t(k.emp_documento, 20), emp_endereco: t(k.emp_endereco), emp_cidade: t(k.emp_cidade, 80),
+            emp_uf: t(k.emp_uf, 2)?.toUpperCase() || null, emp_telefone: t(k.emp_telefone, 20), emp_email: t(k.emp_email, 120),
+            contrato_fidelidade_meses: Math.round(n(k.contrato_fidelidade_meses, 0, 60, 12)),
+            contrato_valor_equipamento: n(k.contrato_valor_equipamento, 0, 100000, 0),
+            contrato_taxa_instalacao: n(k.contrato_taxa_instalacao, 0, 100000, 0),
+            contrato_texto_extra: t(k.contrato_texto_extra, 4000),
+          };
+        })() : {}),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'empresa_id' });
       return NextResponse.json({ ok: true });

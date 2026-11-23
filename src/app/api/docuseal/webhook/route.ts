@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { concluirContratoRastreio } from '@/lib/rastreioContrato';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,6 +141,11 @@ export async function POST(req: Request) {
   }
 
   const supabase = db();
+
+  // Contrato do módulo Rastreio (instalador x cliente final): marca assinado e arquiva
+  if (await concluirContratoRastreio(supabase, submissionId, submissao)) {
+    return NextResponse.json({ ok: true, tipo: 'contrato_rastreio' });
+  }
 
   // Busca o lead pelo submission_id
   const { data: lead, error: leadErr } = await supabase

@@ -45,6 +45,7 @@ export default function DashboardPage() {
     if (mostrarCRM) return;
     if (empresa?.modulos?.nexus) { router.replace('/nexus'); return; }
     if (empresa?.modulos?.pulse) { router.replace('/pulse'); return; }
+    if (empresa?.modulos?.rastreio) { router.replace('/rastreio'); return; }
     router.replace('/customers');
   }, [(auth as any).loading, empresa, router]);
 

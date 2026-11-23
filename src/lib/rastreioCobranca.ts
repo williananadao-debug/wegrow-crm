@@ -19,16 +19,26 @@ const FORMAS: Forma[] = ['UNDEFINED', 'BOLETO', 'PIX', 'CREDIT_CARD'];
 export type ConfigCobranca = {
   taxa_wegrow_pct: number; dias_suspensao: number; multa_pct: number; juros_mes_pct: number;
   nfse_automatica: boolean; nfse_servico_codigo: string | null; nfse_servico_descricao: string | null; webhook_token: string | null;
+  // dados do instalador e condições que entram no contrato (lib/rastreioContrato)
+  emp_razao: string | null; emp_documento: string | null; emp_endereco: string | null; emp_cidade: string | null; emp_uf: string | null;
+  emp_telefone: string | null; emp_email: string | null;
+  contrato_fidelidade_meses: number; contrato_valor_equipamento: number; contrato_taxa_instalacao: number; contrato_texto_extra: string | null;
 };
 const PADRAO: ConfigCobranca = {
   taxa_wegrow_pct: 0, dias_suspensao: 10, multa_pct: 2, juros_mes_pct: 1,
   nfse_automatica: false, nfse_servico_codigo: null, nfse_servico_descricao: 'Serviço de monitoramento e rastreamento veicular', webhook_token: null,
+  emp_razao: null, emp_documento: null, emp_endereco: null, emp_cidade: null, emp_uf: null, emp_telefone: null, emp_email: null,
+  contrato_fidelidade_meses: 12, contrato_valor_equipamento: 0, contrato_taxa_instalacao: 0, contrato_texto_extra: null,
 };
 
 export async function carregarConfig(db: SupabaseClient, empresaId: string): Promise<ConfigCobranca> {
   const { data } = await db.from('rastreio_cobranca_config').select('*').eq('empresa_id', empresaId).maybeSingle();
   const c = { ...PADRAO, ...(data || {}) };
-  return { ...c, taxa_wegrow_pct: Number(c.taxa_wegrow_pct) || 0, multa_pct: Number(c.multa_pct) || 0, juros_mes_pct: Number(c.juros_mes_pct) || 0, dias_suspensao: Number(c.dias_suspensao) };
+  return {
+    ...c, taxa_wegrow_pct: Number(c.taxa_wegrow_pct) || 0, multa_pct: Number(c.multa_pct) || 0, juros_mes_pct: Number(c.juros_mes_pct) || 0, dias_suspensao: Number(c.dias_suspensao),
+    contrato_fidelidade_meses: Number(c.contrato_fidelidade_meses) || 0, contrato_valor_equipamento: Number(c.contrato_valor_equipamento) || 0,
+    contrato_taxa_instalacao: Number(c.contrato_taxa_instalacao) || 0,
+  };
 }
 
 export async function integracaoAsaas(db: SupabaseClient, empresaId: string) {
@@ -237,21 +247,90 @@ export async function aplicarSituacao(db: SupabaseClient, empresaId: string, cli
 
 export async function sincronizarCliente(db: SupabaseClient, empresaId: string, clienteId: string) {
   const ig = await integracaoAsaas(db, empresaId);
-  const { data: c } = await db.from('rastreio_clientes').select('asaas_assinatura_id').eq('id', clienteId).maybeSingle();
-  if (!ig || !c?.asaas_assinatura_id) return 0;
-  const r = await asaas(ig.key, ig.amb, 'GET', `/subscriptions/${c.asaas_assinatura_id}/payments?limit=24`);
+  const { data: c } = await db.from('rastreio_clientes').select('asaas_assinatura_id, asaas_customer_id').eq('id', clienteId).maybeSingle();
+  if (!ig || (!c?.asaas_assinatura_id && !c?.asaas_customer_id)) return 0;
+  // Mensalidades (assinatura) + cobranças avulsas (instalação, equipamento...) do cliente
+  const [assin, avulsas] = await Promise.all([
+    c.asaas_assinatura_id ? asaas(ig.key, ig.amb, 'GET', `/subscriptions/${c.asaas_assinatura_id}/payments?limit=24`).catch(() => ({ data: [] })) : { data: [] },
+    asaas(ig.key, ig.amb, 'GET', `/payments?externalReference=${encodeURIComponent(`rastreio:${clienteId}`)}&limit=50`).catch(() => ({ data: [] })),
+  ]);
+  const vistos = new Set<string>();
   let n = 0;
-  for (const pg of r.data || []) if (await registrarPagamento(db, empresaId, pg, ig)) n++;
+  for (const pg of [...(assin.data || []), ...(avulsas.data || [])] as PagamentoAsaas[]) {
+    if (vistos.has(pg.id)) continue;
+    vistos.add(pg.id);
+    if (await registrarPagamento(db, empresaId, pg, ig)) n++;
+  }
   return n;
+}
+
+// ── Cobrança avulsa: instalação, equipamento, visita técnica... ─────────────────────────────
+
+/** Boleto, Pix ou cartão (à vista ou parcelado) fora da mensalidade. */
+export async function criarCobrancaAvulsa(db: SupabaseClient, empresaId: string, clienteId: string, p: {
+  valor: number; descricao: string; vencimento: string; forma?: string; parcelas?: number;
+}) {
+  const ig = await integracaoAsaas(db, empresaId);
+  if (!ig) throw new Error('Conecte a conta Asaas da empresa primeiro (Financeiro do rastreio → Conectar Asaas).');
+  const { data: c } = await db.from('rastreio_clientes').select('*').eq('id', clienteId).eq('empresa_id', empresaId).maybeSingle();
+  if (!c) throw new Error('Cliente não encontrado.');
+  const valor = Math.round(Number(p.valor) * 100) / 100;
+  if (!(valor >= 5)) throw new Error('Valor mínimo de R$ 5,00.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.vencimento)) || p.vencimento < hojeBR()) throw new Error('Vencimento inválido (hoje ou depois).');
+  const forma: Forma = FORMAS.includes(p.forma as Forma) ? (p.forma as Forma) : 'UNDEFINED';
+  const parcelas = Math.min(Math.max(Math.round(Number(p.parcelas) || 1), 1), 12);
+  if (parcelas > 1 && forma === 'PIX') throw new Error('Pix não parcela: use boleto ou cartão.');
+  if (parcelas > 1 && valor / parcelas < 5) throw new Error('Cada parcela precisa ter pelo menos R$ 5,00.');
+  const cfg = await carregarConfig(db, empresaId);
+  const customer = await garantirClienteAsaas(db, ig, c as Cliente);
+  const descricao = (p.descricao || 'Serviço de rastreamento').trim().slice(0, 200);
+
+  const pg = await asaas(ig.key, ig.amb, 'POST', '/payments', {
+    customer, billingType: forma, dueDate: p.vencimento, description: descricao,
+    externalReference: `rastreio:${clienteId}`,
+    ...(parcelas > 1 ? { installmentCount: parcelas, totalValue: valor } : { value: valor }),
+    fine: { value: cfg.multa_pct }, interest: { value: cfg.juros_mes_pct },
+    split: montarSplit(cfg),
+  });
+  await registrarPagamento(db, empresaId, pg, ig).catch(() => null);
+  if (parcelas > 1) await sincronizarCliente(db, empresaId, clienteId).catch(() => null);
+  return { id: pg.id as string, link: (pg.invoiceUrl || pg.bankSlipUrl || null) as string | null };
+}
+
+async function pagamentoDaEmpresa(db: SupabaseClient, empresaId: string, cobrancaId: number) {
+  const ig = await integracaoAsaas(db, empresaId);
+  if (!ig) throw new Error('Asaas não conectado.');
+  const { data: cob } = await db.from('rastreio_cobrancas').select('asaas_payment_id, cliente_id, valor, status').eq('id', cobrancaId).eq('empresa_id', empresaId).maybeSingle();
+  if (!cob) throw new Error('Cobrança não encontrada.');
+  return { ig, cob };
+}
+
+/** Cliente pagou em mãos (dinheiro, maquininha): dá baixa no Asaas e libera o app. */
+export async function receberEmDinheiro(db: SupabaseClient, empresaId: string, cobrancaId: number) {
+  const { ig, cob } = await pagamentoDaEmpresa(db, empresaId, cobrancaId);
+  if (STATUS_PAGOS.includes(cob.status)) throw new Error('Essa cobrança já está paga.');
+  const pg = await asaas(ig.key, ig.amb, 'POST', `/payments/${cob.asaas_payment_id}/receiveInCash`, {
+    paymentDate: hojeBR(), value: Number(cob.valor), notifyCustomer: false,
+  });
+  await registrarPagamento(db, empresaId, pg, ig);
+}
+
+/** Remove a cobrança no Asaas (o link/boleto deixa de valer). */
+export async function cancelarCobranca(db: SupabaseClient, empresaId: string, cobrancaId: number) {
+  const { ig, cob } = await pagamentoDaEmpresa(db, empresaId, cobrancaId);
+  if (STATUS_PAGOS.includes(cob.status)) throw new Error('Cobrança paga não pode ser cancelada (faça o estorno no Asaas).');
+  await asaas(ig.key, ig.amb, 'DELETE', `/payments/${cob.asaas_payment_id}`);
+  await db.from('rastreio_cobrancas').update({ status: 'DELETED', updated_at: new Date().toISOString() }).eq('id', cobrancaId);
+  await aplicarSituacao(db, empresaId, cob.cliente_id);
 }
 
 /** Sincroniza todos os clientes com assinatura e reavalia atraso/suspensão de todos. */
 export async function sincronizarEmpresa(db: SupabaseClient, empresaId: string) {
   const cfg = await carregarConfig(db, empresaId);
-  const { data: clientes } = await db.from('rastreio_clientes').select('id, asaas_assinatura_id').eq('empresa_id', empresaId).neq('status', 'cancelado');
+  const { data: clientes } = await db.from('rastreio_clientes').select('id, asaas_assinatura_id, asaas_customer_id').eq('empresa_id', empresaId).neq('status', 'cancelado');
   let pagamentos = 0, erros = 0;
   for (const c of clientes || []) {
-    if (c.asaas_assinatura_id) pagamentos += await sincronizarCliente(db, empresaId, c.id).catch(() => { erros++; return 0; });
+    if (c.asaas_assinatura_id || c.asaas_customer_id) pagamentos += await sincronizarCliente(db, empresaId, c.id).catch(() => { erros++; return 0; });
     await aplicarSituacao(db, empresaId, c.id, cfg);
   }
   return { clientes: (clientes || []).length, pagamentos, erros };

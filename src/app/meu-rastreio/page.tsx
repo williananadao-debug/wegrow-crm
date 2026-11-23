@@ -1,11 +1,13 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X, MapPin, Satellite, Signal, Battery, BatteryCharging } from 'lucide-react';
+import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X, MapPin, Satellite, Signal, Battery, BatteryCharging, Shield, Wallet } from 'lucide-react';
 import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, barrasSinal, type Veiculo } from '../rastreio/shared';
 import GraficoVelocidade from '../rastreio/GraficoVelocidade';
 import type { PontoTrajeto } from '../rastreio/MapaRastreio';
 import { analisarTrajeto, fmtDuracao } from '../rastreio/analise';
+import CercasApp from './CercasApp';
+import ContaApp from './ContaApp';
 
 const MapaRastreio = dynamic(() => import('../rastreio/MapaRastreio'), { ssr: false });
 
@@ -16,7 +18,7 @@ type Dados = {
   veiculos: Veiculo[];
   alertas: { id: number; veiculo_id: string; tipo: string; mensagem: string; ocorrido_em: string }[];
 };
-type Aba = 'mapa' | 'trajeto' | 'alertas';
+type Aba = 'mapa' | 'trajeto' | 'cercas' | 'alertas' | 'conta';
 
 const MOTIVOS = ['Meu veículo foi roubado ou furtado', 'Não reconheço o uso agora', 'Outro motivo'];
 const hojeISO = () => new Date().toLocaleDateString('en-CA');
@@ -328,6 +330,10 @@ export default function MeuRastreioPage() {
               </>
             )}
 
+            {veiculo && aba === 'cercas' && <CercasApp veiculo={veiculo} cor={cor} />}
+
+            {aba === 'conta' && <ContaApp cor={cor} />}
+
             {aba === 'alertas' && (
               <section aria-label="Alertas" className="space-y-2">
                 {dados.alertas.length === 0 && <p className="text-center text-sm text-slate-400 py-10">Nenhum alerta ainda.</p>}
@@ -347,8 +353,9 @@ export default function MeuRastreioPage() {
       )}
 
       <nav aria-label="Menu" className="fixed bottom-0 inset-x-0 bg-[#0B1120]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="max-w-lg mx-auto grid grid-cols-3">
-          {([['mapa', 'Mapa', Navigation], ['trajeto', 'Trajeto', Route], ['alertas', 'Alertas', Bell]] as const).map(([k, nome, Icone]) => (
+        <div className={`max-w-lg mx-auto grid ${dados.cliente.titular !== false ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          {([['mapa', 'Mapa', Navigation], ['trajeto', 'Trajeto', Route], ['cercas', 'Cercas', Shield], ['alertas', 'Alertas', Bell],
+            ...(dados.cliente.titular !== false ? [['conta', 'Conta', Wallet] as const] : [])] as const).map(([k, nome, Icone]) => (
             <button key={k} onClick={() => (k === 'alertas' ? abrirAlertas() : setAba(k))} aria-current={aba === k ? 'page' : undefined}
               className="min-h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-black relative"
               style={{ color: aba === k ? cor : '#94A3B8' }}>

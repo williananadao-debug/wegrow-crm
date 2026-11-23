@@ -186,7 +186,7 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <Info icone={<Gauge size={14} />} label="Velocidade" valor={`${Math.round(Number(v.ultima_velocidade || 0))} km/h`} />
-        <Info icone={<Power size={14} />} label="Ignição" valor={v.ignicao == null ? '—' : v.ignicao ? 'Ligada' : 'Desligada'} destaque={v.ignicao ? 'text-emerald-400' : undefined} />
+        <Info icone={<Power size={14} />} label={v.ignicao_virtual ? 'Ignição (virtual)' : 'Ignição'} valor={v.ignicao == null ? '—' : v.ignicao ? 'Ligada' : 'Desligada'} destaque={v.ignicao ? 'text-emerald-400' : undefined} />
         <Info icone={<Battery size={14} />} label="Bateria do veículo" valor={v.bateria_externa != null ? `${Number(v.bateria_externa).toFixed(1)} V` : '—'} />
         <Info icone={<MapPin size={14} />} label="Última posição" valor={haQuanto(v.ultima_posicao_em)} />
       </div>

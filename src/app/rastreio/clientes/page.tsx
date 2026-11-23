@@ -11,7 +11,7 @@ import {
 const CLIENTE_VAZIO = { tipo: 'PF' as 'PF' | 'PJ', nome: '', documento: '', telefone: '', email: '', endereco: '', cidade: '', mensalidade: '', dia_vencimento: '10', status: 'ativo', observacoes: '', relatorio_email: '' };
 const VEICULO_VAZIO = {
   placa: '', descricao: '', tipo: 'carro', imei: '', modelo_rastreador: '', chip_numero: '', chip_operadora: '',
-  tem_bloqueio: true, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '', odometro: '',
+  tem_bloqueio: true, ignicao_virtual: false, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '', odometro: '',
 };
 const TIPOS = [['carro', 'Carro'], ['moto', 'Moto'], ['caminhao', 'Caminhão'], ['van', 'Van/Utilitário'], ['maquina', 'Máquina'], ['outro', 'Outro']];
 
@@ -84,7 +84,7 @@ export default function RastreioClientesPage() {
   function abrirVeiculo(v: Veiculo) {
     setVf({
       placa: v.placa, descricao: v.descricao || '', tipo: v.tipo, imei: v.imei, modelo_rastreador: v.modelo_rastreador || '',
-      chip_numero: v.chip_numero || '', chip_operadora: v.chip_operadora || '', tem_bloqueio: v.tem_bloqueio,
+      chip_numero: v.chip_numero || '', chip_operadora: v.chip_operadora || '', tem_bloqueio: v.tem_bloqueio, ignicao_virtual: Boolean(v.ignicao_virtual),
       instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '',
       grupo: v.grupo || '', odometro: v.odometro_km ? String(Math.round(Number(v.odometro_km))) : '',
     });
@@ -116,7 +116,7 @@ export default function RastreioClientesPage() {
   const dadosVeiculo = () => ({
     placa: mascaraPlaca(vf.placa), descricao: vf.descricao.trim() || null, tipo: vf.tipo, imei: vf.imei.replace(/\s/g, ''),
     modelo_rastreador: vf.modelo_rastreador.trim() || null, chip_numero: vf.chip_numero.trim() || null, chip_operadora: vf.chip_operadora.trim() || null,
-    tem_bloqueio: vf.tem_bloqueio, instalado_em: vf.instalado_em || null, instalado_por: vf.instalado_por.trim() || null,
+    tem_bloqueio: vf.tem_bloqueio, ignicao_virtual: vf.ignicao_virtual, instalado_em: vf.instalado_em || null, instalado_por: vf.instalado_por.trim() || null,
     limite_velocidade: Number(vf.limite_velocidade) || null, grupo: vf.grupo.trim().slice(0, 40) || null,
   });
 
@@ -534,6 +534,10 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                   <label className="col-span-2 flex items-center gap-2 text-sm text-slate-300 mt-5 cursor-pointer">
                     <input type="checkbox" checked={vf.tem_bloqueio} onChange={e => setVf({ ...vf, tem_bloqueio: e.target.checked })} className="accent-sky-400 w-4 h-4" />
                     Relé de bloqueio instalado
+                  </label>
+                  <label className="col-span-2 flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={vf.ignicao_virtual} onChange={e => setVf({ ...vf, ignicao_virtual: e.target.checked })} className="accent-sky-400 w-4 h-4 mt-0.5" />
+                    <span>Ignição virtual <span className="block text-[11px] text-slate-500">Para carro de partida por botão (sem chave) ou sem o fio de pós-chave ligado: considera ligado quando anda e desligado após 4 min parado. Ajuste o intervalo do aparelho para 30 s nos dois estados.</span></span>
                   </label>
                 </div>
               </section>

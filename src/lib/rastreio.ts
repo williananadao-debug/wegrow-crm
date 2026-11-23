@@ -38,6 +38,17 @@ export const POSICAO_RECENTE_MIN = 10;
 
 const NOS_PARA_KMH = 1.852; // o Traccar manda velocidade em nós
 
+// Ignição virtual: acima disso conta como andando (abaixo pode ser deriva do GPS parado)
+export const VIRTUAL_ANDANDO_KMH = 6;
+// Parado por mais que isso = desligado (semáforo e trânsito não desligam)
+export const IGNICAO_VIRTUAL_MIN = 4;
+
+export function ignicaoVirtual(kmh: number, quando: string, atual: boolean | null, ultimoMovimento: string | null): boolean {
+  if (kmh >= VIRTUAL_ANDANDO_KMH) return true;
+  if (!atual || !ultimoMovimento) return false;
+  return Date.parse(quando) - Date.parse(ultimoMovimento) < IGNICAO_VIRTUAL_MIN * 60_000;
+}
+
 export function traccarConfigurado() {
   return Boolean(process.env.TRACCAR_URL && process.env.TRACCAR_USER && process.env.TRACCAR_PASSWORD);
 }
@@ -122,7 +133,7 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
   if (!imei) return 'sem device.uniqueId';
 
   const { data: v } = await db.from('rastreio_veiculos')
-    .select('id, empresa_id, placa, limite_velocidade, ultima_velocidade, ultima_posicao_em, traccar_device_id')
+    .select('id, empresa_id, placa, limite_velocidade, ultima_velocidade, ultima_posicao_em, traccar_device_id, ignicao, ignicao_virtual, ultimo_movimento_em')
     .eq('imei', imei).eq('status', 'ativo').maybeSingle();
   if (!v) return `imei ${imei} não cadastrado`;
 
@@ -134,7 +145,13 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
     const attrs = pos.attributes || {};
     const kmh = Math.round((Number(pos.speed) || 0) * NOS_PARA_KMH);
     const quando = pos.fixTime || pos.deviceTime || pos.serverTime || agora;
-    const ignicao = typeof attrs.ignition === 'boolean' ? attrs.ignition : null;
+    const virtual = Boolean(v.ignicao_virtual);
+    const maisNova = !v.ultima_posicao_em || new Date(quando) >= new Date(v.ultima_posicao_em);
+    // Ignição virtual (carro sem fio de pós-chave): ligada = andando; desliga depois de
+    // IGNICAO_VIRTUAL_MIN parado. Senão, o que o aparelho informar.
+    const ignicao = virtual
+      ? ignicaoVirtual(kmh, quando, v.ignicao, v.ultimo_movimento_em)
+      : (typeof attrs.ignition === 'boolean' ? attrs.ignition : null);
 
     // O forward de evento repete a posição que o gerou — só grava quando é forward de posição.
     if (!corpo.event) {
@@ -159,6 +176,7 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
       await db.from('rastreio_veiculos').update({
         ultima_lat: pos.latitude, ultima_lng: pos.longitude, ultima_velocidade: kmh, ultimo_curso: pos.course ?? null,
         ...(ignicao !== null ? { ignicao } : {}),
+        ...(virtual && kmh >= VIRTUAL_ANDANDO_KMH ? { ultimo_movimento_em: quando } : {}),
         ...(attrs.power != null ? { bateria_externa: Number(attrs.power) } : {}),
         ...(typeof attrs.blocked === 'boolean' ? { bloqueado: attrs.blocked } : {}),
         // Sensores (cada tipo de pacote do GT06 traz uma parte: só sobrescreve o que veio).
@@ -173,12 +191,22 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
         const cercas = await verificarCercas(db, v, pos.latitude, pos.longitude, quando);
         if (cercas) feito.push(cercas);
       }
+      // Ignição virtual gera os próprios avisos de ligou/desligou (o aparelho não sabe)
+      if (virtual && maisNova && !corpo.event && ignicao !== null && v.ignicao !== null && ignicao !== v.ignicao) {
+        await registrarEvento(db, {
+          empresa_id: v.empresa_id, veiculo_id: v.id, tipo: ignicao ? 'ignicao_ligada' : 'ignicao_desligada',
+          mensagem: `${v.placa}: ignição ${ignicao ? 'ligada' : 'desligada'} (virtual)`, lat: pos.latitude, lng: pos.longitude, ocorrido_em: quando,
+        });
+        feito.push('ignição virtual');
+      }
     }
   } else {
     await db.from('rastreio_veiculos').update({ ultima_comunicacao_em: agora }).eq('id', v.id);
   }
 
   const ev = corpo.event;
+  // Com ignição virtual, os eventos de ignição do aparelho não valem (sem fio, ele erra)
+  if (ev?.type && v.ignicao_virtual && (ev.type === 'ignitionOn' || ev.type === 'ignitionOff')) return `${v.placa}: ${feito.join(', ') || 'comunicação'}`;
   if (ev?.type && TEXTO_EVENTO[ev.type]) {
     const r = TEXTO_EVENTO[ev.type](v.placa, ev.attributes || {});
     if (r) {

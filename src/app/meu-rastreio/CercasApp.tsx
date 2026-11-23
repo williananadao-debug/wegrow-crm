@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Plus, Trash2, Crosshair, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Crosshair, X, Undo2, Circle as IconeCirculo, PenLine } from 'lucide-react';
 import type { Veiculo } from '../rastreio/shared';
 import type { CercaMapa } from '../rastreio/MapaRastreio';
 
@@ -27,6 +27,8 @@ export default function CercasApp({ veiculo, cor }: { veiculo: Veiculo; cor: str
   const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState('');
   const [raio, setRaio] = useState(200);
+  const [modo, setModo] = useState<'desenho' | 'circulo'>('desenho');
+  const [pontos, setPontos] = useState<[number, number][]>([]);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
 
@@ -40,15 +42,18 @@ export default function CercasApp({ veiculo, cor }: { veiculo: Veiculo; cor: str
   const doVeiculo = cercas.filter(c => c.veiculo_id === veiculo.id);
   const noMapa: CercaMapa[] = [
     ...doVeiculo,
-    ...(nova ? [{ id: 'nova', nome: nome || 'Nova cerca', lat: nova.lat, lng: nova.lng, raio_m: raio, ativo: true, tipo: 'circulo' }] : []),
+    ...(modo === 'circulo' && nova ? [{ id: 'nova', nome: nome || 'Nova cerca', lat: nova.lat, lng: nova.lng, raio_m: raio, ativo: true, tipo: 'circulo' }] : []),
   ];
-  const limpar = () => { setCriando(false); setNova(null); setNome(''); setErro(''); };
+  const limpar = () => { setCriando(false); setNova(null); setPontos([]); setNome(''); setErro(''); };
+  const pronto = modo === 'desenho' ? pontos.length >= 3 : Boolean(nova);
 
   const salvar = async () => {
-    if (!nova) return;
+    if (!pronto) return;
     setOcupado(true); setErro('');
     try {
-      await chamar({ acao: 'criar', veiculoId: veiculo.id, nome, lat: nova.lat, lng: nova.lng, raio });
+      await chamar(modo === 'desenho'
+        ? { acao: 'criar', veiculoId: veiculo.id, nome, tipo: 'poligono', pontos }
+        : { acao: 'criar', veiculoId: veiculo.id, nome, lat: nova!.lat, lng: nova!.lng, raio });
       limpar();
       await carregar();
     } catch (e) { setErro((e as Error).message); }
@@ -64,9 +69,16 @@ export default function CercasApp({ veiculo, cor }: { veiculo: Veiculo; cor: str
 
   return (
     <>
-      {criando && <p className="text-sm font-bold" style={{ color: cor }}>{nova ? 'Ajuste o raio e dê um nome. Tocar no mapa muda o centro.' : 'Toque no mapa onde fica o lugar (casa, trabalho...).'}</p>}
+      {criando && (
+        <p className="text-sm font-bold" style={{ color: cor }}>
+          {modo === 'desenho'
+            ? (pontos.length < 3 ? `Toque no mapa para marcar os cantos da área (${pontos.length} de no mínimo 3).` : `${pontos.length} pontos. Continue tocando para ajustar ou salve.`)
+            : (nova ? 'Ajuste o raio e dê um nome. Tocar no mapa muda o centro.' : 'Toque no mapa onde fica o lugar (casa, trabalho...).')}
+        </p>
+      )}
       <MapaRastreio veiculos={[veiculo]} selecionadoId={veiculo.id} cercas={noMapa} chaveEnquadrar={`cercas|${veiculo.id}|${doVeiculo.length}`} altura="h-[42vh] min-h-[260px]"
-        onClickMapa={criando ? (lat, lng) => setNova({ lat, lng }) : undefined} />
+        desenho={criando && modo === 'desenho' ? pontos : undefined}
+        onClickMapa={criando ? (lat, lng) => (modo === 'desenho' ? setPontos(p => [...p, [lat, lng] as [number, number]].slice(0, 40)) : setNova({ lat, lng })) : undefined} />
 
       {criando ? (
         <section className="bg-[#0F172A] border border-white/10 rounded-2xl p-4 space-y-3">
@@ -74,21 +86,33 @@ export default function CercasApp({ veiculo, cor }: { veiculo: Veiculo; cor: str
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Nova cerca</p>
             <button onClick={limpar} aria-label="Cancelar" className="text-slate-400"><X size={16} /></button>
           </div>
-          {veiculo.ultima_lat != null && (
+          <div className="grid grid-cols-2 gap-2">
+            {([['desenho', 'Desenhar área', PenLine], ['circulo', 'Círculo', IconeCirculo]] as const).map(([m, t, Icone]) => (
+              <button key={m} onClick={() => { setModo(m); setErro(''); }} className="min-h-11 rounded-xl border text-sm font-black flex items-center justify-center gap-2"
+                style={modo === m ? { borderColor: cor, background: `${cor}1F` } : { borderColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1' }}><Icone size={16} /> {t}</button>
+            ))}
+          </div>
+          {modo === 'desenho' && pontos.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setPontos(p => p.slice(0, -1))} className="min-h-11 rounded-xl border border-white/15 bg-white/5 text-sm font-bold flex items-center justify-center gap-2"><Undo2 size={16} /> Desfazer ponto</button>
+              <button onClick={() => setPontos([])} className="min-h-11 rounded-xl border border-white/15 bg-white/5 text-sm font-bold">Recomeçar</button>
+            </div>
+          )}
+          {modo === 'circulo' && veiculo.ultima_lat != null && (
             <button onClick={() => setNova({ lat: veiculo.ultima_lat!, lng: veiculo.ultima_lng! })} className="w-full min-h-11 rounded-xl border border-white/15 bg-white/5 text-sm font-bold flex items-center justify-center gap-2">
               <Crosshair size={16} /> Usar onde o veículo está agora
             </button>
           )}
           <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome (ex.: Casa)" maxLength={60}
             className="w-full min-h-12 bg-white/5 border border-white/15 rounded-xl px-4 text-sm text-white outline-none" />
-          <div className="grid grid-cols-3 gap-2">
+          {modo === 'circulo' && <div className="grid grid-cols-3 gap-2">
             {RAIOS.map(r => (
               <button key={r} onClick={() => setRaio(r)} className="min-h-11 rounded-xl border text-sm font-black"
                 style={raio === r ? { borderColor: cor, background: `${cor}1F` } : { borderColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1' }}>{fmtRaio(r)}</button>
             ))}
-          </div>
+          </div>}
           {erro && <p className="text-sm text-red-300">{erro}</p>}
-          <button onClick={salvar} disabled={ocupado || !nova || !nome.trim()} className="w-full min-h-14 rounded-2xl font-black uppercase text-[#0B1120] disabled:opacity-40 flex items-center justify-center gap-2" style={{ background: cor }}>
+          <button onClick={salvar} disabled={ocupado || !pronto || !nome.trim()} className="w-full min-h-14 rounded-2xl font-black uppercase text-[#0B1120] disabled:opacity-40 flex items-center justify-center gap-2" style={{ background: cor }}>
             {ocupado && <Loader2 size={16} className="animate-spin" />} Salvar cerca
           </button>
         </section>
@@ -105,7 +129,7 @@ export default function CercasApp({ veiculo, cor }: { veiculo: Veiculo; cor: str
           <article key={c.id} className="rounded-2xl border border-white/10 bg-[#0F172A] p-4 flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="font-black truncate">{c.nome}</p>
-              <p className="text-xs text-slate-400">{c.tipo === 'poligono' ? 'Área desenhada pela central' : `Raio de ${fmtRaio(c.raio_m)}`}{c.dentro != null && c.ativo ? ` · veículo ${c.dentro ? 'dentro' : 'fora'}` : ''}</p>
+              <p className="text-xs text-slate-400">{c.tipo === 'poligono' ? 'Área desenhada' : `Raio de ${fmtRaio(c.raio_m)}`}{c.dentro != null && c.ativo ? ` · veículo ${c.dentro ? 'dentro' : 'fora'}` : ''}</p>
             </div>
             <button onClick={() => acao('alternar', c)} disabled={ocupado} className="min-h-10 px-3 rounded-xl border text-xs font-black uppercase"
               style={c.ativo ? { borderColor: cor, color: cor } : { borderColor: 'rgba(255,255,255,0.15)', color: '#94A3B8' }}>{c.ativo ? 'Ligada' : 'Desligada'}</button>

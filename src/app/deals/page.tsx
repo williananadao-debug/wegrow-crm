@@ -286,7 +286,12 @@ export default function DealsPage() {
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
 
-  const leadEmEdicao = leads.find(l => l.id === editingLeadId);
+  // Lead aberto pela lupa (GlobalSearch) ou por link pode estar fora do período carregado em
+  // `leads` (ex.: ganho em outubro com o filtro em novembro). Sem esta cópia, o modal achava
+  // que o contrato não estava assinado (mostrava o link de assinatura, escondia "Encurtar" e
+  // não travava a edição).
+  const [leadAvulso, setLeadAvulso] = useState<Lead | null>(null);
+  const leadEmEdicao = leads.find(l => l.id === editingLeadId) ?? (leadAvulso && leadAvulso.id === editingLeadId ? leadAvulso : undefined);
   const contratoJaAssinado = Boolean(leadEmEdicao?.docuseal_assinado || leadEmEdicao?.contrato_manual_url);
   const consultorAtualNome = (leadEmEdicao?.user_id && usersMap[leadEmEdicao.user_id]) || leadEmEdicao?.vendedor_nome || perfil?.nome || 'Consultor';
   const leadTravado = contratoJaAssinado && !isDirector;
@@ -1409,7 +1414,7 @@ export default function DealsPage() {
 
     // O consultor que assina primeiro é o vendedor responsável pelo lead — não quem
     // está logado no momento do envio (pode ser um admin enviando em nome de outro).
-    const leadAtual = leads.find(l => l.id === editingLeadId);
+    const leadAtual = leadEmEdicao;
     const consultorId = leadAtual?.user_id;
     const consultorNome = (consultorId && usersMap[consultorId]) || leadAtual?.vendedor_nome || perfil?.nome || 'Consultor';
     const consultorEmail = (consultorId && usersEmailMap[consultorId]) || user?.email;
@@ -1502,7 +1507,7 @@ export default function DealsPage() {
     setUploadManualEnviando(true);
     setUploadManualErro('');
     try {
-      const arquivosExistentes = leads.find(l => l.id === editingLeadId)?.contrato_manual_arquivos || [];
+      const arquivosExistentes = leadEmEdicao?.contrato_manual_arquivos || [];
       const novosArquivos: { nome: string; path: string }[] = [];
 
       for (const file of files) {
@@ -1843,7 +1848,7 @@ export default function DealsPage() {
     const valorTotalFinal = valorTotalOverride !== null ? valorTotalOverride : calculado;
     const percDesconto = subtotal > 0 ? (desconto / subtotal) * 100 : 0;
 
-    let novoStatusAprovacao = leads.find(l => l.id === editingLeadId)?.status_aprovacao || null;
+    let novoStatusAprovacao = leadEmEdicao?.status_aprovacao || null;
 
     if (!isLideranca) {
         if (percDesconto > LIMITE_DESCONTO_MAXIMO) novoStatusAprovacao = 'pendente';
@@ -1855,7 +1860,7 @@ export default function DealsPage() {
 
     let atividadesPayload = [...atividades];
     if (editingLeadId && followupEm) {
-        const leadAtual = leads.find(l => l.id === editingLeadId);
+        const leadAtual = leadEmEdicao;
         if (leadAtual?.followup_em !== followupEm) {
             atividadesPayload = [{ id: Date.now(), tipo: 'followup', descricao: `Follow-up agendado para ${followupEm.split('-').reverse().join('/')}`, created_at: new Date().toISOString() }, ...atividadesPayload];
         }
@@ -1961,6 +1966,7 @@ export default function DealsPage() {
     
     if (lead) {
         setEditingLeadId(lead.id);
+        setLeadAvulso(lead);
         setNovaEmpresa(lead.empresa);
         setNovoTelefone(lead.telefone || '');
         setNovaUnidade(lead.unidade || '');
@@ -2307,14 +2313,14 @@ export default function DealsPage() {
                     <PenLine size={16} className="text-emerald-400"/>
                     <span className="text-emerald-300 font-black text-sm uppercase tracking-wide">Assinatura Digital</span>
                   </div>
-                  {leads.find(l => l.id === editingLeadId)?.docuseal_assinado ? (
+                  {leadEmEdicao?.docuseal_assinado ? (
                     <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
                       <CheckCircle2 size={20} className="text-emerald-400 shrink-0"/>
                       <div className="flex-1">
                         <p className="text-emerald-300 text-sm font-black">Contrato Assinado</p>
                         <p className="text-emerald-400/70 text-xs mt-0.5">Assinatura digital confirmada pelo Docuseal.</p>
                         {(() => {
-                          const arquivos = leads.find(l => l.id === editingLeadId)?.docuseal_arquivos;
+                          const arquivos = leadEmEdicao?.docuseal_arquivos;
                           if (!Array.isArray(arquivos) || arquivos.length === 0) return null;
                           return (
                             <div className="flex flex-wrap gap-3 mt-2">
@@ -2405,16 +2411,16 @@ export default function DealsPage() {
                     <Upload size={16} className="text-orange-400"/>
                     <span className="text-orange-300 font-black text-sm uppercase tracking-wide">Contrato Assinado (PDF ou Fotos)</span>
                   </div>
-                  {leads.find(l => l.id === editingLeadId)?.contrato_manual_url ? (
+                  {leadEmEdicao?.contrato_manual_url ? (
                     <div className="space-y-2">
                       <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
                         <CheckCircle2 size={20} className="text-orange-400 shrink-0"/>
                         <div className="flex-1 min-w-0">
                           <p className="text-orange-300 text-sm font-black">Contrato anexado — produção liberada</p>
                           <div className="flex flex-col items-start gap-0.5 mt-1">
-                            {(leads.find(l => l.id === editingLeadId)?.contrato_manual_arquivos?.length
-                              ? leads.find(l => l.id === editingLeadId)!.contrato_manual_arquivos!
-                              : [{ nome: 'Contrato assinado', path: leads.find(l => l.id === editingLeadId)!.contrato_manual_url! }]
+                            {(leadEmEdicao?.contrato_manual_arquivos?.length
+                              ? leadEmEdicao!.contrato_manual_arquivos!
+                              : [{ nome: 'Contrato assinado', path: leadEmEdicao!.contrato_manual_url! }]
                             ).map((arq, i) => (
                               <button key={i} type="button" onClick={() => abrirArquivoAssinado(arq.path)} className="text-orange-400/70 text-xs underline hover:text-orange-300 truncate max-w-full">{arq.nome || `Arquivo ${i + 1}`}</button>
                             ))}
@@ -2850,7 +2856,7 @@ export default function DealsPage() {
                         </div>
                     )}
 
-                    {editingLeadId && leads.find(l => l.id === editingLeadId)?.status_aprovacao === 'pendente' && (
+                    {editingLeadId && leadEmEdicao?.status_aprovacao === 'pendente' && (
                         <div className="bg-orange-500/10 border border-orange-500/30 p-6 rounded-2xl mt-4 text-center">
                             <Lock className="text-orange-400 mx-auto mb-2" size={24}/>
                             <h3 className="text-orange-400 font-black uppercase text-sm">Alçada de Desconto</h3>
@@ -2963,6 +2969,7 @@ export default function DealsPage() {
           onSalvo={(campos, aviso) => {
             // Fecha a venda também: o formulário aberto ainda tem os itens antigos e salvaria por cima
             setLeads(prev => prev.map(l => l.id === leadEmEdicao.id ? { ...l, ...campos } as Lead : l));
+            setLeadAvulso(prev => (prev && prev.id === leadEmEdicao.id ? { ...prev, ...campos } as Lead : prev));
             setEncurtando(false); setIsModalOpen(false); setEditingLeadId(null);
             setToastMessage(`✂️ ${aviso}`); setShowToast(true);
           }}/>

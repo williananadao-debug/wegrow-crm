@@ -2,12 +2,10 @@
 import { useMemo, useState } from 'react';
 import { Scissors, X, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { valorVenda } from '@/lib/vendasAjustes';
 
 // Encurtar um contrato já ganho (ex.: fechou 6 meses e o cliente pediu só 3). A venda passa a
-// ter o contrato novo (itens, valor, parcelas, fim) — OPEC, contrato e portal leem dela —, o mês
-// em que foi ganha continua contando o valor original (leads.valor_fechado) e a diferença entra
-// como ajuste negativo no mês de hoje, no nome do vendedor da venda (vendas_ajustes, lib/vendasAjustes).
+// ter o contrato novo (itens, valor, parcelas, fim) — OPEC, contrato e portal leem dela — e o
+// novo valor conta no mês em que foi ganha (lib/vendasAjustes). vendas_ajustes guarda o histórico.
 // Só diretoria e gerência. As parcelas em aberto do financeiro ligadas à venda são reduzidas a partir da última.
 
 type Item = { quantidade: number; precoUnitario: number; [k: string]: unknown };
@@ -69,7 +67,6 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
   const diferenca = r2(valorDepois - valorAntes);
   const vendedorNome = lead.vendedor_nome || 'o vendedor da venda';
   const mesVenda = lead.fechado_em ? mesAno(new Date(lead.fechado_em)) : 'o mês da venda';
-  const valorOriginal = valorVenda(lead);
   const invalido = (comLista && excluidas.size === 0) || !(n > 0) || (mesesAntes > 0 && n >= mesesAntes) || !(valorDepois > 0) || valorDepois >= valorAntes || motivo.trim().length < 3;
 
   const itensNovos = useMemo(() => {
@@ -122,7 +119,7 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
       }
       const aviso = (abertos || []).length && resta > 0.009
         ? `Contrato encurtado. Faltaram ${brl(resta)} para descontar: já estava pago — combine a devolução ou crédito com o cliente.`
-        : 'Contrato encurtado. A diferença entra na meta e na comissão deste mês.';
+        : 'Contrato encurtado. O novo valor já vale na meta e na comissão do mês em que a venda foi ganha.';
       onSalvo(campos, aviso);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível encurtar o contrato.');
@@ -196,8 +193,8 @@ export default function EncurtarContrato({ lead, empresaId, autorNome, onFechar,
 
         {n > 0 && valorDepois > 0 && valorDepois < valorAntes && (
           <div className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-200 space-y-1">
-            <p>Diferença: <b>{brl(diferenca)}</b>, descontada da meta e da comissão de <b>{vendedorNome}</b> em <b>{mesAno(new Date())}</b>.</p>
-            <p className="text-amber-200/70">{mesVenda[0].toUpperCase() + mesVenda.slice(1)} continua com {brl(valorOriginal)}, porque a comissão daquele mês já foi calculada.</p>
+            <p>Diferença: <b>{brl(diferenca)}</b>, descontada da meta e da comissão de <b>{vendedorNome}</b> em <b>{mesVenda}</b> (mês em que a venda foi ganha), que passa a contar {brl(valorDepois)}.</p>
+            <p className="text-amber-200/70">Se a comissão daquele mês já foi paga, acerte a diferença com o vendedor.</p>
             <p className="text-amber-200/70">As parcelas em aberto desta venda no financeiro são reduzidas a partir da última. O contrato assinado não muda: se precisar, faça um termo de alteração com o cliente.</p>
           </div>
         )}

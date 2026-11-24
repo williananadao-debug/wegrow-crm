@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { ehCargoRestrito, cargoPodeAcessar } from '@/lib/publicPages';
 import { useState, useEffect } from 'react';
-import { Navigation, Wallet, FileBarChart, Map as IconeMapa,
+import { Navigation, Wallet, FileBarChart, Map as IconeMapa, Siren, Wrench,
   LayoutDashboard, Target, Zap, Settings, LogOut, ShieldCheck,
   Users, Briefcase, ChevronLeft, ChevronRight,
   Rocket, BarChart3, Menu, X, UsersRound, Brain, LayoutGrid, ChevronDown, Activity, ShoppingBag, Boxes, Bot, Radio, HardHat, Radar, Megaphone, Scale, TrendingUp, Factory, DollarSign, Package, Receipt, PackageMinus, ScanLine, Handshake
@@ -176,6 +176,9 @@ export default function Navbar() {
     { name: isCDL ? 'Associados e veículos' : 'Clientes e veículos', icon: <Users size={20} />, href: '/rastreio/clientes' },
     { name: 'Financeiro do rastreio', icon: <Wallet size={20} />, href: '/rastreio/financeiro' },
     { name: 'Relatórios', icon: <FileBarChart size={20} />, href: '/rastreio/relatorios' },
+    { name: 'Ocorrências', icon: <Siren size={20} />, href: '/rastreio/ocorrencias' },
+    { name: 'Ordens de serviço', icon: <Wrench size={20} />, href: '/rastreio/os' },
+    { name: 'Estoque', icon: <Boxes size={20} />, href: '/rastreio/estoque' },
   ];
   // /rastreio/veiculos/... é detalhe da frota → marca "Mapa da frota"
   const rastreioAtivo = (href: string) => href === '/rastreio'

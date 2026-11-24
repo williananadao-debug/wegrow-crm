@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
         nfse_automatica: Boolean(c.nfse_automatica),
         nfse_servico_codigo: String(c.nfse_servico_codigo || '').trim().slice(0, 30) || null,
         nfse_servico_descricao: String(c.nfse_servico_descricao || '').trim().slice(0, 200) || null,
+        ...(c.preco_combustivel != null ? { preco_combustivel: n(c.preco_combustivel, 0, 50, 6) } : {}),
+        ...(c.dias_sem_comunicacao != null ? { dias_sem_comunicacao: Math.round(n(c.dias_sem_comunicacao, 1, 60, 2)) } : {}),
+        ...(c.email_alarmes != null ? { email_alarmes: Boolean(c.email_alarmes) } : {}),
         ...(c.contrato ? (() => {
           const k = c.contrato as Record<string, unknown>;
           const t = (x: unknown, max = 200) => String(x || '').trim().slice(0, max) || null;

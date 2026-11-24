@@ -11,7 +11,7 @@ import {
 const CLIENTE_VAZIO = { tipo: 'PF' as 'PF' | 'PJ', nome: '', documento: '', telefone: '', email: '', endereco: '', cidade: '', mensalidade: '', dia_vencimento: '10', status: 'ativo', observacoes: '', relatorio_email: '' };
 const VEICULO_VAZIO = {
   placa: '', descricao: '', tipo: 'carro', imei: '', modelo_rastreador: '', chip_numero: '', chip_operadora: '',
-  tem_bloqueio: true, ignicao_virtual: false, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '', odometro: '',
+  tem_bloqueio: true, ignicao_virtual: false, instalado_em: new Date().toLocaleDateString('en-CA'), instalado_por: '', limite_velocidade: '', grupo: '', odometro: '', consumo: '', horarioAtivo: false, horarioDias: [1, 2, 3, 4, 5] as number[], horarioIni: '07:00', horarioFim: '19:00',
 };
 const TIPOS = [['carro', 'Carro'], ['moto', 'Moto'], ['caminhao', 'Caminhão'], ['van', 'Van/Utilitário'], ['maquina', 'Máquina'], ['outro', 'Outro']];
 
@@ -85,7 +85,7 @@ export default function RastreioClientesPage() {
     setVf({
       placa: v.placa, descricao: v.descricao || '', tipo: v.tipo, imei: v.imei, modelo_rastreador: v.modelo_rastreador || '',
       chip_numero: v.chip_numero || '', chip_operadora: v.chip_operadora || '', tem_bloqueio: v.tem_bloqueio, ignicao_virtual: Boolean(v.ignicao_virtual),
-      instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '',
+      instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '', consumo: v.consumo_km_l ? String(v.consumo_km_l) : '', horarioAtivo: Boolean(v.horario_uso), horarioDias: v.horario_uso?.dias || [1, 2, 3, 4, 5], horarioIni: v.horario_uso?.inicio || '07:00', horarioFim: v.horario_uso?.fim || '19:00',
       grupo: v.grupo || '', odometro: v.odometro_km ? String(Math.round(Number(v.odometro_km))) : '',
     });
     setErro('');
@@ -118,6 +118,8 @@ export default function RastreioClientesPage() {
     modelo_rastreador: vf.modelo_rastreador.trim() || null, chip_numero: vf.chip_numero.trim() || null, chip_operadora: vf.chip_operadora.trim() || null,
     tem_bloqueio: vf.tem_bloqueio, ignicao_virtual: vf.ignicao_virtual, instalado_em: vf.instalado_em || null, instalado_por: vf.instalado_por.trim() || null,
     limite_velocidade: Number(vf.limite_velocidade) || null, grupo: vf.grupo.trim().slice(0, 40) || null,
+    consumo_km_l: Number(String(vf.consumo).replace(',', '.')) || null,
+    horario_uso: vf.horarioAtivo ? { dias: vf.horarioDias, inicio: vf.horarioIni, fim: vf.horarioFim } : null,
   });
 
   const validarVeiculo = () => {
@@ -520,6 +522,24 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                   <div className="col-span-2"><label className={lbl}>Número do chip</label><input value={vf.chip_numero} onChange={e => setVf({ ...vf, chip_numero: e.target.value })} className={inp} inputMode="tel" /></div>
                   <div><label className={lbl}>Operadora</label><input value={vf.chip_operadora} onChange={e => setVf({ ...vf, chip_operadora: e.target.value })} className={inp} placeholder="Vivo, Claro…" /></div>
                   <div><label className={lbl}>Alerta acima de (km/h)</label><input value={vf.limite_velocidade} onChange={e => setVf({ ...vf, limite_velocidade: e.target.value.replace(/\D/g, '').slice(0, 3) })} className={inp} inputMode="numeric" placeholder="vazio = sem" /></div>
+                  <div><label className={lbl}>Consumo médio (km/l)</label><input value={vf.consumo} onChange={e => setVf({ ...vf, consumo: e.target.value.replace(/[^\d,.]/g, '').slice(0, 5) })} className={inp} inputMode="decimal" placeholder="ex.: 11 (relatório de combustível)" /></div>
+                  <div className="col-span-2 rounded-xl border border-white/10 p-3 space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                      <input type="checkbox" checked={vf.horarioAtivo} onChange={e => setVf({ ...vf, horarioAtivo: e.target.checked })} className="accent-sky-400 w-4 h-4" />
+                      Avisar uso fora do horário permitido
+                    </label>
+                    {vf.horarioAtivo && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((n, d) => (
+                          <button key={n} type="button" onClick={() => setVf({ ...vf, horarioDias: vf.horarioDias.includes(d) ? vf.horarioDias.filter(x => x !== d) : [...vf.horarioDias, d] })}
+                            className={`w-10 py-1 rounded-full border text-[10px] font-black ${vf.horarioDias.includes(d) ? 'border-sky-400 text-sky-300 bg-sky-500/10' : 'border-white/10 text-slate-500'}`}>{n}</button>
+                        ))}
+                        <input type="time" value={vf.horarioIni} onChange={e => setVf({ ...vf, horarioIni: e.target.value })} className={`${inp} !w-28 [color-scheme:dark]`} />
+                        <span className="text-slate-500 text-xs">até</span>
+                        <input type="time" value={vf.horarioFim} onChange={e => setVf({ ...vf, horarioFim: e.target.value })} className={`${inp} !w-28 [color-scheme:dark]`} />
+                      </div>
+                    )}
+                  </div>
                   <div><label className={lbl}>Instalado em</label><input type="date" value={vf.instalado_em} onChange={e => setVf({ ...vf, instalado_em: e.target.value })} className={`${inp} [color-scheme:dark]`} /></div>
                   <div className="col-span-2">
                     <label className={lbl}>Hodômetro atual (km do painel)</label>

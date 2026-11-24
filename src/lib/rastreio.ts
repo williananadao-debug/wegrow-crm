@@ -6,6 +6,7 @@
 //   TRACCAR_WEBHOOK_TOKEN  segredo que vai na URL do forward (?token=...)
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { notificarCliente } from '@/lib/rastreioPush';
+import { alertasSeguranca, avisarCentral } from '@/lib/rastreioCentral';
 
 type NovoEvento = {
   empresa_id: string; veiculo_id: string; tipo: string; mensagem: string;
@@ -15,12 +16,17 @@ type NovoEvento = {
 const TITULO_ALERTA: Record<string, string> = {
   alarme: '🚨 Alerta do rastreador', cerca: '📍 Cerca virtual', velocidade: '⚠️ Excesso de velocidade',
   comando: '🔒 Bloqueio', offline: '📡 Rastreador sem sinal', online: '📡 Rastreador voltou', manutencao: '🔧 Manutenção',
-  ignicao_ligada: '🔑 Ignição ligada', ignicao_desligada: '🔑 Ignição desligada',
+  ignicao_ligada: '🔑 Ignição ligada', ignicao_desligada: '🔑 Ignição desligada', horario: '🕒 Uso fora do horário',
 };
 
 /** Grava o alerta e avisa o celular do dono do veículo (se ele quiser esse tipo de alerta). */
 export async function registrarEvento(db: SupabaseClient, ev: NovoEvento) {
   await db.from('rastreio_eventos').insert(ev);
+  // Alarme crítico também vai por e-mail para a central do instalador (se configurado)
+  if (ev.tipo === 'alarme') {
+    await avisarCentral(db, { empresaId: ev.empresa_id, veiculoId: ev.veiculo_id, titulo: TITULO_ALERTA.alarme, mensagem: ev.mensagem, lat: ev.lat, lng: ev.lng })
+      .catch(e => console.error('[rastreio/central]', (e as Error).message));
+  }
   try {
     const { data: v } = await db.from('rastreio_veiculos').select('cliente_id').eq('id', ev.veiculo_id).maybeSingle();
     if (v?.cliente_id) {
@@ -190,6 +196,12 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
       if (!corpo.event) {
         const cercas = await verificarCercas(db, v, pos.latitude, pos.longitude, quando);
         if (cercas) feito.push(cercas);
+        // Reboque (anda desligado) e uso fora do horário permitido
+        if (kmh >= 15 || ignicao === true) {
+          const seg = await alertasSeguranca(db, v, { kmh, ignicao: ignicao ?? v.ignicao, virtual, quando, lat: pos.latitude, lng: pos.longitude }, ev => registrarEvento(db, ev))
+            .catch(() => null);
+          if (seg) feito.push(seg);
+        }
       }
       // Ignição virtual gera os próprios avisos de ligou/desligou (o aparelho não sabe)
       if (virtual && maisNova && !corpo.event && ignicao !== null && v.ignicao !== null && ignicao !== v.ignicao) {

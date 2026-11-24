@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X, MapPin, Satellite, Signal, Battery, BatteryCharging, Shield, Wallet } from 'lucide-react';
+import { Loader2, Navigation, Bell, BellRing, Route, Lock, Unlock, Share2, LogOut, KeyRound, Gauge, Power, AlertTriangle, X, MapPin, Satellite, Signal, Battery, BatteryCharging, Shield, Wallet, Siren } from 'lucide-react';
 import { situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, barrasSinal, type Veiculo } from '../rastreio/shared';
 import GraficoVelocidade from '../rastreio/GraficoVelocidade';
 import type { PontoTrajeto } from '../rastreio/MapaRastreio';
@@ -38,7 +38,8 @@ export default function MeuRastreioPage() {
   const [dia, setDia] = useState(hojeISO());
   const [trajeto, setTrajeto] = useState<PontoTrajeto[]>([]);
   const [carregandoTrajeto, setCarregandoTrajeto] = useState(false);
-  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin' | 'compartilhar' | 'alertas'>(null);
+  const [modal, setModal] = useState<null | 'bloquear' | 'desbloquear' | 'pin' | 'compartilhar' | 'alertas' | 'roubo'>(null);
+  const [tipoRoubo, setTipoRoubo] = useState<'roubo' | 'furto'>('roubo');
   const [prefs, setPrefs] = useState<{ alertas: Record<string, boolean>; nomes: Record<string, string> } | null>(null);
   const [linkConvite, setLinkConvite] = useState('');
   const [motivo, setMotivo] = useState(0);
@@ -291,6 +292,7 @@ export default function MeuRastreioPage() {
                     ? <button onClick={() => { setModal('desbloquear'); setPin(''); setMsg(null); }} className="min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2"><Unlock size={18} /> Desbloquear</button>
                     : <button onClick={() => { setModal('bloquear'); setPin(''); setMotivo(0); setMsg(null); }} className="min-h-14 rounded-2xl bg-red-600 font-black uppercase text-sm flex items-center justify-center gap-2"><Lock size={18} /> Bloquear</button>)}
                   <button onClick={() => { setModal('compartilhar'); setMsg(null); }} disabled={veiculo.ultima_lat == null} className={`min-h-14 rounded-2xl border border-white/15 bg-white/5 font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-40 ${veiculo.tem_bloqueio && dados.cliente.podeBloquear !== false ? '' : 'col-span-2'}`}><Share2 size={18} /> Compartilhar</button>
+                  <button onClick={() => { setModal('roubo'); setMsg(null); }} className="col-span-2 min-h-12 rounded-2xl border border-red-500/40 bg-red-500/10 text-red-200 font-black uppercase text-xs flex items-center justify-center gap-2"><Siren size={16} /> Fui roubado / furtado</button>
                 </div>
               </>
             )}
@@ -386,6 +388,32 @@ export default function MeuRastreioPage() {
                   </ul>
                 )}
                 <p className="text-xs text-slate-500">As notificações funcionam no app instalado da loja (Android e iPhone).</p>
+              </>
+            ) : modal === 'roubo' ? (
+              <>
+                <h2 className="text-xl font-black flex items-center gap-2"><Siren size={20} className="text-red-400" /> Avisar roubo ou furto</h2>
+                <p className="text-sm text-slate-300">A central é avisada na hora, o rastreador passa a mandar a posição a cada 10 segundos e sai um link ao vivo para a polícia. Se estiver em perigo, ligue <b>190</b> primeiro.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['roubo', 'furto'] as const).map(t => (
+                    <button key={t} onClick={() => setTipoRoubo(t)} className="min-h-12 rounded-xl border font-black uppercase text-sm"
+                      style={tipoRoubo === t ? { borderColor: '#EF4444', background: '#EF44441F', color: '#FCA5A5' } : { borderColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1' }}>{t === 'roubo' ? 'Roubo (com abordagem)' : 'Furto (levaram parado)'}</button>
+                  ))}
+                </div>
+                <button disabled={enviando} onClick={async () => {
+                  if (!veiculo) return;
+                  setEnviando(true); setMsg(null);
+                  try {
+                    const r = await post('ocorrencia', { veiculoId: veiculo.id, tipo: tipoRoubo });
+                    setModal(null);
+                    setMsg({ ok: true, texto: r.jaAberta ? 'A central já está acompanhando este veículo.' : 'Central avisada. O veículo está em rastreamento intensivo.' + (veiculo.tem_bloqueio && dados.cliente.podeBloquear !== false ? ' Se for seguro, use o botão Bloquear.' : '') });
+                    if (r.link) {
+                      try { if (navigator.share) await navigator.share({ title: veiculo.placa, text: `Localização ao vivo do veículo ${veiculo.placa}`, url: r.link }); } catch { /* cancelado */ }
+                    }
+                  } catch (e) { setMsg({ ok: false, texto: (e as Error).message }); }
+                  finally { setEnviando(false); }
+                }} className="w-full min-h-14 rounded-2xl bg-red-600 font-black uppercase disabled:opacity-40 flex items-center justify-center gap-2">
+                  {enviando ? <Loader2 size={18} className="animate-spin" /> : <Siren size={18} />} Avisar a central agora
+                </button>
               </>
             ) : modal === 'compartilhar' ? (
               <>

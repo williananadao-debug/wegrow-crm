@@ -11,6 +11,7 @@ type Status = {
     taxa_wegrow_pct: number; dias_suspensao: number; multa_pct: number; juros_mes_pct: number; nfse_automatica: boolean; nfse_servico_codigo: string | null; nfse_servico_descricao: string | null;
     emp_razao: string | null; emp_documento: string | null; emp_endereco: string | null; emp_cidade: string | null; emp_uf: string | null; emp_telefone: string | null; emp_email: string | null;
     contrato_fidelidade_meses: number; contrato_valor_equipamento: number; contrato_taxa_instalacao: number; contrato_texto_extra: string | null;
+    preco_combustivel?: number; dias_sem_comunicacao?: number; email_alarmes?: boolean;
   };
 };
 type Contrato = { id: number; cliente_id: string; status: string; link_empresa: string | null; link_cliente: string | null; created_at: string; assinado_em: string | null; arquivos: { nome: string; path: string }[] | null };
@@ -345,6 +346,18 @@ export default function RastreioFinanceiroPage() {
                 <p className="text-[11px] text-amber-200/80 flex gap-1"><AlertTriangle size={12} className="shrink-0 mt-0.5" /> Antes, configure a emissão de notas no Asaas (Notas Fiscais → Configurações) com os dados da prefeitura. Vale para as cobranças criadas ou atualizadas depois de ligar.</p>
               </div>
             )}
+            <div className="border-t border-white/10 mt-5 pt-4">
+              <p className="font-black uppercase text-sm mb-2">Central e frota</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo l="Avisar rastreador sem comunicar após (dias)" v={cfg.dias_sem_comunicacao ?? 2} on={x => setCfg({ ...cfg, dias_sem_comunicacao: x })} />
+                <Campo l="Preço do litro de combustível (R$)" v={cfg.preco_combustivel ?? 6} on={x => setCfg({ ...cfg, preco_combustivel: x })} />
+              </div>
+              <label className="flex items-center gap-2 text-sm font-bold mt-3">
+                <input type="checkbox" checked={cfg.email_alarmes !== false} onChange={e => setCfg({ ...cfg, email_alarmes: e.target.checked })} className="accent-emerald-500 w-4 h-4" />
+                Mandar alarmes críticos (reboque, bateria cortada, pânico, ocorrência) por e-mail para a central
+              </label>
+              <p className="text-[11px] text-slate-500 mt-1">Vai para o e-mail da empresa informado em Dados do contrato.</p>
+            </div>
             <div className="border-t border-white/10 mt-5 pt-4">
               <p className="font-black uppercase text-sm mb-1 flex items-center gap-2"><FileSignature size={16} /> Dados do contrato</p>
               <p className="text-[11px] text-slate-500 mb-3">Vão no contrato de rastreamento que o cliente assina pelo celular. Modelo padrão com comodato do equipamento, bloqueio e LGPD: vale revisar com um advogado.</p>

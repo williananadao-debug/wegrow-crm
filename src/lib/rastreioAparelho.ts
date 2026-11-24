@@ -53,7 +53,7 @@ export function textoComando(cmd: ComandoAparelho, p: Params = {}): string {
 
 /** Envia ao aparelho (só diretor/gerente, validado na rota) e registra no log de comandos. */
 export async function configurarAparelho(db: SupabaseClient, p: {
-  empresaId: string; veiculoId: string; comando: ComandoAparelho; params?: Params; autor: { userId: string; nome: string };
+  empresaId: string; veiculoId: string; comando: ComandoAparelho; params?: Params; autor: { userId: string | null; nome: string };
 }) {
   if (!(p.comando in COMANDOS)) throw new Error('Comando inválido.');
   const texto = textoComando(p.comando, p.params);

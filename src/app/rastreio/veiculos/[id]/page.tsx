@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil, Play, Pause, Share2, ParkingCircle, Timer, Satellite, Signal, BatteryCharging, LocateFixed, Eye, Milestone } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, Unlock, Gauge, Power, Battery, MapPin, Cpu, Route, History, AlertTriangle, ExternalLink, Pencil, Play, Pause, Share2, ParkingCircle, Timer, Satellite, Signal, BatteryCharging, LocateFixed, Eye, Milestone, Siren } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   useRastreioAccess, COLUNAS_VEICULO, situacao, SITUACAO_INFO, haQuanto, fmtDataHora, fmtHora, linkMapa, linkStreetView, barrasSinal, apiRastreio,
@@ -177,8 +177,15 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
           {v.bloqueado && <span className="text-[11px] font-black uppercase px-3 py-1.5 rounded-full border text-red-400 bg-red-500/10 border-red-500/30 inline-flex items-center gap-1"><Lock size={12} /> Bloqueado</span>}
           <button onClick={() => setModalLink(true)} className="inline-flex items-center gap-1 text-[11px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10 text-slate-300 hover:bg-white/5"><Share2 size={12} /> Link ao vivo</button>
           <Link href={`/rastreio/clientes?veiculo=${v.id}`} className="inline-flex items-center gap-1 text-[11px] font-black uppercase px-3 py-1.5 rounded-full border border-white/10 text-slate-300 hover:bg-white/5"><Pencil size={12} /> Editar</Link>
+          <Link href="/rastreio/ocorrencias" className="inline-flex items-center gap-1 text-[11px] font-black uppercase px-3 py-1.5 rounded-full border border-red-500/40 text-red-300 hover:bg-red-500/10"><Siren size={12} /> Ocorrência</Link>
         </div>
       </header>
+
+      {v.ocorrencia_aberta_id && (
+        <Link href="/rastreio/ocorrencias" className="mb-4 rounded-xl border border-red-500/50 bg-red-500/15 px-4 py-3 text-sm font-black text-red-200 flex items-center gap-2">
+          <Siren size={16} className="text-red-400 animate-pulse" /> Ocorrência em andamento neste veículo: rastreador em modo intensivo. Abrir a central →
+        </Link>
+      )}
 
       {aviso && (
         <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-bold ${aviso.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>{aviso.texto}</div>

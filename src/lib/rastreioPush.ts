@@ -10,12 +10,12 @@ type ContaServico = { project_id: string; client_email: string; private_key: str
 // Alertas que o cliente recebe no celular por padrão (pode mudar no app).
 export const ALERTAS_PADRAO: Record<string, boolean> = {
   alarme: true, cerca: true, velocidade: true, comando: true, offline: true, manutencao: true,
-  ignicao_ligada: false, ignicao_desligada: false,
+  ignicao_ligada: false, ignicao_desligada: false, horario: true,
 };
 export const NOMES_ALERTA: Record<string, string> = {
   alarme: 'Alarmes (bateria cortada, violação, pânico)', cerca: 'Entrada e saída de cercas', velocidade: 'Excesso de velocidade',
   comando: 'Bloqueio e desbloqueio', offline: 'Rastreador sem comunicação', manutencao: 'Manutenção vencendo',
-  ignicao_ligada: 'Ignição ligada', ignicao_desligada: 'Ignição desligada',
+  ignicao_ligada: 'Ignição ligada', ignicao_desligada: 'Ignição desligada', horario: 'Uso fora do horário permitido',
 };
 
 let cacheToken: { valor: string; expira: number } | null = null;

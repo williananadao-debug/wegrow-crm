@@ -17,12 +17,13 @@ export type Veiculo = {
   ignicao: boolean | null; bateria_externa: number | null; ultima_posicao_em: string | null; ultima_comunicacao_em: string | null;
   satelites?: number | null; sinal_gsm?: number | null; bateria_interna?: number | null; carregando?: boolean | null;
   endereco?: string | null; grupo?: string | null; odometro_km?: number | null; ignicao_virtual?: boolean;
+  consumo_km_l?: number | null; horario_uso?: { dias?: number[]; inicio?: string; fim?: string } | null; ocorrencia_aberta_id?: number | null;
 };
 
 export type Evento = { id: number; veiculo_id: string; tipo: string; mensagem: string; lat: number | null; lng: number | null; lido: boolean; ocorrido_em: string };
 
 // Colunas que o mapa precisa — nunca select('*') de posições (tabela grande).
-export const COLUNAS_VEICULO = 'id, empresa_id, cliente_id, placa, descricao, tipo, imei, modelo_rastreador, chip_numero, chip_operadora, tem_bloqueio, traccar_device_id, instalado_em, instalado_por, limite_velocidade, status, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em, satelites, sinal_gsm, bateria_interna, carregando, endereco, grupo, odometro_km, ignicao_virtual';
+export const COLUNAS_VEICULO = 'id, empresa_id, cliente_id, placa, descricao, tipo, imei, modelo_rastreador, chip_numero, chip_operadora, tem_bloqueio, traccar_device_id, instalado_em, instalado_por, limite_velocidade, status, bloqueado, ultima_lat, ultima_lng, ultima_velocidade, ultimo_curso, ignicao, bateria_externa, ultima_posicao_em, ultima_comunicacao_em, satelites, sinal_gsm, bateria_interna, carregando, endereco, grupo, odometro_km, ignicao_virtual, consumo_km_l, horario_uso, ocorrencia_aberta_id';
 
 export const OFFLINE_MIN = 30; // sem comunicação há mais que isso = offline
 
@@ -91,7 +92,7 @@ export async function apiRastreio(caminho: string, corpo: unknown) {
 export function useRastreioAccess() {
   const auth = (useAuth() || {}) as {
     loading?: boolean;
-    perfil?: { empresa_id?: string; cargo?: string | null } | null;
+    perfil?: { empresa_id?: string; cargo?: string | null; nome?: string | null } | null;
     empresa?: { modulos?: Record<string, unknown> | null } | null;
   };
   const perfil = auth.perfil;

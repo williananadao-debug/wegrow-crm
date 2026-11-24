@@ -1,14 +1,16 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, FileBarChart, Download, Route, ParkingCircle, Bell, CalendarDays, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Loader2, FileBarChart, Download, Route, ParkingCircle, Bell, CalendarDays, ExternalLink, Fuel, MapPin } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRastreioAccess, apiRastreio, fmtDataHora, fmtHora, linkMapa } from '../shared';
 import { fmtDuracao } from '../analise';
 
-type Aba = 'resumo' | 'viagens' | 'eventos';
-type V = { id: string; placa: string; descricao: string | null };
-type Resumo = { veiculo_id: string; dia: string; km: number; minutos_movimento: number; minutos_ligado: number; paradas: number; viagens: number; velocidade_max: number; excessos: number; primeira_posicao: string | null; ultima_posicao: string | null };
+type Aba = 'resumo' | 'frota' | 'locais' | 'viagens' | 'eventos';
+type V = { id: string; placa: string; descricao: string | null; consumo_km_l?: number | null };
+type Resumo = { veiculo_id: string; dia: string; km: number; minutos_movimento: number; minutos_ligado: number; paradas: number; viagens: number; velocidade_max: number; excessos: number; primeira_posicao: string | null; ultima_posicao: string | null;
+  minutos_ocioso?: number; freadas?: number; aceleracoes?: number; nota_conducao?: number | null; motorista_id?: string | null };
+type Local = { veiculo_id: string; nome: string; visitas: number; minutos: number; ultima: string };
 type Ev = { id: number; veiculo_id: string; tipo: string; mensagem: string; lat: number | null; lng: number | null; ocorrido_em: string };
 type Viagens = {
   placa: string; km: number; minutosMovimento: number; velMax: number; truncado: boolean;
@@ -22,6 +24,7 @@ const dataBR = (d: string) => d.split('-').reverse().join('/');
 const TIPOS: Record<string, string> = {
   alarme: 'Alarmes', cerca: 'Cercas', velocidade: 'Velocidade', ignicao_ligada: 'Ignição ligada', ignicao_desligada: 'Ignição desligada',
   offline: 'Sem comunicação', online: 'Voltou a comunicar', comando: 'Bloqueios', manutencao: 'Manutenção',
+  horario: 'Fora do horário', sem_comunicacao: 'Sem comunicar há dias',
 };
 
 function baixarCsv(nome: string, linhas: (string | number)[][]) {
@@ -45,11 +48,20 @@ export default function RelatoriosRastreioPage() {
   const [eventos, setEventos] = useState<Ev[]>([]);
   const [tipoEv, setTipoEv] = useState('todos');
   const [viagens, setViagens] = useState<Viagens | null>(null);
+  const [locais, setLocais] = useState<Local[]>([]);
+  const [motoristas, setMotoristas] = useState<Record<string, string>>({});
+  const [precoComb, setPrecoComb] = useState(6);
 
   useEffect(() => {
     void Promise.resolve().then(async () => {
-      const { data } = await supabase.from('rastreio_veiculos').select('id, placa, descricao').eq('status', 'ativo').order('placa');
+      const [{ data }, { data: ms }, { data: cfg }] = await Promise.all([
+        supabase.from('rastreio_veiculos').select('id, placa, descricao, consumo_km_l').eq('status', 'ativo').order('placa'),
+        supabase.from('rastreio_motoristas').select('id, nome').limit(2000),
+        supabase.from('rastreio_cobranca_config').select('preco_combustivel').maybeSingle(),
+      ]);
       setVeics((data as V[]) || []);
+      setMotoristas(Object.fromEntries((ms || []).map(m => [m.id, m.nome])));
+      if (cfg?.preco_combustivel) setPrecoComb(Number(cfg.preco_combustivel));
     });
   }, []);
 
@@ -61,11 +73,32 @@ export default function RelatoriosRastreioPage() {
     if (!periodoOk) { setErro('Período inválido.'); return; }
     setErro(''); setCarregando(true);
     try {
-      if (aba === 'resumo') {
+      if (aba === 'locais') {
+        if (dias > 62) throw new Error('Escolha até 62 dias.');
+        // Permanência nas cercas: pares "entrou em X" → "saiu de X" dos alertas de cerca
+        let q = supabase.from('rastreio_eventos').select('veiculo_id, mensagem, ocorrido_em').eq('tipo', 'cerca')
+          .gte('ocorrido_em', `${ini}T00:00:00-03:00`).lte('ocorrido_em', `${fim}T23:59:59.999-03:00`).order('ocorrido_em').limit(10000);
+        if (veiculo !== 'todos') q = q.eq('veiculo_id', veiculo);
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        const dentro = new Map<string, string>(); const acc = new Map<string, Local>();
+        for (const e of data || []) {
+          const m = String(e.mensagem).match(/: (entrou em|saiu de) (.+)$/);
+          if (!m) continue;
+          const chave = `${e.veiculo_id}|${m[2]}`;
+          if (m[1] === 'entrou em') { dentro.set(chave, e.ocorrido_em); continue; }
+          const ent = dentro.get(chave); dentro.delete(chave);
+          if (!ent) continue;
+          const l = acc.get(chave) || { veiculo_id: e.veiculo_id, nome: m[2], visitas: 0, minutos: 0, ultima: ent };
+          l.visitas++; l.minutos += Math.max(0, Math.round((Date.parse(e.ocorrido_em) - Date.parse(ent)) / 60000)); l.ultima = ent;
+          acc.set(chave, l);
+        }
+        setLocais([...acc.values()].sort((a, b) => b.minutos - a.minutos));
+      } else if (aba === 'resumo' || aba === 'frota') {
         if (dias > 62) throw new Error('Escolha até 62 dias.');
         if (fim >= hoje()) await apiRastreio('relatorio', { acao: 'hoje' }).catch(() => null);
         let q = supabase.from('rastreio_resumo_diario')
-          .select('veiculo_id, dia, km, minutos_movimento, minutos_ligado, paradas, viagens, velocidade_max, excessos, primeira_posicao, ultima_posicao')
+          .select('veiculo_id, dia, km, minutos_movimento, minutos_ligado, paradas, viagens, velocidade_max, excessos, primeira_posicao, ultima_posicao, minutos_ocioso, freadas, aceleracoes, nota_conducao, motorista_id')
           .gte('dia', ini).lte('dia', fim).order('dia').limit(5000);
         if (veiculo !== 'todos') q = q.eq('veiculo_id', veiculo);
         const { data, error } = await q;
@@ -91,6 +124,30 @@ export default function RelatoriosRastreioPage() {
 
   useEffect(() => { if (veics.length && aba !== 'viagens') void Promise.resolve().then(gerar); }, [aba, veics.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Frota: combustível (km ÷ km/l do veículo × preço), motor ligado parado e nota de condução
+  const consumo = useMemo(() => Object.fromEntries(veics.map(v => [v.id, Number(v.consumo_km_l) || 0])), [veics]);
+  const frota = useMemo(() => {
+    const m: Record<string, { km: number; ocioso: number; freadas: number; acel: number; exc: number; notas: number[] }> = {};
+    const mot: Record<string, { km: number; exc: number; freadas: number; notas: number[]; dias: number }> = {};
+    for (const r of resumo) {
+      const t = (m[r.veiculo_id] ||= { km: 0, ocioso: 0, freadas: 0, acel: 0, exc: 0, notas: [] });
+      t.km += Number(r.km); t.ocioso += r.minutos_ocioso || 0; t.freadas += r.freadas || 0; t.acel += r.aceleracoes || 0; t.exc += r.excessos;
+      if (r.nota_conducao != null) t.notas.push(r.nota_conducao);
+      if (r.motorista_id) {
+        const d = (mot[r.motorista_id] ||= { km: 0, exc: 0, freadas: 0, notas: [], dias: 0 });
+        d.km += Number(r.km); d.exc += r.excessos; d.freadas += r.freadas || 0; d.dias++; if (r.nota_conducao != null) d.notas.push(r.nota_conducao);
+      }
+    }
+    const media = (a: number[]) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+    const veic = Object.entries(m).map(([id, t]) => {
+      const litros = consumo[id] ? t.km / consumo[id] : null;
+      return { id, ...t, nota: media(t.notas), litros, custo: litros != null ? litros * precoComb : null };
+    }).sort((a, b) => b.km - a.km);
+    const porMot = Object.entries(mot).map(([id, t]) => ({ id, ...t, nota: media(t.notas) })).sort((a, b) => (b.nota ?? 0) - (a.nota ?? 0));
+    return { veic, porMot, litros: veic.reduce((s, x) => s + (x.litros || 0), 0), custo: veic.reduce((s, x) => s + (x.custo || 0), 0), ocioso: veic.reduce((s, x) => s + x.ocioso, 0), semConsumo: veic.filter(x => !consumo[x.id]).length };
+  }, [resumo, consumo, precoComb]);
+  const corNota = (n: number | null) => (n == null ? 'text-slate-500' : n >= 85 ? 'text-emerald-400' : n >= 65 ? 'text-amber-300' : 'text-red-400');
+
   // Totais por veículo no resumo
   const porVeiculo = useMemo(() => {
     const m: Record<string, { km: number; mov: number; lig: number; paradas: number; viagens: number; vmax: number; exc: number; dias: number }> = {};
@@ -104,6 +161,15 @@ export default function RelatoriosRastreioPage() {
 
   const exportar = () => {
     const nome = `rastreio-${aba}-${ini}-a-${fim}.csv`;
+    if (aba === 'frota') {
+      baixarCsv(nome, [['Placa', 'Km', 'Litros (estim.)', 'Custo combustível (R$)', 'Motor ligado parado (min)', 'Excessos', 'Freadas bruscas', 'Arrancadas bruscas', 'Nota de condução'],
+        ...frota.veic.map(x => [placa[x.id] || '', x.km.toFixed(1).replace('.', ','), x.litros != null ? x.litros.toFixed(1).replace('.', ',') : '', x.custo != null ? x.custo.toFixed(2).replace('.', ',') : '', x.ocioso, x.exc, x.freadas, x.acel, x.nota ?? ''])]);
+      return;
+    }
+    if (aba === 'locais') {
+      baixarCsv(nome, [['Placa', 'Local (cerca)', 'Visitas', 'Tempo total (min)', 'Última entrada'], ...locais.map(l => [placa[l.veiculo_id] || '', l.nome, l.visitas, l.minutos, fmtDataHora(l.ultima)])]);
+      return;
+    }
     if (aba === 'resumo') {
       baixarCsv(nome, [['Placa', 'Dia', 'Km', 'Em movimento (min)', 'Ligado (min)', 'Viagens', 'Paradas', 'Vel. máx (km/h)', 'Excessos', 'Primeira posição', 'Última posição'],
         ...resumo.map(r => [placa[r.veiculo_id] || '', dataBR(r.dia), String(r.km).replace('.', ','), r.minutos_movimento, r.minutos_ligado, r.viagens, r.paradas, r.velocidade_max, r.excessos, r.primeira_posicao ? fmtHora(r.primeira_posicao) : '', r.ultima_posicao ? fmtHora(r.ultima_posicao) : ''])]);
@@ -119,7 +185,7 @@ export default function RelatoriosRastreioPage() {
   if (authLoading) return <div className="p-8 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-600" /></div>;
   if (!temRastreio) return <div className="p-8 text-slate-400 text-sm">O módulo Rastreio não está ativo pra sua empresa.</div>;
   const ctl = 'bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none [color-scheme:dark]';
-  const temDados = aba === 'resumo' ? resumo.length > 0 : aba === 'eventos' ? eventos.length > 0 : Boolean(viagens);
+  const temDados = aba === 'resumo' || aba === 'frota' ? resumo.length > 0 : aba === 'locais' ? locais.length > 0 : aba === 'eventos' ? eventos.length > 0 : Boolean(viagens);
 
   return (
     <div className="md:p-8 pb-20 text-white">
@@ -129,7 +195,7 @@ export default function RelatoriosRastreioPage() {
       </h1>
 
       <div className="flex gap-2 mb-4 faixa-scroll">
-        {([['resumo', 'Resumo por dia', CalendarDays], ['viagens', 'Viagens e paradas', Route], ['eventos', 'Alertas e eventos', Bell]] as const).map(([k, t, I]) => (
+        {([['resumo', 'Resumo por dia', CalendarDays], ['frota', 'Frota e condução', Fuel], ['locais', 'Tempo nos locais', MapPin], ['viagens', 'Viagens e paradas', Route], ['eventos', 'Alertas e eventos', Bell]] as const).map(([k, t, I]) => (
           <button key={k} onClick={() => setAba(k)} className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase border ${aba === k ? 'bg-sky-400 text-[#0B1120] border-sky-400' : 'bg-white/5 border-white/10 text-slate-300'}`}><I size={14} /> {t}</button>
         ))}
       </div>
@@ -194,6 +260,53 @@ export default function RelatoriosRastreioPage() {
               </tr>
             ))}
           </Tabela>
+        </>
+      )}
+
+      {aba === 'frota' && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <Mini grande l="Combustível (estim.)" v={`${frota.litros.toFixed(0)} L`} />
+            <Mini grande l="Custo combustível" v={frota.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+            <Mini grande l="Motor ligado parado" v={fmtDuracao(frota.ocioso)} alerta={frota.ocioso > 600} />
+            <Mini grande l={`Preço do litro`} v={`R$ ${precoComb.toFixed(2).replace('.', ',')}`} />
+          </div>
+          {frota.semConsumo > 0 && <p className="text-xs text-amber-300 mb-3">{frota.semConsumo} veículo(s) sem consumo (km/l) cadastrado: informe em Editar veículo para calcular o combustível. O preço do litro fica em Financeiro → Regras.</p>}
+          <Tabela vazio={!carregando && frota.veic.length === 0} cab={['Placa', 'Km', 'Litros', 'Custo', 'Ligado parado', 'Excessos', 'Freadas', 'Arrancadas', 'Nota']}>
+            {frota.veic.map(x => (
+              <tr key={x.id}>
+                <td className="py-2 pr-3 font-bold">{placa[x.id]}</td><td className="pr-3">{x.km.toFixed(1)}</td>
+                <td className="pr-3">{x.litros != null ? x.litros.toFixed(1) : '—'}</td><td className="pr-3">{x.custo != null ? x.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                <td className="pr-3">{fmtDuracao(x.ocioso)}</td><td className={`pr-3 ${x.exc ? 'text-red-400 font-bold' : ''}`}>{x.exc}</td>
+                <td className="pr-3">{x.freadas}</td><td className="pr-3">{x.acel}</td>
+                <td className={`pr-3 font-black ${corNota(x.nota)}`}>{x.nota ?? '—'}</td>
+              </tr>
+            ))}
+          </Tabela>
+          {frota.porMot.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Por motorista</p>
+              <Tabela vazio={false} cab={['Motorista', 'Dias', 'Km', 'Excessos', 'Freadas', 'Nota média']}>
+                {frota.porMot.map(x => (
+                  <tr key={x.id}><td className="py-2 pr-3 font-bold">{motoristas[x.id] || '—'}</td><td className="pr-3">{x.dias}</td><td className="pr-3">{x.km.toFixed(1)}</td>
+                    <td className="pr-3">{x.exc}</td><td className="pr-3">{x.freadas}</td><td className={`pr-3 font-black ${corNota(x.nota)}`}>{x.nota ?? '—'}</td></tr>
+                ))}
+              </Tabela>
+            </div>
+          )}
+          <p className="text-[11px] text-slate-500 mt-3">Nota de condução: começa em 100 e perde pontos por excesso de velocidade, freada e arrancada brusca. Freadas e arrancadas dependem do intervalo de envio do rastreador (mais preciso com 10–30 s). O motorista é o vinculado ao veículo em cada dia.</p>
+        </>
+      )}
+
+      {aba === 'locais' && (
+        <>
+          <Tabela vazio={!carregando && locais.length === 0} cab={['Placa', 'Local (cerca)', 'Visitas', 'Tempo total', 'Média por visita', 'Última entrada']}>
+            {locais.map(l => (
+              <tr key={l.veiculo_id + l.nome}><td className="py-2 pr-3 font-bold">{placa[l.veiculo_id]}</td><td className="pr-3">{l.nome}</td><td className="pr-3">{l.visitas}</td>
+                <td className="pr-3">{fmtDuracao(l.minutos)}</td><td className="pr-3">{fmtDuracao(Math.round(l.minutos / Math.max(1, l.visitas)))}</td><td className="pr-3 text-slate-400">{fmtDataHora(l.ultima)}</td></tr>
+            ))}
+          </Tabela>
+          <p className="text-[11px] text-slate-500 mt-3">Cadastre os lugares (clientes, base, obras) como cercas no veículo: o relatório soma quantas vezes e quanto tempo ele ficou em cada um.</p>
         </>
       )}
 

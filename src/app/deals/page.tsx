@@ -540,7 +540,9 @@ export default function DealsPage() {
     ]);
 
     const [resAbertos, resFechados] = await Promise.all([
-        Promise.all(buildQs().map(q => q.lte('etapa', 3).order('created_at', { ascending: false }).limit(500))),
+        // Em aberto: os que já existiam até o fim do período filtrado (filtrar julho não mostra lead
+        // criado em novembro). Sem piso: lead aberto desde antes continua no funil do período.
+        Promise.all(buildQs().map(q => q.lte('etapa', 3).lte('created_at', fimTz).order('created_at', { ascending: false }).limit(500))),
         // Ganho/perdido entram no período em que foram FECHADOS (fechado_em), não no que foram
         // criados — lead aberto em setembro e ganho em outubro aparece em outubro.
         // Paginado: antes era limit(200) e a Demais FM fecha 200+ por mês — os mais antigos do

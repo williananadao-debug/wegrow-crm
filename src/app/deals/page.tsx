@@ -297,6 +297,7 @@ export default function DealsPage() {
   const consultorAtualNome = (leadEmEdicao?.user_id && usersMap[leadEmEdicao.user_id]) || leadEmEdicao?.vendedor_nome || perfil?.nome || 'Consultor';
   const leadTravado = contratoJaAssinado && !isDirector;
   const [encurtando, setEncurtando] = useState(false);
+  const [renovando, setRenovando] = useState(false);
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
@@ -1981,6 +1982,55 @@ export default function DealsPage() {
       setShowToast(true);
   };
 
+  // Renovação (como no sistema que a Sintonia usava): copia a venda ganha para uma proposta nova,
+  // com cliente, agência, itens, desconto e forma de pagamento; a vigência começa no dia seguinte
+  // ao fim do contrato atual e dura o mesmo tempo. O vendedor só ajusta e avança.
+  const renovarContrato = async (lead: Lead) => {
+    if (!perfil?.empresa_id || !user?.id) return;
+    if (!confirm(`Criar a renovação de ${lead.empresa}? Vira uma proposta nova com os mesmos itens e valores, para você ajustar.`)) return;
+    setRenovando(true);
+    try {
+      const dia = (d: Date) => d.toLocaleDateString('en-CA');
+      const ini0 = lead.contrato_inicio ? new Date(`${lead.contrato_inicio}T12:00:00`) : null;
+      const fim0 = lead.contrato_fim ? new Date(`${lead.contrato_fim}T12:00:00`) : null;
+      let inicio: string | null = null, fim: string | null = null;
+      if (fim0) {
+        const ini = new Date(fim0); ini.setDate(ini.getDate() + 1);
+        const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+        if (ini < hoje) ini.setTime(hoje.getTime()); // contrato já acabou: começa hoje
+        const duracao = ini0 ? Math.max(1, Math.round((fim0.getTime() - ini0.getTime()) / 86400000)) : 29;
+        const f = new Date(ini); f.setDate(f.getDate() + duracao);
+        inicio = dia(ini); fim = dia(f);
+      }
+      const ref = `LD-${String(lead.id).padStart(4, '0')}`;
+      const { data, error } = await supabase.from('leads').insert({
+        empresa: lead.empresa, telefone: lead.telefone || null, cnpj: lead.cnpj || null, cidade: lead.cidade || null,
+        endereco: lead.endereco || null, inscricao_estadual: lead.inscricao_estadual || null, client_id: lead.client_id || null,
+        unidade: lead.unidade || null, vendedor_nome: lead.vendedor_nome || null, agencia: (lead as Lead & { agencia?: string | null }).agencia || null,
+        itens: Array.isArray(lead.itens) ? lead.itens : [], desconto: lead.desconto || 0, valor_total: lead.valor_total || 0,
+        // desconto igual ao já aprovado na venda original continua aprovado
+        status_aprovacao: lead.status_aprovacao === 'aprovado' ? 'aprovado' : null,
+        parcelas: lead.parcelas || '1', forma_pagamento: lead.forma_pagamento || null,
+        contrato_inicio: inicio, contrato_fim: fim, tipo: lead.tipo || null,
+        status: 'aberto', etapa: 2, ordem: 0, origem: 'Renovação',
+        descricao: `Renovação de ${ref}.${lead.descricao ? ` ${lead.descricao}` : ''}`.slice(0, 1000),
+        observacao_contrato: lead.observacao_contrato || null,
+        user_id: lead.user_id || user.id, criado_por: user.id, empresa_id: perfil.empresa_id,
+        atividades: [{ id: Date.now(), tipo: 'etapa', descricao: `Renovação criada a partir de ${ref}`, created_at: new Date().toISOString() }],
+      }).select('*').single();
+      if (error || !data) throw new Error(error?.message || 'sem retorno');
+      const novo = data as Lead;
+      setLeads(prev => [novo, ...prev]);
+      setIsModalOpen(false); setEditingLeadId(null);
+      setToastMessage(`🔁 Renovação criada (LD-${String(novo.id).padStart(4, '0')}) em Proposta. Confira datas e valores.`); setShowToast(true);
+      setTimeout(() => abrirModal(novo), 50);
+    } catch (e) {
+      alert(`Não foi possível criar a renovação: ${(e as Error).message}`);
+    } finally {
+      setRenovando(false);
+    }
+  };
+
   const abrirModal = useCallback((lead?: Lead) => {
     setShowClientDropdown(false);
     setCategoriaSelecionada(null); 
@@ -2471,6 +2521,16 @@ export default function DealsPage() {
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <form id="leadForm" onSubmit={salvarLead} className="space-y-6">
+                    {leadEmEdicao?.status === 'ganho' && (
+                        <div className="bg-sky-500/5 border border-sky-500/20 rounded-2xl p-3 flex items-center gap-3 flex-wrap">
+                            <p className="text-sky-200/80 text-xs flex-1 min-w-[180px]">
+                                {leadEmEdicao.contrato_fim ? `Contrato até ${leadEmEdicao.contrato_fim.split('-').reverse().join('/')}. ` : ''}Renove com os mesmos itens, agência e condições: cria uma proposta nova para ajustar.
+                            </p>
+                            <button type="button" onClick={() => renovarContrato(leadEmEdicao)} disabled={renovando} className="flex items-center gap-1.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                                {renovando ? <Loader2 size={12} className="animate-spin"/> : <RefreshCcw size={12}/>} Renovar contrato
+                            </button>
+                        </div>
+                    )}
                     {isLideranca && leadEmEdicao?.status === 'ganho' && Number(leadEmEdicao.parcelas) > 1 && (
                         <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3 flex-wrap">
                             <p className="text-amber-200/80 text-xs flex-1 min-w-[180px]">Cliente pediu menos meses do que fechou? Encurte o contrato sem mexer na meta dos meses já pagos.</p>

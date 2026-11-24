@@ -40,6 +40,8 @@ export default function PortalGenerico() {
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [semRede, setSemRede] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
 
   const [cnpj, setCnpj] = useState('');
   const [loadingCnpj, setLoadingCnpj] = useState(false);
@@ -55,11 +57,14 @@ export default function PortalGenerico() {
   const [leadId, setLeadId] = useState<number | null>(null);
 
   useEffect(() => {
+    // Falha de rede (internet caiu, aba fechada no meio) não pode virar erro solto: mostra
+    // "sem conexão" com botão de tentar de novo (antes ia pro Sentry como TypeError: Failed to fetch).
     fetch(`/api/portal/${slug}`)
       .then(r => { if (!r.ok) { setNotFound(true); return null; } return r.json(); })
-      .then(d => { if (d) setConfig(d); })
+      .then(d => { if (d) { setConfig(d); setSemRede(false); } })
+      .catch(() => setSemRede(true))
       .finally(() => setLoadingConfig(false));
-  }, [slug]);
+  }, [slug, tentativa]);
 
   const cor = config?.cor_primaria || '#22C55E';
   const logo = config?.logo_texto || 'W';
@@ -107,6 +112,17 @@ export default function PortalGenerico() {
   if (loadingConfig) return (
     <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
       <Loader2 size={32} className="animate-spin text-slate-500" />
+    </div>
+  );
+
+  if (semRede && !config) return (
+    <div className="min-h-screen bg-[#0B1120] flex items-center justify-center p-6">
+      <div className="text-center">
+        <AlertCircle size={48} className="text-slate-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-black text-white uppercase italic mb-2">Sem conexão</h1>
+        <p className="text-slate-500 text-sm mb-4">Não conseguimos carregar o portal. Confira a internet e tente de novo.</p>
+        <button onClick={() => { setLoadingConfig(true); setTentativa(t => t + 1); }} className="bg-white/10 border border-white/15 text-white px-5 py-3 rounded-xl text-sm font-black uppercase">Tentar de novo</button>
+      </div>
     </div>
   );
 

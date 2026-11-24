@@ -64,7 +64,7 @@ function partes(content: any): any[] {
 // Modelo principal da Groq (GROQ_MODEL na Vercel troca sem deploy de código) e o reserva, que
 // também aceita tools — usado por Thor/Argus quando o principal é bloqueado/aposentado.
 export const MODELO_GROQ = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
-export const MODELO_GROQ_RESERVA = 'llama-3.3-70b-versatile';
+export const MODELO_GROQ_RESERVA = process.env.GROQ_MODEL_RESERVA || 'openai/gpt-oss-20b';
 
 /** groq.chat.completions.create que troca para o modelo reserva no 403/404 (rotas com tools). */
 export async function criarComReservaGroq(groq: Groq, params: any): Promise<any> {

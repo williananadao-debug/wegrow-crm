@@ -1,6 +1,8 @@
-// Consulta pública de CNPJ na Receita — a "lupa" do cadastro de cliente e do lead.
-// Plano A: publica.cnpj.ws (traz Inscrição Estadual). Plano B: BrasilAPI (sem IE).
-// Sem chave de API: as duas são gratuitas e chamadas direto do navegador.
+// Consulta de CNPJ na Receita — a "lupa" do cadastro de cliente e do lead.
+// 1º o nosso servidor (/api/cnpj): cache de 30 dias + CNPJá paga (CNPJA_API_KEY), com registro de uso.
+// Se o servidor não tiver fonte paga ou falhar: gratuitas direto do navegador (publica.cnpj.ws, com IE;
+// depois BrasilAPI, sem IE) e o resultado volta para o cache do servidor.
+import { supabase } from '@/lib/supabase';
 
 export type DadosCnpj = {
   razao_social: string;
@@ -19,10 +21,10 @@ export type DadosCnpj = {
   enderecoOculto: boolean;
 };
 
-async function fetchComTimeout(url: string, ms = 6000) {
+async function fetchComTimeout(url: string, ms = 6000, init: RequestInit = {}) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
-  try { return await fetch(url, { signal: controller.signal }); }
+  try { return await fetch(url, { ...init, signal: controller.signal }); }
   finally { clearTimeout(id); }
 }
 
@@ -32,6 +34,27 @@ const txt = (v: unknown) => (v == null ? '' : String(v).trim());
 export async function consultarCnpj(cnpjDigitado: string): Promise<DadosCnpj> {
   const cnpj = cnpjDigitado.replace(/\D/g, '');
   if (cnpj.length !== 14) throw new Error('Digite os 14 números do CNPJ.');
+
+  const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  const auth = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : null;
+  if (auth) {
+    try {
+      const r = await fetchComTimeout(`/api/cnpj?c=${cnpj}`, 15000, { headers: auth });
+      if (r.ok) return (await r.json()).dados as DadosCnpj;
+      if (r.status === 404) throw new Error((await r.json().catch(() => ({}))).error || 'CNPJ não encontrado na Receita.');
+    } catch (e) {
+      if ((e as Error).message?.includes('não encontrado')) throw e;
+      /* servidor fora: segue para as gratuitas */
+    }
+  }
+  const d = await consultarGratuitas(cnpj);
+  if (auth) {
+    fetch('/api/cnpj', { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ cnpj, dados: d.dados, fonte: d.fonte }) }).catch(() => null);
+  }
+  return d.dados;
+}
+
+async function consultarGratuitas(cnpj: string): Promise<{ dados: DadosCnpj; fonte: string }> {
 
   try {
     const r = await fetchComTimeout(`https://publica.cnpj.ws/cnpj/${cnpj}`);
@@ -52,7 +75,7 @@ export async function consultarCnpj(cnpjDigitado: string): Promise<DadosCnpj> {
         data_inicio_atividade: est.data_inicio_atividade,
         enderecoOculto: !est.logradouro && !est.cep,
       };
-      return dados;
+      return { dados, fonte: 'cnpj.ws' };
     }
   } catch { /* timeout/rede: tenta o plano B */ }
 
@@ -60,7 +83,7 @@ export async function consultarCnpj(cnpjDigitado: string): Promise<DadosCnpj> {
     const r = await fetchComTimeout(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
     if (r.ok) {
       const d = await r.json();
-      return {
+      return { fonte: 'brasilapi', dados: {
         razao_social: txt(d.razao_social),
         nome_fantasia: txt(d.nome_fantasia),
         cep: txt(d.cep),
@@ -73,7 +96,7 @@ export async function consultarCnpj(cnpjDigitado: string): Promise<DadosCnpj> {
         capital_social: d.capital_social,
         data_inicio_atividade: d.data_inicio_atividade,
         enderecoOculto: !d.logradouro && !d.cep,
-      };
+      } };
     }
   } catch { /* cai no erro abaixo */ }
 

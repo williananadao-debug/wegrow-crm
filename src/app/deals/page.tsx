@@ -26,13 +26,15 @@ import { useUnidades } from '@/lib/useUnidades';
 import dynamic from 'next/dynamic';
 import PainelAudienciaPlano from './PainelAudienciaPlano';
 import EncurtarContrato, { type LeadEncurtar } from './EncurtarContrato';
+import DistribuicaoItem, { resumoDistribuicao, type DistribuicaoMidia } from './DistribuicaoItem';
+import DetalhesPedido, { type PedidoDetalhes, type ArquivoPedido } from './DetalhesPedido';
 
 const KanbanBoard = dynamic(() => import('./KanbanBoard'), { ssr: false });
 const AgendaCalendar = dynamic(() => import('./AgendaCalendar'), { ssr: false });
 
 // --- TIPOS ---
 type TipoEspecialItem = 'bonificacao' | 'doacao' | 'permuta';
-type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; precoBase?: number; capacidade?: string; observacao?: string; imagemUrl?: string | null; configuracoes?: { chave: string; descricao: string; valor: number }[]; };
+type ItemVenda = { servico: string; quantidade: number; precoUnitario: number; tempo?: string; programa?: string; horario_inicial?: string; horario_final?: string; bonificacao?: boolean; tipoEspecial?: TipoEspecialItem; precoBase?: number; capacidade?: string; observacao?: string; imagemUrl?: string | null; configuracoes?: { chave: string; descricao: string; valor: number }[]; distribuicao?: DistribuicaoMidia | null; };
 
 // "bonificacao" era um checkbox (só um tipo). Vira lista suspensa com mais opções —
 // tipoEspecial é o campo novo; bonificacao (boolean) continua sendo lido pra não perder
@@ -108,6 +110,9 @@ type Lead = {
   contrato_manual_em?: string;
   contrato_manual_arquivos?: { nome: string; path: string }[];
   veiculo_referencia?: string | null;
+  num_pi?: string | null;
+  pedido_detalhes?: PedidoDetalhes | null;
+  pedido_arquivos?: ArquivoPedido[] | null;
 };
 
 type ClienteOpcao = {
@@ -339,6 +344,9 @@ export default function DealsPage() {
   // Texto que sai no contrato/proposta. Antes era a nota mais recente do lead — e as notas são a
   // conversa interna da equipe (e recebem notas automáticas: motivo de perda, WhatsApp, e-mail).
   const [observacaoContrato, setObservacaoContrato] = useState(''); 
+  const [numPi, setNumPi] = useState('');
+  const [pedidoDetalhes, setPedidoDetalhes] = useState<PedidoDetalhes>({});
+  const [pedidoArquivos, setPedidoArquivos] = useState<ArquivoPedido[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [veiculoReferencia, setVeiculoReferencia] = useState('');
   const [tipoCliente, setTipoCliente] = useState<'Agência' | 'Anunciante'>('Anunciante');
@@ -464,7 +472,7 @@ export default function DealsPage() {
     // responder depois, sobrescrevia a lista do período novo e lead "sumia" do filtro.
     const minhaBusca = ++buscaLeadsRef.current;
     setLoading(true);
-    const COLS = 'id, empresa, valor_total, valor_fechado, fechado_por, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia';
+    const COLS = 'id, empresa, valor_total, valor_fechado, fechado_por, desconto, itens, etapa, status, tipo, created_at, fechado_em, telefone, checkin, localizacao_url, foto_url, user_id, criado_por, empresa_id, filial_id, client_id, contrato_inicio, contrato_fim, origem, unidade, cidade, descricao, observacao_contrato, status_aprovacao, cnpj, endereco, inscricao_estadual, parcelas, vencimento, vencimentos_datas, forma_pagamento, valor_entrada, forma_pagamento_entrada, vendedor_nome, num_pi, briefing, agencia, followup_em, notas, atividades, docuseal_submission_id, docuseal_sign_url, docuseal_assinado, docuseal_consultor_sign_url, docuseal_consultor_assinado, docuseal_arquivos, contrato_manual_url, contrato_manual_em, contrato_manual_arquivos, veiculo_referencia, pedido_detalhes, pedido_arquivos';
 
     // Cada regra de visibilidade vira uma OU MAIS queries com .eq() puro — nunca uma
     // string de filtro .or() montada na mão. Um .or() exige escapar vírgula/parênteses
@@ -1100,7 +1108,7 @@ export default function DealsPage() {
                     <tbody>
                         ${itensTemporarios.map(i => `
                             <tr>
-                                <td>${i.servico}</td>
+                                <td>${i.servico}${i.distribuicao ? `<br><small style="color:#666">${resumoDistribuicao(i.distribuicao)}</small>` : ''}</td>
                                 <td>${i.quantidade}</td>
                                 <td>R$ ${i.precoUnitario.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                                 <td>R$ ${(i.quantidade * i.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -1897,6 +1905,8 @@ export default function DealsPage() {
         cidade: novaCidade,
         descricao: novaDescricao,
         observacao_contrato: observacaoContrato.trim() || null,
+        num_pi: numPi.trim() || null,
+        pedido_detalhes: Object.values(pedidoDetalhes).some(v => v !== undefined && v !== '') ? pedidoDetalhes : null,
         notas: historico,
         atividades: atividadesPayload,
         tipo: tipoCliente,
@@ -2046,6 +2056,9 @@ export default function DealsPage() {
         setNovaCidade(lead.cidade || '');
         setNovaDescricao(lead.descricao || '');
         setObservacaoContrato(lead.observacao_contrato || '');
+        setNumPi(lead.num_pi || '');
+        setPedidoDetalhes(lead.pedido_detalhes || {});
+        setPedidoArquivos(Array.isArray(lead.pedido_arquivos) ? lead.pedido_arquivos : []);
         setSelectedClientId(lead.client_id || null);
         setVeiculoReferencia(lead.veiculo_referencia || '');
         setItensTemporarios(Array.isArray(lead.itens) ? lead.itens : []);
@@ -2106,6 +2119,7 @@ export default function DealsPage() {
         setNovaCidade('');
         setNovaDescricao('');
         setObservacaoContrato('');
+        setNumPi(''); setPedidoDetalhes({}); setPedidoArquivos([]);
         setSelectedClientId(null);
         setVeiculoReferencia('');
         setItensTemporarios([]);
@@ -2750,6 +2764,10 @@ export default function DealsPage() {
                         <textarea className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-sm font-medium outline-none focus:border-amber-500 min-h-[70px] custom-scrollbar disabled:opacity-60" value={observacaoContrato} onChange={e => setObservacaoContrato(e.target.value)} disabled={leadTravado} placeholder="Ex.: Inserções de segunda a sábado. Cliente envia o áudio até 48h antes da estreia." />
                     </div>
 
+                    <DetalhesPedido numPi={numPi} setNumPi={setNumPi} det={pedidoDetalhes} setDet={setPedidoDetalhes}
+                      leadId={editingLeadId} arquivos={pedidoArquivos} setArquivos={setPedidoArquivos} disabled={leadTravado}
+                      onAbrirArquivo={abrirArquivoAssinado} />
+
                     <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-4 relative">
                         <div className="flex justify-between items-start border-b border-white/5 pb-4">
                             <div>
@@ -2801,7 +2819,7 @@ export default function DealsPage() {
                                     <div key={i} className="flex flex-col bg-[#0F172A] border border-white/5 p-3 rounded-xl text-[10px] text-slate-300">
                                         <div className="flex justify-between items-center mb-2">
                                             <div className="flex items-center gap-2">
-                                                <input type="number" min="1" className="w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500" value={item.quantidade} onChange={(e) => { const novosItens = [...itensTemporarios]; novosItens[i].quantidade = Number(e.target.value); setItensTemporarios(novosItens); }}/>
+                                                <input type="number" min="1" readOnly={Boolean(item.distribuicao)} title={item.distribuicao ? 'Calculada pela distribuição' : undefined} className={`w-12 bg-black/50 border border-white/10 rounded px-1 py-1 text-center font-bold text-white outline-none focus:border-blue-500 ${item.distribuicao ? 'opacity-70 cursor-not-allowed' : ''}`} value={item.quantidade} onChange={(e) => { const novosItens = [...itensTemporarios]; novosItens[i].quantidade = Number(e.target.value); setItensTemporarios(novosItens); }}/>
                                                 <span className="font-bold uppercase truncate max-w-[120px] md:max-w-[200px]">{item.servico}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -2836,6 +2854,10 @@ export default function DealsPage() {
                                                 ))}
                                               </select>
                                             </div>
+                                        </div>
+                                        <div className="pt-2 mt-1 border-t border-white/5">
+                                            <DistribuicaoItem dist={item.distribuicao} padraoInicio={contratoInicio} padraoFim={contratoFim} disabled={leadTravado}
+                                              onChange={(d, qtd) => { const novos = [...itensTemporarios]; novos[i] = { ...novos[i], distribuicao: d, quantidade: d ? qtd : novos[i].quantidade }; setItensTemporarios(novos); }} />
                                         </div>
                                     </div>
                                 ))}

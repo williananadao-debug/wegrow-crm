@@ -31,6 +31,15 @@ export default function RastreioClientesPage() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [cf, setCf] = useState(CLIENTE_VAZIO);
   const [vf, setVf] = useState(VEICULO_VAZIO);
+  // Estoque: rastreadores e chips livres para puxar no cadastro do veículo
+  type ItemEstoque = { id: number; tipo: string; modelo: string | null; imei: string | null; chip_numero: string | null; chip_operadora: string | null; iccid: string | null };
+  const [estoque, setEstoque] = useState<ItemEstoque[]>([]);
+  const [chipEstoqueId, setChipEstoqueId] = useState<number | null>(null);
+  const carregarEstoque = useCallback(async () => {
+    const { data } = await supabase.from('rastreio_equipamentos').select('id, tipo, modelo, imei, chip_numero, chip_operadora, iccid')
+      .eq('status', 'estoque').order('created_at').limit(1000);
+    setEstoque((data as ItemEstoque[]) || []);
+  }, []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
@@ -78,7 +87,8 @@ export default function RastreioClientesPage() {
   const ativos = veiculos.filter(v => v.status === 'ativo').length;
 
   function abrirInstalacao(clienteId: string | null) {
-    setCf(CLIENTE_VAZIO); setVf(VEICULO_VAZIO); setErro('');
+    setCf(CLIENTE_VAZIO); setVf(VEICULO_VAZIO); setErro(''); setChipEstoqueId(null);
+    void carregarEstoque();
     setModal({ tipo: 'instalacao', clienteId });
   }
   function abrirVeiculo(v: Veiculo) {
@@ -88,7 +98,8 @@ export default function RastreioClientesPage() {
       instalado_em: v.instalado_em || '', instalado_por: v.instalado_por || '', limite_velocidade: v.limite_velocidade ? String(v.limite_velocidade) : '', consumo: v.consumo_km_l ? String(v.consumo_km_l) : '', horarioAtivo: Boolean(v.horario_uso), horarioDias: v.horario_uso?.dias || [1, 2, 3, 4, 5], horarioIni: v.horario_uso?.inicio || '07:00', horarioFim: v.horario_uso?.fim || '19:00',
       grupo: v.grupo || '', odometro: v.odometro_km ? String(Math.round(Number(v.odometro_km))) : '',
     });
-    setErro('');
+    setErro(''); setChipEstoqueId(null);
+    void carregarEstoque();
     setModal({ tipo: 'veiculo', veiculo: v });
   }
   function abrirCliente(c: ClienteRastreio) {
@@ -161,6 +172,7 @@ export default function RastreioClientesPage() {
           if (error) throw error;
           veiculoId = data.id;
         }
+        await baixarDoEstoque(veiculoId).catch(() => null);
         // Cadastra/atualiza o IMEI no servidor de rastreio (não bloqueia o salvamento se falhar).
         const r = await apiRastreio('dispositivo', { veiculoId }).catch(e => ({ mensagem: (e as Error).message }));
         setAviso(r?.mensagem ? `Veículo salvo. ${r.mensagem}` : 'Veículo salvo e vinculado ao servidor de rastreio.');
@@ -173,6 +185,18 @@ export default function RastreioClientesPage() {
     } finally {
       setSalvando(false);
     }
+  };
+
+  // Estoque ↔ veículo: o rastreador (pelo IMEI) e o chip escolhido passam a "instalado" neste
+  // veículo; numa troca, o aparelho antigo deste veículo volta para "em estoque".
+  const baixarDoEstoque = async (veiculoId: string) => {
+    const imei = vf.imei.replace(/\D/g, '');
+    if (imei) {
+      await supabase.from('rastreio_equipamentos').update({ status: 'estoque', veiculo_id: null })
+        .eq('veiculo_id', veiculoId).eq('tipo', 'rastreador').eq('status', 'instalado').neq('imei', imei);
+      await supabase.from('rastreio_equipamentos').update({ status: 'instalado', veiculo_id: veiculoId }).eq('imei', imei).in('status', ['estoque', 'instalado']);
+    }
+    if (chipEstoqueId) await supabase.from('rastreio_equipamentos').update({ status: 'instalado', veiculo_id: veiculoId }).eq('id', chipEstoqueId);
   };
 
   // Link de uso único do app do cliente (/meu-rastreio). Fica na tela com "Copiar" e "WhatsApp":
@@ -517,6 +541,33 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                     </select>
                   </div>
                   <div className="col-span-2"><label className={lbl}>Descrição</label><input value={vf.descricao} onChange={e => setVf({ ...vf, descricao: e.target.value })} className={inp} placeholder="Gol prata 2015" /></div>
+                  {estoque.some(e => e.tipo === 'rastreador' && e.imei) && (
+                    <div className="col-span-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 space-y-2">
+                      <label className={lbl}>Puxar rastreador do estoque</label>
+                      <select value="" onChange={e => {
+                        const it = estoque.find(x => x.id === Number(e.target.value));
+                        if (it) setVf({ ...vf, imei: it.imei || '', modelo_rastreador: it.modelo || vf.modelo_rastreador, chip_numero: it.chip_numero || vf.chip_numero, chip_operadora: it.chip_operadora || vf.chip_operadora });
+                      }} className={inp}>
+                        <option value="" className="bg-[#0B1120]">Escolher do estoque ({estoque.filter(e => e.tipo === 'rastreador' && e.imei).length} disponível)…</option>
+                        {estoque.filter(e => e.tipo === 'rastreador' && e.imei).map(it => (
+                          <option key={it.id} value={it.id} className="bg-[#0B1120]">{it.modelo || 'Rastreador'} · IMEI {it.imei}{it.chip_numero ? ` · chip ${it.chip_numero}` : ''}</option>
+                        ))}
+                      </select>
+                      {estoque.some(e => e.tipo === 'chip') && (
+                        <select value={chipEstoqueId ?? ''} onChange={e => {
+                          const it = estoque.find(x => x.id === Number(e.target.value));
+                          setChipEstoqueId(it ? it.id : null);
+                          if (it) setVf({ ...vf, chip_numero: it.chip_numero || vf.chip_numero, chip_operadora: it.chip_operadora || vf.chip_operadora });
+                        }} className={inp}>
+                          <option value="" className="bg-[#0B1120]">Chip avulso do estoque (opcional)…</option>
+                          {estoque.filter(e => e.tipo === 'chip').map(it => (
+                            <option key={it.id} value={it.id} className="bg-[#0B1120]">{it.chip_numero || it.iccid}{it.chip_operadora ? ` · ${it.chip_operadora}` : ''}</option>
+                          ))}
+                        </select>
+                      )}
+                      <p className="text-[10px] text-slate-500">Ao salvar, o item sai do estoque e fica como instalado nesta placa.</p>
+                    </div>
+                  )}
                   <div className="col-span-2"><label className={lbl}>IMEI do rastreador</label><input value={vf.imei} onChange={e => setVf({ ...vf, imei: e.target.value.replace(/\D/g, '').slice(0, 17) })} className={`${inp} font-mono`} inputMode="numeric" placeholder="15 números da etiqueta" /></div>
                   <div className="col-span-2"><label className={lbl}>Modelo do rastreador</label><input value={vf.modelo_rastreador} onChange={e => setVf({ ...vf, modelo_rastreador: e.target.value })} className={inp} placeholder="Ex.: GT06, J16, ST310U" /></div>
                   <div className="col-span-2"><label className={lbl}>Número do chip</label><input value={vf.chip_numero} onChange={e => setVf({ ...vf, chip_numero: e.target.value })} className={inp} inputMode="tel" /></div>

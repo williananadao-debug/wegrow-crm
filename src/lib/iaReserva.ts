@@ -8,9 +8,11 @@ import type Groq from 'groq-sdk';
 // O Google aposenta modelos com frequência (o 2.5-flash já não aceita contas novas).
 const MODELOS_GEMINI = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
 
+// 401/403/404 também: chave inválida, modelo bloqueado no projeto da Groq (aconteceu em 24/11/2026
+// com o openai/gpt-oss-120b) ou modelo aposentado — nada disso se resolve tentando de novo na Groq.
 function deveUsarReserva(err: any) {
   const s = Number(err?.status);
-  return !!process.env.GEMINI_API_KEY && (s === 429 || s === 498 || s >= 500 || !s);
+  return !!process.env.GEMINI_API_KEY && (s === 401 || s === 403 || s === 404 || s === 429 || s === 498 || s >= 500 || !s);
 }
 
 async function gemini(body: { generationConfig?: Record<string, unknown>; [k: string]: unknown }): Promise<string> {
@@ -57,6 +59,24 @@ function partes(content: any): any[] {
     }
     return { text: String(c?.text ?? '') };
   });
+}
+
+// Modelo principal da Groq (GROQ_MODEL na Vercel troca sem deploy de código) e o reserva, que
+// também aceita tools — usado por Thor/Argus quando o principal é bloqueado/aposentado.
+export const MODELO_GROQ = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+export const MODELO_GROQ_RESERVA = 'llama-3.3-70b-versatile';
+
+/** groq.chat.completions.create que troca para o modelo reserva no 403/404 (rotas com tools). */
+export async function criarComReservaGroq(groq: Groq, params: any): Promise<any> {
+  try {
+    return await groq.chat.completions.create(params);
+  } catch (err: any) {
+    if ((err?.status === 403 || err?.status === 404) && params?.model !== MODELO_GROQ_RESERVA) {
+      console.warn(`[iaReserva] Groq ${err.status} em ${params?.model} — usando ${MODELO_GROQ_RESERVA}`);
+      return groq.chat.completions.create({ ...params, model: MODELO_GROQ_RESERVA });
+    }
+    throw err;
+  }
 }
 
 // Mesmo formato de entrada e saída de groq.chat.completions.create (sem stream e sem tools):

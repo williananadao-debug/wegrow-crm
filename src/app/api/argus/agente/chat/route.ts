@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { MODELO_GROQ, MODELO_GROQ_RESERVA } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 import { buscarContratacoesPncp, filtrarPorPalavrasChave, formatarDataPncp } from '@/lib/pncp';
 
@@ -82,6 +83,10 @@ async function chatComRetry(groq: Groq, params: any): Promise<Groq.Chat.Completi
   try {
     return await groq.chat.completions.create(params);
   } catch (err: any) {
+    // Modelo bloqueado no projeto da Groq ou aposentado: tenta o modelo reserva (também tem tools)
+    if ((err?.status === 403 || err?.status === 404) && params?.model !== MODELO_GROQ_RESERVA) {
+      return groq.chat.completions.create({ ...params, model: MODELO_GROQ_RESERVA });
+    }
     if (err?.status === 429) {
       const retryAfter = err?.headers?.['retry-after'];
       const esperaMs = Math.min(retryAfter ? Number(retryAfter) * 1000 : 2000, 8000);
@@ -123,7 +128,7 @@ export async function POST(req: NextRequest) {
     ];
 
     const primeira = await chatComRetry(groq, {
-      model: 'openai/gpt-oss-120b',
+      model: MODELO_GROQ,
       max_tokens: 1500,
       temperature: 0.3,
       reasoning_effort: 'low',
@@ -196,7 +201,7 @@ export async function POST(req: NextRequest) {
     }
 
     const segunda = await chatComRetry(groq, {
-      model: 'openai/gpt-oss-120b',
+      model: MODELO_GROQ,
       max_tokens: 1000,
       temperature: 0.3,
       reasoning_effort: 'low',

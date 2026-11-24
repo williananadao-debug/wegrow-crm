@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { chatComReserva } from '@/lib/iaReserva';
+import { MODELO_GROQ, chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = `Você é um estrategista de vendas especializado em analisar comentários de visitas comerciais em campo (rádio/mídia local).
@@ -139,7 +139,7 @@ ${listaClientes}`;
     // demais e truncar o JSON final antes de fechar. reasoning_effort:'low' +
     // include_reasoning:false mantêm o content só com a resposta final.
     const response = await chatComReserva(groq, {
-      model: 'openai/gpt-oss-120b',
+      model: MODELO_GROQ,
       max_tokens: 2000,
       temperature: 0.2,
       reasoning_effort: 'low',
@@ -201,7 +201,9 @@ ${listaClientes}`;
 
   } catch (err: any) {
     console.error('[IA Relatório Visitas] Erro:', err);
-    return NextResponse.json({ error: err.message || 'Erro interno.' }, { status: 500 });
+    // Erro do provedor de IA (Groq/Gemini) não vai cru para a tela
+    const doProvedor = Number(err?.status) > 0 || /groq|gemini|model/i.test(String(err?.message || ''));
+    return NextResponse.json({ error: doProvedor ? 'A IA está indisponível no momento. Tente de novo em alguns minutos.' : (err.message || 'Erro interno.') }, { status: 500 });
   }
 }
 

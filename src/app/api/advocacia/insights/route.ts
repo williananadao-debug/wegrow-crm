@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { chatComReserva } from '@/lib/iaReserva';
+import { MODELO_GROQ, chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const completion = await chatComReserva(groq, {
-      model: 'openai/gpt-oss-120b',
+      model: MODELO_GROQ,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Números do mês:\n${JSON.stringify(resumo, null, 2)}` },

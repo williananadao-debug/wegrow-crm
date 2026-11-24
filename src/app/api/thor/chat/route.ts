@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { MODELO_GROQ, criarComReservaGroq } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 import { calcularAlertasReposicao } from '@/lib/estoqueInteligente';
 
@@ -115,8 +116,8 @@ export async function POST(req: NextRequest) {
       ...mensagens,
     ];
 
-    const primeira = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const primeira = await criarComReservaGroq(groq, {
+      model: MODELO_GROQ,
       max_tokens: 1500,
       temperature: 0.3,
       reasoning_effort: 'low',
@@ -241,8 +242,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const segunda = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const segunda = await criarComReservaGroq(groq, {
+      model: MODELO_GROQ,
       max_tokens: 1000,
       temperature: 0.3,
       reasoning_effort: 'low',

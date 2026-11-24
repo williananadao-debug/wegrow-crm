@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { chatComReserva } from '@/lib/iaReserva';
+import { MODELO_GROQ, chatComReserva } from '@/lib/iaReserva';
 import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = `Você é um especialista em vendas de mídia/rádio local com profundo conhecimento em publicidade regional.
@@ -190,7 +190,7 @@ ${JSON.stringify(candidatos, null, 2)}
 Selecione os ${limite} melhores candidatos e para cada um monte um pacote de produtos do catálogo acima.`;
 
     const response = await chatComReserva(groq, {
-      model: 'openai/gpt-oss-120b',
+      model: MODELO_GROQ,
       max_tokens: 3000,
       temperature: 0.2,
       reasoning_effort: 'low',

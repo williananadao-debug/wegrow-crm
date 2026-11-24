@@ -6,7 +6,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { garantirDispositivoTraccar, traccarConfigurado, enviarTextoTraccar } from '@/lib/rastreio';
 
-export type ComandoAparelho = 'localizar' | 'status' | 'parametros' | 'versao' | 'rede' | 'reiniciar' | 'intervalo' | 'velocidade' | 'sos' | 'sos_limpar';
+export type ComandoAparelho = 'localizar' | 'status' | 'parametros' | 'versao' | 'rede' | 'reiniciar' | 'intervalo' | 'velocidade' | 'sos' | 'sos_limpar'
+  | 'vigilancia' | 'vibracao' | 'alarme_energia' | 'alarme_bateria' | 'alarme_ignicao' | 'curva' | 'distancia' | 'sinal_vida';
 
 export const COMANDOS: Record<ComandoAparelho, { rotulo: string; ajuda: string }> = {
   localizar: { rotulo: 'Localizar agora', ajuda: 'Pede a posição na hora (WHERE#).' },
@@ -19,9 +20,17 @@ export const COMANDOS: Record<ComandoAparelho, { rotulo: string; ajuda: string }
   sos: { rotulo: 'Números SOS', ajuda: 'Celulares que recebem SMS de alarme do aparelho (SOS,A).' },
   sos_limpar: { rotulo: 'Apagar números SOS', ajuda: 'Remove os 3 números SOS (SOS,D).' },
   reiniciar: { rotulo: 'Reiniciar aparelho', ajuda: 'Reinicia o rastreador; volta em ~1 min (RESET#).' },
+  vigilancia: { rotulo: 'Modo vigilância (âncora)', ajuda: 'Alarme se o veículo sair X metros de onde está estacionado (MOVING).' },
+  vibracao: { rotulo: 'Alarme de vibração', ajuda: 'Alarme quando mexem no carro desligado (SENALM).' },
+  alarme_energia: { rotulo: 'Alarme de corte de energia', ajuda: 'Avisa se cortarem o fio do rastreador (POWERALM).' },
+  alarme_bateria: { rotulo: 'Alarme de bateria interna baixa', ajuda: 'Avisa quando a bateria interna está acabando (BATALM).' },
+  alarme_ignicao: { rotulo: 'Alarme de ignição', ajuda: 'O próprio aparelho avisa ao ligar/desligar (ACCALM).' },
+  curva: { rotulo: 'Posição nas curvas', ajuda: 'Manda ponto a cada mudança de direção: trajeto mais fiel (ANGLEREP).' },
+  distancia: { rotulo: 'Envio por distância', ajuda: 'Manda posição a cada X metros (DISTANCE).' },
+  sinal_vida: { rotulo: 'Sinal de vida', ajuda: 'Intervalo do "estou vivo" com o carro parado (HBT).' },
 };
 
-type Params = { ligado?: number; desligado?: number; kmh?: number; segundos?: number; ativo?: boolean; numeros?: string[] };
+type Params = { ligado?: number; desligado?: number; kmh?: number; segundos?: number; ativo?: boolean; numeros?: string[]; metros?: number; graus?: number; minutos?: number; sms?: boolean };
 
 /** Monta o texto do comando, validando os valores. */
 export function textoComando(cmd: ComandoAparelho, p: Params = {}): string {
@@ -48,6 +57,19 @@ export function textoComando(cmd: ComandoAparelho, p: Params = {}): string {
       return `SOS,A,${nums.join(',')}#`;
     }
     case 'sos_limpar': return 'SOS,D,1,2,3#';
+    // Alarmes do aparelho: M = 0 só internet, 1 internet + SMS para os números SOS
+    case 'vigilancia':
+      if (p.ativo === false) return 'MOVING,OFF#';
+      return `MOVING,ON,${int(p.metros ?? 200, 100, 1000, 'Raio (m)')},${p.sms ? 1 : 0}#`;
+    case 'vibracao': return p.ativo === false ? 'SENALM,OFF#' : `SENALM,ON,${p.sms ? 1 : 0}#`;
+    case 'alarme_energia': return p.ativo === false ? 'POWERALM,OFF#' : `POWERALM,ON,${p.sms ? 1 : 0}#`;
+    case 'alarme_bateria': return p.ativo === false ? 'BATALM,OFF#' : `BATALM,ON,${p.sms ? 1 : 0}#`;
+    case 'alarme_ignicao': return p.ativo === false ? 'ACCALM,OFF#' : `ACCALM,ON,${p.sms ? 1 : 0}#`;
+    case 'curva':
+      if (p.ativo === false) return 'ANGLEREP,OFF#';
+      return `ANGLEREP,ON,${int(p.graus ?? 30, 5, 180, 'Ângulo (graus)')},3#`;
+    case 'distancia': return `DISTANCE,${p.ativo === false ? 0 : int(p.metros ?? 300, 50, 10000, 'Distância (m)')}#`;
+    case 'sinal_vida': return `HBT,${int(p.minutos ?? 5, 1, 300, 'Intervalo (min)')}#`;
   }
 }
 

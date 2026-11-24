@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { Cpu, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Cpu, Loader2, RefreshCw, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { apiRastreio, fmtDataHora, type Veiculo } from '../../shared';
 
@@ -24,6 +24,11 @@ export default function Aparelho({ v }: { v: Veiculo }) {
   const [tDesligado, setTDesligado] = useState(300);
   const [kmh, setKmh] = useState(Number(v.limite_velocidade) || 100);
   const [sos, setSos] = useState(['', '', '']);
+  const [raio, setRaio] = useState(200);
+  const [porSms, setPorSms] = useState(false);
+  const [graus, setGraus] = useState(30);
+  const [metros, setMetros] = useState(300);
+  const [hbt, setHbt] = useState(5);
 
   const carregar = useCallback(async () => {
     const [{ data: r }, { data: e }] = await Promise.all([
@@ -64,7 +69,7 @@ export default function Aparelho({ v }: { v: Veiculo }) {
       </button>
       {aberto && (
         <div className="mt-3 space-y-4 text-sm">
-          <p className="text-[11px] text-slate-500">Vão pela internet (sem SMS). Funcionam nos rastreadores da família GT06; se o modelo não aceitar algum, ele simplesmente não responde.</p>
+          <p className="text-[11px] text-slate-500">Vão pela internet (sem SMS). Funcionam nos rastreadores da família GT06; o texto exato muda um pouco por modelo/firmware: se ele não aceitar, a resposta abaixo vem com erro ou não vem. Mande &quot;Parâmetros&quot; antes para ver o que o aparelho suporta.</p>
           {aviso && <p className={`text-xs font-bold ${aviso.ok ? 'text-emerald-300' : 'text-red-300'}`}>{aviso.t}</p>}
 
           <div className="flex flex-wrap gap-2">
@@ -106,6 +111,50 @@ export default function Aparelho({ v }: { v: Veiculo }) {
               <button onClick={() => enviar('sos_limpar', undefined, 'Apagar os números SOS do aparelho?')} disabled={!!ocupado} className={btn}>Apagar</button>
             </div>
           </div>
+
+          <div className="space-y-2 border-t border-white/5 pt-3">
+            <p className="text-[10px] font-black uppercase text-slate-500">Segurança no próprio aparelho</p>
+            <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={porSms} onChange={e => setPorSms(e.target.checked)} className="accent-sky-400" /> Mandar estes alarmes também por SMS para os números SOS</label>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              Vigilância (âncora): alarme se andar mais de <input type="number" value={raio} onChange={e => setRaio(Number(e.target.value))} className={num} /> m
+              <button onClick={() => enviar('vigilancia', { ativo: true, metros: raio, sms: porSms })} disabled={!!ocupado} className={btn}>Ligar</button>
+              <button onClick={() => enviar('vigilancia', { ativo: false })} disabled={!!ocupado} className={btn}>Desligar</button>
+            </div>
+            {([['vibracao', 'Alarme de vibração (mexeram no carro desligado)'], ['alarme_energia', 'Alarme de corte de energia (arrancaram o fio)'], ['alarme_bateria', 'Alarme de bateria interna baixa'], ['alarme_ignicao', 'Alarme de ignição no aparelho']] as const).map(([k, t]) => (
+              <div key={k} className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                <span className="min-w-[230px]">{t}</span>
+                <button onClick={() => enviar(k, { ativo: true, sms: porSms })} disabled={!!ocupado} className={btn}>Ligar</button>
+                <button onClick={() => enviar(k, { ativo: false })} disabled={!!ocupado} className={btn}>Desligar</button>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2 border-t border-white/5 pt-3">
+            <p className="text-[10px] font-black uppercase text-slate-500">Precisão do trajeto e consumo do chip</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              Ponto a cada curva de <input type="number" value={graus} onChange={e => setGraus(Number(e.target.value))} className={num} /> graus
+              <button onClick={() => enviar('curva', { ativo: true, graus })} disabled={!!ocupado} className={btn}>Ligar</button>
+              <button onClick={() => enviar('curva', { ativo: false })} disabled={!!ocupado} className={btn}>Desligar</button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              Também a cada <input type="number" value={metros} onChange={e => setMetros(Number(e.target.value))} className={num} /> metros
+              <button onClick={() => enviar('distancia', { ativo: true, metros })} disabled={!!ocupado} className={btn}>Aplicar</button>
+              <button onClick={() => enviar('distancia', { ativo: false })} disabled={!!ocupado} className={btn}>Desligar</button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              Sinal de vida parado a cada <input type="number" value={hbt} onChange={e => setHbt(Number(e.target.value))} className={num} /> min
+              <button onClick={() => enviar('sinal_vida', { minutos: hbt })} disabled={!!ocupado} className={btn}>Aplicar</button>
+            </div>
+            <p className="text-[11px] text-slate-500">Curva de 30° deixa o trajeto colado nas ruas gastando pouco dado. Sinal de vida menor detecta mais rápido quando o aparelho cai.</p>
+          </div>
+
+          {v.chip_numero && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-100 space-y-1">
+              <p className="font-black uppercase text-[10px] text-amber-300 flex items-center gap-1"><MessageSquare size={12} /> Plano B sem internet (SMS)</p>
+              <p>Se o chip estiver sem dados, mande por SMS para <b>{v.chip_numero}</b>: <b>WHERE#</b> (coordenadas) ou <b>URL#</b> (link do mapa). Use um celular Android (no iPhone pode ir como iMessage).</p>
+              <a href={`sms:${String(v.chip_numero).replace(/\D/g, '')}?body=${encodeURIComponent('URL#')}`} className="inline-block mt-1 bg-amber-500/20 border border-amber-500/40 rounded-lg px-3 py-1.5 font-black uppercase text-[10px]">Abrir SMS com URL#</a>
+            </div>
+          )}
 
           <div>
             <button onClick={() => enviar('reiniciar', undefined, `Reiniciar o rastreador de ${v.placa}? Ele fica ~1 minuto sem comunicar.`)} disabled={!!ocupado}

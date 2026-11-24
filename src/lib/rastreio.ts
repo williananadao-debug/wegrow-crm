@@ -147,7 +147,10 @@ export async function processarWebhookTraccar(db: SupabaseClient, corpoBruto: un
   const pos: PosicaoTraccar | undefined = corpo.position;
   const feito: string[] = [];
 
-  if (pos && typeof pos.latitude === 'number' && typeof pos.longitude === 'number' && pos.valid !== false) {
+  // GPS sem fixar (garagem, subsolo): aceita a posição aproximada que o servidor calcula pela
+  // torre de celular (Traccar com geolocalização ligada marca attributes.approximate).
+  const aproximada = pos?.valid === false && pos.attributes?.approximate === true && !(pos.latitude === 0 && pos.longitude === 0);
+  if (pos && typeof pos.latitude === 'number' && typeof pos.longitude === 'number' && (pos.valid !== false || aproximada)) {
     const attrs = pos.attributes || {};
     const kmh = Math.round((Number(pos.speed) || 0) * NOS_PARA_KMH);
     const quando = pos.fixTime || pos.deviceTime || pos.serverTime || agora;

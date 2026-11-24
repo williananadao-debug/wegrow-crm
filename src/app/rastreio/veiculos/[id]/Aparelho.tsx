@@ -29,6 +29,8 @@ export default function Aparelho({ v }: { v: Veiculo }) {
   const [graus, setGraus] = useState(30);
   const [metros, setMetros] = useState(300);
   const [hbt, setHbt] = useState(5);
+  const [viaSms, setViaSms] = useState(false);
+  const [smsOn, setSmsOn] = useState(false);
 
   const carregar = useCallback(async () => {
     const [{ data: r }, { data: e }] = await Promise.all([
@@ -40,6 +42,7 @@ export default function Aparelho({ v }: { v: Veiculo }) {
   }, [v.id]);
 
   useEffect(() => { if (aberto) void Promise.resolve().then(carregar); }, [aberto, carregar]);
+  useEffect(() => { if (aberto) apiRastreio('sms', { acao: 'status' }).then(r => setSmsOn(Boolean(r.configurado))).catch(() => null); }, [aberto]);
   // Depois de mandar, olha de novo algumas vezes para pegar a resposta
   useEffect(() => {
     if (!aberto || !enviados[0] || Date.now() - Date.parse(enviados[0].created_at) > 90_000) return;
@@ -51,8 +54,10 @@ export default function Aparelho({ v }: { v: Veiculo }) {
     if (confirmar && !confirm(confirmar)) return;
     setOcupado(comando); setAviso(null);
     try {
-      const r = await apiRastreio('aparelho', { veiculoId: v.id, comando, params });
-      setAviso({ ok: true, t: `${r.texto}: ${r.mensagem}` });
+      const r = viaSms
+        ? await apiRastreio('sms', { acao: 'enviar', veiculoId: v.id, comando, params })
+        : await apiRastreio('aparelho', { veiculoId: v.id, comando, params });
+      setAviso({ ok: true, t: viaSms ? r.mensagem : `${r.texto}: ${r.mensagem}` });
       await carregar();
     } catch (e) { setAviso({ ok: false, t: (e as Error).message }); }
     finally { setOcupado(''); }
@@ -70,6 +75,9 @@ export default function Aparelho({ v }: { v: Veiculo }) {
       {aberto && (
         <div className="mt-3 space-y-4 text-sm">
           <p className="text-[11px] text-slate-500">Vão pela internet (sem SMS). Funcionam nos rastreadores da família GT06; o texto exato muda um pouco por modelo/firmware: se ele não aceitar, a resposta abaixo vem com erro ou não vem. Mande &quot;Parâmetros&quot; antes para ver o que o aparelho suporta.</p>
+          {smsOn && v.chip_numero && (
+            <label className="flex items-center gap-2 text-xs font-bold text-amber-200"><input type="checkbox" checked={viaSms} onChange={e => setViaSms(e.target.checked)} className="accent-amber-400" /> Enviar por SMS para o chip ({v.chip_numero}) — use quando o aparelho estiver sem internet</label>
+          )}
           {aviso && <p className={`text-xs font-bold ${aviso.ok ? 'text-emerald-300' : 'text-red-300'}`}>{aviso.t}</p>}
 
           <div className="flex flex-wrap gap-2">
@@ -171,7 +179,7 @@ export default function Aparelho({ v }: { v: Veiculo }) {
                 {respostas.map(r => (
                   <li key={r.id} className="text-xs">
                     <p className="text-slate-500">{fmtDataHora(r.ocorrido_em)}</p>
-                    <p className="font-mono text-slate-200 break-all whitespace-pre-wrap">{r.mensagem.replace(/^[^:]+: resposta do aparelho:?\s*/, '') || '(sem texto)'}</p>
+                    <p className="font-mono text-slate-200 break-all whitespace-pre-wrap">{r.mensagem.replace(/^[^:]+: resposta do aparelho( \(SMS\))?:?\s*/, m => (m.includes('SMS') ? 'SMS: ' : '')) || '(sem texto)'}</p>
                   </li>
                 ))}
               </ul>

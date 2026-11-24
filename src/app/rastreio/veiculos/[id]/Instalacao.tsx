@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { Wrench, RefreshCw, Loader2, CheckCircle2, Circle, AlertTriangle, Copy, MessageSquare, ChevronDown } from 'lucide-react';
+import { Wrench, RefreshCw, Loader2, CheckCircle2, Circle, AlertTriangle, Copy, MessageSquare, ChevronDown, Send } from 'lucide-react';
 import { apiRastreio, haQuanto, type Veiculo } from '../../shared';
 
 type Diag = {
@@ -14,6 +14,7 @@ const APNS: Record<string, { apn: string; user: string; pass: string }> = {
   vivo: { apn: 'zap.vivo.com.br', user: 'vivo', pass: 'vivo' },
   tim: { apn: 'timbrasil.br', user: 'tim', pass: 'tim' },
   oi: { apn: 'gprs.oi.com.br', user: 'oi', pass: 'oi' },
+  'algar/voxter (m2m)': { apn: 'voxter.br', user: 'algar', pass: 'algar' },
 };
 
 type Perfil = 'gt06' | 'senha';
@@ -44,6 +45,7 @@ function comandos(perfil: Perfil, ip: string, apn: { apn: string; user: string; 
 
 function operadoraDe(texto: string | null) {
   const t = (texto || '').toLowerCase();
+  if (/voxter|algar|m2m/.test(t)) return 'algar/voxter (m2m)';
   return Object.keys(APNS).find(k => t.includes(k)) || 'claro';
 }
 
@@ -55,6 +57,18 @@ export default function Instalacao({ v }: { v: Veiculo }) {
   const [perfil, setPerfil] = useState<Perfil>(/gt06|j16|concox|jimi/i.test(v.modelo_rastreador || 'j16') ? 'gt06' : 'senha');
   const [operadora, setOperadora] = useState(operadoraDe(v.chip_operadora));
   const [copiado, setCopiado] = useState('');
+  // Envio pela plataforma (celular-ponte httpSMS): só aparece quando estiver configurado
+  const [smsOn, setSmsOn] = useState(false);
+  const [enviando, setEnviando] = useState('');
+  const [msgSms, setMsgSms] = useState<{ ok: boolean; t: string } | null>(null);
+  useEffect(() => { if (aberto) apiRastreio('sms', { acao: 'status' }).then(r => setSmsOn(Boolean(r.configurado))).catch(() => null); }, [aberto]);
+  const enviarSms = async (texto: string) => {
+    if (/^(APN|SERVER|apn|adminip)/.test(texto) && !confirm(`Enviar "${texto}" por SMS? Comando errado de APN/servidor tira o aparelho do ar até corrigir por SMS.`)) return;
+    setEnviando(texto); setMsgSms(null);
+    try { const r = await apiRastreio('sms', { acao: 'enviar', veiculoId: v.id, texto }); setMsgSms({ ok: true, t: r.mensagem }); }
+    catch (e) { setMsgSms({ ok: false, t: (e as Error).message }); }
+    finally { setEnviando(''); }
+  };
 
   const verificar = useCallback(async () => {
     setCarregando(true);
@@ -141,10 +155,17 @@ export default function Instalacao({ v }: { v: Veiculo }) {
                     <code className="flex-1 text-[12px] text-sky-300 break-all">{x.c}</code>
                     <button onClick={() => copiar(x.c)} title="Copiar" className="p-1.5 rounded-md hover:bg-white/10 text-slate-400">{copiado === x.c ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Copy size={14} />}</button>
                     {numero && <a href={`sms:${numero}?body=${encodeURIComponent(x.c)}`} title="Abrir no SMS do celular" className="p-1.5 rounded-md hover:bg-white/10 text-slate-400"><MessageSquare size={14} /></a>}
+                    {numero && smsOn && (
+                      <button onClick={() => enviarSms(x.c)} disabled={!!enviando} title="Enviar pela plataforma" className="p-1.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 disabled:opacity-40">
+                        {enviando === x.c ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
             </ol>
+            {msgSms && <p className={`mt-2 text-[11px] font-bold ${msgSms.ok ? 'text-emerald-300' : 'text-red-300'}`}>{msgSms.t}</p>}
+            {smsOn && numero && <p className="text-[10px] text-sky-300/80 mt-2">O botão azul envia pela plataforma; a resposta do aparelho aparece em Comandos do aparelho → Respostas.</p>}
             <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
               Mande um por vez do seu celular para o número do chip do rastreador e espere a resposta. {numero ? 'No celular, o ícone de mensagem já abre o SMS pronto.' : 'Cadastre o número do chip no veículo para abrir o SMS pronto pelo celular.'} O IMEI da etiqueta precisa ser {v.imei}.
             </p>

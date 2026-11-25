@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/acessoEmpresa';
 import { STATUS_ASAAS_PAGOS } from '@/lib/asaas';
-import { asaasWegrow, carregarConfigNf, emitirNfWegrow, sincronizarPendentesNfWegrow } from '@/lib/nfWegrow';
+import { asaasWegrow, carregarConfigNf, ehUltimoDiaDoMesBR, emitirFechamentoMes, emitirNfWegrow, sincronizarPendentesNfWegrow } from '@/lib/nfWegrow';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -14,12 +14,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ erro: 'Não autorizado.' }, { status: 401 });
   }
   const db = supabaseAdmin();
-  const resultado = { sincronizadas: 0, emitidas: 0, erros: [] as string[] };
+  const resultado = { sincronizadas: 0, emitidas: 0, erros: [] as string[], fechamento: null as any };
 
   resultado.sincronizadas = await sincronizarPendentesNfWegrow(db);
 
   const config = await carregarConfigNf(db);
-  if (config?.ativo && process.env.ASAAS_API_KEY) {
+
+  // Modo "fim do mês": no último dia (horário de Brasília) emite as notas da competência seguinte.
+  // As notas nascem SCHEDULED; o e-mail com notas + Pix sai quando o Asaas autoriza (webhook ou
+  // a sincronização acima no dia seguinte).
+  if (config?.ativo && config.emitir_em === 'fim_mes' && process.env.ASAAS_API_KEY && ehUltimoDiaDoMesBR()) {
+    resultado.fechamento = await emitirFechamentoMes(db);
+  }
+
+  if (config?.ativo && config.emitir_em !== 'fim_mes' && process.env.ASAAS_API_KEY) {
     const { data: billings } = await db.from('clientes_wegrow').select('empresa_id, ultima_cobranca_id').not('ultima_cobranca_id', 'is', null);
     for (const b of billings || []) {
       const { data: jaTem } = await db.from('wegrow_notas_fiscais').select('id').eq('asaas_payment_id', b.ultima_cobranca_id).not('status', 'eq', 'ERROR').limit(1).maybeSingle();

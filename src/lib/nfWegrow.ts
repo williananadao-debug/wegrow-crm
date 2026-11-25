@@ -42,6 +42,9 @@ export type ConfigNf = {
   iss: number;
   retain_iss: boolean;
   enviar_email: boolean;
+  // 'pagamento' = emite quando o cliente paga · 'fim_mes' = último dia do mês, nota da competência
+  // seguinte + e-mail com o Pix (migration 20261125160000)
+  emitir_em?: 'pagamento' | 'fim_mes';
 };
 
 export async function carregarConfigNf(db: SupabaseClient): Promise<ConfigNf | null> {
@@ -68,12 +71,16 @@ type Resultado = { ok: true; nota: any; notas?: any[]; jaExistia?: boolean; avis
 type Tomador = { unidadeId: string | null; nome: string; cnpj: string; valorCheio: number; emissora?: string };
 
 export async function emitirNfWegrow(db: SupabaseClient, p: {
-  empresaId: string; competencia?: string; paymentId?: string | null; origem: 'manual' | 'pagamento_recebido' | 'webhook' | 'cron';
+  empresaId: string; competencia?: string; paymentId?: string | null; origem: 'manual' | 'pagamento_recebido' | 'webhook' | 'cron' | 'fim_mes';
 }): Promise<Resultado> {
   const config = await carregarConfigNf(db);
   if (!config) return { ok: false, erro: 'Modelo da nota não configurado — rode a migration 20261030120000_nf_wegrow.sql.' };
   // Automático só com a chave ligada; o botão "Emitir agora" (manual) funciona sempre.
   if (p.origem !== 'manual' && !config.ativo) return { ok: false, erro: 'Emissão automática desligada.' };
+  // No modo "fim do mês" a nota já saiu antes do vencimento: pagamento recebido não emite outra.
+  const modoFimMes = config.emitir_em === 'fim_mes';
+  if (modoFimMes && p.origem !== 'manual' && p.origem !== 'fim_mes') return { ok: false, erro: 'As notas saem no último dia do mês.' };
+  if (!modoFimMes && p.origem === 'fim_mes') return { ok: false, erro: 'Emissão no fim do mês desligada.' };
 
   const competencia = p.competencia || new Date().toISOString().substring(0, 7);
 
@@ -231,6 +238,8 @@ export async function sincronizarPendentesNfWegrow(db: SupabaseClient) {
 
 async function enviarEmailSePreciso(db: SupabaseClient, nota: any, config: ConfigNf, cliente: string) {
   if (!config.enviar_email || nota.email_enviado_em || !nota.email_para || !nota.pdf_url) return;
+  // Nota do fechamento do mês: um e-mail só com todas as notas do cliente + o Pix
+  if (nota.origem === 'fim_mes') return enviarFechamentoMes(db, nota.empresa_id, nota.competencia);
   if (!process.env.RESEND_API_KEY) return;
   try {
     const { Resend } = await import('resend');
@@ -283,5 +292,144 @@ async function enviarEmailSePreciso(db: SupabaseClient, nota: any, config: Confi
     console.log(`[nfWegrow] e-mail enviado nota=${nota.id} para=${nota.email_para}`);
   } catch (err) {
     console.error('[nfWegrow] falha ao enviar e-mail', err);
+  }
+}
+
+// ─── Fechamento do mês (emitir_em = 'fim_mes') ────────────────────────────────────────────────
+// No último dia do mês: para cada cliente com assinatura ativa, emite a nota da competência
+// SEGUINTE (a mensalidade que vence no mês que começa) vinculada à cobrança do Asaas e, quando
+// todas as notas dele forem autorizadas, manda UM e-mail com as notas e o Pix.
+
+const UM_DIA = 24 * 60 * 60 * 1000;
+// "Agora" no horário de Brasília (UTC−3, sem horário de verão) para comparar datas
+const agoraBR = () => new Date(Date.now() - 3 * 60 * 60 * 1000);
+
+export function ehUltimoDiaDoMesBR(d = agoraBR()) {
+  return new Date(d.getTime() + UM_DIA).getUTCDate() === 1;
+}
+
+export function competenciaSeguinte(d = agoraBR()) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().substring(0, 7);
+}
+
+const PAGOS = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+
+// Cobrança da assinatura que vence na competência ('AAAA-MM')
+async function cobrancaDaCompetencia(subscriptionId: string, competencia: string) {
+  const r = await asaasWegrow('GET', `/subscriptions/${subscriptionId}/payments?limit=24`);
+  return (r.data || []).find((pg: any) => String(pg.dueDate || '').startsWith(competencia) && !pg.deleted) || null;
+}
+
+export async function emitirFechamentoMes(db: SupabaseClient, competencia = competenciaSeguinte()) {
+  const resultado = { competencia, emitidas: 0, erros: [] as string[] };
+  const { data: clientes } = await db.from('clientes_wegrow')
+    .select('empresa_id, asaas_subscription_id, razao_social').eq('assinatura_status', 'ativa').not('asaas_subscription_id', 'is', null);
+  for (const c of clientes || []) {
+    const nome = c.razao_social || c.empresa_id;
+    try {
+      const pg = await cobrancaDaCompetencia(c.asaas_subscription_id, competencia);
+      if (!pg) { resultado.erros.push(`${nome}: nenhuma cobrança vencendo em ${competenciaLegivel(competencia)}`); continue; }
+      const r = await emitirNfWegrow(db, { empresaId: c.empresa_id, competencia, paymentId: pg.id, origem: 'fim_mes' });
+      if (!r.ok) { resultado.erros.push(`${nome}: ${r.erro}`); continue; }
+      if (!r.jaExistia) resultado.emitidas += r.notas?.length || 1;
+      if (r.avisos) resultado.erros.push(...r.avisos.map(a => `${nome}: ${a}`));
+    } catch (err: any) {
+      resultado.erros.push(`${nome}: ${err.message}`);
+    }
+  }
+  return resultado;
+}
+
+const brl = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dataBR = (d: string) => String(d || '').split('-').reverse().join('/');
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
+
+async function enviarFechamentoMes(db: SupabaseClient, empresaId: string, competencia: string) {
+  const { data: notas } = await db.from('wegrow_notas_fiscais').select('*')
+    .eq('empresa_id', empresaId).eq('competencia', competencia).eq('origem', 'fim_mes')
+    .not('status', 'in', `(${STATUS_FINAIS_RUINS.join(',')})`).order('tomador');
+  if (!notas?.length || notas.every(n => n.email_enviado_em)) return;
+  // Espera todas as notas do cliente ficarem prontas (Demais FM = uma por emissora)
+  if (notas.some(n => n.status !== 'AUTHORIZED' || !n.pdf_url)) return;
+  const para = notas[0].email_para;
+  if (!para || !process.env.RESEND_API_KEY) return;
+
+  const [{ data: billing }, { data: empresa }] = await Promise.all([
+    db.from('clientes_wegrow').select('razao_social, asaas_subscription_id').eq('empresa_id', empresaId).maybeSingle(),
+    db.from('empresas').select('nome').eq('id', empresaId).maybeSingle(),
+  ]);
+  const cliente = billing?.razao_social || empresa?.nome || '';
+
+  // Cobrança do mês: a vinculada à nota ou, nas notas por emissora (sem vínculo), a da assinatura
+  let pg: any = null;
+  try {
+    const pid = notas.find(n => n.asaas_payment_id)?.asaas_payment_id;
+    pg = pid ? await asaasWegrow('GET', `/payments/${pid}`)
+      : billing?.asaas_subscription_id ? await cobrancaDaCompetencia(billing.asaas_subscription_id, competencia) : null;
+  } catch (err) { console.error('[nfWegrow] fechamento: cobrança', err); }
+  const pago = !!pg && PAGOS.includes(pg.status);
+  let pixCopiaCola = '';
+  if (pg?.id && !pago) {
+    try { pixCopiaCola = (await asaasWegrow('GET', `/payments/${pg.id}/pixQrCode`)).payload || ''; }
+    catch (err) { console.error('[nfWegrow] fechamento: pix', err); }
+  }
+
+  const comp = competenciaLegivel(competencia);
+  const rotulo = 'margin:0 0 4px;font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:1px';
+  const linhasNotas = notas.map(n => {
+    const [emissora, razao] = String(n.tomador || '').split(' · ');
+    const quem = razao ? `${esc(emissora)} — ${esc(razao)}` : esc(cliente);
+    return `<tr><td style="padding:12px 20px;border-bottom:1px solid #1e293b">
+      <p style="margin:0;font-size:13px;color:#fff;font-weight:700">NFS-e nº ${esc(n.numero || '—')} · ${brl(n.valor)}</p>
+      <p style="margin:2px 0 6px;font-size:12px;color:#94a3b8">${quem}</p>
+      <a href="${esc(n.pdf_url)}" style="font-size:12px;color:#22c55e;font-weight:700">Baixar PDF</a>${n.xml_url ? ` &nbsp;·&nbsp; <a href="${esc(n.xml_url)}" style="font-size:12px;color:#94a3b8">XML</a>` : ''}
+    </td></tr>`;
+  }).join('');
+
+  const blocoPix = pg && !pago ? `
+        <p style="margin:28px 0 10px;font-size:16px;font-weight:900;color:#fff">Pagamento</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b1120;border-radius:12px;border:1px solid #1e293b;margin-bottom:16px">
+          <tr><td style="padding:14px 20px;border-bottom:1px solid #1e293b"><p style="${rotulo}">Valor</p>
+            <p style="margin:0;font-size:20px;font-weight:900;color:#22c55e">${brl(pg.value)}</p></td></tr>
+          <tr><td style="padding:14px 20px"><p style="${rotulo}">Vencimento</p>
+            <p style="margin:0;font-size:15px;font-weight:700;color:#fff">${dataBR(pg.dueDate)}</p></td></tr>
+        </table>
+        ${pg.invoiceUrl ? `<a href="${esc(pg.invoiceUrl)}" style="display:inline-block;background:#22c55e;color:#0f172a;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:14px 28px;border-radius:10px;text-decoration:none">Pagar com Pix</a>` : ''}
+        ${pixCopiaCola ? `<p style="margin:20px 0 6px;font-size:12px;color:#94a3b8">Ou copie o código Pix (copia e cola):</p>
+        <p style="margin:0;padding:12px;background:#0b1120;border:1px solid #1e293b;border-radius:8px;font-family:monospace;font-size:11px;color:#e2e8f0;word-break:break-all">${esc(pixCopiaCola)}</p>` : ''}` : '';
+
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'WeGrow <onboarding@resend.dev>',
+      to: [para],
+      subject: `WeGrow — nota fiscal e Pix da mensalidade ${comp}`,
+      html: `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0b1120;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b1120;padding:40px 20px"><tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;max-width:100%">
+      <tr><td style="background:#22c55e;padding:24px 32px">
+        <span style="font-size:22px;font-weight:900;font-style:italic;color:#0f172a;letter-spacing:-1px">WEGROW</span>
+      </td></tr>
+      <tr><td style="padding:32px">
+        <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#fff">Mensalidade de ${comp}</p>
+        <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6">
+          Olá! Seguem ${notas.length > 1 ? 'as notas fiscais' : 'a nota fiscal'} da mensalidade WeGrow de <strong style="color:#fff">${esc(cliente)}</strong>${pago ? '. O pagamento já foi recebido, obrigado!' : ' e os dados para pagamento.'}
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b1120;border-radius:12px;border:1px solid #1e293b">${linhasNotas}</table>
+        ${blocoPix}
+      </td></tr>
+      <tr><td style="padding:16px 32px;border-top:1px solid #1e293b">
+        <p style="margin:0;font-size:10px;color:#334155;text-align:center">WeGrow · Willian da Silva Anadao Tecnologia da Informação LTDA</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`,
+    });
+    await db.from('wegrow_notas_fiscais').update({ email_enviado_em: new Date().toISOString() }).in('id', notas.map(n => n.id));
+    console.log(`[nfWegrow] fechamento enviado empresa=${empresaId} competencia=${competencia} notas=${notas.length}`);
+  } catch (err) {
+    console.error('[nfWegrow] falha ao enviar fechamento', err);
   }
 }

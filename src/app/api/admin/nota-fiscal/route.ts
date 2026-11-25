@@ -58,9 +58,10 @@ export async function POST(request: Request) {
 
   if (body.acao === 'salvar') {
     const patch: Record<string, any> = { updated_at: new Date().toISOString() };
-    for (const c of ['ativo', 'municipal_service_id', 'municipal_service_code', 'municipal_service_name', 'descricao', 'observacoes', 'iss', 'retain_iss', 'enviar_email']) {
+    for (const c of ['ativo', 'municipal_service_id', 'municipal_service_code', 'municipal_service_name', 'descricao', 'observacoes', 'iss', 'retain_iss', 'enviar_email', 'emitir_em']) {
       if (c in body) patch[c] = body[c];
     }
+    if ('emitir_em' in patch && !['pagamento', 'fim_mes'].includes(patch.emitir_em)) return NextResponse.json({ erro: 'Quando emitir: valor inválido.' }, { status: 422 });
     if ('descricao' in patch && !String(patch.descricao || '').trim()) return NextResponse.json({ erro: 'A descrição do serviço não pode ficar vazia.' }, { status: 422 });
     const { error } = await db.from('wegrow_nfse_config').update(patch).eq('id', 1);
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });

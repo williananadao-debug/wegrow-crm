@@ -13,6 +13,7 @@ const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map
 type Config = {
   ativo: boolean; municipal_service_id: string | null; municipal_service_code: string; municipal_service_name: string;
   descricao: string; observacoes: string | null; iss: number; retain_iss: boolean; enviar_email: boolean;
+  emitir_em?: 'pagamento' | 'fim_mes';
 };
 type Nota = {
   id: string; empresa_id: string; empresa_nome: string; empresa_logo: string | null; competencia: string; valor: number;
@@ -148,7 +149,9 @@ export default function NotasFiscaisPage() {
         : 'No Asaas: Notas fiscais → Configurações (Curitiba, Simples Nacional, certificado A1).',
     },
     { ok: !!config?.municipal_service_code && !!config?.descricao, titulo: 'Modelo da nota', texto: config ? `Serviço ${config.municipal_service_code} — ${config.municipal_service_name}` : '—' },
-    { ok: !!config?.ativo, titulo: 'Emissão automática', texto: config?.ativo ? 'Emite quando o pagamento é recebido e envia por e-mail.' : 'Desligada — só emite pelo botão "Emitir nota".' },
+    { ok: !!config?.ativo, titulo: 'Emissão automática', texto: config?.ativo
+      ? (config.emitir_em === 'fim_mes' ? 'No último dia do mês emite a nota do mês seguinte e envia por e-mail junto com o Pix.' : 'Emite quando o pagamento é recebido e envia por e-mail.')
+      :'Desligada — só emite pelo botão "Emitir nota".' },
   ];
   const competenciaAtual = new Date().toISOString().substring(0, 7);
   const previa = (config?.descricao || '').replaceAll('{competencia}', comp(competenciaAtual)).replaceAll('{empresa}', 'Cliente Exemplo LTDA');
@@ -200,10 +203,26 @@ export default function NotasFiscaisPage() {
                 <label className="flex items-center justify-between gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] cursor-pointer">
                   <span>
                     <span className="text-sm font-medium flex items-center gap-2"><Zap size={14} className="text-[#22C55E]"/> Emitir automaticamente</span>
-                    <span className="block text-xs text-slate-400 mt-0.5">Ao clicar em "Pagamento recebido" no God Mode ou quando o Asaas confirmar o pagamento.</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">Escolha abaixo quando a nota sai.</span>
                   </span>
                   <Toggle on={config.ativo} onChange={v => setConfig({ ...config, ativo: v })}/>
                 </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    ['fim_mes', 'Último dia do mês', 'Emite a nota do mês seguinte e manda um e-mail com a(s) nota(s) e o Pix para pagar.'],
+                    ['pagamento', 'Quando o cliente paga', 'Ao clicar em "Pagamento recebido" ou quando o Asaas confirma o pagamento.'],
+                  ] as const).map(([valor, titulo, texto]) => {
+                    const sel = (config.emitir_em || 'pagamento') === valor;
+                    return (
+                      <button key={valor} type="button" onClick={() => setConfig({ ...config, emitir_em: valor })}
+                        className={`text-left p-3 rounded-xl border ${sel ? 'border-[#22C55E]/60 bg-[#22C55E]/10' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.05]'}`}>
+                        <span className="text-sm font-medium flex items-center gap-2">{sel && <Check size={13} className="text-[#22C55E]"/>}{titulo}</span>
+                        <span className="block text-xs text-slate-400 mt-0.5">{texto}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
                 <div>
                   <p className="text-[13px] text-slate-300 mb-1.5">Serviço (Código de Tributação Nacional)</p>

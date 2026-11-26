@@ -62,6 +62,7 @@ export function preencherDescricao(modelo: string, competencia: string, empresa:
   return modelo.replaceAll('{competencia}', competenciaLegivel(competencia)).replaceAll('{empresa}', empresa);
 }
 
+const STATUS_PAGOS_PIX = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
 const STATUS_FINAIS_RUINS = ['CANCELED', 'ERROR', 'CANCELLATION_DENIED'];
 
 type Resultado = { ok: true; nota: any; notas?: any[]; jaExistia?: boolean; avisos?: string[] } | { ok: false; erro: string };
@@ -119,10 +120,26 @@ export async function emitirNfWegrow(db: SupabaseClient, p: {
     }
   }
 
+  // Link de pagamento do Asaas na observação da nota (baixa automática quando o cliente paga)
+  let obsPix = '';
+  if (p.paymentId) {
+    try {
+      const pg = await asaasWegrow('GET', `/payments/${p.paymentId}`);
+      if (pg?.invoiceUrl && !STATUS_PAGOS_PIX.includes(pg.status)) {
+        const [a, m, d] = String(pg.dueDate || '').split('-');
+        const venc = d ? ` — vencimento ${d}/${m}/${a}` : '';
+        const unico = tomadores.length > 1 ? ` (cobrança única de R$ ${Number(pg.value).toFixed(2).replace('.', ',')} referente às ${tomadores.length} notas)` : '';
+        obsPix = `Pagamento via Pix: ${pg.invoiceUrl}${venc}${unico}.`;
+      }
+    } catch (err) {
+      console.error('[nfWegrow] link de pagamento', err);
+    }
+  }
+
   const notas: any[] = [], erros: string[] = [];
   let todasJaExistiam = true;
   for (const t of tomadores) {
-    const r = await emitirParaTomador(db, config, p, competencia, t, Math.round(t.valorCheio * pctWegrow) / 100, obsParceiro, email, tomadores.length > 1 || !!billing?.nf_por_emissora);
+    const r = await emitirParaTomador(db, config, p, competencia, t, Math.round(t.valorCheio * pctWegrow) / 100, [obsParceiro, obsPix].filter(Boolean).join(' '), email, tomadores.length > 1 || !!billing?.nf_por_emissora);
     if (r.ok) { notas.push(r.nota); if (!r.jaExistia) todasJaExistiam = false; }
     else erros.push(t.emissora ? `${t.emissora}: ${r.erro}` : r.erro);
   }

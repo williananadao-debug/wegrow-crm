@@ -37,7 +37,7 @@ export default function OcorrenciasPage() {
     }
     setCarregando(false);
   }, []);
-  useEffect(() => { void Promise.resolve().then(carregar); const t = setInterval(carregar, 20000); return () => clearInterval(t); }, [carregar]);
+  useEffect(() => { void Promise.resolve().then(carregar); const t = setInterval(carregar, 10000); return () => clearInterval(t); }, [carregar]);
 
   const abrirNova = async () => {
     if (!todosVeics.length) {

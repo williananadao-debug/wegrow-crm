@@ -11,7 +11,7 @@ import {
 
 const MapaRastreio = dynamic(() => import('./MapaRastreio'), { ssr: false });
 
-const ATUALIZAR_SEG = 20;
+const ATUALIZAR_SEG = 5;
 
 export default function RastreioFrotaPage() {
   const { authLoading, perfil, temRastreio } = useRastreioAccess();

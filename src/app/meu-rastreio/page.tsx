@@ -60,7 +60,7 @@ export default function MeuRastreioPage() {
   useEffect(() => {
     void Promise.resolve().then(carregar);
     try { setVistos(Number(localStorage.getItem('rastreio_alertas_vistos') || 0)); } catch { /* sem storage */ }
-    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 15000);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 5000);
     return () => clearInterval(t);
   }, [carregar]);
 

@@ -92,7 +92,7 @@ export default function VeiculoPage({ params }: { params: Promise<{ id: string }
       if (d?.cliente_id) supabase.from('rastreio_clientes').select('nome, telefone').eq('id', d.cliente_id).maybeSingle().then(({ data }) => setCliente(data));
     });
     carregarHistorico();
-    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 15000);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 5000);
     return () => clearInterval(t);
   }, [carregar, carregarHistorico]);
 

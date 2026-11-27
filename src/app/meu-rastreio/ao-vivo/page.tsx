@@ -29,7 +29,7 @@ export default function AoVivoPage() {
 
   useEffect(() => {
     void Promise.resolve().then(carregar);
-    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 10000);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 5000);
     return () => clearInterval(t);
   }, [carregar]);
 

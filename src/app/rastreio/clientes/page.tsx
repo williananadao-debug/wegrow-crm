@@ -261,6 +261,42 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
     } catch (err) { alert((err as Error).message); } finally { setCarregandoAcessos(false); }
   };
 
+  // Login e senha permanentes (CPF/CNPJ ou celular + senha gerada). A senha só aparece agora.
+  const [escolhaAcesso, setEscolhaAcesso] = useState<ClienteRastreio | null>(null);
+  const [senhaGerada, setSenhaGerada] = useState<{ login: string; senha: string; link: string; texto: string; fone: string; email: string | null } | null>(null);
+  const [acessoMsg, setAcessoMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [acessoOcupado, setAcessoOcupado] = useState(false);
+  const abrirEscolhaAcesso = (c: ClienteRastreio) => { setEscolhaAcesso(c); setSenhaGerada(null); setAcessoMsg(null); setCopiado(false); };
+  const gerarSenhaApp = async () => {
+    if (!escolhaAcesso) return;
+    setAcessoOcupado(true); setAcessoMsg(null);
+    try {
+      const r = await apiRastreio('senha-app', { clienteId: escolhaAcesso.id, acao: 'gerar' });
+      const texto = `Olá, ${escolhaAcesso.nome.split(' ')[0]}! Este é o seu acesso ao app de rastreamento do seu veículo:
+
+Endereço: ${r.link}
+Login: ${r.login}
+Senha: ${r.senha}
+
+Depois de entrar, adicione o app à tela inicial do celular. Guarde esta senha.`;
+      const fone = String(escolhaAcesso.telefone || '').replace(/\D/g, '');
+      setSenhaGerada({ login: r.login, senha: r.senha, link: r.link, texto, fone: fone ? (fone.length <= 11 ? `55${fone}` : fone) : '', email: r.email });
+    } catch (err) { setAcessoMsg({ ok: false, texto: (err as Error).message }); } finally { setAcessoOcupado(false); }
+  };
+  const enviarSenhaEmail = async () => {
+    if (!escolhaAcesso || !senhaGerada) return;
+    setAcessoOcupado(true); setAcessoMsg(null);
+    try {
+      const r = await apiRastreio('senha-app', { clienteId: escolhaAcesso.id, acao: 'email', senha: senhaGerada.senha });
+      setAcessoMsg({ ok: true, texto: `E-mail enviado para ${r.email}.` });
+    } catch (err) { setAcessoMsg({ ok: false, texto: (err as Error).message }); } finally { setAcessoOcupado(false); }
+  };
+  const copiarSenha = async () => {
+    if (!senhaGerada) return;
+    const ok = await navigator.clipboard?.writeText(senhaGerada.texto).then(() => true).catch(() => false);
+    if (ok) setCopiado(true);
+  };
+
   const copiarLink = async () => {
     if (!linkAcesso) return;
     const ok = await navigator.clipboard?.writeText(linkAcesso.link).then(() => true).catch(() => false);
@@ -354,7 +390,7 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-[#22C55E]">{fmtMoeda(c.mensalidade)}/mês</span>
-                  <button onClick={() => enviarAcesso(c)} disabled={gerandoAcesso === c.id || c.status === 'cancelado'} className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-[10px] font-black uppercase inline-flex items-center gap-1 disabled:opacity-40" title="Manda pelo WhatsApp o link para o cliente entrar no app">
+                  <button onClick={() => abrirEscolhaAcesso(c)} disabled={gerandoAcesso === c.id || c.status === 'cancelado'} className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-[10px] font-black uppercase inline-flex items-center gap-1 disabled:opacity-40" title="Login e senha do cliente no app (WhatsApp ou e-mail)">
                     {gerandoAcesso === c.id ? <Loader2 size={12} className="animate-spin" /> : <Smartphone size={12} />} Acesso ao app
                   </button>
                   <button onClick={() => abrirAcessos(c)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10" title="Celulares com acesso e acessos extras (motorista, gestor)"><UserPlus size={13} /></button>
@@ -444,6 +480,49 @@ Abra no Chrome ou no Safari (não dentro do WhatsApp).`;
                 {carregandoAcessos && <Loader2 size={13} className="animate-spin" />} Gerar link de acesso
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {escolhaAcesso && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !acessoOcupado && setEscolhaAcesso(null)}>
+          <div className="bg-[#0F172A] border border-white/10 rounded-3xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-black uppercase flex items-center gap-2"><Smartphone size={18} /> Acesso ao app</h2>
+              <button onClick={() => setEscolhaAcesso(null)} className="p-2 rounded-lg hover:bg-white/10"><X size={16} /></button>
+            </div>
+            <p className="text-sm text-slate-400 mb-4"><b className="text-white">{escolhaAcesso.nome}</b> entra no app com login e senha, em quantos celulares quiser.</p>
+            {!senhaGerada ? (
+              <>
+                <button onClick={gerarSenhaApp} disabled={acessoOcupado} className="w-full rounded-xl py-3 font-black text-xs uppercase bg-emerald-500 text-[#0B1120] inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                  {acessoOcupado ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />} Gerar login e senha
+                </button>
+                <p className="text-[11px] text-slate-500 mt-2">Se o cliente já tinha senha, ela deixa de valer. Os celulares que já estão logados continuam.</p>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 text-sm space-y-1 font-mono">
+                  <p><span className="text-slate-500 font-sans text-xs">Login </span>{senhaGerada.login}</p>
+                  <p><span className="text-slate-500 font-sans text-xs">Senha </span><b className="text-lg text-white">{senhaGerada.senha}</b></p>
+                  <p className="text-xs text-slate-400 break-all">{senhaGerada.link}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <a href={`https://wa.me/${senhaGerada.fone}?text=${encodeURIComponent(senhaGerada.texto)}`} target="_blank" rel="noreferrer"
+                    className="rounded-xl py-3 font-black text-[11px] uppercase bg-emerald-500 text-[#0B1120] inline-flex items-center justify-center gap-1.5"><MessageCircle size={14} /> WhatsApp</a>
+                  <button onClick={enviarSenhaEmail} disabled={acessoOcupado || !senhaGerada.email} title={senhaGerada.email ? `Enviar para ${senhaGerada.email}` : 'Cliente sem e-mail cadastrado'}
+                    className="rounded-xl py-3 font-black text-[11px] uppercase bg-sky-400 text-[#0B1120] inline-flex items-center justify-center gap-1.5 disabled:opacity-40">
+                    {acessoOcupado ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />} E-mail</button>
+                  <button onClick={copiarSenha} className="rounded-xl py-3 font-black text-[11px] uppercase bg-white/5 border border-white/10 inline-flex items-center justify-center gap-1.5">
+                    {copiado ? <><Check size={14} className="text-emerald-400" /> Copiado</> : <><Copy size={14} /> Copiar</>}</button>
+                </div>
+                {!senhaGerada.email && <p className="text-[11px] text-slate-500 mt-2">Sem e-mail no cadastro: mande pelo WhatsApp ou cadastre o e-mail no cliente.</p>}
+                <p className="text-[11px] text-slate-500 mt-2">A senha aparece só agora. Se perder, gere outra.</p>
+              </>
+            )}
+            {acessoMsg && <p className={`text-sm mt-3 ${acessoMsg.ok ? 'text-emerald-300' : 'text-red-300'}`}>{acessoMsg.texto}</p>}
+            <button onClick={() => { const c = escolhaAcesso; setEscolhaAcesso(null); enviarAcesso(c); }} className="w-full mt-4 text-xs text-slate-400 hover:text-white underline">
+              Prefere um link de uso único? Gerar link
+            </button>
           </div>
         </div>
       )}

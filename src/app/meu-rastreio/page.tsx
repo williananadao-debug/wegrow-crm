@@ -171,14 +171,42 @@ export default function MeuRastreioPage() {
     setSemSessao(true);
   };
 
+  const [loginApp, setLoginApp] = useState('');
+  const [senhaApp, setSenhaApp] = useState('');
+  const [erroLogin, setErroLogin] = useState('');
+  const [entrandoSenha, setEntrandoSenha] = useState(false);
+  const entrarComSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEntrandoSenha(true); setErroLogin('');
+    try {
+      const r = await fetch('/api/rastreio/app/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: loginApp, senha: senhaApp }) });
+      if (r.ok) { window.location.replace('/meu-rastreio'); return; }
+      const j = await r.json().catch(() => ({}));
+      setErroLogin(j.error || 'Não foi possível entrar.');
+    } catch { setErroLogin('Sem conexão. Tente de novo.'); }
+    setEntrandoSenha(false);
+  };
+
   if (semSessao) {
     return (
       <main className="min-h-[100dvh] bg-[#0B1120] text-white flex flex-col items-center justify-center p-6 text-center gap-3">
         <Navigation size={40} className="text-sky-400" />
         <h1 className="text-xl font-black">Acesso ao rastreamento</h1>
-        <p className="text-slate-300 text-sm max-w-xs">Para entrar, abra o link de acesso que a sua central de rastreamento enviou pelo WhatsApp. Se ele venceu, peça um novo.</p>
-        <div className="w-full max-w-xs mt-4 space-y-2">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Ou cole o link aqui</p>
+        <form onSubmit={entrarComSenha} className="w-full max-w-xs mt-2 space-y-2 text-left">
+          <label htmlFor="login-app" className="text-[11px] font-black uppercase tracking-widest text-slate-500">CPF, CNPJ ou celular</label>
+          <input id="login-app" inputMode="numeric" autoComplete="username" value={loginApp} onChange={e => setLoginApp(e.target.value)}
+            className="w-full min-h-12 bg-white/5 border border-white/15 rounded-xl px-4 text-base text-white outline-none focus:border-sky-400" />
+          <label htmlFor="senha-app" className="text-[11px] font-black uppercase tracking-widest text-slate-500 block pt-1">Senha</label>
+          <input id="senha-app" type="password" autoComplete="current-password" autoCapitalize="none" value={senhaApp} onChange={e => setSenhaApp(e.target.value)}
+            className="w-full min-h-12 bg-white/5 border border-white/15 rounded-xl px-4 text-base text-white outline-none focus:border-sky-400" />
+          {erroLogin && <p className="text-sm text-red-300">{erroLogin}</p>}
+          <button type="submit" disabled={entrandoSenha || !loginApp.trim() || !senhaApp.trim()} className="w-full min-h-12 rounded-xl bg-sky-400 text-[#0B1120] font-black uppercase text-sm disabled:opacity-40 inline-flex items-center justify-center gap-2">
+            {entrandoSenha && <Loader2 size={16} className="animate-spin" />} Entrar
+          </button>
+          <p className="text-xs text-slate-500 text-center">Esqueceu a senha? Peça uma nova para a sua central de rastreamento.</p>
+        </form>
+        <div className="w-full max-w-xs mt-6 space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Recebeu um link de acesso? Cole aqui</p>
           <input value={linkConvite} onChange={e => setLinkConvite(e.target.value)} placeholder="https://…/meu-rastreio/entrar?t=…"
             className="w-full min-h-12 bg-white/5 border border-white/15 rounded-xl px-4 text-sm text-white outline-none focus:border-sky-400" />
           <button onClick={() => { const t = linkConvite.match(/[?&]t=([A-Za-z0-9_-]{20,})/)?.[1]; if (t) window.location.href = `/meu-rastreio/entrar?t=${t}`; }}

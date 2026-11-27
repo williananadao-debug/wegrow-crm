@@ -260,3 +260,6 @@ html[data-theme="light"] [data-shell] ::-webkit-scrollbar-track,
 html[data-theme="light"] [data-shell] ::-webkit-scrollbar-corner { background: transparent !important; }
 html[data-theme="light"] [data-shell] ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .22) !important; border-radius: 10px; }
 html[data-theme="light"] [data-shell] ::-webkit-scrollbar-thumb:hover { background: var(--wg-green) !important; }
+
+/* Mapa do Rastreio, camada "Escuro": ruas do OpenStreetMap invertidas (sem chave de API). */
+.mapa-escuro { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6); }

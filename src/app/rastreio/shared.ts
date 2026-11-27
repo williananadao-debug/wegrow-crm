@@ -65,8 +65,11 @@ export function mascaraDocumento(s: string) {
   return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
 }
 
-export const linkMapa = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat},${lng}`;
-export const linkStreetView = (lat: number, lng: number) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+// Formato oficial "Maps URLs" (api=1): no celular abre direto o app do Google Maps; o antigo
+// ?q= dava erro no celular. Coordenada com 6 casas (≈ 10 cm) para o link não ficar gigante.
+const coord = (lat: number, lng: number) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+export const linkMapa = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${coord(lat, lng)}`;
+export const linkStreetView = (lat: number, lng: number) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coord(lat, lng)}`;
 
 /** Sinal do chip em barras 0-4 (GT06 manda 0-4; outros mandam 0-31 ou dBm negativo). */
 export function barrasSinal(s: number | null | undefined) {

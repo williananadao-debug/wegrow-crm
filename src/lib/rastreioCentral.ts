@@ -14,7 +14,7 @@ export async function avisarCentral(db: SupabaseClient, p: { empresaId: string; 
   const { count } = await db.from('rastreio_eventos').select('id', { count: 'exact', head: true })
     .eq('veiculo_id', p.veiculoId).eq('tipo', 'alarme').gte('ocorrido_em', desde);
   if ((count || 0) > 1) return false; // já avisou deste veículo agora há pouco (o atual conta 1)
-  const mapa = p.lat != null && p.lng != null ? `https://www.google.com/maps?q=${p.lat},${p.lng}` : null;
+  const mapa = p.lat != null && p.lng != null ? `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}` : null;
   const { Resend } = await import('resend');
   const resend = new Resend(process.env.RESEND_API_KEY);
   await resend.emails.send({
@@ -69,7 +69,7 @@ export async function alertasSeguranca(
   const feito: string[] = [];
   const passou = (em: string | null, min: number) => !em || Date.parse(p.quando) - Date.parse(em) > min * 60_000;
 
-  if (!p.virtual && p.ignicao === false && p.kmh >= 15 && passou(x.alerta_reboque_em, 30)) {
+  if (!p.virtual && p.ignicao === false && p.kmh >= 15 && passou(x.alerta_reboque_em, 30) && await reboqueConfirmado(db, v.id, p.quando)) {
     const msg = `${v.placa}: POSSÍVEL REBOQUE OU FURTO — em movimento a ${p.kmh} km/h com a ignição desligada`;
     await registrar({ empresa_id: v.empresa_id, veiculo_id: v.id, tipo: 'alarme', mensagem: msg, lat: p.lat, lng: p.lng, ocorrido_em: p.quando });
     await db.from('rastreio_veiculos').update({ alerta_reboque_em: p.quando }).eq('id', v.id);
@@ -86,6 +86,26 @@ export async function alertasSeguranca(
     feito.push('uso fora do horário');
   }
   return feito.length ? feito.join(', ') : null;
+}
+
+/**
+ * O GT06 manda a ignição em pacote separado: na saída, o carro já anda alguns segundos antes do
+ * "ignição ligada" chegar, e a última ignição conhecida ainda é "desligada". Para não alarmar
+ * à toa, só confirma reboque se nos últimos 3 minutos: nenhuma posição veio com ignição ligada,
+ * houve pelo menos 3 posições andando (≥ 10 km/h) e o veículo se deslocou ao menos 300 m.
+ */
+async function reboqueConfirmado(db: SupabaseClient, veiculoId: string, quando: string) {
+  const desde = new Date(Date.parse(quando) - 3 * 60_000).toISOString();
+  const { data } = await db.from('rastreio_posicoes').select('lat, lng, velocidade, ignicao, registrado_em')
+    .eq('veiculo_id', veiculoId).gte('registrado_em', desde).lte('registrado_em', quando).order('registrado_em').limit(200);
+  const pts = data || [];
+  if (pts.some(q => q.ignicao === true)) return false;
+  if (pts.filter(q => Number(q.velocidade) >= 10).length < 3) return false;
+  const a = pts[0], b = pts[pts.length - 1];
+  const rad = (g: number) => (g * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h)) >= 300;
 }
 
 /** Cron diário: rastreador sem comunicar há N dias (config do instalador). Avisa 1 vez por sumiço. */

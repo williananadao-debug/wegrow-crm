@@ -59,7 +59,7 @@ export default function ContaApp({ cor }: { cor: string }) {
 
       <section aria-label="Faturas em aberto" className="space-y-2">
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 px-1">Em aberto</p>
-        {abertas.length === 0 ? <p className="text-sm text-slate-400 px-1">Nada em aberto. Tudo em dia!</p> : abertas.map(x => (
+        {abertas.length === 0 ? <p className="text-sm text-slate-400 px-1">{c.cobrancas.length ? 'Nada em aberto. Tudo em dia!' : 'Nenhuma fatura ainda. Quando a sua mensalidade for gerada, ela aparece aqui para pagar com Pix, boleto ou cartão.'}</p> : abertas.map(x => (
           <article key={x.id} className={`rounded-2xl border p-4 ${x.status === 'OVERDUE' ? 'border-red-500/40 bg-red-500/10' : 'border-white/10 bg-[#0F172A]'}`}>
             <div className="flex justify-between gap-2">
               <div>

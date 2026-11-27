@@ -45,13 +45,43 @@ export async function trocarConvite(db: SupabaseClient, token: string, dispositi
   const { data: marcado } = await db.from('rastreio_app_convites').update({ usado_em: new Date().toISOString() })
     .eq('id', c.id).is('usado_em', null).select('id').maybeSingle();
   if (!marcado) return null;
+  return criarSessao(db, { empresaId: c.empresa_id, clienteId: c.cliente_id, nome: c.nome, veiculoIds: c.veiculo_ids, podeBloquear: c.pode_bloquear ?? true, dispositivo });
+}
+
+export async function criarSessao(db: SupabaseClient, p: { empresaId: string; clienteId: string; nome?: string | null; veiculoIds?: string[] | null; podeBloquear?: boolean; dispositivo?: string }) {
   const sessao = novoToken();
   await db.from('rastreio_app_sessoes').insert({
-    empresa_id: c.empresa_id, cliente_id: c.cliente_id, sessao_hash: hashToken(sessao),
+    empresa_id: p.empresaId, cliente_id: p.clienteId, sessao_hash: hashToken(sessao),
     expira_em: new Date(Date.now() + SESSAO_DIAS * 86400_000).toISOString(), ultimo_acesso: new Date().toISOString(),
-    nome: c.nome, veiculo_ids: c.veiculo_ids, pode_bloquear: c.pode_bloquear ?? true, dispositivo: descreverDispositivo(dispositivo),
+    nome: p.nome ?? null, veiculo_ids: p.veiculoIds ?? null, pode_bloquear: p.podeBloquear ?? true, dispositivo: descreverDispositivo(p.dispositivo),
   });
   return sessao;
+}
+
+// Login permanente do titular: CPF/CNPJ (ou celular, se não tiver documento) + senha gerada pelo
+// sistema. A senha só aparece na hora de gerar; no banco fica o scrypt.
+export const soDigitos = (s: unknown) => String(s ?? '').replace(/\D/g, '');
+export function loginDoCliente(c: { documento?: string | null; telefone?: string | null }) {
+  const doc = soDigitos(c.documento);
+  if (doc.length === 11 || doc.length === 14) return doc;
+  const fone = soDigitos(c.telefone).replace(/^55(?=\d{10,11}$)/, '');
+  return fone.length >= 10 ? fone : null;
+}
+export function gerarSenha() {
+  const letras = 'abcdefghjkmnpqrstuvwxyz', nums = '23456789';
+  const b = randomBytes(8);
+  return Array.from(b.subarray(0, 4), x => letras[x % letras.length]).join('') + Array.from(b.subarray(4), x => nums[x % nums.length]).join('');
+}
+export function hashSenha(senha: string) {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(senha, salt, 32).toString('hex')}`;
+}
+export function confereSenha(senha: string, guardado: string | null) {
+  if (!guardado || !senha) return false;
+  const [salt, hash] = guardado.split(':');
+  const calc = scryptSync(senha, salt, 32);
+  const esperado = Buffer.from(hash, 'hex');
+  return esperado.length === calc.length && timingSafeEqual(calc, esperado);
 }
 
 /** "Android · Chrome", "iPhone · Safari"... para o instalador reconhecer o celular na lista de acessos. */

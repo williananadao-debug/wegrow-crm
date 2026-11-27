@@ -12,7 +12,8 @@ export type CercaMapa = { id: string; nome: string; lat: number; lng: number; ra
 const CAMADAS = {
   ruas: { nome: 'Ruas', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap', max: 19 },
   satelite: { nome: 'Satélite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Imagens &copy; Esri', max: 19 },
-  escuro: { nome: 'Escuro', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap &copy; CARTO', max: 20 },
+  // A CARTO passou a exigir chave ("API KEY REQUIRED"): o escuro agora é o mapa de ruas com filtro (classe mapa-escuro).
+  escuro: { nome: 'Escuro', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap', max: 19 },
 } as const;
 type Camada = keyof typeof CAMADAS;
 const ROTULOS_SATELITE = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
@@ -117,7 +118,7 @@ export default function MapaRastreio({
   return (
     <div className={`${altura} rounded-2xl overflow-hidden border border-white/10 relative z-0 ${onClickMapa ? 'cursor-crosshair' : ''}`}>
       <MapContainer center={centro} zoom={pontos.length ? 13 : 11} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
-        <TileLayer key={camada} attribution={cam.attr} url={cam.url} maxZoom={cam.max} />
+        <TileLayer key={camada} attribution={cam.attr} url={cam.url} maxZoom={cam.max} className={camada === 'escuro' ? 'mapa-escuro' : undefined} />
         {camada === 'satelite' && <TileLayer key="rotulos" url={ROTULOS_SATELITE} maxZoom={19} />}
         <Enquadrar pontos={pontos} chave={chaveEnquadrar} />
         {seguido && <Seguir ponto={[seguido.ultima_lat!, seguido.ultima_lng!]} />}
